@@ -1,0 +1,6 @@
+{
+  "name": "Rookvale",
+  "description": "Classic oblique top-down 2D pixel-art dungeon crawler RPG with vocations, skill progression, tactical grid combat, and offline local saves.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

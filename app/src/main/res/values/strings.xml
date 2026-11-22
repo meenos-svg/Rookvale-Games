@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">Rookvale</string>
+    <string name="title_tagline">Classic Oblique Dungeon RPG</string>
+    <string name="new_hero_title">Forge Your Adventurer</string>
+    <string name="hero_name_label">Adventurer Name</string>
+    <string name="choose_vocation">Choose Vocation</string>
+    <string name="enter_rookvale">Enter Rookvale</string>
+    <string name="continue_adventure">Continue Adventure</string>
+    <string name="saved_characters">Saved Characters</string>
+    <string name="create_new_character">Create New Character</string>
+    <string name="hud_hp">HP</string>
+    <string name="hud_mp">MP</string>
+    <string name="hud_soul">Soul</string>
+    <string name="hud_cap">Cap</string>
+    <string name="hud_gold">Gold</string>
+    <string name="hotkey_hp_potion">Heal</string>
+    <string name="hotkey_mp_potion">Mana</string>
+    <string name="hotkey_rune">Rune</string>
+    <string name="hotkey_rope">Rope</string>
+    <string name="panel_equipment">Equipment</string>
+    <string name="panel_backpack">Backpack</string>
+    <string name="panel_skills">Skills</string>
+    <string name="panel_depot">Depot Chest</string>
+    <string name="panel_shop">Alchemist Shop</string>
+    <string name="action_save">Save</string>
+    <string name="action_fish">Cast Line</string>
+    <string name="action_close">Close</string>
+    <string name="action_delete">Delete</string>
+</resources>
