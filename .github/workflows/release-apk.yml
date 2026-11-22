@@ -48,7 +48,7 @@ jobs:
             Automated Android APK build from latest main push.
             Tap **Rookvale-latest.apk** below to download and install on Android.
           files: Rookvale-latest.apk
-          prerelease: true
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
