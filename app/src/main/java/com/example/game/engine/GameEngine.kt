@@ -1,7 +1,9 @@
 package com.example.game.engine
 
 import com.example.game.model.*
+import com.example.game.multiplayer.LocalMonsterAttackEvent
 import com.example.game.multiplayer.LocalMonsterHitEvent
+import com.example.game.multiplayer.RemoteMonsterAttackEvent
 import com.example.game.multiplayer.RemoteMonsterHitEvent
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.multiplayer.SyncedMonsterSnapshot
@@ -403,10 +405,26 @@ object GameEngine {
         val portal = WorldMaps.portalAt(state.floor, nx, ny, requiresRope = false)
         if (portal != null) {
             val destFloor = WorldMaps.getFloor(portal.toFloor)
-            val msg = if (tile == TileType.ROPE_HOLE_DOWN) {
-                "Dropped down the hole into ${destFloor.name}! Bring a Rope to climb back up."
+            val isDescending = portal.toFloor < state.floor
+            val msg = when {
+                isDescending && tile == TileType.ROPE_HOLE_DOWN ->
+                    "You descend to Floor ${portal.toFloor}: ${destFloor.name}. Danger Level: ${destFloor.dangerLevel}! (${destFloor.recommendedLevel}) Bring a Rope!"
+                isDescending ->
+                    "You descend to Floor ${portal.toFloor}: ${destFloor.name}. Danger Level: ${destFloor.dangerLevel}! (${destFloor.recommendedLevel})"
+                else ->
+                    "Entered ${destFloor.name} (${destFloor.subtitle})."
+            }
+            val banner = if (isDescending) {
+                FloorWarningBanner(
+                    floorId = destFloor.floorId,
+                    floorName = destFloor.name,
+                    dangerLevel = destFloor.dangerLevel,
+                    recommendedLevel = destFloor.recommendedLevel,
+                    severity = destFloor.dangerSeverity,
+                    createdAtMs = nowMs
+                )
             } else {
-                "Entered ${destFloor.name} (${destFloor.subtitle})."
+                null
             }
             return state.copy(
                 floor = portal.toFloor,
@@ -418,7 +436,8 @@ object GameEngine {
                 playerFacing = dir,
                 walkPath = emptyList(),
                 targetMonsterId = null,
-                activePanel = ActivePanel.NONE
+                activePanel = ActivePanel.NONE,
+                floorWarningBanner = banner
             ).addLogInternal(msg)
         }
 
@@ -563,6 +582,19 @@ object GameEngine {
         return s
     }
 
+    /**
+     * Applies monster armor mitigation so weapon upgrades and skill training noticeably matter
+     * against heavy-armored dungeon foes (Minotaurs, Orc Warriors, Cyclopses, Bosses).
+     * Magic and runes pierce 45% of physical armor.
+     */
+    internal fun mitigateMonsterDamage(rawDamage: Int, monsterArmor: Int, isMagic: Boolean): Int {
+        if (monsterArmor <= 0) return rawDamage.coerceAtLeast(1)
+        val armorFactor = if (isMagic) 0.55 else 1.0
+        val absorbed = (monsterArmor * armorFactor * Random.nextDouble(0.45, 0.85)).roundToInt()
+        val floorMin = if (isMagic) 2 else 1
+        return (rawDamage - absorbed).coerceAtLeast(floorMin)
+    }
+
     private fun performPlayerAutoAttack(state: GameWorldState, target: MonsterEntity, nowMs: Long): GameWorldState {
         var s = state
         val weapon = s.equipment.weaponDef()
@@ -580,15 +612,17 @@ object GameEngine {
                 if (s.mp >= weapon.manaCost) {
                     val magicMult = s.attackSkillMultiplier(s.skills.magic.level)
                     val basePower = weapon.attack + s.level * 0.65
-                    val dmg = (basePower * magicMult * Random.nextDouble(0.85, 1.18) * skillPenaltyMult * offVocationMult)
+                    val rawDmg = (basePower * magicMult * Random.nextDouble(0.85, 1.18) * skillPenaltyMult * offVocationMult)
                         .roundToInt().coerceAtLeast(6)
+                    val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = true)
                     s = s.copy(mp = s.mp - weapon.manaCost)
                     s = advanceSkillPublic(s, SkillType.MAGIC, weapon.manaCost.toDouble() * 1.25, nowMs)
                     s = s.addProjectileInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), target.x.toFloat(), target.y.toFloat(), ProjectileKind.ENERGY_BOLT, nowMs)
                     applyDamageToMonster(s, target.id, dmg, nowMs, projectileKind = ProjectileKind.ENERGY_BOLT)
                 } else if (dist <= 1) {
                     val meleeMult = s.attackSkillMultiplier(s.skills.melee.level)
-                    val dmg = (Random.nextInt(4, 8) * meleeMult).roundToInt().coerceAtLeast(3)
+                    val rawDmg = (Random.nextInt(4, 8) * meleeMult).roundToInt().coerceAtLeast(3)
+                    val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = false)
                     s = advanceSkillPublic(s, SkillType.MELEE, 1.5, nowMs)
                     applyDamageToMonster(s, target.id, dmg, nowMs)
                 } else {
@@ -628,8 +662,9 @@ object GameEngine {
                 if (Random.nextDouble() <= hitChance) {
                     val distMult = s.attackSkillMultiplier(s.skills.distance.level)
                     val basePower = weapon.attack + ammoAtkBonus + s.level * 0.60
-                    val dmg = (basePower * distMult * Random.nextDouble(0.80, 1.20) * skillPenaltyMult * offVocationMult)
+                    val rawDmg = (basePower * distMult * Random.nextDouble(0.80, 1.20) * skillPenaltyMult * offVocationMult)
                         .roundToInt().coerceAtLeast(5)
+                    val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = false)
                     applyDamageToMonster(s, target.id, dmg, nowMs, projectileKind = projKind)
                 } else {
                     s.addFloatingInternal(s.floor, target.x.toFloat(), target.y.toFloat(), "MISS", FloatingTextKind.BLOCK, nowMs)
@@ -640,8 +675,9 @@ object GameEngine {
                 s = advanceSkillPublic(s, SkillType.MELEE, 3.2, nowMs)
                 val meleeMult = s.attackSkillMultiplier(s.skills.melee.level)
                 val basePower = baseAtk + s.level * 0.60
-                val dmg = (basePower * meleeMult * Random.nextDouble(0.80, 1.20) * skillPenaltyMult * offVocationMult)
+                val rawDmg = (basePower * meleeMult * Random.nextDouble(0.80, 1.20) * skillPenaltyMult * offVocationMult)
                     .roundToInt().coerceAtLeast(4)
+                val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = false)
                 applyDamageToMonster(s, target.id, dmg, nowMs)
             }
         }
@@ -689,11 +725,8 @@ object GameEngine {
         val corpse = generateMonsterCorpse(m)
         val remainingMonsters = s.monsters.filterNot { it.id == monsterId }
         val respawnTicks = if (m.type.isBoss) 90 else 32
-        s = s.copy(
-            monsters = remainingMonsters,
-            targetMonsterId = if (s.targetMonsterId == monsterId) null else s.targetMonsterId,
-            corpses = (s.corpses + corpse).takeLast(38),
-            pendingRespawns = s.pendingRespawns + PendingRespawn(
+        val updatedRespawns = if (!m.isSummon) {
+            s.pendingRespawns + PendingRespawn(
                 type = m.type,
                 floor = m.floor,
                 spawnX = m.spawnX,
@@ -701,6 +734,14 @@ object GameEngine {
                 ticksRemaining = respawnTicks,
                 originalMonsterId = m.id
             )
+        } else {
+            s.pendingRespawns
+        }
+        s = s.copy(
+            monsters = remainingMonsters,
+            targetMonsterId = if (s.targetMonsterId == monsterId) null else s.targetMonsterId,
+            corpses = (s.corpses + corpse).takeLast(38),
+            pendingRespawns = updatedRespawns
         )
         s = grantExperience(s, m.type.xpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
         return s.addLogInternal("Slain ${m.type.displayName}! (+${m.type.xpReward} XP) Tap corpse to loot.")
@@ -740,7 +781,7 @@ object GameEngine {
         // Monster defeated by teammate!
         val remainingMonsters = s.monsters.filterNot { it.id == m.id }
         val respawnTicks = if (m.type.isBoss) 90 else 32
-        val newRespawns = if (isFloorHost) {
+        val newRespawns = if (isFloorHost && !m.isSummon) {
             s.pendingRespawns + PendingRespawn(
                 type = m.type,
                 floor = m.floor,
@@ -802,7 +843,7 @@ object GameEngine {
         val syncedOnFloor = snapshots.mapNotNull { snap ->
             if (snap.hp <= 0) return@mapNotNull null
             val existing = existingOnFloor[snap.id]
-            val type = existing?.type ?: runCatching { MonsterType.valueOf(snap.typeName) }.getOrNull() ?: return@mapNotNull null
+            val type = existing?.type ?: MonsterType.fromWireName(snap.typeName) ?: return@mapNotNull null
             val moved = existing != null && (existing.x != snap.x || existing.y != snap.y)
             MonsterEntity(
                 id = snap.id,
@@ -821,7 +862,10 @@ object GameEngine {
                 lastMoveFromY = if (moved) existing!!.y else snap.y,
                 lastMoveTimeMs = if (moved) nowMs else (existing?.lastMoveTimeMs ?: nowMs),
                 targetPlayerId = snap.targetPlayerId,
-                contributors = existing?.contributors ?: emptySet()
+                contributors = existing?.contributors ?: emptySet(),
+                isSummon = snap.isSummon || (existing?.isSummon == true),
+                summonerId = existing?.summonerId,
+                pendingAoeTiles = snap.pendingAoeTiles
             )
         }
 
@@ -834,6 +878,76 @@ object GameEngine {
             monsters = otherFloorMonsters + syncedOnFloor,
             targetMonsterId = newTarget
         )
+    }
+
+    /**
+     * Applies a remote monster attack broadcast (ranged projectile, telegraphed Boss Fire Wave detonation,
+     * or status cue) so all co-op players on the same floor see synchronized projectiles and AoE waves.
+     */
+    fun applyRemoteMonsterAttack(
+        state: GameWorldState,
+        event: RemoteMonsterAttackEvent,
+        localPlayerId: String,
+        nowMs: Long
+    ): GameWorldState {
+        if (event.floor != state.floor || state.deathReport != null) return state
+        var s = state
+        val proj = event.projectileKindName?.let { runCatching { ProjectileKind.valueOf(it) }.getOrNull() }
+        if (proj != null && event.aoeTiles.isEmpty()) {
+            s = s.addProjectileInternal(
+                s.floor,
+                event.fromX.toFloat(),
+                event.fromY.toFloat(),
+                event.toX.toFloat(),
+                event.toY.toFloat(),
+                proj,
+                nowMs,
+                300L
+            )
+        }
+
+        if (event.aoeTiles.isNotEmpty()) {
+            val burstProj = proj ?: ProjectileKind.FIRE_BREATH
+            for ((ax, ay) in event.aoeTiles.take(10)) {
+                s = s.addProjectileInternal(
+                    s.floor,
+                    event.fromX.toFloat(),
+                    event.fromY.toFloat(),
+                    ax.toFloat(),
+                    ay.toFloat(),
+                    burstProj,
+                    nowMs,
+                    340L
+                )
+            }
+            val floorMap = WorldMaps.getFloor(s.floor)
+            val inPz = floorMap.isProtectionZone(s.playerX, s.playerY)
+            if (!inPz && s.hp > 0 && (s.playerX to s.playerY) in event.aoeTiles) {
+                val caster = s.monsters.firstOrNull { it.id == event.monsterId }
+                val rawDmg = if (caster != null) {
+                    Random.nextInt(caster.type.minDmg, caster.type.maxDmg + 12)
+                } else {
+                    Random.nextInt(38, 66)
+                }
+                val reduced = (rawDmg - (s.equipment.totalArmor() * 0.5).roundToInt()).coerceAtLeast(14)
+                val casterName = caster?.type?.displayName ?: "Boss"
+                s = s.copy(
+                    hp = (s.hp - reduced).coerceAtLeast(0),
+                    fireTicks = max(s.fireTicks, 5)
+                )
+                    .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.FIRE, nowMs)
+                    .addLogInternal("$casterName's Fire Wave scorched you for $reduced!")
+                if (s.hp <= 0) {
+                    s = handlePlayerDeath(s, nowMs)
+                }
+            }
+        } else if (event.inflictedStatus != null && event.targetPlayerId == localPlayerId && s.hp > 0) {
+            when (event.inflictedStatus) {
+                "POISON" -> s = s.copy(poisonTicks = max(s.poisonTicks, 5))
+                "FIRE" -> s = s.copy(fireTicks = max(s.fireTicks, 4))
+            }
+        }
+        return s
     }
 
     fun buildFloorMonsterSnapshots(state: GameWorldState): List<SyncedMonsterSnapshot> {
@@ -850,85 +964,138 @@ object GameEngine {
                     spawnY = m.spawnY,
                     hp = m.hp,
                     maxHp = m.maxHp,
-                    targetPlayerId = m.targetPlayerId
+                    targetPlayerId = m.targetPlayerId,
+                    isSummon = m.isSummon,
+                    pendingAoeTiles = m.pendingAoeTiles
                 )
             }
     }
 
     /**
-     * World-sourced material-only monster loot tables (ZERO finished weapons!).
+     * Classic 4-Tier monster loot tables:
+     * Preserves all 12 forging materials while scaling food, potions, runes, shields, and armor across tiers.
      */
     fun generateMonsterCorpse(m: MonsterEntity): CorpseEntity {
         val gold = Random.nextInt(m.type.goldMin, m.type.goldMax + 1)
         val loot = mutableListOf<ItemStack>()
         when (m.type) {
-            MonsterType.RAT -> {
+            // --- TIER 1: Starter Overland ---
+            MonsterType.CAVE_RAT -> {
                 if (Random.nextFloat() < 0.48f) loot += ItemStack("jagged_ivory", 1)
-                if (Random.nextFloat() < 0.35f) loot += ItemStack("cheese", 1)
+                if (Random.nextFloat() < 0.45f) loot += ItemStack("cheese", 1)
+                if (Random.nextFloat() < 0.14f) loot += ItemStack("leather_helmet", 1)
+                if (Random.nextFloat() < 0.10f) loot += ItemStack("wooden_club", 1)
+            }
+            MonsterType.WILD_RABBIT -> {
+                if (Random.nextFloat() < 0.72f) loot += ItemStack("fresh_meat", 1)
+                if (Random.nextFloat() < 0.40f) loot += ItemStack("brindle_hide", 1)
+                if (Random.nextFloat() < 0.12f) loot += ItemStack("leather_boots", 1)
+            }
+            MonsterType.YOUNG_SNAKE -> {
+                if (Random.nextFloat() < 0.58f) loot += ItemStack("bile_gland", 1)
+                if (Random.nextFloat() < 0.35f) loot += ItemStack("fresh_meat", 1)
+                if (Random.nextFloat() < 0.12f) loot += ItemStack("leather_legs", 1)
             }
             MonsterType.CRAG_WOLF -> {
                 loot += ItemStack("brindle_hide", 1)
                 if (Random.nextFloat() < 0.65f) loot += ItemStack("jagged_ivory", 1)
+                if (Random.nextFloat() < 0.45f) loot += ItemStack("fresh_meat", 1)
+                if (Random.nextFloat() < 0.12f) loot += ItemStack("leather_armor", 1)
             }
-            MonsterType.VESPER_BAT -> {
-                loot += ItemStack("vesper_wing", 1)
-                if (Random.nextFloat() < 0.40f) loot += ItemStack("jagged_ivory", 1)
-            }
-            MonsterType.CAVE_SPIDER -> {
-                if (Random.nextFloat() < 0.72f) loot += ItemStack("spider_silk", 1)
-                if (Random.nextFloat() < 0.58f) loot += ItemStack("bile_gland", 1)
-                if (Random.nextFloat() < 0.25f) loot += ItemStack("health_potion", 1)
-            }
-            MonsterType.STONEHORN_TROLL -> {
+
+            // --- TIER 2: Outer Wilds & Floor -1 Sewers/Caves ---
+            MonsterType.SWAMP_TROLL -> {
                 loot += ItemStack("brindle_hide", 1)
-                if (Random.nextFloat() < 0.60f) loot += ItemStack("ochre_nugget", 1)
+                if (Random.nextFloat() < 0.55f) loot += ItemStack("ochre_nugget", 1)
                 if (Random.nextFloat() < 0.35f) loot += ItemStack("health_potion", 1)
+                if (Random.nextFloat() < 0.18f) loot += ItemStack("wooden_shield", 1)
+                if (Random.nextFloat() < 0.14f) loot += ItemStack("wooden_club", 1)
             }
             MonsterType.SKELETON -> {
                 loot += ItemStack("ancient_bone", 1)
+                if (Random.nextFloat() < 0.30f) loot += ItemStack("health_potion", 1)
+                if (Random.nextFloat() < 0.20f) loot += ItemStack("wooden_shield", 1)
+                if (Random.nextFloat() < 0.16f) loot += ItemStack("leather_helmet", 1)
+            }
+            MonsterType.GOBLIN_SCOUT -> {
+                loot += ItemStack("vesper_wing", 1)
+                if (Random.nextFloat() < 0.45f) loot += ItemStack("ochre_shafts", 6)
+                if (Random.nextFloat() < 0.32f) loot += ItemStack("hmm_rune", 1)
+                if (Random.nextFloat() < 0.16f) loot += ItemStack("leather_armor", 1)
+            }
+            MonsterType.POISON_SPIDER -> {
+                if (Random.nextFloat() < 0.75f) loot += ItemStack("spider_silk", 1)
+                if (Random.nextFloat() < 0.65f) loot += ItemStack("bile_gland", 1)
+                if (Random.nextFloat() < 0.28f) loot += ItemStack("hmm_rune", 1)
                 if (Random.nextFloat() < 0.28f) loot += ItemStack("health_potion", 1)
             }
-            MonsterType.MARROW_ARCHER -> {
-                loot += ItemStack("ancient_bone", 1)
-                if (Random.nextFloat() < 0.45f) loot += ItemStack("vesper_wing", 1)
-                if (Random.nextFloat() < 0.35f) loot += ItemStack("ochre_shafts", 6)
+
+            // --- TIER 3: Floor -2 Deep Caverns ---
+            MonsterType.MINOTAUR -> {
+                loot += ItemStack("brindle_hide", 1)
+                if (Random.nextFloat() < 0.55f) loot += ItemStack("bogstone_shard", 1)
+                if (Random.nextFloat() < 0.45f) loot += ItemStack("health_potion", 1)
+                if (Random.nextFloat() < 0.18f) loot += ItemStack("steel_shield", 1)
+                if (Random.nextFloat() < 0.15f) loot += ItemStack("brass_legs", 1)
+            }
+            MonsterType.ORC_WARRIOR -> {
+                loot += ItemStack("colossus_tendon", 1)
+                if (Random.nextFloat() < 0.50f) loot += ItemStack("cinder_pitch", 1)
+                if (Random.nextFloat() < 0.45f) loot += ItemStack("health_potion", 1)
+                if (Random.nextFloat() < 0.18f) loot += ItemStack("viking_helmet", 1)
+                if (Random.nextFloat() < 0.15f) loot += ItemStack("brass_armor", 1)
             }
             MonsterType.GHOUL -> {
                 loot += ItemStack("ghoul_gem", 1)
-                if (Random.nextFloat() < 0.50f) loot += ItemStack("ancient_bone", 1)
-                if (Random.nextFloat() < 0.32f) loot += ItemStack("mana_potion", 1)
+                if (Random.nextFloat() < 0.55f) loot += ItemStack("ancient_bone", 1)
+                if (Random.nextFloat() < 0.42f) loot += ItemStack("mana_potion", 1)
+                if (Random.nextFloat() < 0.32f) loot += ItemStack("hmm_rune", 2)
+                if (Random.nextFloat() < 0.10f) loot += ItemStack("life_amulet", 1)
             }
+            MonsterType.FIRE_DEVIL -> {
+                loot += ItemStack("ember_heart", 1)
+                if (Random.nextFloat() < 0.55f) loot += ItemStack("cinder_pitch", 1)
+                if (Random.nextFloat() < 0.45f) loot += ItemStack("mana_potion", 1)
+                if (Random.nextFloat() < 0.35f) loot += ItemStack("hmm_rune", 2)
+                if (Random.nextFloat() < 0.28f) loot += ItemStack("sd_rune", 1)
+            }
+
+            // --- TIER 4: Floor -3 Abyssal Crypt & Bosses ---
             MonsterType.CYCLOPS -> {
                 loot += ItemStack("colossus_tendon", 1)
-                if (Random.nextFloat() < 0.45f) loot += ItemStack("dragon_ham", 1)
-                if (Random.nextFloat() < 0.30f) loot += ItemStack("sd_rune", 1)
+                if (Random.nextFloat() < 0.45f) loot += ItemStack("runic_slate", 1)
+                if (Random.nextFloat() < 0.50f) loot += ItemStack("dragon_ham", 1)
+                if (Random.nextFloat() < 0.32f) loot += ItemStack("sd_rune", 1)
+                if (Random.nextFloat() < 0.16f) loot += ItemStack("steel_shield", 1)
             }
-            MonsterType.FORGE_BRUTE -> {
-                loot += ItemStack("colossus_tendon", 1)
-                if (Random.nextFloat() < 0.55f) loot += ItemStack("cinder_pitch", 1)
-                if (Random.nextFloat() < 0.35f) loot += ItemStack("health_potion", 1)
-            }
-            MonsterType.RUNIC_GOLEM -> {
-                loot += ItemStack("runic_slate", 1)
-                if (Random.nextFloat() < 0.50f) loot += ItemStack("bogstone_shard", 1)
-                if (Random.nextFloat() < 0.30f) loot += ItemStack("mana_potion", 1)
-            }
-            MonsterType.WYRM_HATCHLING -> {
+            MonsterType.DRAGON_HATCHLING -> {
                 loot += ItemStack("wyrmscale_plate", 1)
                 if (Random.nextFloat() < 0.55f) loot += ItemStack("dragon_ham", 1)
-                if (Random.nextFloat() < 0.40f) loot += ItemStack("ember_heart", 1)
+                if (Random.nextFloat() < 0.48f) loot += ItemStack("ember_heart", 1)
+                if (Random.nextFloat() < 0.30f) loot += ItemStack("sd_rune", 1)
             }
-            MonsterType.CINDER_WRAITH -> {
-                loot += ItemStack("ember_heart", 1)
-                if (Random.nextFloat() < 0.45f) loot += ItemStack("ghoul_gem", 1)
-                if (Random.nextFloat() < 0.35f) loot += ItemStack("sd_rune", 1)
+            MonsterType.NECROMANCER -> {
+                loot += ItemStack("runic_slate", 1)
+                if (Random.nextFloat() < 0.70f) loot += ItemStack("ghoul_gem", 1)
+                if (Random.nextFloat() < 0.50f) loot += ItemStack("mana_potion", 1)
+                if (Random.nextFloat() < 0.40f) loot += ItemStack("sd_rune", 2)
+                if (Random.nextFloat() < 0.14f) loot += ItemStack("mystic_robe", 1)
             }
-            MonsterType.DRAGON_BOSS -> {
+            MonsterType.DEMON_LORD -> {
+                loot += ItemStack("dragon_tooth", 1)
+                loot += ItemStack("ember_heart", 2)
+                loot += ItemStack("runic_slate", 1)
+                loot += ItemStack("dragon_ham", 2)
+                loot += ItemStack("sd_rune", 2)
+                if (Random.nextFloat() < 0.35f) loot += ItemStack("dragon_shield", 1)
+            }
+            MonsterType.ELDER_DRAGON -> {
                 loot += ItemStack("dragon_tooth", 1)
                 loot += ItemStack("wyrmscale_plate", 2)
                 loot += ItemStack("ember_heart", 1)
                 loot += ItemStack("dragon_ham", 2)
                 loot += ItemStack("sd_rune", 2)
+                if (Random.nextFloat() < 0.40f) loot += ItemStack("dragon_mail", 1)
             }
         }
         return CorpseEntity(
@@ -987,8 +1154,9 @@ object GameEngine {
         if (state.mp < runeDef.manaCost) return state.addLogInternal("Not enough Mana (${runeDef.manaCost} MP required).")
 
         val magicMult = state.attackSkillMultiplier(state.skills.magic.level)
-        val dmg = ((runeDef.attack + state.level * 1.0) * magicMult * Random.nextDouble(0.85, 1.18))
+        val rawDmg = ((runeDef.attack + state.level * 1.0) * magicMult * Random.nextDouble(0.85, 1.18))
             .roundToInt().coerceAtLeast(12)
+        val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = true)
         var next = state.copy(
             mp = state.mp - runeDef.manaCost,
             soul = (state.soul - 1).coerceAtLeast(0),
@@ -1017,7 +1185,8 @@ object GameEngine {
             lastPlayerMoveMs = nowMs,
             walkPath = emptyList(),
             targetMonsterId = null,
-            activePanel = ActivePanel.NONE
+            activePanel = ActivePanel.NONE,
+            floorWarningBanner = null
         )
             .addFloatingInternal(portal.toFloor, portal.toX.toFloat(), portal.toY.toFloat(), "ROPE UP!", FloatingTextKind.INFO, nowMs)
             .addLogInternal("Climbed up the rope-hole to ${destFloor.name}!")
@@ -1055,15 +1224,16 @@ object GameEngine {
     ): GameWorldState {
         var s = state
         val updatedMonsters = s.monsters.toMutableList()
+        val spawnedSummons = mutableListOf<MonsterEntity>()
         val activeRemoteTargets = remotePlayersOnFloor.filter {
             it.floor == s.floor && it.hp > 0 && !floorMap.isProtectionZone(it.x, it.y)
         }
 
         for (i in updatedMonsters.indices) {
-            val m = updatedMonsters[i]
-            if (m.floor != s.floor) continue
+            var curM = updatedMonsters[i]
+            if (curM.floor != s.floor) continue
 
-            // Determine target player: Host picks closest non-PZ player on floor; Non-host follows host's targetPlayerId
+            // 1. Determine target player: Host picks closest non-PZ player on floor; Non-host follows host's targetPlayerId
             val targetId: String?
             val targetX: Int
             val targetY: Int
@@ -1076,7 +1246,7 @@ object GameEngine {
                 var bestDist = Int.MAX_VALUE
 
                 if (!playerInPz && s.hp > 0) {
-                    val dLocal = chebyshev(m.x, m.y, s.playerX, s.playerY)
+                    val dLocal = chebyshev(curM.x, curM.y, s.playerX, s.playerY)
                     if (dLocal <= 8) {
                         bestId = localPlayerId
                         bestX = s.playerX
@@ -1085,7 +1255,7 @@ object GameEngine {
                     }
                 }
                 for (rp in activeRemoteTargets) {
-                    val dRem = chebyshev(m.x, m.y, rp.x, rp.y)
+                    val dRem = chebyshev(curM.x, curM.y, rp.x, rp.y)
                     if (dRem <= 8 && dRem < bestDist) {
                         bestId = rp.playerId
                         bestX = rp.x
@@ -1097,28 +1267,133 @@ object GameEngine {
                 targetX = bestX
                 targetY = bestY
                 distToTarget = bestDist
-                if (m.targetPlayerId != targetId) {
-                    updatedMonsters[i] = m.copy(targetPlayerId = targetId)
+                if (curM.targetPlayerId != targetId) {
+                    curM = curM.copy(targetPlayerId = targetId)
+                    updatedMonsters[i] = curM
                 }
             } else {
-                targetId = m.targetPlayerId
+                targetId = curM.targetPlayerId
                 targetX = s.playerX
                 targetY = s.playerY
-                distToTarget = chebyshev(m.x, m.y, s.playerX, s.playerY)
+                distToTarget = chebyshev(curM.x, curM.y, s.playerX, s.playerY)
             }
 
-            if (targetId == null || distToTarget > 8) continue
+            // Clear stale telegraph if target fled or stepped into Protection Zone
+            if (targetId == null || distToTarget > 8) {
+                if (isFloorHost && curM.pendingAoeTiles.isNotEmpty()) {
+                    updatedMonsters[i] = curM.copy(pendingAoeTiles = emptyList())
+                }
+                continue
+            }
 
-            // Resolve monster attack locally ONLY when targeting this local player
+            // 2. Boss 1-Tick Telegraphed Fire Wave AoE (Host-driven)
+            if (isFloorHost && curM.type.aiStyle == MonsterAiStyle.BOSS_AOE_SUMMON) {
+                if (curM.pendingAoeTiles.isNotEmpty()) {
+                    val waveTiles = curM.pendingAoeTiles
+                    val waveProj = curM.type.rangedProjectile ?: ProjectileKind.FIRE_BREATH
+                    s = s.copy(
+                        outboundMonsterAttacks = s.outboundMonsterAttacks + LocalMonsterAttackEvent(
+                            monsterId = curM.id,
+                            floor = s.floor,
+                            fromX = curM.x,
+                            fromY = curM.y,
+                            toX = targetX,
+                            toY = targetY,
+                            projectileKindName = waveProj.name,
+                            aoeTiles = waveTiles,
+                            targetPlayerId = targetId,
+                            inflictedStatus = "FIRE"
+                        )
+                    )
+                    for ((ax, ay) in waveTiles.take(10)) {
+                        s = s.addProjectileInternal(
+                            s.floor,
+                            curM.x.toFloat(),
+                            curM.y.toFloat(),
+                            ax.toFloat(),
+                            ay.toFloat(),
+                            waveProj,
+                            nowMs,
+                            340L
+                        )
+                    }
+                    if (!playerInPz && s.hp > 0 && (s.playerX to s.playerY) in waveTiles) {
+                        val rawWave = Random.nextInt(curM.type.minDmg, curM.type.maxDmg + 12)
+                        val waveDmg = (rawWave - (s.equipment.totalArmor() * 0.5).roundToInt()).coerceAtLeast(14)
+                        s = s.copy(
+                            hp = (s.hp - waveDmg).coerceAtLeast(0),
+                            fireTicks = max(s.fireTicks, 5)
+                        )
+                            .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.FIRE, nowMs)
+                            .addLogInternal("${curM.type.displayName}'s Fire Wave scorched you for $waveDmg!")
+                    }
+                    updatedMonsters[i] = curM.copy(pendingAoeTiles = emptyList(), aoeCooldownTicks = 4)
+                    if (s.hp <= 0) break
+                    continue
+                } else if (curM.aoeCooldownTicks <= 0 && distToTarget <= 4) {
+                    val waveTiles = computeFireWaveTiles(floorMap, curM.x, curM.y, targetX, targetY)
+                    if (waveTiles.isNotEmpty()) {
+                        updatedMonsters[i] = curM.copy(pendingAoeTiles = waveTiles)
+                        s = s.addFloatingInternal(s.floor, curM.x.toFloat(), curM.y.toFloat(), "FIRE WAVE!", FloatingTextKind.FIRE, nowMs)
+                            .addLogInternal("${curM.type.displayName} draws a fiery breath — move out of the warning tiles!")
+                        continue
+                    }
+                } else if (curM.aoeCooldownTicks > 0) {
+                    curM = curM.copy(aoeCooldownTicks = curM.aoeCooldownTicks - 1)
+                    updatedMonsters[i] = curM
+                }
+            }
+
+            // 3. Summon Mechanics (Necromancer max 1 Skeleton, Demon Lord max 2 Fire Devils, Elder Dragon max 2 Hatchlings)
+            if (isFloorHost && curM.type.maxSummons > 0) {
+                val activeSummons = updatedMonsters.count { it.floor == s.floor && it.summonerId == curM.id } +
+                    spawnedSummons.count { it.floor == s.floor && it.summonerId == curM.id }
+                if (curM.summonCooldownTicks > 0) {
+                    curM = curM.copy(summonCooldownTicks = curM.summonCooldownTicks - 1)
+                    updatedMonsters[i] = curM
+                } else if (activeSummons < curM.type.maxSummons && distToTarget <= 6) {
+                    val summonType = curM.type.summonType()
+                    val tile = if (summonType != null) {
+                        findSummonTile(floorMap, curM.x, curM.y, s, activeRemoteTargets, updatedMonsters, spawnedSummons)
+                    } else null
+                    if (summonType != null && tile != null) {
+                        val sid = nextMonsterId++
+                        spawnedSummons += MonsterEntity(
+                            id = sid,
+                            type = summonType,
+                            floor = s.floor,
+                            x = tile.first,
+                            y = tile.second,
+                            spawnX = tile.first,
+                            spawnY = tile.second,
+                            hp = summonType.maxHp,
+                            maxHp = summonType.maxHp,
+                            targetPlayerId = targetId,
+                            isSummon = true,
+                            summonerId = curM.id
+                        )
+                        curM = curM.copy(summonCooldownTicks = 8)
+                        updatedMonsters[i] = curM
+                        s = s.addFloatingInternal(s.floor, curM.x.toFloat(), curM.y.toFloat(), "SUMMON!", FloatingTextKind.FIRE, nowMs)
+                            .addLogInternal("${curM.type.displayName} summoned a ${summonType.displayName}!")
+                    }
+                }
+            }
+
+            // 4. Resolve monster attack locally when targeting this local player
             val targetsLocal = targetId == localPlayerId
-            val distToLocal = chebyshev(m.x, m.y, s.playerX, s.playerY)
-            if (targetsLocal && !playerInPz && s.hp > 0 &&
-                (distToLocal <= 1 || (m.type.rangedBreathRange > 1 && distToLocal <= m.type.rangedBreathRange && Random.nextFloat() < 0.45f))
-            ) {
+            val distToLocal = chebyshev(curM.x, curM.y, s.playerX, s.playerY)
+            val canRangedLocal = curM.type.preferredRange > 1 && curM.type.rangedProjectile != null &&
+                distToLocal in 2..curM.type.preferredRange
+            val shouldRangedLocal = canRangedLocal && (
+                curM.type.aiStyle == MonsterAiStyle.RANGED_KITE || Random.nextFloat() < 0.55f
+            )
+
+            if (targetsLocal && !playerInPz && s.hp > 0 && (distToLocal <= 1 || shouldRangedLocal)) {
                 val isRanged = distToLocal > 1
-                if (isRanged) {
-                    val proj = if (m.type == MonsterType.MARROW_ARCHER) ProjectileKind.ARROW else ProjectileKind.FIRE_BREATH
-                    s = s.addProjectileInternal(s.floor, m.x.toFloat(), m.y.toFloat(), s.playerX.toFloat(), s.playerY.toFloat(), proj, nowMs, 300L)
+                val projKind = if (isRanged) curM.type.rangedProjectile ?: ProjectileKind.FIRE_BREATH else null
+                if (projKind != null) {
+                    s = s.addProjectileInternal(s.floor, curM.x.toFloat(), curM.y.toFloat(), s.playerX.toFloat(), s.playerY.toFloat(), projKind, nowMs, 300L)
                 }
                 if (!isRanged) {
                     val shieldTrainPts = when {
@@ -1129,11 +1404,12 @@ object GameEngine {
                     s = advanceSkillPublic(s, SkillType.SHIELDING, shieldTrainPts, nowMs)
                 }
 
+                var statusTag: String? = null
                 val dodgeChance = s.shieldDodgeChance(isRanged)
                 if (Random.nextDouble() < dodgeChance) {
                     s = s.addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "DODGE!", FloatingTextKind.BLOCK, nowMs)
                 } else {
-                    val rawDmg = Random.nextInt(m.type.minDmg, m.type.maxDmg + 1)
+                    val rawDmg = Random.nextInt(curM.type.minDmg, curM.type.maxDmg + 1)
                     val armorMit = s.equipment.totalArmor() * 0.65
                     val glancingShieldMit = if (!isRanged && s.hasActiveShield()) s.equipment.shieldDefense() * 0.22 else 0.0
                     val reduced = (rawDmg - (if (isRanged) armorMit * 0.6 else (armorMit + glancingShieldMit) * Random.nextDouble(0.75, 1.05))).roundToInt()
@@ -1143,43 +1419,102 @@ object GameEngine {
                     } else {
                         s = s.copy(hp = (s.hp - reduced).coerceAtLeast(0))
                             .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.DAMAGE_PLAYER, nowMs)
-                        if (m.type.inflictsPoison && Random.nextFloat() < 0.35f) {
-                            s = s.copy(poisonTicks = max(s.poisonTicks, 5)).addLogInternal("${m.type.displayName} poisoned you!")
+                        if (curM.type.inflictsPoison && Random.nextFloat() < 0.35f) {
+                            statusTag = "POISON"
+                            s = s.copy(poisonTicks = max(s.poisonTicks, 5)).addLogInternal("${curM.type.displayName} poisoned you!")
                         }
-                        if (m.type.inflictsFire && (isRanged || Random.nextFloat() < 0.40f)) {
-                            s = s.copy(fireTicks = max(s.fireTicks, 4)).addLogInternal("${m.type.displayName} set you ablaze!")
+                        if (curM.type.inflictsFire && (isRanged || Random.nextFloat() < 0.40f)) {
+                            statusTag = "FIRE"
+                            s = s.copy(fireTicks = max(s.fireTicks, 4)).addLogInternal("${curM.type.displayName} set you ablaze!")
                         }
                     }
                 }
+                if (projKind != null || statusTag != null) {
+                    s = s.copy(
+                        outboundMonsterAttacks = s.outboundMonsterAttacks + LocalMonsterAttackEvent(
+                            monsterId = curM.id,
+                            floor = s.floor,
+                            fromX = curM.x,
+                            fromY = curM.y,
+                            toX = s.playerX,
+                            toY = s.playerY,
+                            projectileKindName = projKind?.name,
+                            targetPlayerId = localPlayerId,
+                            inflictedStatus = statusTag
+                        )
+                    )
+                }
                 if (s.hp <= 0) break
+            } else if (isFloorHost && !targetsLocal && curM.type.rangedProjectile != null &&
+                distToTarget in 2..curM.type.preferredRange &&
+                (curM.type.aiStyle == MonsterAiStyle.RANGED_KITE || Random.nextFloat() < 0.50f)
+            ) {
+                val projKind = curM.type.rangedProjectile
+                s = s.addProjectileInternal(s.floor, curM.x.toFloat(), curM.y.toFloat(), targetX.toFloat(), targetY.toFloat(), projKind, nowMs, 300L)
+                s = s.copy(
+                    outboundMonsterAttacks = s.outboundMonsterAttacks + LocalMonsterAttackEvent(
+                        monsterId = curM.id,
+                        floor = s.floor,
+                        fromX = curM.x,
+                        fromY = curM.y,
+                        toX = targetX,
+                        toY = targetY,
+                        projectileKindName = projKind.name,
+                        targetPlayerId = targetId
+                    )
+                )
             }
 
-            // Only the elected Floor Host moves monsters to keep all clients synchronized
-            if (isFloorHost && distToTarget > 1) {
-                val curM = updatedMonsters[i]
+            // 5. Host Movement AI: Ranged kiters maintain 2-3 tile distance; melee chases into range 1
+            if (isFloorHost) {
                 if (curM.moveCooldown > 0) {
                     updatedMonsters[i] = curM.copy(moveCooldown = curM.moveCooldown - 1)
                 } else {
-                    val stepX = (targetX - curM.x).coerceIn(-1, 1)
-                    val stepY = (targetY - curM.y).coerceIn(-1, 1)
-                    val candidates = buildList {
-                        if (stepX != 0 && stepY != 0) {
-                            add(curM.x + stepX to curM.y)
-                            add(curM.x to curM.y + stepY)
-                        } else if (stepX != 0) {
-                            add(curM.x + stepX to curM.y); add(curM.x to curM.y + 1); add(curM.x to curM.y - 1)
-                        } else if (stepY != 0) {
-                            add(curM.x to curM.y + stepY); add(curM.x + 1 to curM.y); add(curM.x - 1 to curM.y)
-                        }
-                    }
-                    val moveDest = candidates.firstOrNull { (cx, cy) ->
+                    val isTileFree: (Int, Int) -> Boolean = { cx, cy ->
                         val t = floorMap.tileAt(cx, cy)
                         t.walkable &&
                             !floorMap.isProtectionZone(cx, cy) &&
                             !(cx == s.playerX && cy == s.playerY) &&
                             activeRemoteTargets.none { rp -> rp.x == cx && rp.y == cy } &&
-                            updatedMonsters.none { other -> other.id != curM.id && other.floor == curM.floor && other.x == cx && other.y == cy }
+                            updatedMonsters.none { other -> other.id != curM.id && other.floor == curM.floor && other.x == cx && other.y == cy } &&
+                            spawnedSummons.none { other -> other.floor == curM.floor && other.x == cx && other.y == cy }
                     }
+
+                    val moveDest: Pair<Int, Int>? = when {
+                        // Ranged kiters retreat 1 tile away when player closes to adjacent range
+                        curM.type.aiStyle == MonsterAiStyle.RANGED_KITE && distToTarget <= 1 -> {
+                            listOf(
+                                curM.x + 1 to curM.y,
+                                curM.x - 1 to curM.y,
+                                curM.x to curM.y + 1,
+                                curM.x to curM.y - 1
+                            )
+                                .filter { (cx, cy) -> isTileFree(cx, cy) && chebyshev(cx, cy, targetX, targetY) > distToTarget }
+                                .maxByOrNull { (cx, cy) ->
+                                    chebyshev(cx, cy, targetX, targetY) * 10 + abs(cx - targetX) + abs(cy - targetY)
+                                }
+                        }
+                        // Ranged kiters hold position inside optimal 2..preferredRange firing band
+                        curM.type.aiStyle == MonsterAiStyle.RANGED_KITE && distToTarget in 2..curM.type.preferredRange -> null
+                        // Advance toward target
+                        distToTarget > 1 -> {
+                            val stepX = (targetX - curM.x).coerceIn(-1, 1)
+                            val stepY = (targetY - curM.y).coerceIn(-1, 1)
+                            val candidates = buildList {
+                                if (stepX != 0 && stepY != 0) {
+                                    add(curM.x + stepX to curM.y)
+                                    add(curM.x to curM.y + stepY)
+                                } else if (stepX != 0) {
+                                    add(curM.x + stepX to curM.y); add(curM.x to curM.y + 1); add(curM.x to curM.y - 1)
+                                } else if (stepY != 0) {
+                                    add(curM.x to curM.y + stepY); add(curM.x + 1 to curM.y); add(curM.x - 1 to curM.y)
+                                }
+                            }
+                            candidates.firstOrNull { (cx, cy) -> isTileFree(cx, cy) }
+                        }
+                        else -> null
+                    }
+
                     if (moveDest != null) {
                         updatedMonsters[i] = curM.copy(
                             lastMoveFromX = curM.x,
@@ -1194,7 +1529,73 @@ object GameEngine {
                 }
             }
         }
-        return s.copy(monsters = updatedMonsters)
+        return s.copy(monsters = updatedMonsters + spawnedSummons)
+    }
+
+    /**
+     * Computes a classic 3-wide directional Boss Fire Wave cone (up to 7 walkable non-PZ tiles)
+     * aimed from the boss toward its target.
+     */
+    internal fun computeFireWaveTiles(
+        floorMap: WorldFloor,
+        fromX: Int,
+        fromY: Int,
+        targetX: Int,
+        targetY: Int
+    ): List<Pair<Int, Int>> {
+        val dx = targetX - fromX
+        val dy = targetY - fromY
+        val (dirX, dirY) = if (abs(dx) >= abs(dy)) {
+            (if (dx >= 0) 1 else -1) to 0
+        } else {
+            0 to (if (dy >= 0) 1 else -1)
+        }
+        val perpX = -dirY
+        val perpY = dirX
+
+        val tiles = linkedSetOf<Pair<Int, Int>>()
+        for (dist in 1..3) {
+            val spread = if (dist == 1) 0 else 1
+            for (s in -spread..spread) {
+                val tx = fromX + dirX * dist + perpX * s
+                val ty = fromY + dirY * dist + perpY * s
+                if (tx in 0 until floorMap.width &&
+                    ty in 0 until floorMap.height &&
+                    floorMap.tileAt(tx, ty).walkable &&
+                    !floorMap.isProtectionZone(tx, ty)
+                ) {
+                    tiles += (tx to ty)
+                }
+            }
+        }
+        return tiles.toList()
+    }
+
+    private fun findSummonTile(
+        floorMap: WorldFloor,
+        fromX: Int,
+        fromY: Int,
+        state: GameWorldState,
+        activeRemoteTargets: List<RemotePlayerState>,
+        existingMonsters: List<MonsterEntity>,
+        spawnedSummons: List<MonsterEntity>
+    ): Pair<Int, Int>? {
+        val offsets = listOf(
+            1 to 0, -1 to 0, 0 to 1, 0 to -1,
+            1 to 1, -1 to 1, 1 to -1, -1 to -1
+        )
+        for ((ox, oy) in offsets) {
+            val cx = fromX + ox
+            val cy = fromY + oy
+            if (cx !in 0 until floorMap.width || cy !in 0 until floorMap.height) continue
+            if (!floorMap.tileAt(cx, cy).walkable || floorMap.isProtectionZone(cx, cy)) continue
+            if (cx == state.playerX && cy == state.playerY) continue
+            if (activeRemoteTargets.any { it.x == cx && it.y == cy }) continue
+            if (existingMonsters.any { it.floor == state.floor && it.x == cx && it.y == cy }) continue
+            if (spawnedSummons.any { it.floor == state.floor && it.x == cx && it.y == cy }) continue
+            return cx to cy
+        }
+        return null
     }
 
     private fun processRespawns(
@@ -1637,9 +2038,11 @@ object GameEngine {
     }
 
     private fun pruneExpiredEffects(state: GameWorldState, nowMs: Long): GameWorldState {
+        val activeBanner = state.floorWarningBanner?.takeIf { nowMs - it.createdAtMs < 3500L }
         return state.copy(
             floatingTexts = state.floatingTexts.filter { nowMs - it.createdAtMs < 1350L },
-            projectiles = state.projectiles.filter { nowMs - it.createdAtMs < it.durationMs }
+            projectiles = state.projectiles.filter { nowMs - it.createdAtMs < it.durationMs },
+            floorWarningBanner = activeBanner
         )
     }
 

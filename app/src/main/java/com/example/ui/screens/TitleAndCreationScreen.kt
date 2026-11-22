@@ -23,9 +23,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
@@ -33,6 +37,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -67,6 +72,7 @@ import com.example.game.model.ORACLE_MIN_LEVEL
 import com.example.game.model.SpriteColorSwatch
 import com.example.game.model.Vocation
 import com.example.game.sprites.EntitySpriteAtlas
+import com.example.game.update.UpdateCheckState
 import com.example.ui.theme.BasaltDark
 import com.example.ui.theme.ExpEmerald
 import com.example.ui.theme.ObsidianVoid
@@ -81,6 +87,9 @@ import com.example.ui.theme.TorchGold
 @Composable
 fun TitleAndCreationScreen(
     savedSlots: List<SaveSlotEntity>,
+    updateState: UpdateCheckState = UpdateCheckState(),
+    onDownloadUpdate: (String) -> Unit = {},
+    onDismissUpdate: () -> Unit = {},
     onCreateCharacter: (name: String, tunicColorIndex: Int, hairColorIndex: Int) -> Unit,
     onLoadCharacter: (slotId: String) -> Unit,
     onDeleteSlot: (slotId: String) -> Unit
@@ -126,6 +135,23 @@ fun TitleAndCreationScreen(
                         )
                     )
             )
+            Surface(
+                color = BasaltDark.copy(alpha = 0.85f),
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(1.dp, TorchGold.copy(alpha = 0.6f)),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 10.dp, end = 14.dp)
+                    .testTag("app_version_badge")
+            ) {
+                Text(
+                    text = updateState.currentVersionLabel,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = TorchGold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -152,6 +178,95 @@ fun TitleAndCreationScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // Dismissible GitHub Release Update Banner
+            AnimatedVisibility(
+                visible = updateState.updateAvailable,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Surface(
+                    color = StoneElevated,
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.5.dp, TorchGold),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("update_available_banner")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Update Available",
+                                tint = TorchGold,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "New Rookvale Build Available!",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = TorchGold
+                                )
+                                val sub = buildString {
+                                    if (!updateState.releaseDateLabel.isNullOrBlank()) {
+                                        append("Published ${updateState.releaseDateLabel} • ")
+                                    }
+                                    append("Installed ${updateState.currentVersionLabel}")
+                                }
+                                Text(
+                                    text = sub,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = ParchmentMuted
+                                )
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { onDownloadUpdate(updateState.downloadUrl) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TorchGold,
+                                    contentColor = ObsidianVoid
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("download_update_button")
+                            ) {
+                                Text(
+                                    text = "DOWNLOAD UPDATE",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = onDismissUpdate,
+                                border = BorderStroke(1.dp, StoneBorderLight),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .height(48.dp)
+                                    .testTag("dismiss_update_button")
+                            ) {
+                                Text(
+                                    text = "Later",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = ParchmentLight
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Existing Offline Saved Characters
             if (savedSlots.isNotEmpty()) {
                 Text(

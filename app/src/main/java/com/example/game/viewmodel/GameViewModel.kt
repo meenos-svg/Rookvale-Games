@@ -21,6 +21,8 @@ import com.example.game.multiplayer.MultiplayerUiState
 import com.example.game.multiplayer.RealtimeMultiplayerManager
 import com.example.game.sprites.EntitySpriteAtlas
 import com.example.game.sprites.TileSpriteAtlas
+import com.example.game.update.GitHubUpdateChecker
+import com.example.game.update.UpdateCheckState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -56,6 +58,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     val multiplayerState: StateFlow<MultiplayerUiState> = multiplayerManager.uiState
 
+    private val _updateState = MutableStateFlow(UpdateCheckState())
+    val updateState: StateFlow<UpdateCheckState> = _updateState.asStateFlow()
+
     private val _saveBanner = MutableStateFlow<String?>(null)
     val saveBanner: StateFlow<String?> = _saveBanner.asStateFlow()
 
@@ -69,6 +74,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             TileSpriteAtlas.warmUp()
             EntitySpriteAtlas.warmUp()
         }
+        checkForGitHubUpdates()
 
         // Apply incoming host monster sync snapshots on non-host clients
         viewModelScope.launch {
@@ -120,6 +126,26 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     broadcastCurrentState()
                     persistCurrentState(silent = true)
                 }
+            }
+        }
+
+        // Apply incoming co-op monster ranged projectiles, boss Fire Wave AoE detonations & status cues
+        viewModelScope.launch {
+            multiplayerManager.monsterAttackEvents.collect { attackEvent ->
+                if (_screen.value != AppScreen.PLAYING) return@collect
+                val now = SystemClock.uptimeMillis()
+                var died = false
+                var statusChanged = false
+                _world.update { prev ->
+                    val next = GameEngine.applyRemoteMonsterAttack(prev, attackEvent, prev.saveId, now)
+                    if (next.deathReport != null && prev.deathReport == null) died = true
+                    if (next.hp != prev.hp || next.poisonTicks != prev.poisonTicks || next.fireTicks != prev.fireTicks) {
+                        statusChanged = true
+                    }
+                    next
+                }
+                if (statusChanged) broadcastCurrentState()
+                if (died) persistCurrentState(silent = true)
             }
         }
     }
@@ -259,7 +285,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         diedOrLeveled = true
                     }
                     if (next.floor != prev.floor) floorChanged = true
-                    if (next.hp != prev.hp || next.maxHp != prev.maxHp || next.playerX != prev.playerX || next.playerY != prev.playerY) {
+                    if (next.hp != prev.hp ||
+                        next.maxHp != prev.maxHp ||
+                        next.playerX != prev.playerX ||
+                        next.playerY != prev.playerY ||
+                        (next.poisonTicks > 0) != (prev.poisonTicks > 0) ||
+                        (next.fireTicks > 0) != (prev.fireTicks > 0)
+                    ) {
                         vitalsChanged = true
                     }
                     curFloor = next.floor
@@ -268,6 +300,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 flushOutboundMonsterHits()
+                flushOutboundMonsterAttacks()
 
                 val latest = _world.value
                 if (floorChanged) {
@@ -349,6 +382,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun flushOutboundMonsterAttacks() {
+        val pending = _world.value.outboundMonsterAttacks
+        if (pending.isEmpty()) return
+        val snapshot = _world.value
+        _world.update { it.copy(outboundMonsterAttacks = emptyList()) }
+        for (atk in pending) {
+            multiplayerManager.broadcastMonsterAttack(
+                attack = atk,
+                senderId = snapshot.saveId
+            )
+        }
+    }
+
     private fun broadcastCurrentState() {
         val cur = _world.value
         if (cur.saveId.isNotBlank()) {
@@ -369,8 +415,47 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             floor = floor,
             hp = hp,
             maxHp = maxHp,
-            joinedAt = System.currentTimeMillis()
+            joinedAt = System.currentTimeMillis(),
+            isPoisoned = poisonTicks > 0,
+            isBurning = fireTicks > 0
         )
+
+    fun checkForGitHubUpdates() {
+        viewModelScope.launch {
+            val result = GitHubUpdateChecker.checkForUpdate(getApplication())
+            _updateState.value = result
+        }
+    }
+
+    fun dismissUpdateBanner() {
+        val ts = _updateState.value.releaseTimestampIso
+        GitHubUpdateChecker.dismissRelease(getApplication(), ts)
+        _updateState.update { it.copy(updateAvailable = false) }
+    }
+
+    fun onAppResumed() {
+        if (_screen.value == AppScreen.PLAYING) {
+            val cur = _world.value
+            if (cur.saveId.isNotBlank()) {
+                multiplayerManager.ensureConnectedOrRetry(cur.toPresencePayload())
+            }
+        }
+    }
+
+    fun onMultiplayerStatusTapped() {
+        val cur = _world.value
+        if (cur.saveId.isBlank()) return
+        val result = multiplayerManager.ensureConnectedOrRetry(cur.toPresencePayload())
+        val msg = when (result) {
+            RealtimeMultiplayerManager.RetryResult.ALREADY_ONLINE ->
+                "Online on Floor ${cur.floor} (${multiplayerManager.uiState.value.floorOnlineCount} hero(es) present)."
+            RealtimeMultiplayerManager.RetryResult.CONNECTING ->
+                "Connecting to Rookvale Floor ${cur.floor} live co-op..."
+            RealtimeMultiplayerManager.RetryResult.MISSING_CREDENTIALS ->
+                "Offline Solo: configure SUPABASE_ANON_KEY in Secrets to enable live co-op."
+        }
+        _world.update { st -> st.copy(statusLog = (st.statusLog + msg).takeLast(14)) }
+    }
 
     fun toggleChat() {
         multiplayerManager.toggleChatExpanded()

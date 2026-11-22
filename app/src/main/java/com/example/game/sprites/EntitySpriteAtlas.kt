@@ -169,7 +169,7 @@ object EntitySpriteAtlas {
         val buf = buf32()
         val bob = if (frame == 1) -1 else 0
         when (type) {
-            MonsterType.RAT -> {
+            MonsterType.CAVE_RAT -> {
                 drawShadow(buf, 8, 23, 15, 4)
                 rect(buf, S, 22, 19 + bob, 5, 2, 0xFFD98B9A.toInt())
                 rect(buf, S, 9, 14 + bob, 13, 9, 0xFF6E5038.toInt())
@@ -177,52 +177,60 @@ object EntitySpriteAtlas {
                 rect(buf, S, 6, 16 + bob, 5, 5, 0xFF7D5D42.toInt())
                 px(buf, S, 8, 17 + bob, 0xFFFF2B2B.toInt())
             }
+            MonsterType.WILD_RABBIT -> {
+                drawShadow(buf, 9, 24, 14, 4)
+                val hop = if (frame == 1) -2 else 0
+                val fur = 0xFFD9CDB8.toInt()
+                val inner = 0xFFF2ECE1.toInt()
+                rect(buf, S, 10, 15 + hop, 12, 9, fur)
+                rect(buf, S, 12, 17 + hop, 8, 6, inner)
+                rect(buf, S, 21, 17 + hop, 3, 3, 0xFFFFFFFF.toInt()) // fluffy tail
+                rect(buf, S, 8, 11 + hop, 7, 6, fur) // head
+                rect(buf, S, 9, 5 + hop, 2, 6, fur); rect(buf, S, 13, 5 + hop, 2, 6, fur) // tall ears
+                px(buf, S, 10, 7 + hop, 0xFFE6A1AD.toInt()); px(buf, S, 14, 7 + hop, 0xFFE6A1AD.toInt())
+                px(buf, S, 10, 13 + hop, 0xFF1F1815.toInt()) // dark eye
+                px(buf, S, 8, 14 + hop, 0xFFE68A9A.toInt()) // pink nose
+            }
+            MonsterType.YOUNG_SNAKE -> {
+                drawShadow(buf, 7, 24, 18, 4)
+                val slither = if (frame == 1) 1 else -1
+                val scale = 0xFF3E8C3A.toInt()
+                val hi = 0xFF66B856.toInt()
+                rect(buf, S, 8 + slither, 20, 15, 4, scale)
+                rect(buf, S, 10 + slither, 21, 11, 2, hi)
+                rect(buf, S, 16 - slither, 16, 6, 5, scale)
+                rect(buf, S, 11, 11 + bob, 7, 6, scale) // raised hood/head
+                rect(buf, S, 12, 12 + bob, 5, 3, hi)
+                px(buf, S, 12, 13 + bob, 0xFFFFD43B.toInt()); px(buf, S, 16, 13 + bob, 0xFFFFD43B.toInt())
+                rect(buf, S, 8, 14 + bob, 3, 1, 0xFFFF3344.toInt()) // forked tongue
+            }
             MonsterType.CRAG_WOLF -> {
                 drawShadow(buf, 6, 24, 20, 4)
                 val fur = 0xFF6B6E75.toInt()
                 val light = 0xFF9AA0AA.toInt()
                 rect(buf, S, 8, 14 + bob, 16, 8, fur)
                 rect(buf, S, 10, 13 + bob, 11, 5, light)
-                rect(buf, S, 5, 11 + bob, 7, 7, fur) // wolf head
-                rect(buf, S, 6, 8 + bob, 2, 3, fur); rect(buf, S, 10, 8 + bob, 2, 3, fur) // ears
+                rect(buf, S, 5, 11 + bob, 7, 7, fur)
+                rect(buf, S, 6, 8 + bob, 2, 3, fur); rect(buf, S, 10, 8 + bob, 2, 3, fur)
                 rect(buf, S, 8, 21 + (if (frame == 1) -1 else 0), 3, 5, 0xFF474A52.toInt())
                 rect(buf, S, 19, 21 + (if (frame == 1) 1 else 0), 3, 5, 0xFF474A52.toInt())
-                rect(buf, S, 24, 14 + bob, 4, 3, light) // tail
-                px(buf, S, 7, 13 + bob, 0xFFFFC933.toInt()) // amber eye
-                px(buf, S, 6, 16 + bob, 0xFFFFFFFF.toInt()) // fang
+                rect(buf, S, 24, 14 + bob, 4, 3, light)
+                px(buf, S, 7, 13 + bob, 0xFFFFC933.toInt())
+                px(buf, S, 6, 16 + bob, 0xFFFFFFFF.toInt())
             }
-            MonsterType.VESPER_BAT -> {
-                drawShadow(buf, 9, 25, 14, 3)
-                val wingY = if (frame == 0) 9 else 14
-                rect(buf, S, 3, wingY, 10, 7, 0xFF3E314A.toInt())
-                rect(buf, S, 19, wingY, 10, 7, 0xFF3E314A.toInt())
-                rect(buf, S, 12, 11 + bob, 8, 9, 0xFF544363.toInt())
-                rect(buf, S, 12, 8 + bob, 2, 3, 0xFF544363.toInt()); rect(buf, S, 18, 8 + bob, 2, 3, 0xFF544363.toInt())
-                px(buf, S, 14, 14 + bob, 0xFFFF4D4D.toInt()); px(buf, S, 17, 14 + bob, 0xFFFF4D4D.toInt())
-            }
-            MonsterType.CAVE_SPIDER -> {
-                drawShadow(buf, 6, 23, 20, 5)
-                val legShift = if (frame == 0) 0 else 2
-                for (i in 0..3) {
-                    val ly = 11 + i * 4
-                    rect(buf, S, 4, ly + (if (i % 2 == 0) legShift else -legShift) / 2, 7, 2, 0xFF1F1C24.toInt())
-                    rect(buf, S, 21, ly + (if (i % 2 == 1) legShift else -legShift) / 2, 7, 2, 0xFF1F1C24.toInt())
-                }
-                rect(buf, S, 10, 9 + bob, 12, 10, 0xFF2D2736.toInt())
-                rect(buf, S, 11, 18 + bob, 10, 6, 0xFF1F1A26.toInt())
-                px(buf, S, 13, 20 + bob, 0xFF7BFF33.toInt()); px(buf, S, 18, 20 + bob, 0xFF7BFF33.toInt())
-            }
-            MonsterType.STONEHORN_TROLL -> {
+            MonsterType.SWAMP_TROLL -> {
                 drawShadow(buf, 6, 25, 20, 5)
-                val hide = 0xFF5F6E54.toInt()
+                val hide = 0xFF4F6B43.toInt()
+                val moss = 0xFF709459.toInt()
                 rect(buf, S, 8, 19 + bob, 5, 8, hide); rect(buf, S, 19, 19 + bob, 5, 8, hide)
                 rect(buf, S, 7, 9 + bob, 18, 11, hide)
-                rect(buf, S, 9, 10 + bob, 14, 8, 0xFF758768.toInt())
+                rect(buf, S, 9, 10 + bob, 14, 8, moss)
                 rect(buf, S, 11, 3 + bob, 10, 7, hide)
-                rect(buf, S, 9, 1 + bob, 3, 4, 0xFFDCD3C2.toInt()); rect(buf, S, 20, 1 + bob, 3, 4, 0xFFDCD3C2.toInt()) // stone horns
-                px(buf, S, 13, 6 + bob, 0xFFFF7A29.toInt()); px(buf, S, 18, 6 + bob, 0xFFFF7A29.toInt())
+                rect(buf, S, 10, 2 + bob, 12, 2, 0xFF39522F.toInt()) // swamp moss hair
+                px(buf, S, 13, 6 + bob, 0xFFFFB333.toInt()); px(buf, S, 18, 6 + bob, 0xFFFFB333.toInt())
+                rect(buf, S, 24, 10 + bob, 4, 12, 0xFF6B4423.toInt()) // heavy swamp club
             }
-            MonsterType.SKELETON, MonsterType.MARROW_ARCHER -> {
+            MonsterType.SKELETON -> {
                 drawShadow(buf, 8, 25, 16, 4)
                 val bone = 0xFFE8E2D5.toInt()
                 rect(buf, S, 11, 19 + bob, 3, 7, 0xFFADA699.toInt()); rect(buf, S, 17, 19 + bob, 3, 7, 0xFFADA699.toInt())
@@ -230,13 +238,60 @@ object EntitySpriteAtlas {
                 rect(buf, S, 11, 12 + bob, 9, 2, bone); rect(buf, S, 11, 15 + bob, 9, 2, bone)
                 rect(buf, S, 11, 3 + bob, 9, 8, bone)
                 rect(buf, S, 12, 6 + bob, 2, 2, 0xFF14100E.toInt()); rect(buf, S, 17, 6 + bob, 2, 2, 0xFF14100E.toInt())
-                if (type == MonsterType.MARROW_ARCHER) {
-                    rect(buf, S, 4, 6 + bob, 3, 15, 0xFFA36E39.toInt()) // bone bow
-                    rect(buf, S, 10, 2 + bob, 11, 3, 0xFF8C2424.toInt()) // crimson archer hood
-                } else {
-                    rect(buf, S, 5, 8 + bob, 3, 11, 0xFF94745E.toInt())
-                    rect(buf, S, 22, 12 + bob, 6, 9, 0xFF6B533B.toInt())
+                rect(buf, S, 5, 8 + bob, 3, 11, 0xFF94745E.toInt())
+                rect(buf, S, 22, 12 + bob, 6, 9, 0xFF6B533B.toInt())
+            }
+            MonsterType.GOBLIN_SCOUT -> {
+                drawShadow(buf, 8, 24, 16, 4)
+                val skin = 0xFF5D8F3B.toInt()
+                val tunic = 0xFF7D532B.toInt()
+                rect(buf, S, 11, 20 + bob, 3, 6, skin); rect(buf, S, 17, 20 + bob, 3, 6, skin)
+                rect(buf, S, 10, 13 + bob, 11, 8, tunic)
+                rect(buf, S, 11, 6 + bob, 9, 7, skin) // goblin head
+                rect(buf, S, 7, 7 + bob, 4, 2, skin); rect(buf, S, 20, 7 + bob, 4, 2, skin) // pointy ears
+                px(buf, S, 13, 9 + bob, 0xFFFFD43B.toInt()); px(buf, S, 17, 9 + bob, 0xFFFFD43B.toInt())
+                // Sling & stone pouch
+                rect(buf, S, 22, 11 + bob, 4, 4, 0xFF9BA3AD.toInt())
+                rect(buf, S, 5, 13 + bob, 4, 5, 0xFF543318.toInt())
+            }
+            MonsterType.POISON_SPIDER -> {
+                drawShadow(buf, 6, 23, 20, 5)
+                val legShift = if (frame == 0) 0 else 2
+                for (i in 0..3) {
+                    val ly = 11 + i * 4
+                    rect(buf, S, 4, ly + (if (i % 2 == 0) legShift else -legShift) / 2, 7, 2, 0xFF1D2419.toInt())
+                    rect(buf, S, 21, ly + (if (i % 2 == 1) legShift else -legShift) / 2, 7, 2, 0xFF1D2419.toInt())
                 }
+                rect(buf, S, 10, 9 + bob, 12, 10, 0xFF283321.toInt())
+                rect(buf, S, 13, 11 + bob, 6, 4, 0xFF5EE034.toInt()) // venom abdomen mark
+                rect(buf, S, 11, 18 + bob, 10, 6, 0xFF1E261A.toInt())
+                px(buf, S, 13, 20 + bob, 0xFF8CFF33.toInt()); px(buf, S, 18, 20 + bob, 0xFF8CFF33.toInt())
+            }
+            MonsterType.MINOTAUR -> {
+                drawShadow(buf, 5, 25, 22, 5)
+                val fur = 0xFF6B3E26.toInt()
+                val armor = 0xFF7D8591.toInt()
+                rect(buf, S, 8, 20 + bob, 5, 7, fur); rect(buf, S, 19, 20 + bob, 5, 7, fur)
+                rect(buf, S, 7, 10 + bob, 18, 11, armor) // iron cuirass
+                rect(buf, S, 10, 11 + bob, 12, 8, 0xFF9EA6B3.toInt())
+                rect(buf, S, 10, 3 + bob, 12, 8, fur) // bull head
+                rect(buf, S, 6, 1 + bob, 4, 4, 0xFFE8DFC8.toInt()); rect(buf, S, 22, 1 + bob, 4, 4, 0xFFE8DFC8.toInt()) // curved horns
+                px(buf, S, 13, 6 + bob, 0xFFFF3B2E.toInt()); px(buf, S, 18, 6 + bob, 0xFFFF3B2E.toInt())
+                rect(buf, S, 25, 6 + bob, 4, 15, 0xFFB0B8C4.toInt()) // battle axe
+            }
+            MonsterType.ORC_WARRIOR -> {
+                drawShadow(buf, 6, 25, 20, 5)
+                val skin = 0xFF477A3B.toInt()
+                val steel = 0xFF5D6570.toInt()
+                rect(buf, S, 9, 20 + bob, 5, 7, 0xFF3E3A36.toInt()); rect(buf, S, 18, 20 + bob, 5, 7, 0xFF3E3A36.toInt())
+                rect(buf, S, 7, 10 + bob, 18, 11, steel)
+                rect(buf, S, 10, 11 + bob, 12, 7, 0xFF7B8494.toInt())
+                rect(buf, S, 10, 3 + bob, 12, 7, skin)
+                rect(buf, S, 10, 2 + bob, 12, 3, steel) // iron warhelm
+                px(buf, S, 12, 9 + bob, 0xFFFFFFFF.toInt()); px(buf, S, 19, 9 + bob, 0xFFFFFFFF.toInt()) // tusks
+                px(buf, S, 13, 6 + bob, 0xFFFF4D2E.toInt()); px(buf, S, 18, 6 + bob, 0xFFFF4D2E.toInt())
+                rect(buf, S, 4, 7 + bob, 3, 14, 0xFFD0D8E2.toInt()) // orc saber
+                rect(buf, S, 24, 12 + bob, 5, 9, 0xFF7D502E.toInt()) // iron-rimmed shield
             }
             MonsterType.GHOUL -> {
                 drawShadow(buf, 8, 25, 16, 5)
@@ -245,27 +300,30 @@ object EntitySpriteAtlas {
                 rect(buf, S, 11, 4 + bob, 10, 8, 0xFF779481.toInt())
                 rect(buf, S, 13, 7 + bob, 2, 2, 0xFF8CFF4D.toInt()); rect(buf, S, 17, 7 + bob, 2, 2, 0xFF8CFF4D.toInt())
             }
-            MonsterType.CYCLOPS, MonsterType.FORGE_BRUTE -> {
+            MonsterType.FIRE_DEVIL -> {
+                drawShadow(buf, 8, 25, 16, 4)
+                val crimson = 0xFFB82424.toInt()
+                val flame = if (frame == 0) 0xFFFF6E1A.toInt() else 0xFFFFB833.toInt()
+                rect(buf, S, 10, 19 + bob, 4, 7, 0xFF7D1616.toInt()); rect(buf, S, 18, 19 + bob, 4, 7, 0xFF7D1616.toInt())
+                rect(buf, S, 9, 10 + bob, 14, 10, crimson)
+                rect(buf, S, 11, 12 + bob, 10, 6, flame) // fiery core
+                rect(buf, S, 11, 3 + bob, 10, 7, crimson)
+                rect(buf, S, 10, 0 + bob, 2, 4, 0xFF2B1B1B.toInt()); rect(buf, S, 20, 0 + bob, 2, 4, 0xFF2B1B1B.toInt()) // devil horns
+                px(buf, S, 13, 6 + bob, 0xFFFFE57F.toInt()); px(buf, S, 18, 6 + bob, 0xFFFFE57F.toInt())
+                rect(buf, S, 23, 8 + bob, 5, 5, flame) // floating fireball
+            }
+            MonsterType.CYCLOPS -> {
                 drawShadow(buf, 5, 25, 22, 6)
-                val skin = if (type == MonsterType.FORGE_BRUTE) 0xFF995D42.toInt() else 0xFFB8875A.toInt()
-                val hi = if (type == MonsterType.FORGE_BRUTE) 0xFFB87454.toInt() else 0xFFD4A272.toInt()
+                val skin = 0xFFB8875A.toInt()
+                val hi = 0xFFD4A272.toInt()
                 rect(buf, S, 8, 20 + bob, 6, 8, skin); rect(buf, S, 18, 20 + bob, 6, 8, skin)
                 rect(buf, S, 8, 17 + bob, 16, 5, 0xFF3D2E29.toInt())
                 rect(buf, S, 6, 7 + bob, 20, 11, skin); rect(buf, S, 9, 8 + bob, 14, 8, hi)
                 rect(buf, S, 11, 1 + bob, 10, 7, hi)
                 rect(buf, S, 14, 3 + bob, 4, 3, 0xFFFFF4D1.toInt()); rect(buf, S, 15, 4 + bob, 2, 2, 0xFFE65C1A.toInt())
-                rect(buf, S, 25, 4 + bob, 5, 16, if (type == MonsterType.FORGE_BRUTE) 0xFF545B66.toInt() else 0xFF5C3A1E.toInt())
+                rect(buf, S, 25, 4 + bob, 5, 16, 0xFF5C3A1E.toInt())
             }
-            MonsterType.RUNIC_GOLEM -> {
-                drawShadow(buf, 5, 25, 22, 6)
-                rect(buf, S, 7, 19 + bob, 6, 9, 0xFF4B5059.toInt()); rect(buf, S, 19, 19 + bob, 6, 9, 0xFF4B5059.toInt())
-                rect(buf, S, 5, 7 + bob, 22, 13, 0xFF636B78.toInt())
-                rect(buf, S, 10, 2 + bob, 12, 6, 0xFF7B8596.toInt())
-                val runeGlow = if (frame == 0) 0xFF8B6BFF.toInt() else 0xFFD1B8FF.toInt()
-                rect(buf, S, 13, 11 + bob, 6, 6, runeGlow)
-                rect(buf, S, 12, 4 + bob, 2, 2, runeGlow); rect(buf, S, 18, 4 + bob, 2, 2, runeGlow)
-            }
-            MonsterType.WYRM_HATCHLING -> {
+            MonsterType.DRAGON_HATCHLING -> {
                 drawShadow(buf, 7, 24, 18, 5)
                 val wy = if (frame == 0) 7 else 10
                 rect(buf, S, 4, wy, 7, 9, 0xFF9E2B2B.toInt()); rect(buf, S, 21, wy, 7, 9, 0xFF9E2B2B.toInt())
@@ -274,14 +332,37 @@ object EntitySpriteAtlas {
                 rect(buf, S, 11, 5 + bob, 10, 7, 0xFF39A85C.toInt())
                 px(buf, S, 13, 7 + bob, 0xFFFF661A.toInt()); px(buf, S, 18, 7 + bob, 0xFFFF661A.toInt())
             }
-            MonsterType.CINDER_WRAITH -> {
-                drawShadow(buf, 9, 25, 14, 4)
-                rect(buf, S, 8, 10 + bob, 16, 14, 0xFF2E1A1F.toInt())
-                rect(buf, S, 10, 12 + bob, 12, 10, if (frame == 0) 0xFFFF5E1A.toInt() else 0xFFFF882B.toInt())
-                rect(buf, S, 11, 4 + bob, 10, 8, 0xFF1F1216.toInt())
-                rect(buf, S, 13, 7 + bob, 2, 2, 0xFFFFE57F.toInt()); rect(buf, S, 17, 7 + bob, 2, 2, 0xFFFFE57F.toInt())
+            MonsterType.NECROMANCER -> {
+                drawShadow(buf, 8, 25, 16, 5)
+                val cloak = 0xFF2B1C3D.toInt()
+                val trim = 0xFF6B3AA6.toInt()
+                val glow = if (frame == 0) 0xFFC77DFF.toInt() else 0xFFFF4D6D.toInt()
+                rect(buf, S, 8, 10 + bob, 16, 16, cloak)
+                rect(buf, S, 13, 11 + bob, 6, 14, trim)
+                rect(buf, S, 10, 3 + bob, 12, 8, 0xFF1A1226.toInt()) // hooded face
+                rect(buf, S, 12, 6 + bob, 2, 2, glow); rect(buf, S, 18, 6 + bob, 2, 2, glow)
+                rect(buf, S, 24, 6 + bob, 2, 19, 0xFF473A52.toInt()) // skull staff
+                rect(buf, S, 23, 3 + bob, 4, 4, 0xFFE8E2D5.toInt())
             }
-            MonsterType.DRAGON_BOSS -> {
+            MonsterType.DEMON_LORD -> {
+                drawShadow(buf, 3, 25, 26, 6)
+                val wingY = if (frame == 0) 5 else 8
+                val skin = 0xFFA6171F.toInt()
+                val armor = 0xFF261C24.toInt()
+                val hellfire = if (frame == 0) 0xFFFF6E1A.toInt() else 0xFFFFD447.toInt()
+                // Bat-like abyssal wings
+                rect(buf, S, 1, wingY, 8, 12, 0xFF3D141C.toInt()); rect(buf, S, 23, wingY, 8, 12, 0xFF3D141C.toInt())
+                rect(buf, S, 1, wingY, 8, 2, 0xFF7D1922.toInt()); rect(buf, S, 23, wingY, 8, 2, 0xFF7D1922.toInt())
+                // Broad demon torso + obsidian pauldrons
+                rect(buf, S, 8, 10 + bob, 16, 15, skin)
+                rect(buf, S, 8, 10 + bob, 16, 4, armor)
+                rect(buf, S, 12, 14 + bob, 8, 7, hellfire)
+                // Horned demonic crown
+                rect(buf, S, 10, 2 + bob, 12, 8, skin)
+                rect(buf, S, 7, 0 + bob, 4, 5, 0xFFE6D4A8.toInt()); rect(buf, S, 21, 0 + bob, 4, 5, 0xFFE6D4A8.toInt())
+                rect(buf, S, 12, 5 + bob, 2, 2, 0xFFFFE57F.toInt()); rect(buf, S, 18, 5 + bob, 2, 2, 0xFFFFE57F.toInt())
+            }
+            MonsterType.ELDER_DRAGON -> {
                 drawShadow(buf, 3, 25, 26, 6)
                 val wingY = if (frame == 0) 4 else 7
                 rect(buf, S, 1, wingY, 9, 13, 0xFF8C2424.toInt()); rect(buf, S, 22, wingY, 9, 13, 0xFF8C2424.toInt())
@@ -422,11 +503,20 @@ object EntitySpriteAtlas {
                 for (i in 0..10) px(buf, ITEM_S, 3 + i, 13 - i, 0xFF8C5A2B.toInt()); rect(buf, ITEM_S, 13, 3, 1, 9, 0xFFDCD3C2.toInt())
             }
             ItemCategory.FOOD -> {
-                val c = if (itemId == "fresh_fish") 0xFF5A9BD4.toInt() else if (itemId == "dragon_ham") 0xFFB8442A.toInt() else 0xFFE3C254.toInt()
+                val c = when (itemId) {
+                    "fresh_fish" -> 0xFF5A9BD4.toInt()
+                    "fresh_meat" -> 0xFFC94A38.toInt()
+                    "dragon_ham" -> 0xFFB8442A.toInt()
+                    else -> 0xFFE3C254.toInt()
+                }
                 rect(buf, ITEM_S, 3, 5, 10, 6, c); rect(buf, ITEM_S, 12, 4, 2, 8, c)
+                if (itemId == "fresh_meat") rect(buf, ITEM_S, 11, 7, 3, 2, 0xFFEDE3CE.toInt())
             }
             ItemCategory.WEAPON_MELEE -> {
-                if (itemId.contains("axe") || itemId.contains("glaive") || itemId.contains("halberd")) {
+                if (itemId == "wooden_club") {
+                    for (i in 0..9) px(buf, ITEM_S, 3 + i, 12 - i, 0xFF7D4E26.toInt())
+                    rect(buf, ITEM_S, 9, 2, 5, 5, 0xFF5C3818.toInt())
+                } else if (itemId.contains("axe") || itemId.contains("glaive") || itemId.contains("halberd")) {
                     for (i in 0..10) px(buf, ITEM_S, 3 + i, 12 - i, 0xFF6B4226.toInt())
                     rect(buf, ITEM_S, 8, 2, 6, 6, tierTint)
                 } else {

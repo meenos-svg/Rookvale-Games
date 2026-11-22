@@ -55,6 +55,9 @@ class RealtimeMultiplayerManager(
     private val _monsterHitEvents = MutableSharedFlow<RemoteMonsterHitEvent>(extraBufferCapacity = 64)
     val monsterHitEvents: SharedFlow<RemoteMonsterHitEvent> = _monsterHitEvents.asSharedFlow()
 
+    private val _monsterAttackEvents = MutableSharedFlow<RemoteMonsterAttackEvent>(extraBufferCapacity = 64)
+    val monsterAttackEvents: SharedFlow<RemoteMonsterAttackEvent> = _monsterAttackEvents.asSharedFlow()
+
     private val refCounter = AtomicLong(1L)
     private var activeWebSocket: WebSocket? = null
     private var heartbeatJob: Job? = null
@@ -74,18 +77,47 @@ class RealtimeMultiplayerManager(
 
     private val presenceMap = LinkedHashMap<String, RemotePlayerState>()
 
+    enum class RetryResult {
+        CONNECTING,
+        ALREADY_ONLINE,
+        MISSING_CREDENTIALS
+    }
+
     fun connect(initialPayload: LocalPlayerPresencePayload) {
         sessionActive = true
         latestLocalPayload = initialPayload
         currentFloor = initialPayload.floor
         floorJoinedAtMs = initialPayload.joinedAt
         reconnectAttempt = 0
+        reconnectJob?.cancel()
+        reconnectJob = null
 
         if (!MultiplayerConfig.isConfigured()) {
             transitionToOfflineSolo(localPlayerId = initialPayload.playerId)
             return
         }
         openSocket()
+    }
+
+    fun ensureConnectedOrRetry(payload: LocalPlayerPresencePayload): RetryResult {
+        sessionActive = true
+        latestLocalPayload = payload.copy(joinedAt = if (floorJoinedAtMs > 0L) floorJoinedAtMs else payload.joinedAt)
+        currentFloor = payload.floor
+        if (floorJoinedAtMs == 0L) floorJoinedAtMs = payload.joinedAt
+
+        if (!MultiplayerConfig.isConfigured()) {
+            transitionToOfflineSolo(localPlayerId = payload.playerId)
+            return RetryResult.MISSING_CREDENTIALS
+        }
+        if (_uiState.value.status == ConnectionStatus.ONLINE && activeWebSocket != null) {
+            broadcastLocalState(latestLocalPayload!!)
+            return RetryResult.ALREADY_ONLINE
+        }
+        reconnectAttempt = 0
+        reconnectJob?.cancel()
+        reconnectJob = null
+        openSocket()
+        return RetryResult.CONNECTING
     }
 
     fun disconnect() {
@@ -134,6 +166,7 @@ class RealtimeMultiplayerManager(
         if (!_uiState.value.isFloorHost || floor != currentFloor) return
 
         val listPayload = monsters.map { m ->
+            val aoeEncoded = m.pendingAoeTiles.take(16).map { (ax, ay) -> listOf(ax, ay) }
             mapOf(
                 "id" to m.id,
                 "type" to m.typeName,
@@ -144,7 +177,9 @@ class RealtimeMultiplayerManager(
                 "sy" to m.spawnY,
                 "hp" to m.hp,
                 "mhp" to m.maxHp,
-                "tgt" to m.targetPlayerId
+                "tgt" to m.targetPlayerId,
+                "sum" to m.isSummon,
+                "aoe" to aoeEncoded
             )
         }
         sendBroadcast(
@@ -177,6 +212,31 @@ class RealtimeMultiplayerManager(
                 "proj" to hit.projectileKindName,
                 "fx" to hit.fromX,
                 "fy" to hit.fromY
+            )
+        )
+    }
+
+    fun broadcastMonsterAttack(attack: LocalMonsterAttackEvent, senderId: String) {
+        val ws = activeWebSocket ?: return
+        if (_uiState.value.status != ConnectionStatus.ONLINE) return
+
+        val aoeEncoded = attack.aoeTiles.take(16).map { (ax, ay) -> listOf(ax, ay) }
+        sendBroadcast(
+            ws,
+            MultiplayerConfig.floorChannelTopic(attack.floor),
+            "monster_attack",
+            mapOf(
+                "sid" to senderId,
+                "mid" to attack.monsterId,
+                "floor" to attack.floor,
+                "fx" to attack.fromX,
+                "fy" to attack.fromY,
+                "tx" to attack.toX,
+                "ty" to attack.toY,
+                "proj" to attack.projectileKindName,
+                "aoe" to aoeEncoded,
+                "tgt" to attack.targetPlayerId,
+                "st" to attack.inflictedStatus
             )
         )
     }
@@ -453,6 +513,7 @@ class RealtimeMultiplayerManager(
                     "player_state" -> if (topic == expectedFloorTopic) applyRemotePlayerState(innerBody)
                     "monster_sync" -> if (topic == expectedFloorTopic) applyMonsterSync(innerBody)
                     "monster_hit" -> if (topic == expectedFloorTopic) applyRemoteMonsterHit(innerBody)
+                    "monster_attack" -> if (topic == expectedFloorTopic) applyRemoteMonsterAttack(innerBody)
                     "chat_msg" -> applyIncomingChat(innerBody)
                 }
             }
@@ -544,7 +605,9 @@ class RealtimeMultiplayerManager(
             val maxHp = (m["mhp"].asIntOrNull() ?: 50).coerceIn(1, 50_000)
             val hp = (m["hp"].asIntOrNull() ?: maxHp).coerceIn(0, maxHp)
             val tgt = (m["tgt"] as? String)?.let { MultiplayerSanitizer.sanitizeId(it) }?.ifBlank { null }
-            SyncedMonsterSnapshot(id, typeName, floor, cx, cy, csx, csy, hp, maxHp, tgt)
+            val isSummon = (m["sum"] as? Boolean) ?: false
+            val aoeTiles = parseTilePairs(m["aoe"], floor)
+            SyncedMonsterSnapshot(id, typeName, floor, cx, cy, csx, csy, hp, maxHp, tgt, isSummon, aoeTiles)
         }
         _monsterSyncEvents.tryEmit(floor to snapshots)
     }
@@ -575,6 +638,46 @@ class RealtimeMultiplayerManager(
             fromY = fy
         )
         _monsterHitEvents.tryEmit(evt)
+    }
+
+    private fun applyRemoteMonsterAttack(body: Map<String, Any?>) {
+        val localId = latestLocalPayload?.playerId
+        val senderId = MultiplayerSanitizer.sanitizeId(body["sid"] as? String)
+        if (senderId.isNotBlank() && senderId == localId) return
+        val floor = body["floor"].asIntOrNull() ?: return
+        if (!MultiplayerSanitizer.isValidFloor(floor) || floor != currentFloor) return
+        val monsterId = body["mid"].asIntOrNull() ?: return
+        val (fx, fy) = MultiplayerSanitizer.clampCoord(floor, body["fx"].asIntOrNull() ?: 0, body["fy"].asIntOrNull() ?: 0)
+        val (tx, ty) = MultiplayerSanitizer.clampCoord(floor, body["tx"].asIntOrNull() ?: fx, body["ty"].asIntOrNull() ?: fy)
+        val proj = (body["proj"] as? String)?.take(24)
+        val aoeTiles = parseTilePairs(body["aoe"], floor)
+        val targetId = (body["tgt"] as? String)?.let { MultiplayerSanitizer.sanitizeId(it) }?.ifBlank { null }
+        val status = (body["st"] as? String)?.uppercase()?.takeIf { it == "POISON" || it == "BURN" }
+        _monsterAttackEvents.tryEmit(
+            RemoteMonsterAttackEvent(
+                monsterId = monsterId,
+                floor = floor,
+                fromX = fx,
+                fromY = fy,
+                toX = tx,
+                toY = ty,
+                projectileKindName = proj,
+                aoeTiles = aoeTiles,
+                targetPlayerId = targetId,
+                inflictedStatus = status
+            )
+        )
+    }
+
+    private fun parseTilePairs(raw: Any?, floor: Int): List<Pair<Int, Int>> {
+        val list = raw as? List<*> ?: return emptyList()
+        return list.take(16).mapNotNull { entry ->
+            val pair = entry as? List<*> ?: return@mapNotNull null
+            if (pair.size < 2) return@mapNotNull null
+            val rx = pair[0].asIntOrNull() ?: return@mapNotNull null
+            val ry = pair[1].asIntOrNull() ?: return@mapNotNull null
+            MultiplayerSanitizer.clampCoord(floor, rx, ry)
+        }
     }
 
     private fun applyIncomingChat(body: Map<String, Any?>) {
@@ -660,7 +763,9 @@ class RealtimeMultiplayerManager(
             floor = floor,
             hp = hp,
             maxHp = maxHp,
-            joinedAt = joinedAt
+            joinedAt = joinedAt,
+            isPoisoned = (meta["psn"] as? Boolean) ?: existing?.isPoisoned ?: false,
+            isBurning = (meta["brn"] as? Boolean) ?: existing?.isBurning ?: false
         )
     }
 
@@ -681,7 +786,9 @@ class RealtimeMultiplayerManager(
         "y" to p.y,
         "floor" to p.floor,
         "hp" to p.hp,
-        "maxHp" to p.maxHp
+        "maxHp" to p.maxHp,
+        "psn" to p.isPoisoned,
+        "brn" to p.isBurning
     )
 
     @Suppress("UNCHECKED_CAST")

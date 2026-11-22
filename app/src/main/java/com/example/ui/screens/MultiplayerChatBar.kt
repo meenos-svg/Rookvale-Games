@@ -70,6 +70,7 @@ import com.example.ui.theme.TorchGold
 @Composable
 fun MultiplayerStatusBadge(
     mpState: MultiplayerUiState,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val dotColor = when (mpState.status) {
@@ -90,10 +91,12 @@ fun MultiplayerStatusBadge(
         color = dotColor.copy(alpha = 0.14f),
         shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, dotColor.copy(alpha = 0.65f)),
-        modifier = modifier.testTag("multiplayer_status_pill")
+        modifier = modifier
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .testTag("multiplayer_status_pill")
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {

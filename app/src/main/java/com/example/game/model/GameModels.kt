@@ -1,5 +1,6 @@
 package com.example.game.model
 
+import com.example.game.multiplayer.LocalMonsterAttackEvent
 import com.example.game.multiplayer.LocalMonsterHitEvent
 import com.squareup.moshi.JsonClass
 
@@ -386,34 +387,165 @@ data class OreNodeState(
     val isDepleted: Boolean get() = chargesLeft <= 0
 }
 
+enum class MonsterAiStyle {
+    MELEE,
+    RANGED_KITE,
+    BOSS_AOE_SUMMON
+}
+
+enum class ThreatBand {
+    EASY,
+    EVEN,
+    CHALLENGING,
+    DEADLY
+}
+
+data class FloorWarningBanner(
+    val floorId: Int,
+    val floorName: String,
+    val dangerLevel: String,
+    val recommendedLevel: String,
+    val severity: Int,
+    val createdAtMs: Long
+)
+
 enum class MonsterType(
     val displayName: String,
+    val tier: Int,
+    val threatLevel: Int,
     val maxHp: Int,
+    val armor: Int,
     val xpReward: Int,
     val minDmg: Int,
     val maxDmg: Int,
     val goldMin: Int,
     val goldMax: Int,
     val moveIntervalTicks: Int,
+    val aiStyle: MonsterAiStyle = MonsterAiStyle.MELEE,
+    val preferredRange: Int = 1,
+    val rangedProjectile: ProjectileKind? = null,
     val inflictsPoison: Boolean = false,
     val inflictsFire: Boolean = false,
     val isBoss: Boolean = false,
-    val rangedBreathRange: Int = 1
+    val summonTypeName: String? = null,
+    val maxSummons: Int = 0
 ) {
-    RAT("Cave Rat", 35, 25, 2, 7, 4, 14, 1),
-    CRAG_WOLF("Crag Wolf", 54, 42, 6, 13, 6, 18, 1),
-    VESPER_BAT("Vesper Bat", 48, 38, 4, 10, 5, 16, 1),
-    CAVE_SPIDER("Briar Spider", 66, 52, 6, 14, 10, 24, 1, inflictsPoison = true),
-    STONEHORN_TROLL("Stonehorn Troll", 95, 78, 9, 18, 16, 36, 2),
-    SKELETON("Skeleton", 115, 90, 10, 22, 18, 44, 1),
-    MARROW_ARCHER("Marrow Archer", 105, 105, 12, 24, 20, 48, 2, rangedBreathRange = 3),
-    GHOUL("Crypt Ghoul", 170, 150, 16, 30, 28, 70, 2, inflictsPoison = true),
-    CYCLOPS("Cyclops", 285, 255, 25, 46, 52, 115, 2),
-    FORGE_BRUTE("Forge Brute", 335, 310, 30, 54, 65, 135, 2),
-    RUNIC_GOLEM("Runic Golem", 360, 340, 28, 52, 70, 145, 3),
-    WYRM_HATCHLING("Wyrm Hatchling", 410, 420, 32, 58, 95, 180, 2, inflictsFire = true, rangedBreathRange = 3),
-    CINDER_WRAITH("Cinder Wraith", 375, 390, 34, 60, 88, 165, 2, inflictsFire = true, rangedBreathRange = 3),
-    DRAGON_BOSS("Ancient Dragon", 720, 1050, 40, 76, 210, 380, 2, inflictsFire = true, isBoss = true, rangedBreathRange = 4)
+    // --- TIER 1: Starter Overland (Levels 1-3) ---
+    CAVE_RAT(
+        displayName = "Cave Rat", tier = 1, threatLevel = 1, maxHp = 32, armor = 0,
+        xpReward = 24, minDmg = 2, maxDmg = 6, goldMin = 4, goldMax = 12, moveIntervalTicks = 1
+    ),
+    WILD_RABBIT(
+        displayName = "Wild Rabbit", tier = 1, threatLevel = 1, maxHp = 22, armor = 0,
+        xpReward = 16, minDmg = 1, maxDmg = 4, goldMin = 1, goldMax = 6, moveIntervalTicks = 1
+    ),
+    YOUNG_SNAKE(
+        displayName = "Young Snake", tier = 1, threatLevel = 2, maxHp = 40, armor = 1,
+        xpReward = 32, minDmg = 3, maxDmg = 8, goldMin = 5, goldMax = 15, moveIntervalTicks = 1
+    ),
+    CRAG_WOLF(
+        displayName = "Crag Wolf", tier = 1, threatLevel = 3, maxHp = 58, armor = 2,
+        xpReward = 46, minDmg = 6, maxDmg = 12, goldMin = 7, goldMax = 20, moveIntervalTicks = 1
+    ),
+
+    // --- TIER 2: Outer Wilds & Floor -1 Sewers/Caves (Levels 3-6) ---
+    SWAMP_TROLL(
+        displayName = "Swamp Troll", tier = 2, threatLevel = 4, maxHp = 100, armor = 4,
+        xpReward = 82, minDmg = 9, maxDmg = 18, goldMin = 14, goldMax = 34, moveIntervalTicks = 2
+    ),
+    SKELETON(
+        displayName = "Skeleton", tier = 2, threatLevel = 5, maxHp = 118, armor = 5,
+        xpReward = 98, minDmg = 11, maxDmg = 22, goldMin = 18, goldMax = 44, moveIntervalTicks = 1
+    ),
+    GOBLIN_SCOUT(
+        displayName = "Goblin Scout", tier = 2, threatLevel = 5, maxHp = 92, armor = 3,
+        xpReward = 95, minDmg = 10, maxDmg = 20, goldMin = 18, goldMax = 42, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 3, rangedProjectile = ProjectileKind.THROWN_STONE
+    ),
+    POISON_SPIDER(
+        displayName = "Poison Spider", tier = 2, threatLevel = 6, maxHp = 125, armor = 4,
+        xpReward = 115, minDmg = 11, maxDmg = 23, goldMin = 20, goldMax = 48, moveIntervalTicks = 1,
+        inflictsPoison = true
+    ),
+
+    // --- TIER 3: Floor -2 Deep Caverns (Levels 6-10) ---
+    MINOTAUR(
+        displayName = "Minotaur", tier = 3, threatLevel = 7, maxHp = 215, armor = 10,
+        xpReward = 190, minDmg = 17, maxDmg = 32, goldMin = 34, goldMax = 78, moveIntervalTicks = 2
+    ),
+    ORC_WARRIOR(
+        displayName = "Orc Warrior", tier = 3, threatLevel = 8, maxHp = 245, armor = 11,
+        xpReward = 225, minDmg = 20, maxDmg = 36, goldMin = 40, goldMax = 90, moveIntervalTicks = 1
+    ),
+    GHOUL(
+        displayName = "Ghoul", tier = 3, threatLevel = 9, maxHp = 270, armor = 8,
+        xpReward = 255, minDmg = 21, maxDmg = 38, goldMin = 46, goldMax = 102, moveIntervalTicks = 2,
+        inflictsPoison = true
+    ),
+    FIRE_DEVIL(
+        displayName = "Fire Devil", tier = 3, threatLevel = 10, maxHp = 235, armor = 7,
+        xpReward = 275, minDmg = 22, maxDmg = 40, goldMin = 52, goldMax = 115, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 3, rangedProjectile = ProjectileKind.FIREBALL,
+        inflictsFire = true
+    ),
+
+    // --- TIER 4: Floor -3 Abyssal Crypt & Bosses (Levels 10+) ---
+    CYCLOPS(
+        displayName = "Cyclops", tier = 4, threatLevel = 11, maxHp = 370, armor = 15,
+        xpReward = 360, minDmg = 28, maxDmg = 52, goldMin = 72, goldMax = 155, moveIntervalTicks = 2
+    ),
+    DRAGON_HATCHLING(
+        displayName = "Dragon Hatchling", tier = 4, threatLevel = 13, maxHp = 440, armor = 14,
+        xpReward = 450, minDmg = 32, maxDmg = 58, goldMin = 95, goldMax = 195, moveIntervalTicks = 2,
+        preferredRange = 3, rangedProjectile = ProjectileKind.FIRE_BREATH, inflictsFire = true
+    ),
+    NECROMANCER(
+        displayName = "Necromancer", tier = 4, threatLevel = 14, maxHp = 405, armor = 11,
+        xpReward = 480, minDmg = 30, maxDmg = 56, goldMin = 105, goldMax = 210, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 3, rangedProjectile = ProjectileKind.NECRO_BOLT,
+        summonTypeName = "SKELETON", maxSummons = 1
+    ),
+    DEMON_LORD(
+        displayName = "Demon Lord", tier = 4, threatLevel = 18, maxHp = 860, armor = 18,
+        xpReward = 1150, minDmg = 42, maxDmg = 76, goldMin = 240, goldMax = 440, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
+        inflictsFire = true, isBoss = true, summonTypeName = "FIRE_DEVIL", maxSummons = 2
+    ),
+    ELDER_DRAGON(
+        displayName = "Elder Dragon", tier = 4, threatLevel = 20, maxHp = 1120, armor = 20,
+        xpReward = 1550, minDmg = 48, maxDmg = 88, goldMin = 320, goldMax = 580, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIRE_BREATH,
+        inflictsFire = true, isBoss = true, summonTypeName = "DRAGON_HATCHLING", maxSummons = 2
+    );
+
+    fun threatBandFor(playerLevel: Int): ThreatBand = when {
+        isBoss || threatLevel >= playerLevel + 5 -> ThreatBand.DEADLY
+        threatLevel >= playerLevel + 2 -> ThreatBand.CHALLENGING
+        threatLevel <= playerLevel - 3 -> ThreatBand.EASY
+        else -> ThreatBand.EVEN
+    }
+
+    fun summonType(): MonsterType? = summonTypeName?.let { fromWireName(it) }
+
+    companion object {
+        fun fromWireName(raw: String?): MonsterType? {
+            val clean = raw?.trim().orEmpty()
+            if (clean.isEmpty()) return null
+            return runCatching { valueOf(clean) }.getOrNull() ?: when (clean) {
+                "RAT" -> CAVE_RAT
+                "VESPER_BAT" -> GOBLIN_SCOUT
+                "CAVE_SPIDER" -> POISON_SPIDER
+                "STONEHORN_TROLL" -> SWAMP_TROLL
+                "MARROW_ARCHER" -> GOBLIN_SCOUT
+                "FORGE_BRUTE" -> ORC_WARRIOR
+                "RUNIC_GOLEM" -> CYCLOPS
+                "WYRM_HATCHLING" -> DRAGON_HATCHLING
+                "CINDER_WRAITH" -> FIRE_DEVIL
+                "DRAGON_BOSS" -> ELDER_DRAGON
+                else -> null
+            }
+        }
+    }
 }
 
 data class MonsterEntity(
@@ -433,7 +565,12 @@ data class MonsterEntity(
     val lastMoveFromY: Int = y,
     val lastMoveTimeMs: Long = 0L,
     val targetPlayerId: String? = null,
-    val contributors: Set<String> = emptySet()
+    val contributors: Set<String> = emptySet(),
+    val isSummon: Boolean = false,
+    val summonerId: Int? = null,
+    val aoeCooldownTicks: Int = 2,
+    val pendingAoeTiles: List<Pair<Int, Int>> = emptyList(),
+    val summonCooldownTicks: Int = 3
 )
 
 data class PendingRespawn(
@@ -488,6 +625,9 @@ enum class ProjectileKind {
     ENERGY_BOLT,
     DEATH_RUNE,
     FIRE_BREATH,
+    FIREBALL,
+    THROWN_STONE,
+    NECRO_BOLT,
     SPLASH,
     MINING_SPARK
 }
@@ -602,7 +742,9 @@ data class GameWorldState(
     val tickCount: Long = 0L,
     val lastCombatTickMs: Long = 0L,
     val lastPlayerAttackMs: Long = 0L,
-    val outboundMonsterHits: List<LocalMonsterHitEvent> = emptyList()
+    val floorWarningBanner: FloorWarningBanner? = null,
+    val outboundMonsterHits: List<LocalMonsterHitEvent> = emptyList(),
+    val outboundMonsterAttacks: List<LocalMonsterAttackEvent> = emptyList()
 ) {
     fun toolBagWeightOz(): Double =
         toolBag.sumOf { ItemCatalog.get(it.itemId).weightOz * TOOL_BAG_WEIGHT_MULTIPLIER * it.count }

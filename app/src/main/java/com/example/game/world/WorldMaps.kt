@@ -51,7 +51,10 @@ data class WorldFloor(
     val width: Int,
     val height: Int,
     val tiles: Array<Array<TileType>>,
-    val isProtectionZone: (Int, Int) -> Boolean = { _, _ -> false }
+    val isProtectionZone: (Int, Int) -> Boolean = { _, _ -> false },
+    val dangerLevel: String = "Low",
+    val recommendedLevel: String = "Lvl 1-3",
+    val dangerSeverity: Int = 0
 ) {
     fun tileAt(x: Int, y: Int): TileType {
         if (x !in 0 until width || y !in 0 until height) return TileType.STONE_WALL
@@ -121,64 +124,76 @@ object WorldMaps {
     )
 
     val monsterSpawns: List<MonsterSpawn> = listOf(
-        // --- Floor 0 Surface: Quarry & Foothills (NW) ---
-        MonsterSpawn(0, 22, 42, MonsterType.RAT),
-        MonsterSpawn(0, 18, 36, MonsterType.RAT),
-        MonsterSpawn(0, 14, 28, MonsterType.CRAG_WOLF),
-        MonsterSpawn(0, 23, 24, MonsterType.CRAG_WOLF),
-        MonsterSpawn(0, 12, 16, MonsterType.CRAG_WOLF),
-        MonsterSpawn(0, 25, 14, MonsterType.CRAG_WOLF),
+        // --- Floor 0 Town Outskirts (TIER 1 — Levels 1-3, safely outside Rookvale City PZ) ---
+        // West Gate Outskirts
+        MonsterSpawn(0, 29, 45, MonsterType.WILD_RABBIT),
+        MonsterSpawn(0, 27, 42, MonsterType.CAVE_RAT),
+        MonsterSpawn(0, 25, 48, MonsterType.YOUNG_SNAKE),
+        MonsterSpawn(0, 22, 42, MonsterType.CAVE_RAT),
+        MonsterSpawn(0, 19, 39, MonsterType.CRAG_WOLF),
+        // North Gate Outskirts
+        MonsterSpawn(0, 47, 29, MonsterType.WILD_RABBIT),
+        MonsterSpawn(0, 50, 27, MonsterType.YOUNG_SNAKE),
+        MonsterSpawn(0, 48, 24, MonsterType.CRAG_WOLF),
+        // East Gate Outskirts
+        MonsterSpawn(0, 66, 46, MonsterType.WILD_RABBIT),
+        MonsterSpawn(0, 68, 43, MonsterType.YOUNG_SNAKE),
+        MonsterSpawn(0, 71, 46, MonsterType.CRAG_WOLF),
 
-        // --- Floor 0 Surface: Dark Forest (East) ---
-        MonsterSpawn(0, 72, 42, MonsterType.CRAG_WOLF),
-        MonsterSpawn(0, 80, 44, MonsterType.CRAG_WOLF),
-        MonsterSpawn(0, 74, 54, MonsterType.CAVE_SPIDER),
-        MonsterSpawn(0, 84, 56, MonsterType.CAVE_SPIDER),
-        MonsterSpawn(0, 70, 66, MonsterType.CAVE_SPIDER),
-        MonsterSpawn(0, 82, 70, MonsterType.CRAG_WOLF),
+        // --- Floor 0 Outer Wilds (TIER 2 — Levels 3-6, far Quarry, Deep Dark Forest & Mountain Pass) ---
+        // Far NW Quarry & Foothills
+        MonsterSpawn(0, 14, 28, MonsterType.GOBLIN_SCOUT),
+        MonsterSpawn(0, 23, 24, MonsterType.SWAMP_TROLL),
+        MonsterSpawn(0, 12, 16, MonsterType.GOBLIN_SCOUT),
+        MonsterSpawn(0, 25, 14, MonsterType.SKELETON),
+        // Deep East Dark Forest
+        MonsterSpawn(0, 78, 46, MonsterType.GOBLIN_SCOUT),
+        MonsterSpawn(0, 74, 54, MonsterType.POISON_SPIDER),
+        MonsterSpawn(0, 84, 56, MonsterType.POISON_SPIDER),
+        MonsterSpawn(0, 70, 66, MonsterType.SWAMP_TROLL),
+        MonsterSpawn(0, 82, 70, MonsterType.POISON_SPIDER),
+        // NE Mountain Cavern Pass
+        MonsterSpawn(0, 66, 22, MonsterType.GOBLIN_SCOUT),
+        MonsterSpawn(0, 72, 19, MonsterType.SWAMP_TROLL),
+        MonsterSpawn(0, 82, 18, MonsterType.SWAMP_TROLL),
+        MonsterSpawn(0, 68, 12, MonsterType.SKELETON),
 
-        // --- Floor 0 Surface: Mountain Cavern Entrance (NE) ---
-        MonsterSpawn(0, 66, 22, MonsterType.CRAG_WOLF),
-        MonsterSpawn(0, 72, 19, MonsterType.STONEHORN_TROLL),
-        MonsterSpawn(0, 82, 18, MonsterType.STONEHORN_TROLL),
-        MonsterSpawn(0, 68, 12, MonsterType.STONEHORN_TROLL),
+        // --- Floor -1: Mossy Sewers & Caves (TIER 2 — Levels 3-6) ---
+        MonsterSpawn(-1, 24, 14, MonsterType.CAVE_RAT),
+        MonsterSpawn(-1, 20, 18, MonsterType.SWAMP_TROLL),
+        MonsterSpawn(-1, 32, 16, MonsterType.GOBLIN_SCOUT),
+        MonsterSpawn(-1, 16, 20, MonsterType.SKELETON),
+        MonsterSpawn(-1, 14, 28, MonsterType.POISON_SPIDER),
+        MonsterSpawn(-1, 22, 28, MonsterType.SKELETON),
+        MonsterSpawn(-1, 32, 26, MonsterType.GOBLIN_SCOUT),
+        MonsterSpawn(-1, 28, 33, MonsterType.POISON_SPIDER),
+        MonsterSpawn(-1, 20, 35, MonsterType.SWAMP_TROLL),
 
-        // --- Floor -1: Mossy Sewers & Shafts ---
-        MonsterSpawn(-1, 24, 14, MonsterType.RAT),
-        MonsterSpawn(-1, 20, 18, MonsterType.RAT),
-        MonsterSpawn(-1, 32, 16, MonsterType.VESPER_BAT),
-        MonsterSpawn(-1, 16, 20, MonsterType.VESPER_BAT),
-        MonsterSpawn(-1, 14, 28, MonsterType.CAVE_SPIDER),
-        MonsterSpawn(-1, 22, 28, MonsterType.CAVE_SPIDER),
-        MonsterSpawn(-1, 32, 26, MonsterType.VESPER_BAT),
-        MonsterSpawn(-1, 28, 33, MonsterType.CAVE_SPIDER),
-        MonsterSpawn(-1, 20, 35, MonsterType.CAVE_SPIDER),
-
-        // --- Floor -2: Forsaken Crypts ---
-        MonsterSpawn(-2, 18, 32, MonsterType.SKELETON),
-        MonsterSpawn(-2, 30, 32, MonsterType.SKELETON),
-        MonsterSpawn(-2, 14, 24, MonsterType.MARROW_ARCHER),
-        MonsterSpawn(-2, 34, 24, MonsterType.MARROW_ARCHER),
+        // --- Floor -2: Deep Caverns (TIER 3 — Levels 6-10) ---
+        MonsterSpawn(-2, 18, 32, MonsterType.MINOTAUR),
+        MonsterSpawn(-2, 30, 32, MonsterType.ORC_WARRIOR),
+        MonsterSpawn(-2, 14, 24, MonsterType.FIRE_DEVIL),
+        MonsterSpawn(-2, 34, 24, MonsterType.MINOTAUR),
         MonsterSpawn(-2, 24, 24, MonsterType.GHOUL),
-        MonsterSpawn(-2, 18, 16, MonsterType.GHOUL),
+        MonsterSpawn(-2, 18, 16, MonsterType.ORC_WARRIOR),
         MonsterSpawn(-2, 30, 16, MonsterType.GHOUL),
-        MonsterSpawn(-2, 24, 12, MonsterType.MARROW_ARCHER),
+        MonsterSpawn(-2, 24, 12, MonsterType.FIRE_DEVIL),
 
-        // --- Floor -3: Colossus Forgehall & Deep Outpost ---
+        // --- Floor -3: Abyssal Crypt & Boss (TIER 4 — Levels 10-18) ---
         MonsterSpawn(-3, 14, 14, MonsterType.CYCLOPS),
         MonsterSpawn(-3, 34, 14, MonsterType.CYCLOPS),
-        MonsterSpawn(-3, 12, 24, MonsterType.FORGE_BRUTE),
-        MonsterSpawn(-3, 35, 24, MonsterType.FORGE_BRUTE),
-        MonsterSpawn(-3, 16, 32, MonsterType.RUNIC_GOLEM),
-        MonsterSpawn(-3, 32, 32, MonsterType.RUNIC_GOLEM),
-        MonsterSpawn(-3, 24, 34, MonsterType.CYCLOPS),
+        MonsterSpawn(-3, 12, 24, MonsterType.DRAGON_HATCHLING),
+        MonsterSpawn(-3, 35, 24, MonsterType.NECROMANCER),
+        MonsterSpawn(-3, 16, 32, MonsterType.NECROMANCER),
+        MonsterSpawn(-3, 32, 32, MonsterType.DRAGON_HATCHLING),
+        MonsterSpawn(-3, 24, 34, MonsterType.DEMON_LORD),
 
-        // --- Floor -4: Obsidian Caldera & Wyrm Sanctum ---
-        MonsterSpawn(-4, 18, 32, MonsterType.WYRM_HATCHLING),
-        MonsterSpawn(-4, 30, 32, MonsterType.CINDER_WRAITH),
-        MonsterSpawn(-4, 14, 24, MonsterType.CINDER_WRAITH),
-        MonsterSpawn(-4, 34, 24, MonsterType.WYRM_HATCHLING),
-        MonsterSpawn(-4, 24, 16, MonsterType.DRAGON_BOSS)
+        // --- Floor -4: Obsidian Wyrm Sanctum (Endgame Raid — Levels 16-20+) ---
+        MonsterSpawn(-4, 18, 32, MonsterType.DRAGON_HATCHLING),
+        MonsterSpawn(-4, 32, 32, MonsterType.FIRE_DEVIL),
+        MonsterSpawn(-4, 14, 24, MonsterType.NECROMANCER),
+        MonsterSpawn(-4, 34, 24, MonsterType.DRAGON_HATCHLING),
+        MonsterSpawn(-4, 24, 16, MonsterType.ELDER_DRAGON)
     )
 
     val floors: Map<Int, WorldFloor> = mapOf(
@@ -409,11 +424,15 @@ object WorldMaps {
         return WorldFloor(
             floorId = 0,
             name = "Rookvale Overland",
-            subtitle = "Surface (96×96)",
+            subtitle = "Surface • Safe Town PZ",
             width = w,
             height = h,
             tiles = g,
-            isProtectionZone = { x, y -> x in (ox + 12)..(ox + 18) && y in (oy + 10)..(oy + 16) }
+            // Temple & entire walled Rookvale City perimeter remain a safe Protection Zone
+            isProtectionZone = { x, y -> x in (ox + 2)..(ox + 29) && y in (oy + 2)..(oy + 29) },
+            dangerLevel = "Low (Outskirts)",
+            recommendedLevel = "Lvl 1-6",
+            dangerSeverity = 0
         )
     }
 
@@ -448,7 +467,17 @@ object WorldMaps {
         g[28][38] = TileType.ROPE_SPOT_UP
         g[38][24] = TileType.ROPE_HOLE_DOWN
 
-        return WorldFloor(-1, "Mossy Sewers & Shafts", "Dungeon Floor -1", s, s, g)
+        return WorldFloor(
+            floorId = -1,
+            name = "Mossy Sewers & Caves",
+            subtitle = "Dungeon Floor -1",
+            width = s,
+            height = s,
+            tiles = g,
+            dangerLevel = "Moderate",
+            recommendedLevel = "Lvl 3-6",
+            dangerSeverity = 1
+        )
     }
 
     private fun buildCryptsFloor(): WorldFloor {
@@ -481,7 +510,17 @@ object WorldMaps {
         g[8][24] = TileType.STAIRS_DOWN
         g[24][40] = TileType.ROPE_HOLE_DOWN
 
-        return WorldFloor(-2, "Forsaken Crypts", "Dungeon Floor -2", s, s, g)
+        return WorldFloor(
+            floorId = -2,
+            name = "Deep Caverns",
+            subtitle = "Dungeon Floor -2",
+            width = s,
+            height = s,
+            tiles = g,
+            dangerLevel = "High",
+            recommendedLevel = "Lvl 6-10",
+            dangerSeverity = 2
+        )
     }
 
     private fun buildForgehallFloor(): WorldFloor {
@@ -514,7 +553,17 @@ object WorldMaps {
         g[40][24] = TileType.STAIRS_DOWN
         g[34][10] = TileType.ROPE_HOLE_DOWN
 
-        return WorldFloor(-3, "Colossus Forgehall", "Dungeon Floor -3 • Deep Outpost", s, s, g)
+        return WorldFloor(
+            floorId = -3,
+            name = "Abyssal Crypt",
+            subtitle = "Dungeon Floor -3 • Deep Outpost",
+            width = s,
+            height = s,
+            tiles = g,
+            dangerLevel = "Extreme",
+            recommendedLevel = "Lvl 10-18",
+            dangerSeverity = 3
+        )
     }
 
     private fun buildWyrmSanctumFloor(): WorldFloor {
@@ -544,6 +593,16 @@ object WorldMaps {
         g[40][24] = TileType.STAIRS_UP
         g[34][10] = TileType.ROPE_SPOT_UP
 
-        return WorldFloor(-4, "Obsidian Wyrm Sanctum", "Dungeon Floor -4 • Boss Lair", s, s, g)
+        return WorldFloor(
+            floorId = -4,
+            name = "Obsidian Wyrm Sanctum",
+            subtitle = "Dungeon Floor -4 • Endgame Boss Lair",
+            width = s,
+            height = s,
+            tiles = g,
+            dangerLevel = "Deadly",
+            recommendedLevel = "Lvl 16-20+",
+            dangerSeverity = 4
+        )
     }
 }

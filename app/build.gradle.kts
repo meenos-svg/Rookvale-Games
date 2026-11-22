@@ -1,4 +1,6 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 plugins {
   alias(libs.plugins.android.application)
@@ -16,8 +18,11 @@ android {
     applicationId = "com.aistudio.rookvale.qmxrkp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "1.2"
+
+    val buildTimeUtc = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString()
+    buildConfigField("String", "BUILD_TIME_UTC", "\"$buildTimeUtc\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

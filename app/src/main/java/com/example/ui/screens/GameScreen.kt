@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
@@ -9,6 +11,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,16 +25,13 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Backpack
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -51,9 +52,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.game.model.ActivePanel
-import com.example.game.model.Direction
 import com.example.game.model.EquipmentSlot
+import com.example.game.model.FloorWarningBanner
 import com.example.game.model.GameWorldState
+import com.example.game.model.ThreatBand
 import com.example.game.model.Vocation
 import com.example.game.multiplayer.ChatChannel
 import com.example.game.multiplayer.MultiplayerUiState
@@ -79,13 +81,13 @@ import com.example.ui.theme.TargetRed
 import com.example.ui.theme.TorchAmber
 import com.example.ui.theme.TorchGold
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GameScreen(
     state: GameWorldState,
     multiplayerState: MultiplayerUiState = MultiplayerUiState(),
     saveBanner: String?,
     onTileTapped: (Int, Int) -> Unit,
-    onDirectionStep: (Direction) -> Unit,
     onHotkeyHp: () -> Unit,
     onHotkeyMp: () -> Unit,
     onHotkeyRune: () -> Unit,
@@ -103,6 +105,7 @@ fun GameScreen(
     onSellItem: (String) -> Unit,
     onCraftRecipe: (String) -> Unit,
     onChooseVocationAtOracle: (Vocation) -> Unit,
+    onMultiplayerStatusTapped: () -> Unit = {},
     onToggleChat: () -> Unit = {},
     onSelectChatChannel: (ChatChannel) -> Unit = {},
     onSendChat: (String) -> Unit = {},
@@ -116,6 +119,7 @@ fun GameScreen(
         state.monsters.firstOrNull { it.id == state.targetMonsterId && it.floor == state.floor }
     }
     val weaponNeedsAmmo = state.equipment.weaponDef()?.requiredAmmoKind != null
+    val remainingCap = state.remainingCapOz()
 
     Column(
         modifier = Modifier
@@ -139,15 +143,56 @@ fun GameScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(state.playerName, style = MaterialTheme.typography.titleMedium, color = TorchGold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("Lvl ${state.level} ${state.vocation.displayName}", style = MaterialTheme.typography.labelMedium, color = ParchmentLight, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            MultiplayerStatusBadge(mpState = multiplayerState)
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = state.playerName,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = TorchGold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Text(
+                                text = "Lvl ${state.level} ${state.vocation.displayName}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = ParchmentLight,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            MultiplayerStatusBadge(
+                                mpState = multiplayerState,
+                                onClick = onMultiplayerStatusTapped
+                            )
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("${floorInfo.name} (${state.floor})", style = MaterialTheme.typography.labelSmall, color = ParchmentMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("${state.gold} gp", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = TorchGold)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text(
+                                text = "${floorInfo.name} (${state.floor})",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ParchmentMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${state.gold} gp",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = TorchGold
+                            )
+                            Text(
+                                text = "Cap ${formatOz(remainingCap)} oz",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = if (remainingCap < 25.0) HealthCrimson else ParchmentLight,
+                                modifier = Modifier.testTag("hud_cap_text")
+                            )
                             if (weaponNeedsAmmo) {
                                 val ammoQty = state.activeAmmoCount()
                                 StatusChip("AMMO $ammoQty", if (ammoQty > 0) TorchAmber else HealthCrimson)
@@ -179,7 +224,7 @@ fun GameScreen(
                     }
                 }
 
-                // HP, Mana, Soul & Cap Gauges
+                // HP, Mana & Single-Line Soul Gauge Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -192,28 +237,48 @@ fun GameScreen(
                         shape = RoundedCornerShape(6.dp),
                         border = BorderStroke(1.dp, StoneBorderLight.copy(alpha = 0.7f))
                     ) {
-                        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), horizontalAlignment = Alignment.End) {
-                            Text("Soul ${state.soul}", style = MaterialTheme.typography.labelSmall, color = SoulViolet)
-                            Text("Cap ${formatOz(state.remainingCapOz())}oz", style = MaterialTheme.typography.labelSmall, color = if (state.remainingCapOz() < 25.0) HealthCrimson else ParchmentLight)
-                        }
+                        Text(
+                            text = "Soul ${state.soul}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = SoulViolet,
+                            maxLines = 1,
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp, vertical = 5.dp)
+                                .testTag("hud_soul_text")
+                        )
                     }
                 }
 
                 if (targetedMonster != null) {
+                    val band = targetedMonster.type.threatBandFor(state.level)
+                    val bandAccent = when (band) {
+                        ThreatBand.EASY -> Color(0xFF4CE06A)
+                        ThreatBand.EVEN -> ParchmentLight
+                        ThreatBand.CHALLENGING -> TorchGold
+                        ThreatBand.DEADLY -> TargetRed
+                    }
+                    val prefix = if (band == ThreatBand.DEADLY) "☠ " else ""
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(Color(0xFF2B1414), RoundedCornerShape(4.dp))
-                            .border(1.dp, TargetRed, RoundedCornerShape(4.dp))
+                            .border(1.dp, bandAccent, RoundedCornerShape(4.dp))
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("TARGET: ${targetedMonster.type.displayName}", style = MaterialTheme.typography.labelMedium, color = ParchmentLight, modifier = Modifier.weight(1f))
+                        Text(
+                            text = "${prefix}TARGET: ${targetedMonster.type.displayName} [Lvl ${targetedMonster.type.threatLevel}]",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = bandAccent,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
                         LinearProgressIndicator(
                             progress = { (targetedMonster.hp.toFloat() / targetedMonster.maxHp.toFloat()).coerceIn(0f, 1f) },
-                            color = TargetRed,
+                            color = bandAccent,
                             trackColor = ObsidianVoid,
-                            modifier = Modifier.width(84.dp).height(6.dp).clip(RoundedCornerShape(3.dp))
+                            modifier = Modifier.width(80.dp).height(6.dp).clip(RoundedCornerShape(3.dp))
                         )
                         Spacer(Modifier.width(6.dp))
                         Text("${targetedMonster.hp}/${targetedMonster.maxHp}", style = MaterialTheme.typography.labelSmall, color = ParchmentLight)
@@ -222,7 +287,7 @@ fun GameScreen(
             }
         }
 
-        // --- MAIN OBLIQUE PIXEL-ART VIEWPORT + LOG + COLLAPSIBLE CHAT + SLIDE-UP PANEL ---
+        // --- MAIN OBLIQUE PIXEL-ART VIEWPORT + FLOOR BANNER + LOG + COLLAPSIBLE CHAT + SLIDE-UP PANEL ---
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             GameCanvasView(
                 state = state,
@@ -230,6 +295,19 @@ fun GameScreen(
                 onTileTapped = onTileTapped,
                 modifier = Modifier.fillMaxSize()
             )
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = state.floorWarningBanner != null && state.activePanel == ActivePanel.NONE,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 10.dp, top = 8.dp, end = if (state.showMinimap) 122.dp else 10.dp)
+            ) {
+                state.floorWarningBanner?.let { banner ->
+                    FloorDescentWarningBanner(banner = banner)
+                }
+            }
 
             if (state.activePanel == ActivePanel.NONE) {
                 Column(
@@ -288,7 +366,7 @@ fun GameScreen(
             }
         }
 
-        // --- BOTTOM DARK STONE CONTROL DOCK (D-PAD + 4 HOTKEYS + 3 DRAWER TABS; NO ANYWHERE CRAFTING BUTTON) ---
+        // --- BOTTOM DARK STONE CONTROL DOCK (SINGLE FULL-WIDTH 4-HOTKEY ROW + 3 DRAWER TABS) ---
         Surface(
             color = BasaltDark,
             border = BorderStroke(1.dp, StoneBorderLight),
@@ -301,26 +379,50 @@ fun GameScreen(
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                val bestRuneId = state.bestAttackRuneId() ?: "hmm_rune"
+                val totalRunes = state.itemCount("sd_rune") + state.itemCount("hmm_rune")
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CompactStepPad(onDirectionStep = onDirectionStep)
-
-                    val bestRuneId = state.bestAttackRuneId() ?: "hmm_rune"
-                    val totalRunes = state.itemCount("sd_rune") + state.itemCount("hmm_rune")
-
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            HotkeyStoneButton("health_potion", stringResource(R.string.hotkey_hp_potion), state.itemCount("health_potion"), HealthCrimson, onHotkeyHp, "hotkey_health_potion", Modifier.weight(1f))
-                            HotkeyStoneButton("mana_potion", stringResource(R.string.hotkey_mp_potion), state.itemCount("mana_potion"), ManaSapphire, onHotkeyMp, "hotkey_mana_potion", Modifier.weight(1f))
-                        }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            HotkeyStoneButton(bestRuneId, stringResource(R.string.hotkey_rune), totalRunes, SoulViolet, onHotkeyRune, "hotkey_attack_rune", Modifier.weight(1f))
-                            HotkeyStoneButton("rope", stringResource(R.string.hotkey_rope), state.itemCount("rope"), TorchGold, onHotkeyRope, "hotkey_rope", Modifier.weight(1f))
-                        }
-                    }
+                    HotkeyStoneButton(
+                        itemId = "health_potion",
+                        label = stringResource(R.string.hotkey_hp_potion),
+                        count = state.itemCount("health_potion"),
+                        accent = HealthCrimson,
+                        onClick = onHotkeyHp,
+                        testTag = "hotkey_health_potion",
+                        modifier = Modifier.weight(1f)
+                    )
+                    HotkeyStoneButton(
+                        itemId = "mana_potion",
+                        label = stringResource(R.string.hotkey_mp_potion),
+                        count = state.itemCount("mana_potion"),
+                        accent = ManaSapphire,
+                        onClick = onHotkeyMp,
+                        testTag = "hotkey_mana_potion",
+                        modifier = Modifier.weight(1f)
+                    )
+                    HotkeyStoneButton(
+                        itemId = bestRuneId,
+                        label = stringResource(R.string.hotkey_rune),
+                        count = totalRunes,
+                        accent = SoulViolet,
+                        onClick = onHotkeyRune,
+                        testTag = "hotkey_attack_rune",
+                        modifier = Modifier.weight(1f)
+                    )
+                    HotkeyStoneButton(
+                        itemId = "rope",
+                        label = stringResource(R.string.hotkey_rope),
+                        count = state.itemCount("rope"),
+                        accent = TorchGold,
+                        onClick = onHotkeyRope,
+                        testTag = "hotkey_rope",
+                        modifier = Modifier.weight(1f)
+                    )
                 }
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -362,6 +464,51 @@ private fun VitalGauge(label: String, current: Int, max: Int, fillColor: Color, 
 }
 
 @Composable
+private fun FloorDescentWarningBanner(banner: FloorWarningBanner) {
+    val accent = when {
+        banner.severity <= 1 -> ExpEmerald
+        banner.severity == 2 -> TorchGold
+        banner.severity == 3 -> FireOrange
+        else -> TargetRed
+    }
+    Surface(
+        color = BasaltDark.copy(alpha = 0.94f),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.5.dp, accent),
+        modifier = Modifier.testTag("floor_warning_banner")
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = "Floor Danger Warning",
+                tint = accent,
+                modifier = Modifier.size(18.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    text = "Floor ${banner.floorId}: ${banner.floorName}",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = ParchmentLight,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Danger: ${banner.dangerLevel} • ${banner.recommendedLevel}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = accent,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun StatusChip(text: String, color: Color) {
     Box(
         modifier = Modifier.background(color.copy(alpha = 0.22f), RoundedCornerShape(3.dp)).border(1.dp, color, RoundedCornerShape(3.dp)).padding(horizontal = 4.dp, vertical = 1.dp)
@@ -371,48 +518,55 @@ private fun StatusChip(text: String, color: Color) {
 }
 
 @Composable
-private fun CompactStepPad(onDirectionStep: (Direction) -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        StepArrowButton(Icons.Default.KeyboardArrowUp, "Move North", { onDirectionStep(Direction.NORTH) }, "dpad_north")
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            StepArrowButton(Icons.AutoMirrored.Filled.ArrowBack, "Move West", { onDirectionStep(Direction.WEST) }, "dpad_west")
-            StepArrowButton(Icons.Default.KeyboardArrowDown, "Move South", { onDirectionStep(Direction.SOUTH) }, "dpad_south")
-            StepArrowButton(Icons.AutoMirrored.Filled.ArrowForward, "Move East", { onDirectionStep(Direction.EAST) }, "dpad_east")
-        }
-    }
-}
-
-@Composable
-private fun StepArrowButton(icon: ImageVector, contentDesc: String, onClick: () -> Unit, testTag: String) {
-    Surface(
-        color = StoneElevated,
-        shape = RoundedCornerShape(6.dp),
-        border = BorderStroke(1.dp, StoneBorderLight),
-        modifier = Modifier.size(48.dp).clickable(onClick = onClick).testTag(testTag)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDesc, tint = ParchmentLight, modifier = Modifier.size(22.dp))
-        }
-    }
-}
-
-@Composable
-private fun HotkeyStoneButton(itemId: String, label: String, count: Int, accent: Color, onClick: () -> Unit, testTag: String, modifier: Modifier = Modifier) {
+private fun HotkeyStoneButton(
+    itemId: String,
+    label: String,
+    count: Int,
+    accent: Color,
+    onClick: () -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier
+) {
     val icon = remember(itemId) { EntitySpriteAtlas.itemIcon(itemId) }
     val enabledAlpha = if (count > 0) 1f else 0.45f
     Surface(
         color = StoneSurface,
         shape = RoundedCornerShape(6.dp),
         border = BorderStroke(1.2.dp, if (count > 0) accent.copy(alpha = 0.85f) else StoneBorderLight),
-        modifier = modifier.height(48.dp).clickable(onClick = onClick).testTag(testTag)
+        modifier = modifier.height(54.dp).clickable(onClick = onClick).testTag(testTag)
     ) {
-        Row(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            PixelSpritePreview(icon, Modifier.size(26.dp).background(ObsidianVoid, RoundedCornerShape(4.dp)))
-            Spacer(Modifier.width(6.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(label, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = ParchmentLight.copy(alpha = enabledAlpha), maxLines = 1)
-                Text("x$count", style = MaterialTheme.typography.labelSmall, color = if (count > 0) TorchGold else ParchmentMuted)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                PixelSpritePreview(
+                    icon,
+                    Modifier
+                        .size(22.dp)
+                        .background(ObsidianVoid, RoundedCornerShape(4.dp))
+                )
+                Text(
+                    text = "x$count",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = if (count > 0) TorchGold else ParchmentMuted,
+                    maxLines = 1
+                )
             }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = ParchmentLight.copy(alpha = enabledAlpha),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -423,7 +577,7 @@ private fun DrawerTabButton(icon: ImageVector, label: String, active: Boolean, o
         color = if (active) TorchGold else StoneElevated,
         shape = RoundedCornerShape(6.dp),
         border = BorderStroke(1.dp, if (active) TorchGold else StoneBorderLight),
-        modifier = modifier.height(44.dp).clickable(onClick = onClick).testTag(testTag)
+        modifier = modifier.height(48.dp).clickable(onClick = onClick).testTag(testTag)
     ) {
         Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, label, tint = if (active) ObsidianVoid else TorchGold, modifier = Modifier.size(18.dp))

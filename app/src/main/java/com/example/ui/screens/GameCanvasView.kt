@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.example.game.model.FloatingTextKind
 import com.example.game.model.GameWorldState
 import com.example.game.model.ProjectileKind
+import com.example.game.model.ThreatBand
 import com.example.game.model.TileType
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.sprites.EntitySpriteAtlas
@@ -235,7 +236,36 @@ fun GameCanvasView(
                 }
             }
 
-            // 4. Monsters
+            // 3.5 Telegraphed Boss Fire Wave AoE Warning Tiles
+            val aoePulse = if (((now / 160L) % 2L) == 0L) 0.44f else 0.24f
+            st.monsters.forEach { m ->
+                if (m.floor == st.floor && m.pendingAoeTiles.isNotEmpty()) {
+                    m.pendingAoeTiles.forEach { (ax, ay) ->
+                        if (ax in minTx..maxTx && ay in minTy..maxTy) {
+                            val left = originX + ax * tilePx
+                            val top = originY + ay * tilePx
+                            drawRect(
+                                color = FireOrange.copy(alpha = aoePulse),
+                                topLeft = Offset(left + 2f, top + 2f),
+                                size = Size(tilePx - 4f, tilePx - 4f)
+                            )
+                            drawRect(
+                                color = TargetRed.copy(alpha = 0.90f),
+                                topLeft = Offset(left + 2f, top + 2f),
+                                size = Size(tilePx - 4f, tilePx - 4f),
+                                style = Stroke(width = 3.5f)
+                            )
+                            drawRect(
+                                color = Color(0xFFFFE066).copy(alpha = aoePulse + 0.25f),
+                                topLeft = Offset(left + tilePx * 0.36f, top + tilePx * 0.36f),
+                                size = Size(tilePx * 0.28f, tilePx * 0.28f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 4. Monsters (with color-coded threat nameplates + pixel skull for Deadly/Boss foes)
             st.monsters.forEach { m ->
                 if (m.floor == st.floor && m.x in (minTx - 1)..(maxTx + 1) && m.y in (minTy - 1)..(maxTy + 1)) {
                     val mFrac = ((now - m.lastMoveTimeMs).toFloat() / 220f).coerceIn(0f, 1f)
@@ -272,12 +302,37 @@ fun GameCanvasView(
                     }
                     drawRect(hpColor, Offset(barX, barY), Size(barW * hpFrac, 7f))
 
-                    if (m.type.isBoss || m.id == st.targetMonsterId) {
-                        drawContext.canvas.nativeCanvas.apply {
-                            drawText(m.type.displayName, sx + tilePx * 0.5f, barY - 6f, labelShadowPaint)
-                            drawText(m.type.displayName, sx + tilePx * 0.5f, barY - 6f, labelPaint)
-                        }
+                    val threatBand = m.type.threatBandFor(st.level)
+                    val prevColor = labelPaint.color
+                    labelPaint.color = when (threatBand) {
+                        ThreatBand.EASY -> android.graphics.Color.parseColor("#4CE06A")
+                        ThreatBand.EVEN -> android.graphics.Color.parseColor("#EDE3CE")
+                        ThreatBand.CHALLENGING -> android.graphics.Color.parseColor("#F5C443")
+                        ThreatBand.DEADLY -> android.graphics.Color.parseColor("#FF4557")
                     }
+                    val centerX = sx + tilePx * 0.5f
+                    val textY = barY - 6f
+                    val textWidth = labelPaint.measureText(m.type.displayName)
+
+                    if (threatBand == ThreatBand.DEADLY) {
+                        // Crisp procedural pixel skull icon beside Deadly / Boss nameplates
+                        val skullPx = 2.2f
+                        val skullX = centerX - textWidth * 0.5f - skullPx * 7.5f
+                        val skullY = textY - skullPx * 7.2f
+                        drawRect(Color.Black, Offset(skullX - 1f, skullY - 1f), Size(skullPx * 6f + 2f, skullPx * 6f + 2f))
+                        drawRect(Color(0xFFF3EFE6), Offset(skullX + skullPx, skullY), Size(skullPx * 4f, skullPx * 4f))
+                        drawRect(Color(0xFFF3EFE6), Offset(skullX, skullY + skullPx), Size(skullPx * 6f, skullPx * 2.5f))
+                        drawRect(Color(0xFFF3EFE6), Offset(skullX + skullPx * 1.5f, skullY + skullPx * 4f), Size(skullPx * 3f, skullPx * 1.8f))
+                        // Eye sockets & nose notch
+                        drawRect(Color(0xFFB71C1C), Offset(skullX + skullPx * 1.1f, skullY + skullPx * 1.6f), Size(skullPx * 1.2f, skullPx * 1.2f))
+                        drawRect(Color(0xFFB71C1C), Offset(skullX + skullPx * 3.7f, skullY + skullPx * 1.6f), Size(skullPx * 1.2f, skullPx * 1.2f))
+                    }
+
+                    drawContext.canvas.nativeCanvas.apply {
+                        drawText(m.type.displayName, centerX, textY, labelShadowPaint)
+                        drawText(m.type.displayName, centerX, textY, labelPaint)
+                    }
+                    labelPaint.color = prevColor
                 }
             }
 
@@ -290,6 +345,13 @@ fun GameCanvasView(
                     val rx = (originX + rpX * tilePx).roundToInt()
                     val ry = (originY + rpY * tilePx).roundToInt()
                     val rpFrame = if (rpMoveFrac < 1f) ((now / 110L) % 2L).toInt() else animFrame
+
+                    if (rp.isPoisoned) {
+                        drawCircle(PoisonGreen.copy(alpha = 0.28f), tilePx * 0.56f, Offset(rx + tilePx * 0.5f, ry + tilePx * 0.55f))
+                    }
+                    if (rp.isBurning) {
+                        drawCircle(FireOrange.copy(alpha = 0.34f), tilePx * 0.58f, Offset(rx + tilePx * 0.5f, ry + tilePx * 0.55f))
+                    }
 
                     drawImage(
                         image = EntitySpriteAtlas.playerBitmap(rp.vocation, rpFrame, rp.tunicColorIndex, rp.hairColorIndex),
@@ -401,6 +463,20 @@ fun GameCanvasView(
                     ProjectileKind.FIRE_BREATH -> {
                         drawCircle(FireOrange, 16f + t * 8f, Offset(px, py))
                         drawCircle(Color(0xFFFFE57F), 8f, Offset(px, py))
+                    }
+                    ProjectileKind.FIREBALL -> {
+                        drawCircle(TargetRed, 14f, Offset(px, py))
+                        drawCircle(FireOrange, 10f, Offset(px, py))
+                        drawCircle(Color(0xFFFFE57F), 5f, Offset(px, py))
+                    }
+                    ProjectileKind.THROWN_STONE -> {
+                        drawRect(Color(0xFF5A5E66), Offset(px - 6f, py - 6f), Size(12f, 12f))
+                        drawRect(Color(0xFFA8ADB8), Offset(px - 4f, py - 4f), Size(6f, 6f))
+                    }
+                    ProjectileKind.NECRO_BOLT -> {
+                        drawCircle(Color(0xFF2E1042), 14f, Offset(px, py))
+                        drawCircle(Color(0xFFB34BFF), 9f, Offset(px, py))
+                        drawCircle(Color(0xFFFF66A3), 4f, Offset(px, py))
                     }
                     ProjectileKind.SPLASH -> {
                         val wx = originX + (proj.toX + 0.5f) * tilePx

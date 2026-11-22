@@ -194,7 +194,7 @@ class ExampleUnitTest {
         assertEquals(1.0, base.copy(vocation = Vocation.KNIGHT).weaponOffVocationMultiplier(claymore), 0.001)
 
         // Higher Melee skill deals measurably higher average damage across combat strikes
-        val target = MonsterEntity(777, MonsterType.DRAGON_BOSS, -4, 16, 15, 16, 15, 5000, 5000)
+        val target = MonsterEntity(777, MonsterType.ELDER_DRAGON, -4, 16, 15, 16, 15, 5000, 5000)
         val lowSkill = base.copy(
             vocation = Vocation.KNIGHT,
             floor = -4,
@@ -449,8 +449,10 @@ class ExampleUnitTest {
                 val corpse = GameEngine.generateMonsterCorpse(dummy)
                 for (stack in corpse.items) {
                     val def = ItemCatalog.get(stack.itemId)
+                    // Basic wooden_club is allowed as a Tier 1/2 starter club drop; no forged Smithy weapons may drop
+                    if (def.id == "wooden_club") continue
                     assertFalse(
-                        "Monster ${type.displayName} dropped finished weapon ${def.name} instead of raw materials",
+                        "Monster ${type.displayName} dropped forged weapon ${def.name} instead of raw materials",
                         def.category in weaponCategories
                     )
                 }

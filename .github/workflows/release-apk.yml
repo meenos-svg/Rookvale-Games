@@ -33,6 +33,21 @@ jobs:
             -keypass android -keyalg RSA -keysize 2048 \
             -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
+      - name: Configure Supabase Secrets (.env)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -n "$SUPABASE_ANON_KEY" ]; then
+            {
+              echo "SUPABASE_URL=${SUPABASE_URL:-https://wzwuflkwzistgwifsbul.supabase.co}"
+              echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+            } > .env
+            echo "Configured .env from GitHub Secrets for live co-op builds."
+          else
+            echo "SUPABASE_ANON_KEY secret not set; APK will build with Offline Solo fallback."
+          fi
+
       - name: Build Debug APK
         run: gradle assembleDebug
 

@@ -41,7 +41,9 @@ data class RemotePlayerState(
     val floor: Int,
     val hp: Int,
     val maxHp: Int,
-    val joinedAt: Long = 0L
+    val joinedAt: Long = 0L,
+    val isPoisoned: Boolean = false,
+    val isBurning: Boolean = false
 )
 
 data class LocalPlayerPresencePayload(
@@ -56,7 +58,9 @@ data class LocalPlayerPresencePayload(
     val floor: Int,
     val hp: Int,
     val maxHp: Int,
-    val joinedAt: Long
+    val joinedAt: Long,
+    val isPoisoned: Boolean = false,
+    val isBurning: Boolean = false
 )
 
 data class SyncedMonsterSnapshot(
@@ -69,7 +73,9 @@ data class SyncedMonsterSnapshot(
     val spawnY: Int,
     val hp: Int,
     val maxHp: Int,
-    val targetPlayerId: String? = null
+    val targetPlayerId: String? = null,
+    val isSummon: Boolean = false,
+    val pendingAoeTiles: List<Pair<Int, Int>> = emptyList()
 )
 
 data class RemoteMonsterHitEvent(
@@ -94,6 +100,32 @@ data class LocalMonsterHitEvent(
     val projectileKindName: String? = null,
     val fromX: Int = 0,
     val fromY: Int = 0
+)
+
+data class LocalMonsterAttackEvent(
+    val monsterId: Int,
+    val floor: Int,
+    val fromX: Int,
+    val fromY: Int,
+    val toX: Int,
+    val toY: Int,
+    val projectileKindName: String? = null,
+    val aoeTiles: List<Pair<Int, Int>> = emptyList(),
+    val targetPlayerId: String? = null,
+    val inflictedStatus: String? = null
+)
+
+data class RemoteMonsterAttackEvent(
+    val monsterId: Int,
+    val floor: Int,
+    val fromX: Int,
+    val fromY: Int,
+    val toX: Int,
+    val toY: Int,
+    val projectileKindName: String? = null,
+    val aoeTiles: List<Pair<Int, Int>> = emptyList(),
+    val targetPlayerId: String? = null,
+    val inflictedStatus: String? = null
 )
 
 data class MultiplayerUiState(

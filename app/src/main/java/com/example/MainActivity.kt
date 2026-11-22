@@ -1,5 +1,7 @@
 package com.example
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -10,6 +12,7 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.game.model.ActivePanel
+import com.example.game.update.GitHubUpdateChecker
 import com.example.game.viewmodel.AppScreen
 import com.example.game.viewmodel.GameViewModel
 import com.example.ui.screens.GameScreen
@@ -32,11 +35,15 @@ class MainActivity : ComponentActivity() {
                 val world by gameViewModel.world.collectAsStateWithLifecycle()
                 val mpState by gameViewModel.multiplayerState.collectAsStateWithLifecycle()
                 val saveBanner by gameViewModel.saveBanner.collectAsStateWithLifecycle()
+                val updateState by gameViewModel.updateState.collectAsStateWithLifecycle()
 
                 when (screen) {
                     AppScreen.TITLE_AND_CREATE -> {
                         TitleAndCreationScreen(
                             savedSlots = savedSlots,
+                            updateState = updateState,
+                            onDownloadUpdate = { url -> openReleaseInBrowser(url) },
+                            onDismissUpdate = gameViewModel::dismissUpdateBanner,
                             onCreateCharacter = { name, tunicIdx, hairIdx ->
                                 gameViewModel.startNewCharacter(name, tunicIdx, hairIdx)
                             },
@@ -57,7 +64,6 @@ class MainActivity : ComponentActivity() {
                             multiplayerState = mpState,
                             saveBanner = saveBanner,
                             onTileTapped = gameViewModel::onTileTapped,
-                            onDirectionStep = gameViewModel::onDirectionStep,
                             onHotkeyHp = gameViewModel::onHotkeyHealthPotion,
                             onHotkeyMp = gameViewModel::onHotkeyManaPotion,
                             onHotkeyRune = gameViewModel::onHotkeyAttackRune,
@@ -75,6 +81,7 @@ class MainActivity : ComponentActivity() {
                             onSellItem = gameViewModel::sellItem,
                             onCraftRecipe = gameViewModel::craftRecipe,
                             onChooseVocationAtOracle = gameViewModel::chooseVocationAtOracle,
+                            onMultiplayerStatusTapped = gameViewModel::onMultiplayerStatusTapped,
                             onToggleChat = gameViewModel::toggleChat,
                             onSelectChatChannel = gameViewModel::selectChatChannel,
                             onSendChat = gameViewModel::sendChatMessage,
@@ -88,8 +95,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        gameViewModel.onAppResumed()
+    }
+
     override fun onPause() {
         super.onPause()
         gameViewModel.persistCurrentState(silent = true)
+    }
+
+    private fun openReleaseInBrowser(rawUrl: String) {
+        val safeUrl = GitHubUpdateChecker.validateReleaseUrl(rawUrl)
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(safeUrl)).apply {
+            addCategory(Intent.CATEGORY_BROWSABLE)
+        }
+        runCatching { startActivity(intent) }
     }
 }
