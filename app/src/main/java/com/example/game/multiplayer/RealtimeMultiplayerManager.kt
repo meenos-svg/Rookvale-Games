@@ -58,6 +58,9 @@ class RealtimeMultiplayerManager(
     private val _monsterAttackEvents = MutableSharedFlow<RemoteMonsterAttackEvent>(extraBufferCapacity = 64)
     val monsterAttackEvents: SharedFlow<RemoteMonsterAttackEvent> = _monsterAttackEvents.asSharedFlow()
 
+    private val _playerActionFxEvents = MutableSharedFlow<RemotePlayerActionFxEvent>(extraBufferCapacity = 64)
+    val playerActionFxEvents: SharedFlow<RemotePlayerActionFxEvent> = _playerActionFxEvents.asSharedFlow()
+
     private val refCounter = AtomicLong(1L)
     private var activeWebSocket: WebSocket? = null
     private var heartbeatJob: Job? = null
@@ -145,7 +148,14 @@ class RealtimeMultiplayerManager(
         val ws = activeWebSocket
         if (ws != null && _uiState.value.status == ConnectionStatus.ONLINE) {
             if (oldFloor != newFloor) {
-                sendPhoenixFrame(ws, MultiplayerConfig.floorChannelTopic(oldFloor), "phx_leave", emptyMap())
+                val oldTopic = MultiplayerConfig.floorChannelTopic(oldFloor)
+                sendBroadcast(
+                    ws,
+                    oldTopic,
+                    "player_leave",
+                    mapOf("playerId" to updatedPayload.playerId, "floor" to oldFloor)
+                )
+                sendPhoenixFrame(ws, oldTopic, "phx_leave", emptyMap())
             }
             joinFloorChannel(ws, newFloor)
         }
@@ -158,6 +168,30 @@ class RealtimeMultiplayerManager(
 
         val body = playerPayloadToMap(latestLocalPayload!!)
         sendBroadcast(ws, MultiplayerConfig.floorChannelTopic(currentFloor), "player_state", body)
+    }
+
+    fun broadcastPlayerActionFx(event: LocalPlayerActionFxEvent, senderId: String) {
+        val ws = activeWebSocket ?: return
+        if (_uiState.value.status != ConnectionStatus.ONLINE) return
+        if (event.floor != currentFloor) return
+
+        sendBroadcast(
+            ws,
+            MultiplayerConfig.floorChannelTopic(event.floor),
+            "player_fx",
+            mapOf(
+                "pid" to senderId,
+                "floor" to event.floor,
+                "x" to event.x,
+                "y" to event.y,
+                "txt" to event.text,
+                "kind" to event.floatingKindName,
+                "act" to event.actionState.name,
+                "proj" to event.projectileKindName,
+                "tx" to event.toX,
+                "ty" to event.toY
+            )
+        )
     }
 
     fun broadcastMonsterSync(floor: Int, monsters: List<SyncedMonsterSnapshot>) {
@@ -511,6 +545,8 @@ class RealtimeMultiplayerManager(
                 val innerBody = payload["payload"].asStringMap() ?: return
                 when (innerEvent) {
                     "player_state" -> if (topic == expectedFloorTopic) applyRemotePlayerState(innerBody)
+                    "player_leave" -> if (topic == expectedFloorTopic) applyRemotePlayerLeave(innerBody)
+                    "player_fx" -> if (topic == expectedFloorTopic) applyRemotePlayerActionFx(innerBody)
                     "monster_sync" -> if (topic == expectedFloorTopic) applyMonsterSync(innerBody)
                     "monster_hit" -> if (topic == expectedFloorTopic) applyRemoteMonsterHit(innerBody)
                     "monster_attack" -> if (topic == expectedFloorTopic) applyRemoteMonsterAttack(innerBody)
@@ -584,6 +620,55 @@ class RealtimeMultiplayerManager(
         recomputePresenceAndHost()
     }
 
+    private fun applyRemotePlayerLeave(body: Map<String, Any?>) {
+        val localId = latestLocalPayload?.playerId
+        val id = MultiplayerSanitizer.sanitizeId(body["playerId"] as? String)
+        if (id.isBlank() || id == localId) return
+        val removed = synchronized(presenceMap) { presenceMap.remove(id) != null }
+        if (removed) recomputePresenceAndHost()
+    }
+
+    private fun applyRemotePlayerActionFx(body: Map<String, Any?>) {
+        val localId = latestLocalPayload?.playerId
+        val pid = MultiplayerSanitizer.sanitizeId(body["pid"] as? String)
+        if (pid.isBlank() || pid == localId) return
+        val floor = body["floor"].asIntOrNull() ?: return
+        if (!MultiplayerSanitizer.isValidFloor(floor) || floor != currentFloor) return
+        val (cx, cy) = MultiplayerSanitizer.clampCoord(floor, body["x"].asIntOrNull() ?: 0, body["y"].asIntOrNull() ?: 0)
+        val rawToX = body["tx"].asIntOrNull()
+        val rawToY = body["ty"].asIntOrNull()
+        val clampedTo = if (rawToX != null && rawToY != null) MultiplayerSanitizer.clampCoord(floor, rawToX, rawToY) else null
+        val actionState = MultiplayerSanitizer.safeActionState(body["act"] as? String)
+        val animNow = animClockProvider()
+
+        if (actionState != PlayerActionState.IDLE) {
+            var updated = false
+            synchronized(presenceMap) {
+                val existing = presenceMap[pid]
+                if (existing != null) {
+                    presenceMap[pid] = existing.copy(actionState = actionState, lastActionMs = animNow)
+                    updated = true
+                }
+            }
+            if (updated) recomputePresenceAndHost()
+        }
+
+        _playerActionFxEvents.tryEmit(
+            RemotePlayerActionFxEvent(
+                playerId = pid,
+                floor = floor,
+                x = cx,
+                y = cy,
+                text = MultiplayerSanitizer.sanitizeFloatingText(body["txt"] as? String),
+                floatingKind = MultiplayerSanitizer.safeFloatingKind(body["kind"] as? String),
+                actionState = actionState,
+                projectileKindName = (body["proj"] as? String)?.take(24),
+                toX = clampedTo?.first,
+                toY = clampedTo?.second
+            )
+        )
+    }
+
     private fun applyMonsterSync(body: Map<String, Any?>) {
         val floor = body["floor"].asIntOrNull() ?: return
         if (!MultiplayerSanitizer.isValidFloor(floor) || floor != currentFloor) return
@@ -652,7 +737,7 @@ class RealtimeMultiplayerManager(
         val proj = (body["proj"] as? String)?.take(24)
         val aoeTiles = parseTilePairs(body["aoe"], floor)
         val targetId = (body["tgt"] as? String)?.let { MultiplayerSanitizer.sanitizeId(it) }?.ifBlank { null }
-        val status = (body["st"] as? String)?.uppercase()?.takeIf { it == "POISON" || it == "BURN" }
+        val status = (body["st"] as? String)?.uppercase()?.takeIf { it == "POISON" || it == "FIRE" || it == "BURN" }
         _monsterAttackEvents.tryEmit(
             RemoteMonsterAttackEvent(
                 monsterId = monsterId,
@@ -748,13 +833,24 @@ class RealtimeMultiplayerManager(
         val hp = (meta["hp"].asIntOrNull() ?: existing?.hp ?: maxHp).coerceIn(0, maxHp)
         val joinedAt = meta["joinedAt"].asLongOrNull() ?: existing?.joinedAt ?: nowProvider()
 
+        val outfitMap = meta["outfitColors"].asStringMap()
+        val rawTunic = outfitMap?.get("tunic").asIntOrNull() ?: meta["tunicColorIndex"].asIntOrNull() ?: existing?.tunicColorIndex ?: 0
+        val rawHair = outfitMap?.get("hair").asIntOrNull() ?: meta["hairColorIndex"].asIntOrNull() ?: existing?.hairColorIndex ?: 0
+        val parsedDir = (meta["direction"] as? String)?.let { MultiplayerSanitizer.safeDirection(it) }
+            ?: if (moved) inferDirection(existing!!.x, existing.y, cx, cy) else (existing?.direction ?: com.example.game.model.Direction.SOUTH)
+        val parsedAction = (meta["actionState"] as? String)?.let { MultiplayerSanitizer.safeActionState(it) }
+            ?: if (moved) PlayerActionState.WALKING else (existing?.actionState ?: PlayerActionState.IDLE)
+        val actionTriggered = parsedAction == PlayerActionState.ATTACKING ||
+            parsedAction == PlayerActionState.CASTING ||
+            parsedAction == PlayerActionState.HEALING
+
         return RemotePlayerState(
             playerId = id,
             name = MultiplayerSanitizer.sanitizeName(meta["name"] as? String ?: existing?.name),
             level = (meta["level"].asIntOrNull() ?: existing?.level ?: 1).coerceIn(1, 999),
             vocation = MultiplayerSanitizer.safeVocation(meta["vocation"] as? String ?: existing?.vocation?.name),
-            tunicColorIndex = MultiplayerSanitizer.clampTunicIndex(meta["tunicColorIndex"].asIntOrNull() ?: existing?.tunicColorIndex ?: 0),
-            hairColorIndex = MultiplayerSanitizer.clampHairIndex(meta["hairColorIndex"].asIntOrNull() ?: existing?.hairColorIndex ?: 0),
+            tunicColorIndex = MultiplayerSanitizer.clampTunicIndex(rawTunic),
+            hairColorIndex = MultiplayerSanitizer.clampHairIndex(rawHair),
             x = cx,
             y = cy,
             prevX = if (moved) existing!!.x else cx,
@@ -765,8 +861,22 @@ class RealtimeMultiplayerManager(
             maxHp = maxHp,
             joinedAt = joinedAt,
             isPoisoned = (meta["psn"] as? Boolean) ?: existing?.isPoisoned ?: false,
-            isBurning = (meta["brn"] as? Boolean) ?: existing?.isBurning ?: false
+            isBurning = (meta["brn"] as? Boolean) ?: existing?.isBurning ?: false,
+            direction = parsedDir,
+            actionState = parsedAction,
+            lastActionMs = if (actionTriggered) animNow else (existing?.lastActionMs ?: 0L)
         )
+    }
+
+    private fun inferDirection(fromX: Int, fromY: Int, toX: Int, toY: Int): com.example.game.model.Direction {
+        val dx = toX - fromX
+        val dy = toY - fromY
+        return when {
+            kotlin.math.abs(dx) >= kotlin.math.abs(dy) ->
+                if (dx >= 0) com.example.game.model.Direction.EAST else com.example.game.model.Direction.WEST
+            dy >= 0 -> com.example.game.model.Direction.SOUTH
+            else -> com.example.game.model.Direction.NORTH
+        }
     }
 
     private fun extractFirstMeta(entry: Map<String, Any?>): Map<String, Any?>? {
@@ -782,9 +892,15 @@ class RealtimeMultiplayerManager(
         "vocation" to p.vocation.name,
         "tunicColorIndex" to p.tunicColorIndex,
         "hairColorIndex" to p.hairColorIndex,
+        "outfitColors" to mapOf(
+            "tunic" to p.tunicColorIndex,
+            "hair" to p.hairColorIndex
+        ),
         "x" to p.x,
         "y" to p.y,
         "floor" to p.floor,
+        "direction" to p.direction.name,
+        "actionState" to p.actionState.name,
         "hp" to p.hp,
         "maxHp" to p.maxHp,
         "psn" to p.isPoisoned,

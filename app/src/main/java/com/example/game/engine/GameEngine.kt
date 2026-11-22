@@ -3,8 +3,11 @@ package com.example.game.engine
 import com.example.game.model.*
 import com.example.game.multiplayer.LocalMonsterAttackEvent
 import com.example.game.multiplayer.LocalMonsterHitEvent
+import com.example.game.multiplayer.LocalPlayerActionFxEvent
+import com.example.game.multiplayer.PlayerActionState
 import com.example.game.multiplayer.RemoteMonsterAttackEvent
 import com.example.game.multiplayer.RemoteMonsterHitEvent
+import com.example.game.multiplayer.RemotePlayerActionFxEvent
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.multiplayer.SyncedMonsterSnapshot
 import com.example.game.world.NpcRole
@@ -262,7 +265,13 @@ object GameEngine {
         )
     }
 
-    fun handleTileTap(state: GameWorldState, tx: Int, ty: Int, nowMs: Long): GameWorldState {
+    fun handleTileTap(
+        state: GameWorldState,
+        tx: Int,
+        ty: Int,
+        nowMs: Long,
+        remotePlayersOnFloor: List<RemotePlayerState> = emptyList()
+    ): GameWorldState {
         if (state.deathReport != null) return state
         val floorMap = WorldMaps.getFloor(state.floor)
         if (tx !in 0 until floorMap.width || ty !in 0 until floorMap.height) return state
@@ -277,6 +286,16 @@ object GameEngine {
                 "Target cleared."
             }
             return state.copy(targetMonsterId = newTarget).addLogInternal(msg)
+        }
+
+        // 1.5 Tap Remote Player -> Tibia-style Look / Inspect ("You see PlayerName (Level X Vocation).")
+        val tappedPlayer = remotePlayersOnFloor.firstOrNull { it.floor == state.floor && it.x == tx && it.y == ty }
+        if (tappedPlayer != null) {
+            return state.copy(
+                inspectedPlayerId = tappedPlayer.playerId,
+                inspectedPlayerUntilMs = nowMs + 2600L,
+                walkPath = emptyList()
+            ).addLogInternal("You see ${tappedPlayer.name} (Level ${tappedPlayer.level} ${tappedPlayer.vocation.displayName}).")
         }
 
         val npc = WorldMaps.npcs.firstOrNull { it.floor == state.floor && it.x == tx && it.y == ty }
@@ -299,12 +318,12 @@ object GameEngine {
                     else -> state.copy(activePanel = ActivePanel.SHOP, walkPath = emptyList())
                         .addLogInternal("Alaric: 'Potions, runes, and sturdy tools — forge your own steel at the Smithy!'")
                 }
-            } else setWalkPathToAdjacent(state, tx, ty)
+            } else setWalkPathToAdjacent(state, tx, ty, remotePlayersOnFloor)
         }
 
         // 3. Temple Altar
         if (tile == TileType.TEMPLE_ALTAR) {
-            return if (dist <= 2) blessAtTemple(state, nowMs) else setWalkPathToAdjacent(state, tx, ty)
+            return if (dist <= 2) blessAtTemple(state, nowMs) else setWalkPathToAdjacent(state, tx, ty, remotePlayersOnFloor)
         }
 
         // 4. Depot Chest & Deep Outpost Mini-Depot
@@ -313,7 +332,7 @@ object GameEngine {
                 val label = if (tile == TileType.MINI_DEPOT) "Deep Outpost Mini-Depot" else "Rookvale Depot Chest"
                 state.copy(activePanel = ActivePanel.DEPOT, walkPath = emptyList())
                     .addLogInternal("Opened your $label.")
-            } else setWalkPathToAdjacent(state, tx, ty)
+            } else setWalkPathToAdjacent(state, tx, ty, remotePlayersOnFloor)
         }
 
         // 5. Physical World-Anchored Crafting Stations (Smelting Furnace & Blacksmith Anvil)
@@ -321,20 +340,20 @@ object GameEngine {
             return if (dist <= 1) {
                 state.copy(activePanel = ActivePanel.FURNACE, walkPath = emptyList())
                     .addLogInternal("Stepped up to the roaring Smelting Furnace.")
-            } else setWalkPathToAdjacent(state, tx, ty)
+            } else setWalkPathToAdjacent(state, tx, ty, remotePlayersOnFloor)
         }
         if (tile == TileType.BLACKSMITH_ANVIL) {
             return if (dist <= 1) {
                 state.copy(activePanel = ActivePanel.ANVIL, walkPath = emptyList())
                     .addLogInternal("Readied your hammer at the Blacksmith Anvil.")
-            } else setWalkPathToAdjacent(state, tx, ty)
+            } else setWalkPathToAdjacent(state, tx, ty, remotePlayersOnFloor)
         }
 
         // 6. Interactive Ore Veins (Ochre, Bogstone, Brimstone, Aetherium)
         if (tile.oreVeinKind() != null) {
             return if (dist <= 1) {
                 CraftingAndMiningEngine.mineOreNode(state.copy(walkPath = emptyList()), tx, ty, nowMs)
-            } else setWalkPathToAdjacent(state, tx, ty)
+            } else setWalkPathToAdjacent(state, tx, ty, remotePlayersOnFloor)
         }
 
         // 7. Lootable Corpse
@@ -358,22 +377,38 @@ object GameEngine {
             return useRope(state, nowMs)
         }
 
-        // 10. Walkable tile -> BFS path
+        // 10. Walkable tile -> BFS path (respecting Tibia-style non-PZ player blocking)
         if (tile.walkable) {
-            val path = findPath(state, tx, ty)
+            val path = findPath(state, tx, ty, remotePlayersOnFloor)
             if (path.isNotEmpty()) {
-                return stepAlongPath(state.copy(walkPath = path), nowMs)
+                return stepAlongPath(state.copy(walkPath = path), nowMs, remotePlayersOnFloor)
             }
         }
         return state
     }
 
-    fun stepDirection(state: GameWorldState, dir: Direction, nowMs: Long): GameWorldState {
+    fun stepDirection(
+        state: GameWorldState,
+        dir: Direction,
+        nowMs: Long,
+        remotePlayersOnFloor: List<RemotePlayerState> = emptyList()
+    ): GameWorldState {
         if (state.deathReport != null) return state
-        return attemptMoveTo(state.copy(walkPath = emptyList()), state.playerX + dir.dx, state.playerY + dir.dy, dir, nowMs)
+        return attemptMoveTo(
+            state.copy(walkPath = emptyList()),
+            state.playerX + dir.dx,
+            state.playerY + dir.dy,
+            dir,
+            nowMs,
+            remotePlayersOnFloor
+        )
     }
 
-    fun stepAlongPath(state: GameWorldState, nowMs: Long): GameWorldState {
+    fun stepAlongPath(
+        state: GameWorldState,
+        nowMs: Long,
+        remotePlayersOnFloor: List<RemotePlayerState> = emptyList()
+    ): GameWorldState {
         if (state.deathReport != null || state.walkPath.isEmpty()) return state
         val (nx, ny) = state.walkPath.first()
         val remaining = state.walkPath.drop(1)
@@ -385,7 +420,7 @@ object GameEngine {
             dy > 0 -> Direction.SOUTH
             else -> Direction.NORTH
         }
-        val moved = attemptMoveTo(state.copy(walkPath = remaining), nx, ny, dir, nowMs)
+        val moved = attemptMoveTo(state.copy(walkPath = remaining), nx, ny, dir, nowMs, remotePlayersOnFloor)
         return if (moved.playerX == state.playerX && moved.playerY == state.playerY && moved.floor == state.floor) {
             moved.copy(walkPath = emptyList())
         } else {
@@ -393,14 +428,45 @@ object GameEngine {
         }
     }
 
-    private fun attemptMoveTo(state: GameWorldState, nx: Int, ny: Int, dir: Direction, nowMs: Long): GameWorldState {
+    /**
+     * Classic Tibia player interference rule:
+     * - Inside Protection Zones (Temple & Town) players pass freely through one another.
+     * - On floor-change portals (stairs / rope holes) players may stack so entrances cannot be trapped.
+     * - Everywhere else (Wilds & Dungeons), tiles occupied by another player are solid/blocked.
+     */
+    internal fun isBlockedByRemotePlayer(
+        floorMap: WorldFloor,
+        x: Int,
+        y: Int,
+        remotePlayersOnFloor: List<RemotePlayerState>
+    ): Boolean {
+        if (remotePlayersOnFloor.isEmpty()) return false
+        if (floorMap.isProtectionZone(x, y)) return false
+        val tile = floorMap.tileAt(x, y)
+        if (tile == TileType.STAIRS_DOWN || tile == TileType.STAIRS_UP ||
+            tile == TileType.ROPE_HOLE_DOWN || tile == TileType.ROPE_SPOT_UP
+        ) {
+            return false
+        }
+        return remotePlayersOnFloor.any { it.floor == floorMap.floorId && it.x == x && it.y == y }
+    }
+
+    private fun attemptMoveTo(
+        state: GameWorldState,
+        nx: Int,
+        ny: Int,
+        dir: Direction,
+        nowMs: Long,
+        remotePlayersOnFloor: List<RemotePlayerState> = emptyList()
+    ): GameWorldState {
         val floorMap = WorldMaps.getFloor(state.floor)
         val tile = floorMap.tileAt(nx, ny)
         if (!tile.walkable) return state.copy(playerFacing = dir)
 
         val blockedByMonster = state.monsters.any { it.floor == state.floor && it.x == nx && it.y == ny }
         val blockedByNpc = WorldMaps.npcs.any { it.floor == state.floor && it.x == nx && it.y == ny }
-        if (blockedByMonster || blockedByNpc) return state.copy(playerFacing = dir)
+        val blockedByPlayer = isBlockedByRemotePlayer(floorMap, nx, ny, remotePlayersOnFloor)
+        if (blockedByMonster || blockedByNpc || blockedByPlayer) return state.copy(playerFacing = dir)
 
         val portal = WorldMaps.portalAt(state.floor, nx, ny, requiresRope = false)
         if (portal != null) {
@@ -549,11 +615,13 @@ object GameEngine {
             val pDmg = Random.nextInt(4, 9)
             s = s.copy(hp = (s.hp - pDmg).coerceAtLeast(0), poisonTicks = s.poisonTicks - 1)
                 .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$pDmg", FloatingTextKind.POISON, nowMs)
+                .queuePlayerFx("-$pDmg", FloatingTextKind.POISON, PlayerActionState.IDLE)
         }
         if (s.fireTicks > 0 && s.hp > 0) {
             val fDmg = Random.nextInt(8, 15)
             s = s.copy(hp = (s.hp - fDmg).coerceAtLeast(0), fireTicks = s.fireTicks - 1)
                 .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$fDmg", FloatingTextKind.FIRE, nowMs)
+                .queuePlayerFx("-$fDmg", FloatingTextKind.FIRE, PlayerActionState.IDLE)
         }
 
         // 4. Monster AI on active floor (Host moves & elects targetPlayerId; Non-host resolves attacks targeting local player)
@@ -602,6 +670,9 @@ object GameEngine {
         val effectiveRange = weapon?.range ?: 1
         if (dist > effectiveRange) return s
 
+        // Turn character sprite toward the target
+        s = s.copy(playerFacing = directionToward(s.playerX, s.playerY, target.x, target.y))
+
         // Soft skill-requirement scaling (-35% dmg) & Tier 3-4 off-vocation penalty (-25% dmg)
         val reqType = weapon?.requiredSkillType
         val skillPenaltyMult = if (reqType != null && s.skills.levelFor(reqType) < weapon.requiredSkillLevel) 0.65 else 1.0
@@ -618,12 +689,14 @@ object GameEngine {
                     s = s.copy(mp = s.mp - weapon.manaCost)
                     s = advanceSkillPublic(s, SkillType.MAGIC, weapon.manaCost.toDouble() * 1.25, nowMs)
                     s = s.addProjectileInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), target.x.toFloat(), target.y.toFloat(), ProjectileKind.ENERGY_BOLT, nowMs)
+                    s = s.queuePlayerFx(null, null, PlayerActionState.CASTING)
                     applyDamageToMonster(s, target.id, dmg, nowMs, projectileKind = ProjectileKind.ENERGY_BOLT)
                 } else if (dist <= 1) {
                     val meleeMult = s.attackSkillMultiplier(s.skills.melee.level)
                     val rawDmg = (Random.nextInt(4, 8) * meleeMult).roundToInt().coerceAtLeast(3)
                     val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = false)
                     s = advanceSkillPublic(s, SkillType.MELEE, 1.5, nowMs)
+                    s = s.queuePlayerFx(null, null, PlayerActionState.ATTACKING)
                     applyDamageToMonster(s, target.id, dmg, nowMs)
                 } else {
                     s.addLogInternal("Low Mana for ${weapon.name}! Drink a Mana Potion.")
@@ -665,9 +738,11 @@ object GameEngine {
                     val rawDmg = (basePower * distMult * Random.nextDouble(0.80, 1.20) * skillPenaltyMult * offVocationMult)
                         .roundToInt().coerceAtLeast(5)
                     val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = false)
+                    s = s.queuePlayerFx(null, null, PlayerActionState.ATTACKING)
                     applyDamageToMonster(s, target.id, dmg, nowMs, projectileKind = projKind)
                 } else {
                     s.addFloatingInternal(s.floor, target.x.toFloat(), target.y.toFloat(), "MISS", FloatingTextKind.BLOCK, nowMs)
+                        .queuePlayerFx("MISS", FloatingTextKind.BLOCK, PlayerActionState.ATTACKING, projKind, target.x, target.y)
                 }
             }
             else -> {
@@ -678,6 +753,7 @@ object GameEngine {
                 val rawDmg = (basePower * meleeMult * Random.nextDouble(0.80, 1.20) * skillPenaltyMult * offVocationMult)
                     .roundToInt().coerceAtLeast(4)
                 val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = false)
+                s = s.queuePlayerFx(null, null, PlayerActionState.ATTACKING)
                 applyDamageToMonster(s, target.id, dmg, nowMs)
             }
         }
@@ -950,6 +1026,37 @@ object GameEngine {
         return s
     }
 
+    /**
+     * Renders floating heal/mana/damage numbers and optional spell/ranged projectiles emitted
+     * by a remote co-op player on the same floor.
+     */
+    fun applyRemotePlayerActionFx(
+        state: GameWorldState,
+        event: RemotePlayerActionFxEvent,
+        nowMs: Long
+    ): GameWorldState {
+        if (event.floor != state.floor) return state
+        var s = state
+        if (event.text != null && event.floatingKind != null) {
+            val fxX = (event.toX ?: event.x).toFloat()
+            val fxY = (event.toY ?: event.y).toFloat()
+            s = s.addFloatingInternal(s.floor, fxX, fxY, event.text, event.floatingKind, nowMs)
+        }
+        val proj = event.projectileKindName?.let { runCatching { ProjectileKind.valueOf(it) }.getOrNull() }
+        if (proj != null && event.toX != null && event.toY != null) {
+            s = s.addProjectileInternal(
+                s.floor,
+                event.x.toFloat(),
+                event.y.toFloat(),
+                event.toX.toFloat(),
+                event.toY.toFloat(),
+                proj,
+                nowMs
+            )
+        }
+        return s
+    }
+
     fun buildFloorMonsterSnapshots(state: GameWorldState): List<SyncedMonsterSnapshot> {
         return state.monsters
             .filter { it.floor == state.floor && it.hp > 0 }
@@ -1124,6 +1231,7 @@ object GameEngine {
             backpack = removeItemPublic(state.backpack, "health_potion", 1)
         )
             .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "+$actualHeal HP", FloatingTextKind.HEAL, nowMs)
+            .queuePlayerFx("+$actualHeal HP", FloatingTextKind.HEAL, PlayerActionState.HEALING)
             .addLogInternal("Drank Health Potion (+$actualHeal HP).")
     }
 
@@ -1139,6 +1247,7 @@ object GameEngine {
             backpack = removeItemPublic(state.backpack, "mana_potion", 1)
         )
             .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "+$actual MP", FloatingTextKind.MANA, nowMs)
+            .queuePlayerFx("+$actual MP", FloatingTextKind.MANA, PlayerActionState.HEALING)
             .addLogInternal("Drank Mana Potion (+$actual MP).")
     }
 
@@ -1160,11 +1269,13 @@ object GameEngine {
         var next = state.copy(
             mp = state.mp - runeDef.manaCost,
             soul = (state.soul - 1).coerceAtLeast(0),
+            playerFacing = directionToward(state.playerX, state.playerY, target.x, target.y),
             backpack = removeItemPublic(state.backpack, runeId, 1)
         )
         next = advanceSkillPublic(next, SkillType.MAGIC, runeDef.manaCost.toDouble() * 1.4, nowMs)
         val projKind = if (runeId == "sd_rune") ProjectileKind.DEATH_RUNE else ProjectileKind.ENERGY_BOLT
         next = next.addProjectileInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), target.x.toFloat(), target.y.toFloat(), projKind, nowMs)
+        next = next.queuePlayerFx(null, null, PlayerActionState.CASTING)
         return applyDamageToMonster(next, target.id, dmg, nowMs, "${runeDef.name} struck ${target.type.displayName} for $dmg!", projKind)
     }
 
@@ -1325,6 +1436,7 @@ object GameEngine {
                             fireTicks = max(s.fireTicks, 5)
                         )
                             .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.FIRE, nowMs)
+                            .queuePlayerFx("-$waveDmg", FloatingTextKind.FIRE, PlayerActionState.IDLE)
                             .addLogInternal("${curM.type.displayName}'s Fire Wave scorched you for $waveDmg!")
                     }
                     updatedMonsters[i] = curM.copy(pendingAoeTiles = emptyList(), aoeCooldownTicks = 4)
@@ -1408,6 +1520,7 @@ object GameEngine {
                 val dodgeChance = s.shieldDodgeChance(isRanged)
                 if (Random.nextDouble() < dodgeChance) {
                     s = s.addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "DODGE!", FloatingTextKind.BLOCK, nowMs)
+                        .queuePlayerFx("DODGE!", FloatingTextKind.BLOCK, PlayerActionState.IDLE)
                 } else {
                     val rawDmg = Random.nextInt(curM.type.minDmg, curM.type.maxDmg + 1)
                     val armorMit = s.equipment.totalArmor() * 0.65
@@ -1416,9 +1529,11 @@ object GameEngine {
 
                     if (reduced <= 0) {
                         s = s.addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "GLANCE", FloatingTextKind.BLOCK, nowMs)
+                            .queuePlayerFx("GLANCE", FloatingTextKind.BLOCK, PlayerActionState.IDLE)
                     } else {
                         s = s.copy(hp = (s.hp - reduced).coerceAtLeast(0))
                             .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.DAMAGE_PLAYER, nowMs)
+                            .queuePlayerFx("-$reduced", FloatingTextKind.DAMAGE_PLAYER, PlayerActionState.IDLE)
                         if (curM.type.inflictsPoison && Random.nextFloat() < 0.35f) {
                             statusTag = "POISON"
                             s = s.copy(poisonTicks = max(s.poisonTicks, 5)).addLogInternal("${curM.type.displayName} poisoned you!")
@@ -1475,7 +1590,7 @@ object GameEngine {
                         t.walkable &&
                             !floorMap.isProtectionZone(cx, cy) &&
                             !(cx == s.playerX && cy == s.playerY) &&
-                            activeRemoteTargets.none { rp -> rp.x == cx && rp.y == cy } &&
+                            remotePlayersOnFloor.none { rp -> rp.floor == curM.floor && rp.x == cx && rp.y == cy } &&
                             updatedMonsters.none { other -> other.id != curM.id && other.floor == curM.floor && other.x == cx && other.y == cy } &&
                             spawnedSummons.none { other -> other.floor == curM.floor && other.x == cx && other.y == cy }
                     }
@@ -1780,8 +1895,10 @@ object GameEngine {
             ItemCategory.FOOD -> {
                 val newHp = (state.hp + def.restoreAmount).coerceAtMost(state.maxHp)
                 val newMp = (state.mp + def.restoreAmount / 2).coerceAtMost(state.maxMp)
+                val healed = newHp - state.hp
                 state.copy(hp = newHp, mp = newMp, backpack = removeItemPublic(state.backpack, itemId, 1))
-                    .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "+${newHp - state.hp} HP", FloatingTextKind.HEAL, nowMs)
+                    .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "+$healed HP", FloatingTextKind.HEAL, nowMs)
+                    .queuePlayerFx("+$healed HP", FloatingTextKind.HEAL, PlayerActionState.HEALING)
                     .addLogInternal("Ate ${def.name}.")
             }
             ItemCategory.AMMO -> {
@@ -1948,19 +2065,32 @@ object GameEngine {
     private fun blessAtTemple(state: GameWorldState, nowMs: Long): GameWorldState {
         return state.copy(hp = state.maxHp, mp = state.maxMp, poisonTicks = 0, fireTicks = 0)
             .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "BLESSED!", FloatingTextKind.HEAL, nowMs)
+            .queuePlayerFx("BLESSED!", FloatingTextKind.HEAL, PlayerActionState.HEALING)
             .addLogInternal("Brother Alden: 'May the light of Rookvale restore your body and spirit.'")
     }
 
-    private fun setWalkPathToAdjacent(state: GameWorldState, tx: Int, ty: Int): GameWorldState {
+    private fun setWalkPathToAdjacent(
+        state: GameWorldState,
+        tx: Int,
+        ty: Int,
+        remotePlayersOnFloor: List<RemotePlayerState> = emptyList()
+    ): GameWorldState {
         val floorMap = WorldMaps.getFloor(state.floor)
         val adj = listOf(tx to ty - 1, tx to ty + 1, tx - 1 to ty, tx + 1 to ty)
-            .filter { (x, y) -> floorMap.tileAt(x, y).walkable }
+            .filter { (x, y) ->
+                floorMap.tileAt(x, y).walkable && !isBlockedByRemotePlayer(floorMap, x, y, remotePlayersOnFloor)
+            }
             .minByOrNull { (x, y) -> abs(x - state.playerX) + abs(y - state.playerY) }
             ?: return state
-        return state.copy(walkPath = findPath(state, adj.first, adj.second))
+        return state.copy(walkPath = findPath(state, adj.first, adj.second, remotePlayersOnFloor))
     }
 
-    private fun findPath(state: GameWorldState, goalX: Int, goalY: Int): List<Pair<Int, Int>> {
+    private fun findPath(
+        state: GameWorldState,
+        goalX: Int,
+        goalY: Int,
+        remotePlayersOnFloor: List<RemotePlayerState> = emptyList()
+    ): List<Pair<Int, Int>> {
         if (state.playerX == goalX && state.playerY == goalY) return emptyList()
         val floorMap = WorldMaps.getFloor(state.floor)
         val visited = HashSet<Int>(256)
@@ -1990,6 +2120,7 @@ object GameEngine {
                 if (!floorMap.tileAt(nx, ny).walkable) continue
                 val coord = nx to ny
                 if (coord in monsterSet || coord in npcSet) continue
+                if (isBlockedByRemotePlayer(floorMap, nx, ny, remotePlayersOnFloor)) continue
                 visited.add(key)
                 parent[coord] = cur
                 queue.add(coord)
@@ -2039,14 +2170,27 @@ object GameEngine {
 
     private fun pruneExpiredEffects(state: GameWorldState, nowMs: Long): GameWorldState {
         val activeBanner = state.floorWarningBanner?.takeIf { nowMs - it.createdAtMs < 3500L }
+        val keepInspected = state.inspectedPlayerId != null && nowMs < state.inspectedPlayerUntilMs
         return state.copy(
             floatingTexts = state.floatingTexts.filter { nowMs - it.createdAtMs < 1350L },
             projectiles = state.projectiles.filter { nowMs - it.createdAtMs < it.durationMs },
-            floorWarningBanner = activeBanner
+            floorWarningBanner = activeBanner,
+            inspectedPlayerId = if (keepInspected) state.inspectedPlayerId else null,
+            inspectedPlayerUntilMs = if (keepInspected) state.inspectedPlayerUntilMs else 0L
         )
     }
 
     internal fun allocateEffectId(): Long = nextEffectId++
+
+    internal fun directionToward(fromX: Int, fromY: Int, toX: Int, toY: Int): Direction {
+        val dx = toX - fromX
+        val dy = toY - fromY
+        return if (abs(dx) >= abs(dy)) {
+            if (dx >= 0) Direction.EAST else Direction.WEST
+        } else {
+            if (dy >= 0) Direction.SOUTH else Direction.NORTH
+        }
+    }
 
     private fun chebyshev(x1: Int, y1: Int, x2: Int, y2: Int): Int = max(abs(x1 - x2), abs(y1 - y2))
 }
@@ -2058,6 +2202,28 @@ internal fun GameWorldState.addFloatingInternal(floor: Int, x: Float, y: Float, 
 
 internal fun GameWorldState.addProjectileInternal(floor: Int, fx: Float, fy: Float, tx: Float, ty: Float, kind: ProjectileKind, nowMs: Long, durationMs: Long = 260L): GameWorldState {
     return copy(projectiles = (projectiles + ProjectileEffect(GameEngine.allocateEffectId(), floor, fx, fy, tx, ty, kind, nowMs, durationMs)).takeLast(14))
+}
+
+internal fun GameWorldState.queuePlayerFx(
+    text: String?,
+    kind: FloatingTextKind?,
+    actionState: PlayerActionState,
+    projectileKind: ProjectileKind? = null,
+    toX: Int? = null,
+    toY: Int? = null
+): GameWorldState {
+    val event = LocalPlayerActionFxEvent(
+        floor = floor,
+        x = playerX,
+        y = playerY,
+        text = text,
+        floatingKindName = kind?.name,
+        actionState = actionState,
+        projectileKindName = projectileKind?.name,
+        toX = toX,
+        toY = toY
+    )
+    return copy(outboundPlayerEffects = (outboundPlayerEffects + event).takeLast(10))
 }
 
 internal fun GameWorldState.addLogInternal(message: String): GameWorldState {

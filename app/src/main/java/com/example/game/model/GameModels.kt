@@ -2,6 +2,7 @@ package com.example.game.model
 
 import com.example.game.multiplayer.LocalMonsterAttackEvent
 import com.example.game.multiplayer.LocalMonsterHitEvent
+import com.example.game.multiplayer.LocalPlayerActionFxEvent
 import com.squareup.moshi.JsonClass
 
 const val CURRENT_MAP_VERSION = 2
@@ -743,8 +744,11 @@ data class GameWorldState(
     val lastCombatTickMs: Long = 0L,
     val lastPlayerAttackMs: Long = 0L,
     val floorWarningBanner: FloorWarningBanner? = null,
+    val inspectedPlayerId: String? = null,
+    val inspectedPlayerUntilMs: Long = 0L,
     val outboundMonsterHits: List<LocalMonsterHitEvent> = emptyList(),
-    val outboundMonsterAttacks: List<LocalMonsterAttackEvent> = emptyList()
+    val outboundMonsterAttacks: List<LocalMonsterAttackEvent> = emptyList(),
+    val outboundPlayerEffects: List<LocalPlayerActionFxEvent> = emptyList()
 ) {
     fun toolBagWeightOz(): Double =
         toolBag.sumOf { ItemCatalog.get(it.itemId).weightOz * TOOL_BAG_WEIGHT_MULTIPLIER * it.count }

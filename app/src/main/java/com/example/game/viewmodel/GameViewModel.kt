@@ -18,6 +18,7 @@ import com.example.game.multiplayer.ChatChannel
 import com.example.game.multiplayer.ConnectionStatus
 import com.example.game.multiplayer.LocalPlayerPresencePayload
 import com.example.game.multiplayer.MultiplayerUiState
+import com.example.game.multiplayer.PlayerActionState
 import com.example.game.multiplayer.RealtimeMultiplayerManager
 import com.example.game.sprites.EntitySpriteAtlas
 import com.example.game.sprites.TileSpriteAtlas
@@ -148,6 +149,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 if (died) persistCurrentState(silent = true)
             }
         }
+
+        // Apply incoming co-op player heal/damage/block floating numbers & spell projectiles
+        viewModelScope.launch {
+            multiplayerManager.playerActionFxEvents.collect { fxEvent ->
+                if (_screen.value != AppScreen.PLAYING) return@collect
+                val now = SystemClock.uptimeMillis()
+                _world.update { prev ->
+                    GameEngine.applyRemotePlayerActionFx(prev, fxEvent, now)
+                }
+            }
+        }
     }
 
     fun startNewCharacter(name: String, tunicColorIndex: Int = 0, hairColorIndex: Int = 0) {
@@ -228,6 +240,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 delay(200L)
                 val now = SystemClock.uptimeMillis()
                 var leveledUp = false
+                var attackedAction: PlayerActionState? = null
+                var facingChanged = false
                 var newLevel = 1
                 var floor = 0
                 var name = ""
@@ -241,14 +255,21 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             floor = next.floor
                             name = next.playerName
                         }
+                        if (next.playerFacing != prev.playerFacing) facingChanged = true
+                        if (next.outboundPlayerEffects.size > prev.outboundPlayerEffects.size) {
+                            attackedAction = next.outboundPlayerEffects.lastOrNull()?.actionState
+                        }
                         next
                     }
                 }
                 flushOutboundMonsterHits()
+                flushOutboundPlayerEffects()
                 if (leveledUp) {
                     multiplayerManager.broadcastSystemCallout("$name advanced to Level $newLevel!", floor)
-                    broadcastCurrentState()
+                    broadcastCurrentState(attackedAction ?: PlayerActionState.IDLE)
                     persistCurrentState(silent = true)
+                } else if (attackedAction != null || facingChanged) {
+                    broadcastCurrentState(attackedAction ?: PlayerActionState.IDLE)
                 }
             }
         }
@@ -265,6 +286,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 var leveledUp = false
                 var floorChanged = false
                 var vitalsChanged = false
+                var tickAction: PlayerActionState? = null
                 var newLevel = 1
                 var curFloor = 0
                 var name = ""
@@ -289,10 +311,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         next.maxHp != prev.maxHp ||
                         next.playerX != prev.playerX ||
                         next.playerY != prev.playerY ||
+                        next.playerFacing != prev.playerFacing ||
                         (next.poisonTicks > 0) != (prev.poisonTicks > 0) ||
                         (next.fireTicks > 0) != (prev.fireTicks > 0)
                     ) {
                         vitalsChanged = true
+                    }
+                    val lastAction = next.outboundPlayerEffects.lastOrNull()?.actionState
+                    if (lastAction != null && lastAction != PlayerActionState.IDLE) {
+                        tickAction = lastAction
                     }
                     curFloor = next.floor
                     name = next.playerName
@@ -301,12 +328,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
                 flushOutboundMonsterHits()
                 flushOutboundMonsterAttacks()
+                flushOutboundPlayerEffects()
 
                 val latest = _world.value
                 if (floorChanged) {
                     multiplayerManager.switchFloor(latest.floor, latest.toPresencePayload())
-                } else if (vitalsChanged) {
-                    multiplayerManager.broadcastLocalState(latest.toPresencePayload())
+                } else if (vitalsChanged || tickAction != null) {
+                    multiplayerManager.broadcastLocalState(latest.toPresencePayload(tickAction ?: PlayerActionState.IDLE))
                 }
 
                 if (leveledUp) {
@@ -331,14 +359,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             while (true) {
                 delay(210L)
                 val now = SystemClock.uptimeMillis()
+                val remotes = multiplayerManager.uiState.value.remotePlayers
                 var changedFloor = false
                 var movedTile = false
+                var facingChanged = false
                 _world.update { prev ->
                     if (prev.walkPath.isEmpty()) prev
                     else {
-                        val next = GameEngine.stepAlongPath(prev, now)
+                        val next = GameEngine.stepAlongPath(prev, now, remotes)
                         if (next.floor != prev.floor) changedFloor = true
                         if (next.playerX != prev.playerX || next.playerY != prev.playerY) movedTile = true
+                        if (next.playerFacing != prev.playerFacing) facingChanged = true
                         next
                     }
                 }
@@ -347,7 +378,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
                     persistCurrentState(silent = true)
                 } else if (movedTile) {
-                    broadcastCurrentState()
+                    broadcastCurrentState(PlayerActionState.WALKING)
+                } else if (facingChanged) {
+                    broadcastCurrentState(PlayerActionState.IDLE)
                 }
             }
         }
@@ -395,14 +428,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun broadcastCurrentState() {
-        val cur = _world.value
-        if (cur.saveId.isNotBlank()) {
-            multiplayerManager.broadcastLocalState(cur.toPresencePayload())
+    private fun flushOutboundPlayerEffects() {
+        val pending = _world.value.outboundPlayerEffects
+        if (pending.isEmpty()) return
+        val snapshot = _world.value
+        _world.update { it.copy(outboundPlayerEffects = emptyList()) }
+        for (fx in pending) {
+            multiplayerManager.broadcastPlayerActionFx(
+                event = fx,
+                senderId = snapshot.saveId
+            )
         }
     }
 
-    private fun GameWorldState.toPresencePayload(): LocalPlayerPresencePayload =
+    private fun broadcastCurrentState(actionState: PlayerActionState = PlayerActionState.IDLE) {
+        val cur = _world.value
+        if (cur.saveId.isNotBlank()) {
+            multiplayerManager.broadcastLocalState(cur.toPresencePayload(actionState))
+        }
+    }
+
+    private fun GameWorldState.toPresencePayload(
+        actionState: PlayerActionState = PlayerActionState.IDLE
+    ): LocalPlayerPresencePayload =
         LocalPlayerPresencePayload(
             playerId = saveId,
             name = playerName,
@@ -417,7 +465,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             maxHp = maxHp,
             joinedAt = System.currentTimeMillis(),
             isPoisoned = poisonTicks > 0,
-            isBurning = fireTicks > 0
+            isBurning = fireTicks > 0,
+            direction = playerFacing,
+            actionState = actionState
         )
 
     fun checkForGitHubUpdates() {
@@ -478,20 +528,30 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onTileTapped(tx: Int, ty: Int) {
         val now = SystemClock.uptimeMillis()
+        val remotes = multiplayerManager.uiState.value.remotePlayers
         var floorChanged = false
         var moved = false
+        var facingChanged = false
+        var healed = false
         _world.update { prev ->
-            val next = GameEngine.handleTileTap(prev, tx, ty, now)
+            val next = GameEngine.handleTileTap(prev, tx, ty, now, remotes)
             if (next.floor != prev.floor) floorChanged = true
             if (next.playerX != prev.playerX || next.playerY != prev.playerY) moved = true
+            if (next.playerFacing != prev.playerFacing) facingChanged = true
+            if (next.hp != prev.hp) healed = true
             next
         }
+        flushOutboundPlayerEffects()
         if (floorChanged) {
             val cur = _world.value
             multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
             persistCurrentState(silent = true)
         } else if (moved) {
-            broadcastCurrentState()
+            broadcastCurrentState(PlayerActionState.WALKING)
+        } else if (healed) {
+            broadcastCurrentState(PlayerActionState.HEALING)
+        } else if (facingChanged) {
+            broadcastCurrentState(PlayerActionState.IDLE)
         }
     }
 
@@ -499,12 +559,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val now = SystemClock.uptimeMillis()
         if (now - lastStepMs < 155L) return
         lastStepMs = now
+        val remotes = multiplayerManager.uiState.value.remotePlayers
         var floorChanged = false
         var moved = false
+        var facingChanged = false
         _world.update { prev ->
-            val next = GameEngine.stepDirection(prev, dir, now)
+            val next = GameEngine.stepDirection(prev, dir, now, remotes)
             if (next.floor != prev.floor) floorChanged = true
             if (next.playerX != prev.playerX || next.playerY != prev.playerY) moved = true
+            if (next.playerFacing != prev.playerFacing) facingChanged = true
             next
         }
         if (floorChanged) {
@@ -512,29 +575,40 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
             persistCurrentState(silent = true)
         } else if (moved) {
-            broadcastCurrentState()
+            broadcastCurrentState(PlayerActionState.WALKING)
+        } else if (facingChanged) {
+            broadcastCurrentState(PlayerActionState.IDLE)
         }
     }
 
     fun onHotkeyHealthPotion() {
         val now = SystemClock.uptimeMillis()
-        var hpChanged = false
+        var used = false
         _world.update { prev ->
             val next = GameEngine.useHealthPotion(prev, now)
-            if (next.hp != prev.hp) hpChanged = true
+            if (next.hp != prev.hp || next.outboundPlayerEffects.size > prev.outboundPlayerEffects.size) used = true
             next
         }
-        if (hpChanged) broadcastCurrentState()
+        flushOutboundPlayerEffects()
+        if (used) broadcastCurrentState(PlayerActionState.HEALING)
     }
 
     fun onHotkeyManaPotion() {
         val now = SystemClock.uptimeMillis()
-        _world.update { GameEngine.useManaPotion(it, now) }
+        var used = false
+        _world.update { prev ->
+            val next = GameEngine.useManaPotion(prev, now)
+            if (next.mp != prev.mp || next.outboundPlayerEffects.size > prev.outboundPlayerEffects.size) used = true
+            next
+        }
+        flushOutboundPlayerEffects()
+        if (used) broadcastCurrentState(PlayerActionState.HEALING)
     }
 
     fun onHotkeyAttackRune() {
         val now = SystemClock.uptimeMillis()
         var leveledUp = false
+        var casted = false
         var newLevel = 1
         var floor = 0
         var name = ""
@@ -546,13 +620,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 floor = next.floor
                 name = next.playerName
             }
+            if (next.outboundMonsterHits.size > prev.outboundMonsterHits.size) casted = true
             next
         }
         flushOutboundMonsterHits()
+        flushOutboundPlayerEffects()
         if (leveledUp) {
             multiplayerManager.broadcastSystemCallout("$name advanced to Level $newLevel!", floor)
-            broadcastCurrentState()
+            broadcastCurrentState(PlayerActionState.CASTING)
             persistCurrentState(silent = true)
+        } else if (casted) {
+            broadcastCurrentState(PlayerActionState.CASTING)
         }
     }
 
@@ -596,13 +674,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun useBackpackItem(itemId: String) {
         val now = SystemClock.uptimeMillis()
+        var action: PlayerActionState? = null
         var hpChanged = false
         _world.update { prev ->
             val next = GameEngine.useOrEquipBackpackItem(prev, itemId, now)
             if (next.hp != prev.hp) hpChanged = true
+            if (next.outboundPlayerEffects.size > prev.outboundPlayerEffects.size) {
+                action = next.outboundPlayerEffects.lastOrNull()?.actionState
+            }
             next
         }
-        if (hpChanged) broadcastCurrentState()
+        flushOutboundMonsterHits()
+        flushOutboundPlayerEffects()
+        if (hpChanged || action != null) broadcastCurrentState(action ?: PlayerActionState.IDLE)
     }
 
     fun dropBackpackItem(itemId: String) {

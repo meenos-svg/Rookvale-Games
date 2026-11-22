@@ -1,20 +1,30 @@
 package com.example
 
 import com.example.game.engine.GameEngine
+import com.example.game.model.Direction
 import com.example.game.model.EquippedGear
+import com.example.game.model.FloatingTextKind
 import com.example.game.model.MonsterEntity
 import com.example.game.model.MonsterType
+import com.example.game.model.ProjectileKind
+import com.example.game.model.TileType
 import com.example.game.model.Vocation
 import com.example.game.multiplayer.ChatChannel
 import com.example.game.multiplayer.ConnectionStatus
 import com.example.game.multiplayer.LocalPlayerPresencePayload
 import com.example.game.multiplayer.MultiplayerConfig
 import com.example.game.multiplayer.MultiplayerSanitizer
+import com.example.game.multiplayer.PlayerActionState
 import com.example.game.multiplayer.RealtimeMultiplayerManager
 import com.example.game.multiplayer.RemoteMonsterHitEvent
+import com.example.game.multiplayer.RemotePlayerActionFxEvent
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.multiplayer.SyncedMonsterSnapshot
 import com.example.game.multiplayer.electFloorHost
+import com.example.game.world.WorldMaps
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -218,5 +228,154 @@ class MultiplayerCoopTest {
         assertEquals(16, syncedM.y)
         assertEquals("p_lyra", syncedM.targetPlayerId)
         assertTrue("Host sync must preserve local contributor tracking", "p_lyra" in syncedM.contributors)
+    }
+
+    @Test
+    fun playerStateSyncsDirectionActionStateOutfitColorsAndRemovesOnFloorLeave() {
+        val mgr = RealtimeMultiplayerManager(CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        mgr.connect(
+            LocalPlayerPresencePayload(
+                playerId = "p_local",
+                name = "Roland",
+                level = 10,
+                vocation = Vocation.KNIGHT,
+                tunicColorIndex = 0,
+                hairColorIndex = 0,
+                x = 15,
+                y = 15,
+                floor = -1,
+                hp = 200,
+                maxHp = 200,
+                joinedAt = 1000L,
+                direction = Direction.SOUTH,
+                actionState = PlayerActionState.IDLE
+            )
+        )
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:floor:-1","event":"phx_reply","payload":{"status":"ok"},"ref":"1"}"""
+        )
+
+        // Incoming player_state with outfitColors object, direction, and CASTING actionState
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:floor:-1","event":"broadcast","payload":{"event":"player_state","payload":{"playerId":"p_mage","name":"Elara","level":18,"vocation":"MAGE","outfitColors":{"tunic":4,"hair":2},"x":16,"y":15,"floor":-1,"hp":190,"maxHp":210,"direction":"WEST","actionState":"CASTING","joinedAt":1200}}}"""
+        )
+        val elara = mgr.uiState.value.remotePlayers.firstOrNull { it.playerId == "p_mage" }
+        assertNotNull(elara)
+        assertEquals(4, elara!!.tunicColorIndex)
+        assertEquals(2, elara.hairColorIndex)
+        assertEquals(Direction.WEST, elara.direction)
+        assertEquals(PlayerActionState.CASTING, elara.actionState)
+        assertEquals(2, mgr.uiState.value.floorOnlineCount)
+
+        // Remote player climbs/descends -> player_leave removes them immediately
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:floor:-1","event":"broadcast","payload":{"event":"player_leave","payload":{"playerId":"p_mage","floor":-1}}}"""
+        )
+        assertTrue("Remote player must be removed on floor change", mgr.uiState.value.remotePlayers.isEmpty())
+        assertEquals(1, mgr.uiState.value.floorOnlineCount)
+    }
+
+    @Test
+    fun remotePlayerActionFxRendersFloatingNumbersAndSpellProjectiles() = runBlocking {
+        val mgr = RealtimeMultiplayerManager(CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        mgr.connect(
+            LocalPlayerPresencePayload("p_local", "Roland", 8, Vocation.ADVENTURER, 0, 0, 14, 15, -1, 180, 180, 1000L)
+        )
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:floor:-1","event":"phx_reply","payload":{"status":"ok"},"ref":"1"}"""
+        )
+
+        var received: RemotePlayerActionFxEvent? = null
+        val job = launch(Dispatchers.Unconfined) {
+            received = mgr.playerActionFxEvents.first()
+        }
+
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:floor:-1","event":"broadcast","payload":{"event":"player_fx","payload":{"playerId":"p_lyra","floor":-1,"x":16,"y":15,"text":"+95 HP","floatingKind":"HEAL","actionState":"HEALING","proj":"ENERGY_BOLT","toX":18,"toY":15}}}"""
+        )
+        job.join()
+
+        assertNotNull("Expected player_fx event to emit", received)
+        assertEquals("+95 HP", received!!.text)
+        assertEquals(FloatingTextKind.HEAL, received!!.floatingKind)
+        assertEquals(PlayerActionState.HEALING, received!!.actionState)
+
+        val world = GameEngine.createNewWorld("Roland").copy(floor = -1, playerX = 14, playerY = 15)
+        val updated = GameEngine.applyRemotePlayerActionFx(world, received!!, nowMs = 5000L)
+        assertTrue("Remote heal text must appear on same floor", updated.floatingTexts.any { it.text == "+95 HP" && it.kind == FloatingTextKind.HEAL })
+        assertTrue("Remote spell projectile must spawn on same floor", updated.projectiles.any { it.kind == ProjectileKind.ENERGY_BOLT && it.toX == 18f && it.toY == 15f })
+
+        // Different floor FX must be ignored
+        val otherFloorWorld = world.copy(floor = 0)
+        val ignored = GameEngine.applyRemotePlayerActionFx(otherFloorWorld, received!!, nowMs = 5000L)
+        assertTrue(ignored.floatingTexts.isEmpty())
+        assertTrue(ignored.projectiles.isEmpty())
+    }
+
+    @Test
+    fun tibiaCollisionBlocksInNonPzAllowsPassingInPzAndPortalsAndSupportsTapToInspect() {
+        // 1. Non-PZ Dungeon (Floor -1): remote player at (16, 15) blocks direct step & pathfinding
+        val dungeonMap = WorldMaps.getFloor(-1)
+        assertFalse("Dungeon tile (16, 15) should not be PZ", dungeonMap.isProtectionZone(16, 15))
+        val blocker = RemotePlayerState("p_lyra", "Lyra", 20, Vocation.PALADIN, 2, 1, 16, 15, floor = -1, hp = 260, maxHp = 280, joinedAt = 1000L)
+        val dungeonState = GameEngine.createNewWorld("Roland").copy(
+            floor = -1,
+            playerX = 15,
+            playerY = 15,
+            monsters = emptyList()
+        )
+
+        val blockedStep = GameEngine.stepDirection(dungeonState, Direction.EAST, 1000L, listOf(blocker))
+        assertEquals("Non-PZ player must block direct step", 15, blockedStep.playerX)
+        assertEquals(15, blockedStep.playerY)
+        assertEquals("Blocked step still updates facing direction", Direction.EAST, blockedStep.playerFacing)
+
+        // Tap-to-Inspect on remote player's tile
+        val inspected = GameEngine.handleTileTap(dungeonState, 16, 15, 1000L, listOf(blocker))
+        assertEquals("p_lyra", inspected.inspectedPlayerId)
+        assertTrue(
+            "Inspect must log Tibia-style You see message",
+            inspected.statusLog.last().contains("You see Lyra (Level 20 Paladin).")
+        )
+
+        // Tapping a walkable tile behind the blocker routes around them instead of stepping onto (16, 15)
+        val walkedAround = GameEngine.handleTileTap(dungeonState, 17, 15, 1000L, listOf(blocker))
+        assertFalse("Path must never step onto occupied non-PZ player tile", walkedAround.playerX == 16 && walkedAround.playerY == 15)
+        assertFalse("Queued path must never contain occupied non-PZ player tile", (16 to 15) in walkedAround.walkPath)
+
+        // 2. Protection Zone (Rookvale Temple Floor 0): players pass freely through each other!
+        val pzFloor = WorldMaps.getFloor(0)
+        val templeX = WorldMaps.TEMPLE_SPAWN_X
+        val templeY = WorldMaps.TEMPLE_SPAWN_Y
+        assertTrue("Temple spawn +1 east must be PZ", pzFloor.isProtectionZone(templeX + 1, templeY))
+        val templeAlly = RemotePlayerState("p_ally", "AldenFan", 5, Vocation.ADVENTURER, 0, 0, templeX + 1, templeY, floor = 0, hp = 150, maxHp = 150, joinedAt = 1000L)
+        val pzState = GameEngine.createNewWorld("Roland").copy(
+            floor = 0,
+            playerX = templeX,
+            playerY = templeY,
+            monsters = emptyList()
+        )
+        val steppedThroughPz = GameEngine.stepDirection(pzState, Direction.EAST, 1000L, listOf(templeAlly))
+        assertEquals("PZ must allow walking through another player", templeX + 1, steppedThroughPz.playerX)
+        assertEquals(templeY, steppedThroughPz.playerY)
+
+        // 3. Portal anti-grief rule: players standing on stairs/rope tiles never block entrances
+        var stairsCoord: Pair<Int, Int>? = null
+        for (y in 0 until dungeonMap.height) {
+            for (x in 0 until dungeonMap.width) {
+                val t = dungeonMap.tileAt(x, y)
+                if (t == TileType.STAIRS_UP || t == TileType.STAIRS_DOWN || t == TileType.ROPE_SPOT_UP) {
+                    stairsCoord = x to y
+                    break
+                }
+            }
+            if (stairsCoord != null) break
+        }
+        assertNotNull("Floor -1 should have stairs/rope tile", stairsCoord)
+        val portalBlocker = blocker.copy(x = stairsCoord!!.first, y = stairsCoord.second)
+        assertFalse(
+            "Portal tiles must never be blocked by remote players",
+            GameEngine.isBlockedByRemotePlayer(dungeonMap, stairsCoord.first, stairsCoord.second, listOf(portalBlocker))
+        )
     }
 }

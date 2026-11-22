@@ -1,8 +1,18 @@
 package com.example.game.multiplayer
 
 import com.example.game.model.AdventurerPalette
+import com.example.game.model.Direction
+import com.example.game.model.FloatingTextKind
 import com.example.game.model.Vocation
 import com.example.game.world.WorldMaps
+
+enum class PlayerActionState {
+    IDLE,
+    WALKING,
+    ATTACKING,
+    CASTING,
+    HEALING
+}
 
 enum class ConnectionStatus {
     OFFLINE_SOLO,
@@ -43,7 +53,10 @@ data class RemotePlayerState(
     val maxHp: Int,
     val joinedAt: Long = 0L,
     val isPoisoned: Boolean = false,
-    val isBurning: Boolean = false
+    val isBurning: Boolean = false,
+    val direction: Direction = Direction.SOUTH,
+    val actionState: PlayerActionState = PlayerActionState.IDLE,
+    val lastActionMs: Long = 0L
 )
 
 data class LocalPlayerPresencePayload(
@@ -60,7 +73,9 @@ data class LocalPlayerPresencePayload(
     val maxHp: Int,
     val joinedAt: Long,
     val isPoisoned: Boolean = false,
-    val isBurning: Boolean = false
+    val isBurning: Boolean = false,
+    val direction: Direction = Direction.SOUTH,
+    val actionState: PlayerActionState = PlayerActionState.IDLE
 )
 
 data class SyncedMonsterSnapshot(
@@ -126,6 +141,31 @@ data class RemoteMonsterAttackEvent(
     val aoeTiles: List<Pair<Int, Int>> = emptyList(),
     val targetPlayerId: String? = null,
     val inflictedStatus: String? = null
+)
+
+data class LocalPlayerActionFxEvent(
+    val floor: Int,
+    val x: Int,
+    val y: Int,
+    val text: String? = null,
+    val floatingKindName: String? = null,
+    val actionState: PlayerActionState = PlayerActionState.IDLE,
+    val projectileKindName: String? = null,
+    val toX: Int? = null,
+    val toY: Int? = null
+)
+
+data class RemotePlayerActionFxEvent(
+    val playerId: String,
+    val floor: Int,
+    val x: Int,
+    val y: Int,
+    val text: String? = null,
+    val floatingKind: FloatingTextKind? = null,
+    val actionState: PlayerActionState = PlayerActionState.IDLE,
+    val projectileKindName: String? = null,
+    val toX: Int? = null,
+    val toY: Int? = null
 )
 
 data class MultiplayerUiState(
@@ -194,6 +234,25 @@ object MultiplayerSanitizer {
 
     fun safeVocation(raw: String?): Vocation =
         runCatching { Vocation.valueOf(raw.orEmpty()) }.getOrDefault(Vocation.ADVENTURER)
+
+    fun safeDirection(raw: String?): Direction =
+        runCatching { Direction.valueOf(raw.orEmpty().uppercase()) }.getOrDefault(Direction.SOUTH)
+
+    fun safeActionState(raw: String?): PlayerActionState =
+        runCatching { PlayerActionState.valueOf(raw.orEmpty().uppercase()) }.getOrDefault(PlayerActionState.IDLE)
+
+    fun safeFloatingKind(raw: String?): FloatingTextKind? =
+        raw?.let { runCatching { FloatingTextKind.valueOf(it.uppercase()) }.getOrNull() }
+
+    fun sanitizeFloatingText(raw: String?): String? {
+        val cleaned = raw.orEmpty()
+            .replace(controlRegex, "")
+            .replace("\n", "")
+            .replace("\r", "")
+            .trim()
+            .take(20)
+        return cleaned.ifEmpty { null }
+    }
 
     fun clampTunicIndex(idx: Int): Int = idx.coerceIn(0, AdventurerPalette.tunicColors.lastIndex)
     fun clampHairIndex(idx: Int): Int = idx.coerceIn(0, AdventurerPalette.hairColors.lastIndex)

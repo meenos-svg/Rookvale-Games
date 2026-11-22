@@ -34,11 +34,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.example.game.model.Direction
 import com.example.game.model.FloatingTextKind
 import com.example.game.model.GameWorldState
 import com.example.game.model.ProjectileKind
 import com.example.game.model.ThreatBand
 import com.example.game.model.TileType
+import com.example.game.multiplayer.PlayerActionState
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.sprites.EntitySpriteAtlas
 import com.example.game.sprites.TileSpriteAtlas
@@ -345,16 +347,69 @@ fun GameCanvasView(
                     val rx = (originX + rpX * tilePx).roundToInt()
                     val ry = (originY + rpY * tilePx).roundToInt()
                     val rpFrame = if (rpMoveFrac < 1f) ((now / 110L) % 2L).toInt() else animFrame
+                    val center = Offset(rx + tilePx * 0.5f, ry + tilePx * 0.55f)
+
+                    // Tap-to-Inspect highlight ring
+                    if (rp.playerId == st.inspectedPlayerId && now < st.inspectedPlayerUntilMs) {
+                        val pulseAlpha = if (((now / 180L) % 2L) == 0L) 0.92f else 0.52f
+                        drawRect(
+                            color = Color(0xFF47D7FF).copy(alpha = pulseAlpha),
+                            topLeft = Offset(rx.toFloat() + 1f, ry.toFloat() + 1f),
+                            size = Size(tilePx - 2f, tilePx - 2f),
+                            style = Stroke(width = 4.5f)
+                        )
+                    }
 
                     if (rp.isPoisoned) {
-                        drawCircle(PoisonGreen.copy(alpha = 0.28f), tilePx * 0.56f, Offset(rx + tilePx * 0.5f, ry + tilePx * 0.55f))
+                        drawCircle(PoisonGreen.copy(alpha = 0.28f), tilePx * 0.56f, center)
                     }
                     if (rp.isBurning) {
-                        drawCircle(FireOrange.copy(alpha = 0.34f), tilePx * 0.58f, Offset(rx + tilePx * 0.5f, ry + tilePx * 0.55f))
+                        drawCircle(FireOrange.copy(alpha = 0.34f), tilePx * 0.58f, center)
+                    }
+
+                    // Brief actionState visual cue (melee slash, arcane cast ring, or emerald heal halo)
+                    val actionAge = now - rp.lastActionMs
+                    if (actionAge in 0L..420L) {
+                        val aFrac = 1f - (actionAge.toFloat() / 420f)
+                        when (rp.actionState) {
+                            PlayerActionState.ATTACKING -> {
+                                val offX = rp.direction.dx * tilePx * 0.36f
+                                val offY = rp.direction.dy * tilePx * 0.36f
+                                drawCircle(
+                                    color = Color(0xFFFFE082).copy(alpha = 0.65f * aFrac),
+                                    radius = tilePx * (0.22f + 0.14f * (1f - aFrac)),
+                                    center = Offset(center.x + offX, center.y + offY),
+                                    style = Stroke(width = 4f)
+                                )
+                            }
+                            PlayerActionState.CASTING -> {
+                                drawCircle(
+                                    color = Color(0xFF5CE1FF).copy(alpha = 0.72f * aFrac),
+                                    radius = tilePx * (0.42f + 0.18f * (1f - aFrac)),
+                                    center = center,
+                                    style = Stroke(width = 4f)
+                                )
+                            }
+                            PlayerActionState.HEALING -> {
+                                drawCircle(
+                                    color = Color(0xFF4CE678).copy(alpha = 0.72f * aFrac),
+                                    radius = tilePx * (0.38f + 0.20f * (1f - aFrac)),
+                                    center = center,
+                                    style = Stroke(width = 4f)
+                                )
+                            }
+                            else -> Unit
+                        }
                     }
 
                     drawImage(
-                        image = EntitySpriteAtlas.playerBitmap(rp.vocation, rpFrame, rp.tunicColorIndex, rp.hairColorIndex),
+                        image = EntitySpriteAtlas.playerBitmap(
+                            vocation = rp.vocation,
+                            frame = rpFrame,
+                            tunicColorIndex = rp.tunicColorIndex,
+                            hairColorIndex = rp.hairColorIndex,
+                            direction = rp.direction
+                        ),
                         dstOffset = IntOffset(rx, ry),
                         dstSize = IntSize(tileInt, tileInt),
                         filterQuality = FilterQuality.None
@@ -377,7 +432,7 @@ fun GameCanvasView(
 
                     val prevColor = labelPaint.color
                     labelPaint.color = android.graphics.Color.parseColor("#8CF0FF")
-                    val tag = "${rp.name} [${rp.level}]"
+                    val tag = "${rp.name} [Lvl ${rp.level}]"
                     drawContext.canvas.nativeCanvas.apply {
                         drawText(tag, rx + tilePx * 0.5f, rBarY - 6f, labelShadowPaint)
                         drawText(tag, rx + tilePx * 0.5f, rBarY - 6f, labelPaint)
@@ -399,7 +454,13 @@ fun GameCanvasView(
             }
 
             drawImage(
-                image = EntitySpriteAtlas.playerBitmap(st.vocation, playerFrame, st.tunicColorIndex, st.hairColorIndex),
+                image = EntitySpriteAtlas.playerBitmap(
+                    vocation = st.vocation,
+                    frame = playerFrame,
+                    tunicColorIndex = st.tunicColorIndex,
+                    hairColorIndex = st.hairColorIndex,
+                    direction = st.playerFacing
+                ),
                 dstOffset = IntOffset(playerScreenX, playerScreenY),
                 dstSize = IntSize(tileInt, tileInt),
                 filterQuality = FilterQuality.None
@@ -594,13 +655,16 @@ private fun MinimapOverlay(
                     }
                 }
             }
-            // Remote co-op allies as bright cyan pips
+            // Remote co-op allies as high-contrast cyan pips with dark outline
             remotePlayers.forEach { rp ->
                 if (rp.floor == state.floor) {
                     val dx = rp.x - state.playerX
                     val dy = rp.y - state.playerY
                     if (dx in -radius..radius && dy in -radius..radius) {
-                        drawRect(Color(0xFF47D7FF), Offset((dx + radius) * cell - 0.5f, (dy + radius) * cell - 0.5f), Size(cell + 1f, cell + 1f))
+                        val px = (dx + radius) * cell
+                        val py = (dy + radius) * cell
+                        drawRect(Color.Black, Offset(px - 1.5f, py - 1.5f), Size(cell + 3f, cell + 3f))
+                        drawRect(Color(0xFF47D7FF), Offset(px - 0.5f, py - 0.5f), Size(cell + 1f, cell + 1f))
                     }
                 }
             }

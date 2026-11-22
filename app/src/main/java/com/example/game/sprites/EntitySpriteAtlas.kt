@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.example.game.model.AdventurerPalette
+import com.example.game.model.Direction
 import com.example.game.model.ItemCatalog
 import com.example.game.model.ItemCategory
 import com.example.game.model.MonsterType
@@ -26,7 +27,12 @@ object EntitySpriteAtlas {
     private var playerCorpseBmp: ImageBitmap? = null
 
     fun warmUp() {
-        Vocation.entries.forEach { v -> playerBitmap(v, 0); playerBitmap(v, 1) }
+        Vocation.entries.forEach { v ->
+            Direction.entries.forEach { d ->
+                playerBitmap(v, 0, direction = d)
+                playerBitmap(v, 1, direction = d)
+            }
+        }
         MonsterType.entries.forEach { m -> monsterBitmap(m, 0); monsterBitmap(m, 1) }
         NpcRole.entries.forEach { npcBitmap(it) }
         corpseBitmap(false); corpseBitmap(true)
@@ -37,15 +43,16 @@ object EntitySpriteAtlas {
         vocation: Vocation,
         frame: Int,
         tunicColorIndex: Int = 0,
-        hairColorIndex: Int = 0
+        hairColorIndex: Int = 0,
+        direction: Direction = Direction.SOUTH
     ): ImageBitmap {
         val f = frame and 1
         val key = if (vocation == Vocation.ADVENTURER) {
-            "ADV_${tunicColorIndex.coerceIn(0, AdventurerPalette.tunicColors.lastIndex)}_${hairColorIndex.coerceIn(0, AdventurerPalette.hairColors.lastIndex)}_$f"
+            "ADV_${tunicColorIndex.coerceIn(0, AdventurerPalette.tunicColors.lastIndex)}_${hairColorIndex.coerceIn(0, AdventurerPalette.hairColors.lastIndex)}_${direction.name}_$f"
         } else {
-            "${vocation.name}_$f"
+            "${vocation.name}_${direction.name}_$f"
         }
-        return playerCache.getOrPut(key) { buildPlayer(vocation, f, tunicColorIndex, hairColorIndex) }
+        return playerCache.getOrPut(key) { buildPlayer(vocation, f, tunicColorIndex, hairColorIndex, direction) }
     }
 
     fun monsterBitmap(type: MonsterType, frame: Int): ImageBitmap =
@@ -78,91 +85,232 @@ object EntitySpriteAtlas {
         rect(buf, S, x, y, w, h, 0x66000000)
     }
 
+    private fun flipHorizontal(buf: IntArray, size: Int = S): IntArray {
+        val out = IntArray(size * size)
+        for (y in 0 until size) {
+            val row = y * size
+            for (x in 0 until size) {
+                out[row + (size - 1 - x)] = buf[row + x]
+            }
+        }
+        return out
+    }
+
     private fun buildPlayer(
         vocation: Vocation,
         frame: Int,
         tunicColorIndex: Int,
-        hairColorIndex: Int
+        hairColorIndex: Int,
+        direction: Direction
     ): ImageBitmap {
+        if (direction == Direction.WEST) {
+            val eastBuf = buildPlayerPixels(vocation, frame, tunicColorIndex, hairColorIndex, Direction.EAST)
+            return toBmp(flipHorizontal(eastBuf, S), S)
+        }
+        return toBmp(buildPlayerPixels(vocation, frame, tunicColorIndex, hairColorIndex, direction), S)
+    }
+
+    private fun buildPlayerPixels(
+        vocation: Vocation,
+        frame: Int,
+        tunicColorIndex: Int,
+        hairColorIndex: Int,
+        direction: Direction
+    ): IntArray {
         val buf = buf32()
         val bob = if (frame == 1) -1 else 0
         drawShadow(buf)
         val skin = 0xFFE8BE96.toInt()
         val boot = 0xFF3D2514.toInt()
         val outline = 0xFF14100E.toInt()
-        rect(buf, S, 10, 23 + (if (frame == 1) -1 else 0), 4, 4, boot)
-        rect(buf, S, 17, 23 + (if (frame == 1) 1 else 0), 4, 4, boot)
+
+        if (direction == Direction.EAST) {
+            // Side-facing stride boots
+            rect(buf, S, 11 + (if (frame == 1) 2 else -1), 23, 5, 4, boot)
+            rect(buf, S, 15 + (if (frame == 1) -2 else 1), 23, 5, 4, boot)
+        } else {
+            rect(buf, S, 10, 23 + (if (frame == 1) -1 else 0), 4, 4, boot)
+            rect(buf, S, 17, 23 + (if (frame == 1) 1 else 0), 4, 4, boot)
+        }
 
         when (vocation) {
             Vocation.ADVENTURER -> {
                 val tunic = AdventurerPalette.tunicAt(tunicColorIndex)
                 val hair = AdventurerPalette.hairAt(hairColorIndex)
-                // Breeches
-                rect(buf, S, 10, 18 + bob, 11, 6, 0xFF4F3B2A.toInt())
-                // Customizable medieval tunic + leather satchel strap
-                rect(buf, S, 9, 10 + bob, 13, 9, tunic.primaryArgb)
-                rect(buf, S, 11, 11 + bob, 9, 7, tunic.highlightArgb)
-                rect(buf, S, 10, 16 + bob, 11, 2, 0xFF6B4423.toInt()) // belt
-                rect(buf, S, 14, 16 + bob, 3, 2, 0xFFE6B44C.toInt()) // brass buckle
-                // Satchel shoulder strap
-                px(buf, S, 11, 10 + bob, 0xFF543318.toInt())
-                px(buf, S, 12, 11 + bob, 0xFF543318.toInt())
-                px(buf, S, 13, 12 + bob, 0xFF543318.toInt())
-                px(buf, S, 14, 13 + bob, 0xFF543318.toInt())
-                // Head & customizable hair
-                rect(buf, S, 12, 5 + bob, 7, 5, skin)
-                rect(buf, S, 11, 2 + bob, 9, 4, hair.primaryArgb)
-                rect(buf, S, 12, 2 + bob, 7, 2, hair.highlightArgb)
-                rect(buf, S, 11, 5 + bob, 1, 3, hair.primaryArgb)
-                rect(buf, S, 19, 5 + bob, 1, 3, hair.primaryArgb)
-                px(buf, S, 13, 7 + bob, outline); px(buf, S, 17, 7 + bob, outline)
-                // Starter dirk in left hand + small wooden buckler on right
-                rect(buf, S, 6, 12 + bob, 2, 7, 0xFFD99A4E.toInt())
-                rect(buf, S, 5, 16 + bob, 4, 2, 0xFF7D4E26.toInt())
-                rect(buf, S, 22, 12 + bob, 5, 8, 0xFF7D4E26.toInt())
-                rect(buf, S, 23, 13 + bob, 3, 6, 0xFFA66C38.toInt())
+                when (direction) {
+                    Direction.SOUTH -> {
+                        rect(buf, S, 10, 18 + bob, 11, 6, 0xFF4F3B2A.toInt())
+                        rect(buf, S, 9, 10 + bob, 13, 9, tunic.primaryArgb)
+                        rect(buf, S, 11, 11 + bob, 9, 7, tunic.highlightArgb)
+                        rect(buf, S, 10, 16 + bob, 11, 2, 0xFF6B4423.toInt())
+                        rect(buf, S, 14, 16 + bob, 3, 2, 0xFFE6B44C.toInt())
+                        px(buf, S, 11, 10 + bob, 0xFF543318.toInt())
+                        px(buf, S, 12, 11 + bob, 0xFF543318.toInt())
+                        px(buf, S, 13, 12 + bob, 0xFF543318.toInt())
+                        px(buf, S, 14, 13 + bob, 0xFF543318.toInt())
+                        rect(buf, S, 12, 5 + bob, 7, 5, skin)
+                        rect(buf, S, 11, 2 + bob, 9, 4, hair.primaryArgb)
+                        rect(buf, S, 12, 2 + bob, 7, 2, hair.highlightArgb)
+                        rect(buf, S, 11, 5 + bob, 1, 3, hair.primaryArgb)
+                        rect(buf, S, 19, 5 + bob, 1, 3, hair.primaryArgb)
+                        px(buf, S, 13, 7 + bob, outline); px(buf, S, 17, 7 + bob, outline)
+                        rect(buf, S, 6, 12 + bob, 2, 7, 0xFFD99A4E.toInt())
+                        rect(buf, S, 5, 16 + bob, 4, 2, 0xFF7D4E26.toInt())
+                        rect(buf, S, 22, 12 + bob, 5, 8, 0xFF7D4E26.toInt())
+                        rect(buf, S, 23, 13 + bob, 3, 6, 0xFFA66C38.toInt())
+                    }
+                    Direction.NORTH -> {
+                        rect(buf, S, 10, 18 + bob, 11, 6, 0xFF4F3B2A.toInt())
+                        rect(buf, S, 9, 10 + bob, 13, 9, tunic.primaryArgb)
+                        rect(buf, S, 10, 16 + bob, 11, 2, 0xFF6B4423.toInt())
+                        // Adventurer leather pack on back
+                        rect(buf, S, 11, 11 + bob, 9, 6, 0xFF6B4423.toInt())
+                        rect(buf, S, 12, 12 + bob, 7, 4, 0xFF8C5A2E.toInt())
+                        // Back of hair covering head
+                        rect(buf, S, 11, 2 + bob, 9, 8, hair.primaryArgb)
+                        rect(buf, S, 12, 2 + bob, 7, 3, hair.highlightArgb)
+                        rect(buf, S, 6, 13 + bob, 2, 6, 0xFFD99A4E.toInt())
+                        rect(buf, S, 22, 12 + bob, 4, 7, 0xFF7D4E26.toInt())
+                    }
+                    else -> { // EAST (WEST mirrors this)
+                        rect(buf, S, 12, 18 + bob, 8, 6, 0xFF4F3B2A.toInt())
+                        rect(buf, S, 11, 10 + bob, 10, 9, tunic.primaryArgb)
+                        rect(buf, S, 14, 11 + bob, 6, 7, tunic.highlightArgb)
+                        rect(buf, S, 11, 16 + bob, 10, 2, 0xFF6B4423.toInt())
+                        // Back satchel profile
+                        rect(buf, S, 9, 11 + bob, 3, 6, 0xFF6B4423.toInt())
+                        // Profile head & hair
+                        rect(buf, S, 13, 5 + bob, 7, 5, skin)
+                        rect(buf, S, 11, 2 + bob, 9, 4, hair.primaryArgb)
+                        rect(buf, S, 11, 5 + bob, 3, 4, hair.primaryArgb)
+                        rect(buf, S, 13, 2 + bob, 6, 2, hair.highlightArgb)
+                        px(buf, S, 18, 7 + bob, outline) // single forward eye
+                        // Forward dirk held out right + buckler on flank
+                        rect(buf, S, 21, 13 + bob, 6, 2, 0xFFD99A4E.toInt())
+                        rect(buf, S, 20, 12 + bob, 2, 4, 0xFF7D4E26.toInt())
+                        rect(buf, S, 15, 13 + bob, 4, 7, 0xFF7D4E26.toInt())
+                        rect(buf, S, 16, 14 + bob, 2, 5, 0xFFA66C38.toInt())
+                    }
+                }
             }
             Vocation.KNIGHT -> {
-                rect(buf, S, 10, 18 + bob, 11, 6, 0xFF6B7380.toInt())
-                rect(buf, S, 9, 10 + bob, 13, 9, 0xFFB82828.toInt())
-                rect(buf, S, 11, 11 + bob, 9, 7, 0xFFD93B3B.toInt())
-                rect(buf, S, 15, 11 + bob, 2, 6, 0xFFE6B44C.toInt())
-                rect(buf, S, 13, 13 + bob, 6, 2, 0xFFE6B44C.toInt())
-                rect(buf, S, 11, 3 + bob, 9, 8, 0xFF9EA8B5.toInt())
-                rect(buf, S, 12, 6 + bob, 7, 3, skin)
-                rect(buf, S, 13, 7 + bob, 2, 1, outline); rect(buf, S, 17, 7 + bob, 2, 1, outline)
-                rect(buf, S, 14, 1 + bob, 3, 3, 0xFFD93B3B.toInt())
-                rect(buf, S, 5, 7 + bob, 3, 12, 0xFFD8E0EB.toInt())
-                rect(buf, S, 4, 16 + bob, 5, 2, 0xFFE6B44C.toInt())
-                rect(buf, S, 21, 11 + bob, 7, 10, 0xFF56606E.toInt())
-                rect(buf, S, 22, 12 + bob, 5, 8, 0xFF2D5CA6.toInt())
-                rect(buf, S, 24, 14 + bob, 2, 4, 0xFFE6B44C.toInt())
+                when (direction) {
+                    Direction.SOUTH -> {
+                        rect(buf, S, 10, 18 + bob, 11, 6, 0xFF6B7380.toInt())
+                        rect(buf, S, 9, 10 + bob, 13, 9, 0xFFB82828.toInt())
+                        rect(buf, S, 11, 11 + bob, 9, 7, 0xFFD93B3B.toInt())
+                        rect(buf, S, 15, 11 + bob, 2, 6, 0xFFE6B44C.toInt())
+                        rect(buf, S, 13, 13 + bob, 6, 2, 0xFFE6B44C.toInt())
+                        rect(buf, S, 11, 3 + bob, 9, 8, 0xFF9EA8B5.toInt())
+                        rect(buf, S, 12, 6 + bob, 7, 3, skin)
+                        rect(buf, S, 13, 7 + bob, 2, 1, outline); rect(buf, S, 17, 7 + bob, 2, 1, outline)
+                        rect(buf, S, 14, 1 + bob, 3, 3, 0xFFD93B3B.toInt())
+                        rect(buf, S, 5, 7 + bob, 3, 12, 0xFFD8E0EB.toInt())
+                        rect(buf, S, 4, 16 + bob, 5, 2, 0xFFE6B44C.toInt())
+                        rect(buf, S, 21, 11 + bob, 7, 10, 0xFF56606E.toInt())
+                        rect(buf, S, 22, 12 + bob, 5, 8, 0xFF2D5CA6.toInt())
+                        rect(buf, S, 24, 14 + bob, 2, 4, 0xFFE6B44C.toInt())
+                    }
+                    Direction.NORTH -> {
+                        rect(buf, S, 10, 18 + bob, 11, 6, 0xFF6B7380.toInt())
+                        rect(buf, S, 9, 10 + bob, 13, 11, 0xFF961E1E.toInt()) // crimson cape back
+                        rect(buf, S, 11, 11 + bob, 9, 8, 0xFFB82828.toInt())
+                        rect(buf, S, 11, 3 + bob, 9, 8, 0xFF8C96A3.toInt()) // back of steel helm
+                        rect(buf, S, 14, 1 + bob, 3, 4, 0xFFD93B3B.toInt()) // helmet plume
+                        rect(buf, S, 5, 8 + bob, 3, 10, 0xFFD8E0EB.toInt())
+                        rect(buf, S, 21, 11 + bob, 6, 9, 0xFF56606E.toInt())
+                    }
+                    else -> { // EAST
+                        rect(buf, S, 12, 18 + bob, 8, 6, 0xFF6B7380.toInt())
+                        rect(buf, S, 10, 10 + bob, 11, 9, 0xFFB82828.toInt())
+                        rect(buf, S, 9, 11 + bob, 3, 10, 0xFF8C1C1C.toInt()) // trailing cape
+                        rect(buf, S, 12, 3 + bob, 8, 8, 0xFF9EA8B5.toInt())
+                        rect(buf, S, 15, 6 + bob, 5, 3, skin)
+                        rect(buf, S, 17, 7 + bob, 2, 1, outline)
+                        rect(buf, S, 11, 1 + bob, 5, 3, 0xFFD93B3B.toInt()) // plume sweeping back
+                        // Forward greatsword + kite shield
+                        rect(buf, S, 22, 9 + bob, 3, 10, 0xFFD8E0EB.toInt())
+                        rect(buf, S, 21, 16 + bob, 5, 2, 0xFFE6B44C.toInt())
+                        rect(buf, S, 15, 12 + bob, 6, 9, 0xFF56606E.toInt())
+                        rect(buf, S, 16, 13 + bob, 4, 7, 0xFF2D5CA6.toInt())
+                    }
+                }
             }
             Vocation.PALADIN -> {
-                rect(buf, S, 10, 18 + bob, 11, 6, 0xFF594028.toInt())
-                rect(buf, S, 9, 10 + bob, 13, 9, 0xFF286E3C.toInt())
-                rect(buf, S, 11, 11 + bob, 9, 7, 0xFF398C4E.toInt())
-                rect(buf, S, 10, 16 + bob, 11, 2, 0xFFD4A23C.toInt())
-                rect(buf, S, 10, 3 + bob, 11, 8, 0xFF205430.toInt())
-                rect(buf, S, 12, 6 + bob, 7, 4, skin)
-                px(buf, S, 13, 7 + bob, outline); px(buf, S, 17, 7 + bob, outline)
-                rect(buf, S, 5, 6 + bob, 2, 15, 0xFF8C5828.toInt())
-                rect(buf, S, 7, 7 + bob, 1, 13, 0xFFDCD3C2.toInt())
-                rect(buf, S, 21, 9 + bob, 4, 9, 0xFF7D4E26.toInt())
+                when (direction) {
+                    Direction.SOUTH -> {
+                        rect(buf, S, 10, 18 + bob, 11, 6, 0xFF594028.toInt())
+                        rect(buf, S, 9, 10 + bob, 13, 9, 0xFF286E3C.toInt())
+                        rect(buf, S, 11, 11 + bob, 9, 7, 0xFF398C4E.toInt())
+                        rect(buf, S, 10, 16 + bob, 11, 2, 0xFFD4A23C.toInt())
+                        rect(buf, S, 10, 3 + bob, 11, 8, 0xFF205430.toInt())
+                        rect(buf, S, 12, 6 + bob, 7, 4, skin)
+                        px(buf, S, 13, 7 + bob, outline); px(buf, S, 17, 7 + bob, outline)
+                        rect(buf, S, 5, 6 + bob, 2, 15, 0xFF8C5828.toInt())
+                        rect(buf, S, 7, 7 + bob, 1, 13, 0xFFDCD3C2.toInt())
+                        rect(buf, S, 21, 9 + bob, 4, 9, 0xFF7D4E26.toInt())
+                    }
+                    Direction.NORTH -> {
+                        rect(buf, S, 10, 18 + bob, 11, 6, 0xFF594028.toInt())
+                        rect(buf, S, 9, 10 + bob, 13, 9, 0xFF286E3C.toInt())
+                        rect(buf, S, 10, 3 + bob, 11, 8, 0xFF205430.toInt()) // hood back
+                        // Quiver strapped across back with gold fletching
+                        rect(buf, S, 13, 10 + bob, 5, 8, 0xFF7D4E26.toInt())
+                        rect(buf, S, 14, 8 + bob, 3, 2, 0xFFE6B44C.toInt())
+                        rect(buf, S, 5, 7 + bob, 2, 13, 0xFF8C5828.toInt())
+                    }
+                    else -> { // EAST
+                        rect(buf, S, 12, 18 + bob, 8, 6, 0xFF594028.toInt())
+                        rect(buf, S, 11, 10 + bob, 10, 9, 0xFF286E3C.toInt())
+                        rect(buf, S, 14, 11 + bob, 6, 7, 0xFF398C4E.toInt())
+                        rect(buf, S, 8, 10 + bob, 4, 8, 0xFF7D4E26.toInt()) // quiver on back
+                        rect(buf, S, 11, 3 + bob, 9, 8, 0xFF205430.toInt())
+                        rect(buf, S, 15, 6 + bob, 5, 4, skin)
+                        px(buf, S, 18, 7 + bob, outline)
+                        // Forward bow facing east
+                        rect(buf, S, 22, 6 + bob, 2, 15, 0xFF8C5828.toInt())
+                        rect(buf, S, 21, 7 + bob, 1, 13, 0xFFDCD3C2.toInt())
+                    }
+                }
             }
             Vocation.MAGE -> {
-                rect(buf, S, 9, 11 + bob, 13, 13, 0xFF234794.toInt())
-                rect(buf, S, 11, 12 + bob, 9, 11, 0xFF3361BD.toInt())
-                rect(buf, S, 14, 12 + bob, 3, 11, 0xFFE6B44C.toInt())
-                rect(buf, S, 12, 6 + bob, 7, 5, skin)
-                px(buf, S, 13, 8 + bob, outline); px(buf, S, 17, 8 + bob, outline)
-                rect(buf, S, 8, 5 + bob, 15, 2, 0xFF1D397A.toInt())
-                rect(buf, S, 11, 2 + bob, 9, 3, 0xFF2C54AB.toInt())
-                rect(buf, S, 23, 6 + bob, 2, 19, 0xFF6B4226.toInt())
-                rect(buf, S, 22, 4 + bob, 4, 4, if (frame == 0) 0xFF66E8FF.toInt() else 0xFFB899FF.toInt())
+                val orbColor = if (frame == 0) 0xFF66E8FF.toInt() else 0xFFB899FF.toInt()
+                when (direction) {
+                    Direction.SOUTH -> {
+                        rect(buf, S, 9, 11 + bob, 13, 13, 0xFF234794.toInt())
+                        rect(buf, S, 11, 12 + bob, 9, 11, 0xFF3361BD.toInt())
+                        rect(buf, S, 14, 12 + bob, 3, 11, 0xFFE6B44C.toInt())
+                        rect(buf, S, 12, 6 + bob, 7, 5, skin)
+                        px(buf, S, 13, 8 + bob, outline); px(buf, S, 17, 8 + bob, outline)
+                        rect(buf, S, 8, 5 + bob, 15, 2, 0xFF1D397A.toInt())
+                        rect(buf, S, 11, 2 + bob, 9, 3, 0xFF2C54AB.toInt())
+                        rect(buf, S, 23, 6 + bob, 2, 19, 0xFF6B4226.toInt())
+                        rect(buf, S, 22, 4 + bob, 4, 4, orbColor)
+                    }
+                    Direction.NORTH -> {
+                        rect(buf, S, 9, 11 + bob, 13, 13, 0xFF1E3C7D.toInt())
+                        rect(buf, S, 11, 12 + bob, 9, 11, 0xFF2B52A6.toInt())
+                        rect(buf, S, 8, 5 + bob, 15, 2, 0xFF1D397A.toInt())
+                        rect(buf, S, 11, 2 + bob, 9, 8, 0xFF2C54AB.toInt()) // wizard hat & cloak rear
+                        rect(buf, S, 23, 6 + bob, 2, 19, 0xFF6B4226.toInt())
+                        rect(buf, S, 22, 4 + bob, 4, 4, orbColor)
+                    }
+                    else -> { // EAST
+                        rect(buf, S, 11, 11 + bob, 10, 13, 0xFF234794.toInt())
+                        rect(buf, S, 14, 12 + bob, 6, 11, 0xFF3361BD.toInt())
+                        rect(buf, S, 18, 12 + bob, 2, 11, 0xFFE6B44C.toInt())
+                        rect(buf, S, 14, 6 + bob, 6, 5, skin)
+                        px(buf, S, 18, 8 + bob, outline)
+                        rect(buf, S, 9, 5 + bob, 13, 2, 0xFF1D397A.toInt())
+                        rect(buf, S, 11, 2 + bob, 8, 3, 0xFF2C54AB.toInt())
+                        // Staff held forward
+                        rect(buf, S, 23, 6 + bob, 2, 19, 0xFF6B4226.toInt())
+                        rect(buf, S, 22, 4 + bob, 4, 4, orbColor)
+                    }
+                }
             }
         }
-        return toBmp(buf, S)
+        return buf
     }
 
     private fun buildMonster(type: MonsterType, frame: Int): ImageBitmap {
