@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
                 val screen by gameViewModel.screen.collectAsStateWithLifecycle()
                 val savedSlots by gameViewModel.savedSlots.collectAsStateWithLifecycle()
                 val world by gameViewModel.world.collectAsStateWithLifecycle()
+                val mpState by gameViewModel.multiplayerState.collectAsStateWithLifecycle()
                 val saveBanner by gameViewModel.saveBanner.collectAsStateWithLifecycle()
 
                 when (screen) {
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity() {
                         }
                         GameScreen(
                             state = world,
+                            multiplayerState = mpState,
                             saveBanner = saveBanner,
                             onTileTapped = gameViewModel::onTileTapped,
                             onDirectionStep = gameViewModel::onDirectionStep,
@@ -73,6 +75,9 @@ class MainActivity : ComponentActivity() {
                             onSellItem = gameViewModel::sellItem,
                             onCraftRecipe = gameViewModel::craftRecipe,
                             onChooseVocationAtOracle = gameViewModel::chooseVocationAtOracle,
+                            onToggleChat = gameViewModel::toggleChat,
+                            onSelectChatChannel = gameViewModel::selectChatChannel,
+                            onSendChat = gameViewModel::sendChatMessage,
                             onSaveManual = { gameViewModel.persistCurrentState(silent = false) },
                             onReturnTitle = gameViewModel::returnToTitle,
                             onDismissDeath = gameViewModel::dismissDeathReport

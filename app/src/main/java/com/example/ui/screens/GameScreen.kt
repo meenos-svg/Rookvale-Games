@@ -55,6 +55,8 @@ import com.example.game.model.Direction
 import com.example.game.model.EquipmentSlot
 import com.example.game.model.GameWorldState
 import com.example.game.model.Vocation
+import com.example.game.multiplayer.ChatChannel
+import com.example.game.multiplayer.MultiplayerUiState
 import com.example.game.sprites.EntitySpriteAtlas
 import com.example.game.world.WorldMaps
 import com.example.ui.theme.BasaltDark
@@ -80,6 +82,7 @@ import com.example.ui.theme.TorchGold
 @Composable
 fun GameScreen(
     state: GameWorldState,
+    multiplayerState: MultiplayerUiState = MultiplayerUiState(),
     saveBanner: String?,
     onTileTapped: (Int, Int) -> Unit,
     onDirectionStep: (Direction) -> Unit,
@@ -100,6 +103,9 @@ fun GameScreen(
     onSellItem: (String) -> Unit,
     onCraftRecipe: (String) -> Unit,
     onChooseVocationAtOracle: (Vocation) -> Unit,
+    onToggleChat: () -> Unit = {},
+    onSelectChatChannel: (ChatChannel) -> Unit = {},
+    onSendChat: (String) -> Unit = {},
     onSaveManual: () -> Unit,
     onReturnTitle: () -> Unit,
     onDismissDeath: () -> Unit
@@ -134,10 +140,10 @@ fun GameScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(state.playerName, style = MaterialTheme.typography.titleMedium, color = TorchGold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Lvl ${state.level} ${state.vocation.displayName}", style = MaterialTheme.typography.labelMedium, color = ParchmentLight)
+                            Text("Lvl ${state.level} ${state.vocation.displayName}", style = MaterialTheme.typography.labelMedium, color = ParchmentLight, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            MultiplayerStatusBadge(mpState = multiplayerState)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("${floorInfo.name} (${state.floor})", style = MaterialTheme.typography.labelSmall, color = ParchmentMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -216,28 +222,47 @@ fun GameScreen(
             }
         }
 
-        // --- MAIN OBLIQUE PIXEL-ART VIEWPORT + LOG + SLIDE-UP PANEL ---
+        // --- MAIN OBLIQUE PIXEL-ART VIEWPORT + LOG + COLLAPSIBLE CHAT + SLIDE-UP PANEL ---
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            GameCanvasView(state = state, onTileTapped = onTileTapped, modifier = Modifier.fillMaxSize())
+            GameCanvasView(
+                state = state,
+                remotePlayers = multiplayerState.remotePlayers,
+                onTileTapped = onTileTapped,
+                modifier = Modifier.fillMaxSize()
+            )
 
             if (state.activePanel == ActivePanel.NONE) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .fillMaxWidth()
-                        .background(ObsidianVoid.copy(alpha = 0.68f))
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalArrangement = Arrangement.spacedBy(1.dp)
                 ) {
-                    state.statusLog.takeLast(2).forEachIndexed { idx, line ->
-                        Text(
-                            text = line,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (idx == 1 || state.statusLog.size == 1) ParchmentLight else ParchmentMuted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    if (!multiplayerState.chatExpanded) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(ObsidianVoid.copy(alpha = 0.65f))
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(1.dp)
+                        ) {
+                            state.statusLog.takeLast(2).forEachIndexed { idx, line ->
+                                Text(
+                                    text = line,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (idx == 1 || state.statusLog.size == 1) ParchmentLight else ParchmentMuted,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
+                    CollapsibleFloorChatBar(
+                        mpState = multiplayerState,
+                        currentFloor = state.floor,
+                        onToggleExpanded = onToggleChat,
+                        onSelectChannel = onSelectChatChannel,
+                        onSendMessage = onSendChat
+                    )
                 }
             }
 

@@ -1,5 +1,6 @@
 package com.example.game.model
 
+import com.example.game.multiplayer.LocalMonsterHitEvent
 import com.squareup.moshi.JsonClass
 
 const val CURRENT_MAP_VERSION = 2
@@ -430,7 +431,9 @@ data class MonsterEntity(
     val animOffset: Float = 0f,
     val lastMoveFromX: Int = x,
     val lastMoveFromY: Int = y,
-    val lastMoveTimeMs: Long = 0L
+    val lastMoveTimeMs: Long = 0L,
+    val targetPlayerId: String? = null,
+    val contributors: Set<String> = emptySet()
 )
 
 data class PendingRespawn(
@@ -438,7 +441,8 @@ data class PendingRespawn(
     val floor: Int,
     val spawnX: Int,
     val spawnY: Int,
-    val ticksRemaining: Int
+    val ticksRemaining: Int,
+    val originalMonsterId: Int = 0
 )
 
 @JsonClass(generateAdapter = true)
@@ -597,7 +601,8 @@ data class GameWorldState(
     val showMinimap: Boolean = true,
     val tickCount: Long = 0L,
     val lastCombatTickMs: Long = 0L,
-    val lastPlayerAttackMs: Long = 0L
+    val lastPlayerAttackMs: Long = 0L,
+    val outboundMonsterHits: List<LocalMonsterHitEvent> = emptyList()
 ) {
     fun toolBagWeightOz(): Double =
         toolBag.sumOf { ItemCatalog.get(it.itemId).weightOz * TOOL_BAG_WEIGHT_MULTIPLIER * it.count }

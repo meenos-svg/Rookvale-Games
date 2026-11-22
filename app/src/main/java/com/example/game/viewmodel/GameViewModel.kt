@@ -14,6 +14,11 @@ import com.example.game.model.Direction
 import com.example.game.model.EquipmentSlot
 import com.example.game.model.GameWorldState
 import com.example.game.model.Vocation
+import com.example.game.multiplayer.ChatChannel
+import com.example.game.multiplayer.ConnectionStatus
+import com.example.game.multiplayer.LocalPlayerPresencePayload
+import com.example.game.multiplayer.MultiplayerUiState
+import com.example.game.multiplayer.RealtimeMultiplayerManager
 import com.example.game.sprites.EntitySpriteAtlas
 import com.example.game.sprites.TileSpriteAtlas
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +39,11 @@ enum class AppScreen {
 
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = GameSaveRepository(RookvaleDatabase.getInstance(application).saveSlotDao())
+    private val multiplayerManager = RealtimeMultiplayerManager(
+        scope = viewModelScope,
+        nowProvider = { System.currentTimeMillis() },
+        animClockProvider = { SystemClock.uptimeMillis() }
+    )
 
     val savedSlots: StateFlow<List<SaveSlotEntity>> = repository.allSaves
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -43,6 +53,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _world = MutableStateFlow(GameWorldState())
     val world: StateFlow<GameWorldState> = _world.asStateFlow()
+
+    val multiplayerState: StateFlow<MultiplayerUiState> = multiplayerManager.uiState
 
     private val _saveBanner = MutableStateFlow<String?>(null)
     val saveBanner: StateFlow<String?> = _saveBanner.asStateFlow()
@@ -57,6 +69,59 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             TileSpriteAtlas.warmUp()
             EntitySpriteAtlas.warmUp()
         }
+
+        // Apply incoming host monster sync snapshots on non-host clients
+        viewModelScope.launch {
+            multiplayerManager.monsterSyncEvents.collect { (floor, snapshots) ->
+                if (_screen.value != AppScreen.PLAYING) return@collect
+                if (multiplayerManager.uiState.value.isFloorHost) return@collect
+                val now = SystemClock.uptimeMillis()
+                var leveledUp = false
+                var newLevel = 1
+                var playerName = ""
+                _world.update { prev ->
+                    val next = GameEngine.applyRemoteMonsterSync(prev, floor, snapshots, prev.saveId, now)
+                    if (next.level > prev.level) {
+                        leveledUp = true
+                        newLevel = next.level
+                        playerName = next.playerName
+                    }
+                    next
+                }
+                if (leveledUp) {
+                    multiplayerManager.broadcastSystemCallout("$playerName advanced to Level $newLevel!", floor)
+                    persistCurrentState(silent = true)
+                }
+            }
+        }
+
+        // Apply incoming co-op monster hits (floating damage + personal instanced loot on kill)
+        viewModelScope.launch {
+            multiplayerManager.monsterHitEvents.collect { hitEvent ->
+                if (_screen.value != AppScreen.PLAYING) return@collect
+                val now = SystemClock.uptimeMillis()
+                val isHost = multiplayerManager.uiState.value.isFloorHost
+                var leveledUp = false
+                var newLevel = 1
+                var playerName = ""
+                var curFloor = 0
+                _world.update { prev ->
+                    val next = GameEngine.applyRemoteMonsterHit(prev, hitEvent, prev.saveId, isHost, now)
+                    if (next.level > prev.level) {
+                        leveledUp = true
+                        newLevel = next.level
+                        playerName = next.playerName
+                        curFloor = next.floor
+                    }
+                    next
+                }
+                if (leveledUp) {
+                    multiplayerManager.broadcastSystemCallout("$playerName advanced to Level $newLevel!", curFloor)
+                    broadcastCurrentState()
+                    persistCurrentState(silent = true)
+                }
+            }
+        }
     }
 
     fun startNewCharacter(name: String, tunicColorIndex: Int = 0, hairColorIndex: Int = 0) {
@@ -68,6 +133,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         )
         _world.value = fresh
         _screen.value = AppScreen.PLAYING
+        multiplayerManager.connect(fresh.toPresencePayload())
         startGameLoops()
         persistCurrentState(silent = true)
     }
@@ -75,19 +141,31 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun chooseVocationAtOracle(vocation: Vocation) {
         val now = SystemClock.uptimeMillis()
         var promoted = false
+        var name = ""
+        var floor = 0
         _world.update { prev ->
             val next = GameEngine.promoteVocation(prev, vocation, now)
-            if (next.vocation != prev.vocation) promoted = true
+            if (next.vocation != prev.vocation) {
+                promoted = true
+                name = next.playerName
+                floor = next.floor
+            }
             next
         }
-        if (promoted) persistCurrentState(silent = true)
+        if (promoted) {
+            multiplayerManager.broadcastSystemCallout("$name has been chosen as a ${vocation.displayName} by The Oracle!", floor)
+            broadcastCurrentState()
+            persistCurrentState(silent = true)
+        }
     }
 
     fun loadCharacter(slotId: String) {
         viewModelScope.launch {
             val loaded = repository.loadGame(slotId) ?: return@launch
-            _world.value = GameEngine.fromSaveData(loaded)
+            val state = GameEngine.fromSaveData(loaded)
+            _world.value = state
             _screen.value = AppScreen.PLAYING
+            multiplayerManager.connect(state.toPresencePayload())
             startGameLoops()
         }
     }
@@ -98,6 +176,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun returnToTitle() {
         persistCurrentState(silent = true)
+        multiplayerManager.disconnect()
         stopGameLoops()
         _screen.value = AppScreen.TITLE_AND_CREATE
     }
@@ -122,26 +201,94 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             while (true) {
                 delay(200L)
                 val now = SystemClock.uptimeMillis()
+                var leveledUp = false
+                var newLevel = 1
+                var floor = 0
+                var name = ""
                 _world.update { prev ->
                     if (prev.targetMonsterId == null) prev
-                    else GameEngine.processPlayerAttackSubTick(prev, now)
+                    else {
+                        val next = GameEngine.processPlayerAttackSubTick(prev, now)
+                        if (next.level > prev.level) {
+                            leveledUp = true
+                            newLevel = next.level
+                            floor = next.floor
+                            name = next.playerName
+                        }
+                        next
+                    }
+                }
+                flushOutboundMonsterHits()
+                if (leveledUp) {
+                    multiplayerManager.broadcastSystemCallout("$name advanced to Level $newLevel!", floor)
+                    broadcastCurrentState()
+                    persistCurrentState(silent = true)
                 }
             }
         }
 
-        // 1.0s World Tick: monster AI, poison/fire status ticks, ore vein regen & monster respawns
+        // 1.0s World Tick: monster AI (host-driven when online), status ticks, ore vein regen & monster respawns
         worldTickJob = viewModelScope.launch {
             while (true) {
                 delay(1000L)
                 val now = SystemClock.uptimeMillis()
+                val mp = multiplayerManager.uiState.value
+                val isHost = mp.isFloorHost || mp.status != ConnectionStatus.ONLINE
+
                 var diedOrLeveled = false
+                var leveledUp = false
+                var floorChanged = false
+                var vitalsChanged = false
+                var newLevel = 1
+                var curFloor = 0
+                var name = ""
+
                 _world.update { prev ->
-                    val next = GameEngine.processCombatTick(prev, now)
+                    val next = GameEngine.processCombatTick(
+                        state = prev,
+                        nowMs = now,
+                        isFloorHost = isHost,
+                        localPlayerId = prev.saveId,
+                        remotePlayersOnFloor = mp.remotePlayers
+                    )
+                    if (next.level > prev.level) {
+                        leveledUp = true
+                        newLevel = next.level
+                    }
                     if (next.level != prev.level || (next.deathReport != null && prev.deathReport == null)) {
                         diedOrLeveled = true
                     }
+                    if (next.floor != prev.floor) floorChanged = true
+                    if (next.hp != prev.hp || next.maxHp != prev.maxHp || next.playerX != prev.playerX || next.playerY != prev.playerY) {
+                        vitalsChanged = true
+                    }
+                    curFloor = next.floor
+                    name = next.playerName
                     next
                 }
+
+                flushOutboundMonsterHits()
+
+                val latest = _world.value
+                if (floorChanged) {
+                    multiplayerManager.switchFloor(latest.floor, latest.toPresencePayload())
+                } else if (vitalsChanged) {
+                    multiplayerManager.broadcastLocalState(latest.toPresencePayload())
+                }
+
+                if (leveledUp) {
+                    multiplayerManager.broadcastSystemCallout("$name advanced to Level $newLevel!", curFloor)
+                }
+
+                // Elected Floor Host broadcasts authoritative monster positions, HP & targetPlayerId
+                val updatedMp = multiplayerManager.uiState.value
+                if (updatedMp.status == ConnectionStatus.ONLINE && updatedMp.isFloorHost && !floorChanged) {
+                    multiplayerManager.broadcastMonsterSync(
+                        floor = latest.floor,
+                        monsters = GameEngine.buildFloorMonsterSnapshots(latest)
+                    )
+                }
+
                 if (diedOrLeveled) persistCurrentState(silent = true)
             }
         }
@@ -152,15 +299,23 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 delay(210L)
                 val now = SystemClock.uptimeMillis()
                 var changedFloor = false
+                var movedTile = false
                 _world.update { prev ->
                     if (prev.walkPath.isEmpty()) prev
                     else {
                         val next = GameEngine.stepAlongPath(prev, now)
                         if (next.floor != prev.floor) changedFloor = true
+                        if (next.playerX != prev.playerX || next.playerY != prev.playerY) movedTile = true
                         next
                     }
                 }
-                if (changedFloor) persistCurrentState(silent = true)
+                if (changedFloor) {
+                    val cur = _world.value
+                    multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
+                    persistCurrentState(silent = true)
+                } else if (movedTile) {
+                    broadcastCurrentState()
+                }
             }
         }
     }
@@ -174,15 +329,85 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         walkLoopJob = null
     }
 
+    private fun flushOutboundMonsterHits() {
+        val pending = _world.value.outboundMonsterHits
+        if (pending.isEmpty()) return
+        val snapshot = _world.value
+        _world.update { it.copy(outboundMonsterHits = emptyList()) }
+        for (hit in pending) {
+            multiplayerManager.broadcastMonsterHit(
+                hit = hit,
+                attackerId = snapshot.saveId,
+                attackerName = snapshot.playerName
+            )
+            if (hit.resultingHp <= 0 && hit.isBoss) {
+                multiplayerManager.broadcastSystemCallout(
+                    "${snapshot.playerName} helped slay the ${hit.monsterTypeName}!",
+                    hit.floor
+                )
+            }
+        }
+    }
+
+    private fun broadcastCurrentState() {
+        val cur = _world.value
+        if (cur.saveId.isNotBlank()) {
+            multiplayerManager.broadcastLocalState(cur.toPresencePayload())
+        }
+    }
+
+    private fun GameWorldState.toPresencePayload(): LocalPlayerPresencePayload =
+        LocalPlayerPresencePayload(
+            playerId = saveId,
+            name = playerName,
+            level = level,
+            vocation = vocation,
+            tunicColorIndex = tunicColorIndex,
+            hairColorIndex = hairColorIndex,
+            x = playerX,
+            y = playerY,
+            floor = floor,
+            hp = hp,
+            maxHp = maxHp,
+            joinedAt = System.currentTimeMillis()
+        )
+
+    fun toggleChat() {
+        multiplayerManager.toggleChatExpanded()
+    }
+
+    fun selectChatChannel(channel: ChatChannel) {
+        multiplayerManager.selectChatChannel(channel)
+    }
+
+    fun sendChatMessage(text: String) {
+        val cur = _world.value
+        val ch = multiplayerManager.uiState.value.activeChatChannel
+        multiplayerManager.sendChatMessage(
+            rawText = text,
+            channel = ch,
+            senderName = cur.playerName,
+            floor = cur.floor
+        )
+    }
+
     fun onTileTapped(tx: Int, ty: Int) {
         val now = SystemClock.uptimeMillis()
         var floorChanged = false
+        var moved = false
         _world.update { prev ->
             val next = GameEngine.handleTileTap(prev, tx, ty, now)
             if (next.floor != prev.floor) floorChanged = true
+            if (next.playerX != prev.playerX || next.playerY != prev.playerY) moved = true
             next
         }
-        if (floorChanged) persistCurrentState(silent = true)
+        if (floorChanged) {
+            val cur = _world.value
+            multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
+            persistCurrentState(silent = true)
+        } else if (moved) {
+            broadcastCurrentState()
+        }
     }
 
     fun onDirectionStep(dir: Direction) {
@@ -190,17 +415,31 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (now - lastStepMs < 155L) return
         lastStepMs = now
         var floorChanged = false
+        var moved = false
         _world.update { prev ->
             val next = GameEngine.stepDirection(prev, dir, now)
             if (next.floor != prev.floor) floorChanged = true
+            if (next.playerX != prev.playerX || next.playerY != prev.playerY) moved = true
             next
         }
-        if (floorChanged) persistCurrentState(silent = true)
+        if (floorChanged) {
+            val cur = _world.value
+            multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
+            persistCurrentState(silent = true)
+        } else if (moved) {
+            broadcastCurrentState()
+        }
     }
 
     fun onHotkeyHealthPotion() {
         val now = SystemClock.uptimeMillis()
-        _world.update { GameEngine.useHealthPotion(it, now) }
+        var hpChanged = false
+        _world.update { prev ->
+            val next = GameEngine.useHealthPotion(prev, now)
+            if (next.hp != prev.hp) hpChanged = true
+            next
+        }
+        if (hpChanged) broadcastCurrentState()
     }
 
     fun onHotkeyManaPotion() {
@@ -210,7 +449,26 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onHotkeyAttackRune() {
         val now = SystemClock.uptimeMillis()
-        _world.update { GameEngine.useAttackRune(it, now) }
+        var leveledUp = false
+        var newLevel = 1
+        var floor = 0
+        var name = ""
+        _world.update { prev ->
+            val next = GameEngine.useAttackRune(prev, now)
+            if (next.level > prev.level) {
+                leveledUp = true
+                newLevel = next.level
+                floor = next.floor
+                name = next.playerName
+            }
+            next
+        }
+        flushOutboundMonsterHits()
+        if (leveledUp) {
+            multiplayerManager.broadcastSystemCallout("$name advanced to Level $newLevel!", floor)
+            broadcastCurrentState()
+            persistCurrentState(silent = true)
+        }
     }
 
     fun onHotkeyRope() {
@@ -221,7 +479,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             if (next.floor != prev.floor) changed = true
             next
         }
-        if (changed) persistCurrentState(silent = true)
+        if (changed) {
+            val cur = _world.value
+            multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
+            persistCurrentState(silent = true)
+        }
     }
 
     fun toggleMinimap() {
@@ -249,7 +511,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun useBackpackItem(itemId: String) {
         val now = SystemClock.uptimeMillis()
-        _world.update { GameEngine.useOrEquipBackpackItem(it, itemId, now) }
+        var hpChanged = false
+        _world.update { prev ->
+            val next = GameEngine.useOrEquipBackpackItem(prev, itemId, now)
+            if (next.hp != prev.hp) hpChanged = true
+            next
+        }
+        if (hpChanged) broadcastCurrentState()
     }
 
     fun dropBackpackItem(itemId: String) {
@@ -291,6 +559,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        multiplayerManager.disconnect()
         stopGameLoops()
         super.onCleared()
     }

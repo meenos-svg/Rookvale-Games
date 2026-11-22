@@ -1,6 +1,10 @@
 package com.example.game.engine
 
 import com.example.game.model.*
+import com.example.game.multiplayer.LocalMonsterHitEvent
+import com.example.game.multiplayer.RemoteMonsterHitEvent
+import com.example.game.multiplayer.RemotePlayerState
+import com.example.game.multiplayer.SyncedMonsterSnapshot
 import com.example.game.world.NpcRole
 import com.example.game.world.WorldFloor
 import com.example.game.world.WorldMaps
@@ -484,7 +488,13 @@ object GameEngine {
      * 1.0s World Tick: Temple PZ regen, Poison/Fire ticks, Monster AI, Respawns, Ore Node regen, and Death check.
      * Also triggers a player attack check if called directly in deterministic unit tests.
      */
-    fun processCombatTick(state: GameWorldState, nowMs: Long): GameWorldState {
+    fun processCombatTick(
+        state: GameWorldState,
+        nowMs: Long,
+        isFloorHost: Boolean = true,
+        localPlayerId: String = state.saveId,
+        remotePlayersOnFloor: List<RemotePlayerState> = emptyList()
+    ): GameWorldState {
         if (state.deathReport != null) return pruneExpiredEffects(state, nowMs)
         var s = pruneExpiredEffects(state, nowMs).copy(
             tickCount = state.tickCount + 1,
@@ -527,13 +537,23 @@ object GameEngine {
                 .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$fDmg", FloatingTextKind.FIRE, nowMs)
         }
 
-        // 4. Monster AI on active floor
+        // 4. Monster AI on active floor (Host moves & elects targetPlayerId; Non-host resolves attacks targeting local player)
         if (s.hp > 0) {
-            s = processMonstersTick(s, floorMap, inPz, nowMs)
+            s = processMonstersTick(
+                state = s,
+                floorMap = floorMap,
+                playerInPz = inPz,
+                nowMs = nowMs,
+                isFloorHost = isFloorHost,
+                localPlayerId = localPlayerId.ifBlank { s.saveId },
+                remotePlayersOnFloor = remotePlayersOnFloor
+            )
         }
 
-        // 5. Monster respawns & Ore Vein regeneration
-        s = processRespawns(s)
+        // 5. Monster respawns (host-driven) & Ore Vein regeneration
+        if (isFloorHost) {
+            s = processRespawns(s, remotePlayersOnFloor)
+        }
         s = CraftingAndMiningEngine.regenerateOreNodesTick(s)
 
         // 6. Death penalty check
@@ -565,7 +585,7 @@ object GameEngine {
                     s = s.copy(mp = s.mp - weapon.manaCost)
                     s = advanceSkillPublic(s, SkillType.MAGIC, weapon.manaCost.toDouble() * 1.25, nowMs)
                     s = s.addProjectileInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), target.x.toFloat(), target.y.toFloat(), ProjectileKind.ENERGY_BOLT, nowMs)
-                    applyDamageToMonster(s, target.id, dmg, nowMs)
+                    applyDamageToMonster(s, target.id, dmg, nowMs, projectileKind = ProjectileKind.ENERGY_BOLT)
                 } else if (dist <= 1) {
                     val meleeMult = s.attackSkillMultiplier(s.skills.melee.level)
                     val dmg = (Random.nextInt(4, 8) * meleeMult).roundToInt().coerceAtLeast(3)
@@ -610,7 +630,7 @@ object GameEngine {
                     val basePower = weapon.attack + ammoAtkBonus + s.level * 0.60
                     val dmg = (basePower * distMult * Random.nextDouble(0.80, 1.20) * skillPenaltyMult * offVocationMult)
                         .roundToInt().coerceAtLeast(5)
-                    applyDamageToMonster(s, target.id, dmg, nowMs)
+                    applyDamageToMonster(s, target.id, dmg, nowMs, projectileKind = projKind)
                 } else {
                     s.addFloatingInternal(s.floor, target.x.toFloat(), target.y.toFloat(), "MISS", FloatingTextKind.BLOCK, nowMs)
                 }
@@ -632,17 +652,40 @@ object GameEngine {
         monsterId: Int,
         damage: Int,
         nowMs: Long,
-        customLog: String? = null
+        customLog: String? = null,
+        projectileKind: ProjectileKind? = null
     ): GameWorldState {
         val m = state.monsters.firstOrNull { it.id == monsterId } ?: return state
+        val localId = state.saveId.ifBlank { "local" }
         val newHp = (m.hp - damage).coerceAtLeast(0)
-        var s = state.addFloatingInternal(m.floor, m.x.toFloat(), m.y.toFloat(), "-$damage", FloatingTextKind.DAMAGE_MONSTER, nowMs)
+        val updatedContributors = m.contributors + localId
+
+        val hitEvent = LocalMonsterHitEvent(
+            monsterId = m.id,
+            floor = m.floor,
+            damage = damage,
+            resultingHp = newHp,
+            monsterTypeName = m.type.displayName,
+            isBoss = m.type.isBoss,
+            projectileKindName = projectileKind?.name,
+            fromX = state.playerX,
+            fromY = state.playerY
+        )
+
+        var s = state
+            .copy(outboundMonsterHits = state.outboundMonsterHits + hitEvent)
+            .addFloatingInternal(m.floor, m.x.toFloat(), m.y.toFloat(), "-$damage", FloatingTextKind.DAMAGE_MONSTER, nowMs)
         if (customLog != null) s = s.addLogInternal(customLog)
 
         if (newHp > 0) {
-            return s.copy(monsters = s.monsters.map { if (it.id == monsterId) it.copy(hp = newHp) else it })
+            return s.copy(
+                monsters = s.monsters.map {
+                    if (it.id == monsterId) it.copy(hp = newHp, contributors = updatedContributors) else it
+                }
+            )
         }
 
+        // Monster slain: local player contributed, so spawn their personal instanced loot drop
         val corpse = generateMonsterCorpse(m)
         val remainingMonsters = s.monsters.filterNot { it.id == monsterId }
         val respawnTicks = if (m.type.isBoss) 90 else 32
@@ -650,10 +693,166 @@ object GameEngine {
             monsters = remainingMonsters,
             targetMonsterId = if (s.targetMonsterId == monsterId) null else s.targetMonsterId,
             corpses = (s.corpses + corpse).takeLast(38),
-            pendingRespawns = s.pendingRespawns + PendingRespawn(m.type, m.floor, m.spawnX, m.spawnY, respawnTicks)
+            pendingRespawns = s.pendingRespawns + PendingRespawn(
+                type = m.type,
+                floor = m.floor,
+                spawnX = m.spawnX,
+                spawnY = m.spawnY,
+                ticksRemaining = respawnTicks,
+                originalMonsterId = m.id
+            )
         )
         s = grantExperience(s, m.type.xpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
         return s.addLogInternal("Slain ${m.type.displayName}! (+${m.type.xpReward} XP) Tap corpse to loot.")
+    }
+
+    /**
+     * Applies a co-op teammate's broadcast hit on a shared floor monster.
+     * Shows floating damage + optional projectile, updates HP, and when HP reaches 0,
+     * spawns a personal instanced loot drop & XP locally ONLY if the local player also dealt damage.
+     */
+    fun applyRemoteMonsterHit(
+        state: GameWorldState,
+        event: RemoteMonsterHitEvent,
+        localPlayerId: String,
+        isFloorHost: Boolean,
+        nowMs: Long
+    ): GameWorldState {
+        if (event.floor != state.floor) return state
+        val m = state.monsters.firstOrNull { it.id == event.monsterId && it.floor == event.floor } ?: return state
+        var s = state.addFloatingInternal(m.floor, m.x.toFloat(), m.y.toFloat(), "-${event.damage}", FloatingTextKind.DAMAGE_MONSTER, nowMs)
+        val proj = event.projectileKindName?.let { runCatching { ProjectileKind.valueOf(it) }.getOrNull() }
+        if (proj != null) {
+            s = s.addProjectileInternal(m.floor, event.fromX.toFloat(), event.fromY.toFloat(), m.x.toFloat(), m.y.toFloat(), proj, nowMs)
+        }
+
+        val updatedContributors = m.contributors + event.attackerId
+        val newHp = minOf((m.hp - event.damage).coerceAtLeast(0), event.resultingHp).coerceAtLeast(0)
+
+        if (newHp > 0) {
+            return s.copy(
+                monsters = s.monsters.map {
+                    if (it.id == m.id) it.copy(hp = newHp, contributors = updatedContributors) else it
+                }
+            )
+        }
+
+        // Monster defeated by teammate!
+        val remainingMonsters = s.monsters.filterNot { it.id == m.id }
+        val respawnTicks = if (m.type.isBoss) 90 else 32
+        val newRespawns = if (isFloorHost) {
+            s.pendingRespawns + PendingRespawn(
+                type = m.type,
+                floor = m.floor,
+                spawnX = m.spawnX,
+                spawnY = m.spawnY,
+                ticksRemaining = respawnTicks,
+                originalMonsterId = m.id
+            )
+        } else {
+            s.pendingRespawns
+        }
+
+        val localContributed = localPlayerId.isNotBlank() && localPlayerId in updatedContributors
+        s = s.copy(
+            monsters = remainingMonsters,
+            targetMonsterId = if (s.targetMonsterId == m.id) null else s.targetMonsterId,
+            pendingRespawns = newRespawns
+        )
+
+        if (localContributed) {
+            val personalCorpse = generateMonsterCorpse(m)
+            s = s.copy(corpses = (s.corpses + personalCorpse).takeLast(38))
+            s = grantExperience(s, m.type.xpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
+            s = s.addLogInternal("Co-op kill: ${m.type.displayName}! (+${m.type.xpReward} XP) Personal loot dropped.")
+        } else {
+            s = s.addLogInternal("${event.attackerName} slew ${m.type.displayName}.")
+        }
+        return s
+    }
+
+    /**
+     * Applies authoritative host monster positions, HP, targetPlayerId, and respawns on non-host clients
+     * while preserving local contributor tracking so personal instanced loot is never lost.
+     */
+    fun applyRemoteMonsterSync(
+        state: GameWorldState,
+        floor: Int,
+        snapshots: List<SyncedMonsterSnapshot>,
+        localPlayerId: String,
+        nowMs: Long
+    ): GameWorldState {
+        if (floor != state.floor) return state
+        val existingOnFloor = state.monsters.filter { it.floor == floor }.associateBy { it.id }
+        val otherFloorMonsters = state.monsters.filter { it.floor != floor }
+        val syncedIds = snapshots.map { it.id }.toSet()
+
+        var s = state
+
+        // Check if any monster we contributed to died on the host while a hit packet was missed
+        for ((id, oldM) in existingOnFloor) {
+            if (id !in syncedIds && localPlayerId.isNotBlank() && localPlayerId in oldM.contributors) {
+                val personalCorpse = generateMonsterCorpse(oldM)
+                s = s.copy(corpses = (s.corpses + personalCorpse).takeLast(38))
+                s = grantExperience(s, oldM.type.xpReward.toLong(), oldM.x.toFloat(), oldM.y.toFloat(), nowMs)
+                s = s.addLogInternal("Co-op kill: ${oldM.type.displayName}! (+${oldM.type.xpReward} XP) Personal loot dropped.")
+            }
+        }
+
+        val syncedOnFloor = snapshots.mapNotNull { snap ->
+            if (snap.hp <= 0) return@mapNotNull null
+            val existing = existingOnFloor[snap.id]
+            val type = existing?.type ?: runCatching { MonsterType.valueOf(snap.typeName) }.getOrNull() ?: return@mapNotNull null
+            val moved = existing != null && (existing.x != snap.x || existing.y != snap.y)
+            MonsterEntity(
+                id = snap.id,
+                type = type,
+                floor = floor,
+                x = snap.x,
+                y = snap.y,
+                spawnX = existing?.spawnX ?: snap.spawnX,
+                spawnY = existing?.spawnY ?: snap.spawnY,
+                hp = snap.hp.coerceIn(1, snap.maxHp),
+                maxHp = snap.maxHp,
+                facing = existing?.facing ?: Direction.SOUTH,
+                moveCooldown = existing?.moveCooldown ?: 0,
+                animOffset = existing?.animOffset ?: ((snap.id * 0.37f) % 1f),
+                lastMoveFromX = if (moved) existing!!.x else snap.x,
+                lastMoveFromY = if (moved) existing!!.y else snap.y,
+                lastMoveTimeMs = if (moved) nowMs else (existing?.lastMoveTimeMs ?: nowMs),
+                targetPlayerId = snap.targetPlayerId,
+                contributors = existing?.contributors ?: emptySet()
+            )
+        }
+
+        val newTarget = if (s.targetMonsterId != null && syncedOnFloor.none { it.id == s.targetMonsterId }) {
+            null
+        } else {
+            s.targetMonsterId
+        }
+        return s.copy(
+            monsters = otherFloorMonsters + syncedOnFloor,
+            targetMonsterId = newTarget
+        )
+    }
+
+    fun buildFloorMonsterSnapshots(state: GameWorldState): List<SyncedMonsterSnapshot> {
+        return state.monsters
+            .filter { it.floor == state.floor && it.hp > 0 }
+            .map { m ->
+                SyncedMonsterSnapshot(
+                    id = m.id,
+                    typeName = m.type.name,
+                    floor = m.floor,
+                    x = m.x,
+                    y = m.y,
+                    spawnX = m.spawnX,
+                    spawnY = m.spawnY,
+                    hp = m.hp,
+                    maxHp = m.maxHp,
+                    targetPlayerId = m.targetPlayerId
+                )
+            }
     }
 
     /**
@@ -798,7 +997,7 @@ object GameEngine {
         next = advanceSkillPublic(next, SkillType.MAGIC, runeDef.manaCost.toDouble() * 1.4, nowMs)
         val projKind = if (runeId == "sd_rune") ProjectileKind.DEATH_RUNE else ProjectileKind.ENERGY_BOLT
         next = next.addProjectileInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), target.x.toFloat(), target.y.toFloat(), projKind, nowMs)
-        return applyDamageToMonster(next, target.id, dmg, nowMs, "${runeDef.name} struck ${target.type.displayName} for $dmg!")
+        return applyDamageToMonster(next, target.id, dmg, nowMs, "${runeDef.name} struck ${target.type.displayName} for $dmg!", projKind)
     }
 
     fun useRope(state: GameWorldState, nowMs: Long): GameWorldState {
@@ -845,22 +1044,82 @@ object GameEngine {
         return next
     }
 
-    private fun processMonstersTick(state: GameWorldState, floorMap: WorldFloor, playerInPz: Boolean, nowMs: Long): GameWorldState {
+    private fun processMonstersTick(
+        state: GameWorldState,
+        floorMap: WorldFloor,
+        playerInPz: Boolean,
+        nowMs: Long,
+        isFloorHost: Boolean,
+        localPlayerId: String,
+        remotePlayersOnFloor: List<RemotePlayerState>
+    ): GameWorldState {
         var s = state
         val updatedMonsters = s.monsters.toMutableList()
+        val activeRemoteTargets = remotePlayersOnFloor.filter {
+            it.floor == s.floor && it.hp > 0 && !floorMap.isProtectionZone(it.x, it.y)
+        }
+
         for (i in updatedMonsters.indices) {
             val m = updatedMonsters[i]
             if (m.floor != s.floor) continue
-            val dist = chebyshev(m.x, m.y, s.playerX, s.playerY)
-            if (dist > 8) continue
 
-            if (!playerInPz && s.hp > 0 && (dist <= 1 || (m.type.rangedBreathRange > 1 && dist <= m.type.rangedBreathRange && Random.nextFloat() < 0.45f))) {
-                val isRanged = dist > 1
+            // Determine target player: Host picks closest non-PZ player on floor; Non-host follows host's targetPlayerId
+            val targetId: String?
+            val targetX: Int
+            val targetY: Int
+            val distToTarget: Int
+
+            if (isFloorHost) {
+                var bestId: String? = null
+                var bestX = s.playerX
+                var bestY = s.playerY
+                var bestDist = Int.MAX_VALUE
+
+                if (!playerInPz && s.hp > 0) {
+                    val dLocal = chebyshev(m.x, m.y, s.playerX, s.playerY)
+                    if (dLocal <= 8) {
+                        bestId = localPlayerId
+                        bestX = s.playerX
+                        bestY = s.playerY
+                        bestDist = dLocal
+                    }
+                }
+                for (rp in activeRemoteTargets) {
+                    val dRem = chebyshev(m.x, m.y, rp.x, rp.y)
+                    if (dRem <= 8 && dRem < bestDist) {
+                        bestId = rp.playerId
+                        bestX = rp.x
+                        bestY = rp.y
+                        bestDist = dRem
+                    }
+                }
+                targetId = bestId
+                targetX = bestX
+                targetY = bestY
+                distToTarget = bestDist
+                if (m.targetPlayerId != targetId) {
+                    updatedMonsters[i] = m.copy(targetPlayerId = targetId)
+                }
+            } else {
+                targetId = m.targetPlayerId
+                targetX = s.playerX
+                targetY = s.playerY
+                distToTarget = chebyshev(m.x, m.y, s.playerX, s.playerY)
+            }
+
+            if (targetId == null || distToTarget > 8) continue
+
+            // Resolve monster attack locally ONLY when targeting this local player
+            val targetsLocal = targetId == localPlayerId
+            val distToLocal = chebyshev(m.x, m.y, s.playerX, s.playerY)
+            if (targetsLocal && !playerInPz && s.hp > 0 &&
+                (distToLocal <= 1 || (m.type.rangedBreathRange > 1 && distToLocal <= m.type.rangedBreathRange && Random.nextFloat() < 0.45f))
+            ) {
+                val isRanged = distToLocal > 1
                 if (isRanged) {
                     val proj = if (m.type == MonsterType.MARROW_ARCHER) ProjectileKind.ARROW else ProjectileKind.FIRE_BREATH
                     s = s.addProjectileInternal(s.floor, m.x.toFloat(), m.y.toFloat(), s.playerX.toFloat(), s.playerY.toFloat(), proj, nowMs, 300L)
                 }
-                // Shielding acts as an active Dodge stat (1H + Shield full dodge vs 2H weapon penalty)
                 if (!isRanged) {
                     val shieldTrainPts = when {
                         s.hasActiveShield() -> 3.4
@@ -895,35 +1154,41 @@ object GameEngine {
                 if (s.hp <= 0) break
             }
 
-            if (dist > 1 && !playerInPz) {
-                if (m.moveCooldown > 0) {
-                    updatedMonsters[i] = m.copy(moveCooldown = m.moveCooldown - 1)
+            // Only the elected Floor Host moves monsters to keep all clients synchronized
+            if (isFloorHost && distToTarget > 1) {
+                val curM = updatedMonsters[i]
+                if (curM.moveCooldown > 0) {
+                    updatedMonsters[i] = curM.copy(moveCooldown = curM.moveCooldown - 1)
                 } else {
-                    val stepX = (s.playerX - m.x).coerceIn(-1, 1)
-                    val stepY = (s.playerY - m.y).coerceIn(-1, 1)
+                    val stepX = (targetX - curM.x).coerceIn(-1, 1)
+                    val stepY = (targetY - curM.y).coerceIn(-1, 1)
                     val candidates = buildList {
                         if (stepX != 0 && stepY != 0) {
-                            add(m.x + stepX to m.y)
-                            add(m.x to m.y + stepY)
+                            add(curM.x + stepX to curM.y)
+                            add(curM.x to curM.y + stepY)
                         } else if (stepX != 0) {
-                            add(m.x + stepX to m.y); add(m.x to m.y + 1); add(m.x to m.y - 1)
+                            add(curM.x + stepX to curM.y); add(curM.x to curM.y + 1); add(curM.x to curM.y - 1)
                         } else if (stepY != 0) {
-                            add(m.x to m.y + stepY); add(m.x + 1 to m.y); add(m.x - 1 to m.y)
+                            add(curM.x to curM.y + stepY); add(curM.x + 1 to curM.y); add(curM.x - 1 to curM.y)
                         }
                     }
                     val moveDest = candidates.firstOrNull { (cx, cy) ->
                         val t = floorMap.tileAt(cx, cy)
-                        t.walkable && !floorMap.isProtectionZone(cx, cy) && !(cx == s.playerX && cy == s.playerY) &&
-                            updatedMonsters.none { other -> other.id != m.id && other.floor == m.floor && other.x == cx && other.y == cy }
+                        t.walkable &&
+                            !floorMap.isProtectionZone(cx, cy) &&
+                            !(cx == s.playerX && cy == s.playerY) &&
+                            activeRemoteTargets.none { rp -> rp.x == cx && rp.y == cy } &&
+                            updatedMonsters.none { other -> other.id != curM.id && other.floor == curM.floor && other.x == cx && other.y == cy }
                     }
                     if (moveDest != null) {
-                        updatedMonsters[i] = m.copy(
-                            lastMoveFromX = m.x,
-                            lastMoveFromY = m.y,
+                        updatedMonsters[i] = curM.copy(
+                            lastMoveFromX = curM.x,
+                            lastMoveFromY = curM.y,
                             lastMoveTimeMs = nowMs,
                             x = moveDest.first,
                             y = moveDest.second,
-                            moveCooldown = (m.type.moveIntervalTicks - 1).coerceAtLeast(0)
+                            targetPlayerId = targetId,
+                            moveCooldown = (curM.type.moveIntervalTicks - 1).coerceAtLeast(0)
                         )
                     }
                 }
@@ -932,16 +1197,21 @@ object GameEngine {
         return s.copy(monsters = updatedMonsters)
     }
 
-    private fun processRespawns(state: GameWorldState): GameWorldState {
+    private fun processRespawns(
+        state: GameWorldState,
+        remotePlayersOnFloor: List<RemotePlayerState> = emptyList()
+    ): GameWorldState {
         if (state.pendingRespawns.isEmpty()) return state
         val remaining = mutableListOf<PendingRespawn>()
         val spawned = mutableListOf<MonsterEntity>()
         for (r in state.pendingRespawns) {
             if (r.ticksRemaining <= 1) {
                 val occupied = (state.floor == r.floor && state.playerX == r.spawnX && state.playerY == r.spawnY) ||
+                    remotePlayersOnFloor.any { it.floor == r.floor && it.x == r.spawnX && it.y == r.spawnY } ||
                     state.monsters.any { it.floor == r.floor && it.x == r.spawnX && it.y == r.spawnY }
                 if (!occupied) {
-                    spawned += MonsterEntity(nextMonsterId++, r.type, r.floor, r.spawnX, r.spawnY, r.spawnX, r.spawnY, r.type.maxHp, r.type.maxHp)
+                    val respawnId = if (r.originalMonsterId > 0) r.originalMonsterId else nextMonsterId++
+                    spawned += MonsterEntity(respawnId, r.type, r.floor, r.spawnX, r.spawnY, r.spawnX, r.spawnY, r.type.maxHp, r.type.maxHp)
                 } else {
                     remaining += r.copy(ticksRemaining = 3)
                 }

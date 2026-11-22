@@ -38,6 +38,7 @@ import com.example.game.model.FloatingTextKind
 import com.example.game.model.GameWorldState
 import com.example.game.model.ProjectileKind
 import com.example.game.model.TileType
+import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.sprites.EntitySpriteAtlas
 import com.example.game.sprites.TileSpriteAtlas
 import com.example.game.world.NpcRole
@@ -60,10 +61,12 @@ import kotlin.math.roundToInt
 @Composable
 fun GameCanvasView(
     state: GameWorldState,
+    remotePlayers: List<RemotePlayerState> = emptyList(),
     onTileTapped: (Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val latestState by rememberUpdatedState(state)
+    val latestRemotePlayers by rememberUpdatedState(remotePlayers)
     val latestOnTileTapped by rememberUpdatedState(onTileTapped)
 
     var frameUptimeMs by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
@@ -278,6 +281,49 @@ fun GameCanvasView(
                 }
             }
 
+            // 4.5 Remote Co-Op Players on the same floor
+            latestRemotePlayers.forEach { rp ->
+                if (rp.floor == st.floor && rp.x in (minTx - 1)..(maxTx + 1) && rp.y in (minTy - 1)..(maxTy + 1)) {
+                    val rpMoveFrac = ((now - rp.lastMoveMs).toFloat() / 190f).coerceIn(0f, 1f)
+                    val rpX = rp.prevX + (rp.x - rp.prevX) * rpMoveFrac
+                    val rpY = rp.prevY + (rp.y - rp.prevY) * rpMoveFrac
+                    val rx = (originX + rpX * tilePx).roundToInt()
+                    val ry = (originY + rpY * tilePx).roundToInt()
+                    val rpFrame = if (rpMoveFrac < 1f) ((now / 110L) % 2L).toInt() else animFrame
+
+                    drawImage(
+                        image = EntitySpriteAtlas.playerBitmap(rp.vocation, rpFrame, rp.tunicColorIndex, rp.hairColorIndex),
+                        dstOffset = IntOffset(rx, ry),
+                        dstSize = IntSize(tileInt, tileInt),
+                        filterQuality = FilterQuality.None
+                    )
+
+                    val rHpFrac = (rp.hp.toFloat() / rp.maxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+                    val rBarW = tilePx * 0.88f
+                    val rBarX = rx + (tilePx - rBarW) * 0.5f
+                    val rBarY = ry - 12f
+                    drawRect(Color.Black, Offset(rBarX - 1f, rBarY - 1f), Size(rBarW + 2f, 9f))
+                    drawRect(
+                        when {
+                            rHpFrac > 0.6f -> Color(0xFF47D7FF)
+                            rHpFrac > 0.3f -> TorchGold
+                            else -> HealthCrimson
+                        },
+                        Offset(rBarX, rBarY),
+                        Size(rBarW * rHpFrac, 7f)
+                    )
+
+                    val prevColor = labelPaint.color
+                    labelPaint.color = android.graphics.Color.parseColor("#8CF0FF")
+                    val tag = "${rp.name} [${rp.level}]"
+                    drawContext.canvas.nativeCanvas.apply {
+                        drawText(tag, rx + tilePx * 0.5f, rBarY - 6f, labelShadowPaint)
+                        drawText(tag, rx + tilePx * 0.5f, rBarY - 6f, labelPaint)
+                    }
+                    labelPaint.color = prevColor
+                }
+            }
+
             // 5. Player
             val playerScreenX = (originX + camPlayerX * tilePx).roundToInt()
             val playerScreenY = (originY + camPlayerY * tilePx).roundToInt()
@@ -407,6 +453,7 @@ fun GameCanvasView(
         if (state.showMinimap) {
             MinimapOverlay(
                 state = state,
+                remotePlayers = remotePlayers,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(8.dp)
@@ -416,7 +463,11 @@ fun GameCanvasView(
 }
 
 @Composable
-private fun MinimapOverlay(state: GameWorldState, modifier: Modifier = Modifier) {
+private fun MinimapOverlay(
+    state: GameWorldState,
+    remotePlayers: List<RemotePlayerState>,
+    modifier: Modifier = Modifier
+) {
     Surface(
         color = BasaltDark.copy(alpha = 0.88f),
         shape = RoundedCornerShape(6.dp),
@@ -464,6 +515,16 @@ private fun MinimapOverlay(state: GameWorldState, modifier: Modifier = Modifier)
                     val dy = m.y - state.playerY
                     if (dx in -radius..radius && dy in -radius..radius) {
                         drawRect(TargetRed, Offset((dx + radius) * cell, (dy + radius) * cell), Size(cell, cell))
+                    }
+                }
+            }
+            // Remote co-op allies as bright cyan pips
+            remotePlayers.forEach { rp ->
+                if (rp.floor == state.floor) {
+                    val dx = rp.x - state.playerX
+                    val dy = rp.y - state.playerY
+                    if (dx in -radius..radius && dy in -radius..radius) {
+                        drawRect(Color(0xFF47D7FF), Offset((dx + radius) * cell - 0.5f, (dy + radius) * cell - 0.5f), Size(cell + 1f, cell + 1f))
                     }
                 }
             }
