@@ -38,17 +38,25 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
+          RESOLVED_URL="${SUPABASE_URL:-https://wzwuflkwzistgwifsbul.supabase.co}"
           if [ -n "$SUPABASE_ANON_KEY" ]; then
             {
-              echo "SUPABASE_URL=${SUPABASE_URL:-https://wzwuflkwzistgwifsbul.supabase.co}"
+              echo "SUPABASE_URL=$RESOLVED_URL"
               echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
             } > .env
-            echo "Configured .env from GitHub Secrets for live co-op builds."
+            {
+              echo "SUPABASE_URL=$RESOLVED_URL"
+              echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+            } >> local.properties
+            echo "Configured .env and local.properties from GitHub Secrets for live co-op builds."
           else
             echo "SUPABASE_ANON_KEY secret not set; APK will build with Offline Solo fallback."
           fi
 
       - name: Build Debug APK
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: gradle assembleDebug
 
       - name: Rename APK for easy download
