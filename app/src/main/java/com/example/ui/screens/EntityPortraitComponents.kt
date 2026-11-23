@@ -40,10 +40,16 @@ fun LivePaperDollPreview(
     quality: GraphicsQuality = GraphicsQuality.HIGH,
     contentDesc: String = "Hero paper-doll preview"
 ) {
-    val directions = remember { listOf(Direction.SOUTH, Direction.EAST, Direction.NORTH, Direction.WEST) }
-    var dirIndex by remember(initialDirection) {
-        mutableIntStateOf(directions.indexOf(initialDirection).coerceAtLeast(0))
+    val octantAngles = remember { floatArrayOf(0f, 45f, 90f, 135f, 180f, -135f, -90f, -45f) }
+    val initialIndex = remember(initialDirection) {
+        when (initialDirection) {
+            Direction.SOUTH -> 0
+            Direction.EAST -> 2
+            Direction.NORTH -> 4
+            Direction.WEST -> 6
+        }
     }
+    var angleIndex by remember(initialDirection) { mutableIntStateOf(initialIndex) }
     var clockMs by remember { mutableLongStateOf(0L) }
     val reusablePath = remember { Path() }
 
@@ -55,16 +61,17 @@ fun LivePaperDollPreview(
         }
     }
 
-    val activeDir = directions[dirIndex % directions.size]
-    val resolvedFacing = remember(activeDir) {
-        // Default 45-degree camera maps SOUTH -> FRONT, EAST -> RIGHT, NORTH -> BACK, WEST -> LEFT
-        ScreenFacingResolver.resolve(activeDir, cameraYawDeg = IsometricCamera.DEFAULT_YAW_DEG)
+    val activeAngleDeg = octantAngles[angleIndex % octantAngles.size]
+    val resolvedFacing = remember(activeAngleDeg) {
+        ScreenFacingResolver.resolveForRelativeAngleDeg(activeAngleDeg)
     }
 
     val clickMod = if (interactiveRotate) {
         Modifier
-            .clickable(role = Role.Button) { dirIndex = (dirIndex + 1) % directions.size }
-            .semantics { contentDescription = "$contentDesc. Tap to rotate character." }
+            .clickable(role = Role.Button) { angleIndex = (angleIndex + 1) % octantAngles.size }
+            .semantics {
+                contentDescription = "$contentDesc (${resolvedFacing.octant.label} view). Tap to rotate character 8 ways."
+            }
     } else {
         Modifier.semantics { contentDescription = contentDesc }
     }
@@ -74,11 +81,16 @@ fun LivePaperDollPreview(
             val h = size.minDimension * 0.90f
             val cx = size.width * 0.5f
             val feetY = size.height * 0.89f
-            // Soft studio pedestal shadow
+            // Angled studio cast shadow + tight contact occlusion pool
             drawOval(
-                color = Color.Black.copy(alpha = 0.42f),
-                topLeft = Offset(cx - h * 0.28f, feetY - h * 0.06f),
-                size = Size(h * 0.56f, h * 0.14f)
+                color = Color(0x3D060914),
+                topLeft = Offset(cx - h * 0.24f, feetY - h * 0.055f),
+                size = Size(h * 0.62f, h * 0.14f)
+            )
+            drawOval(
+                color = Color.Black.copy(alpha = 0.50f),
+                topLeft = Offset(cx - h * 0.26f, feetY - h * 0.055f),
+                size = Size(h * 0.52f, h * 0.13f)
             )
             ArticulatedHumanoidRenderer.drawPlayer(
                 scope = this,
@@ -98,7 +110,7 @@ fun LivePaperDollPreview(
 }
 
 /**
- * Crisp articulated monster preview for Battle List entries and inspect modals.
+ * Crisp 2.5D/3D volumetric monster preview for Battle List entries and inspect modals.
  */
 @Composable
 fun ArticulatedMonsterPreview(
@@ -118,9 +130,8 @@ fun ArticulatedMonsterPreview(
         }
     }
 
-    val facing = remember {
-        ScreenFacingResolver.resolve(Direction.SOUTH, cameraYawDeg = IsometricCamera.DEFAULT_YAW_DEG)
-    }
+    // Classic heroic 3/4 isometric angle highlights side snout/wings/legs depth + front face
+    val facing = remember { ScreenFacingResolver.resolveForRelativeAngleDeg(32f) }
 
     Canvas(
         modifier = modifier.semantics {
@@ -132,9 +143,9 @@ fun ArticulatedMonsterPreview(
         val cx = size.width * 0.5f
         val feetY = size.height * 0.87f
         drawOval(
-            color = Color.Black.copy(alpha = 0.38f),
-            topLeft = Offset(cx - h * 0.28f, feetY - h * 0.05f),
-            size = Size(h * 0.56f, h * 0.13f)
+            color = Color.Black.copy(alpha = 0.44f),
+            topLeft = Offset(cx - h * 0.29f, feetY - h * 0.055f),
+            size = Size(h * 0.58f, h * 0.135f)
         )
         OrganicMonsterRenderer.drawMonster(
             scope = this,
@@ -154,7 +165,7 @@ fun ArticulatedMonsterPreview(
 }
 
 /**
- * Crisp articulated thematic NPC preview for dialogs (e.g., The Oracle, Brother Alden, Alaric).
+ * Crisp 2.5D/3D volumetric thematic NPC preview for dialogs (e.g., The Oracle, Brother Alden, Alaric).
  */
 @Composable
 fun ArticulatedNpcPreview(
@@ -174,9 +185,7 @@ fun ArticulatedNpcPreview(
         }
     }
 
-    val facing = remember {
-        ScreenFacingResolver.resolve(Direction.SOUTH, cameraYawDeg = IsometricCamera.DEFAULT_YAW_DEG)
-    }
+    val facing = remember { ScreenFacingResolver.resolveForRelativeAngleDeg(20f) }
 
     Canvas(
         modifier = modifier.semantics {
@@ -187,7 +196,7 @@ fun ArticulatedNpcPreview(
         val cx = size.width * 0.5f
         val feetY = size.height * 0.89f
         drawOval(
-            color = Color.Black.copy(alpha = 0.42f),
+            color = Color.Black.copy(alpha = 0.46f),
             topLeft = Offset(cx - h * 0.28f, feetY - h * 0.06f),
             size = Size(h * 0.56f, h * 0.14f)
         )

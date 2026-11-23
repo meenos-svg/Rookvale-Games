@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import com.example.game.model.AdventurerPalette
 import com.example.game.model.Direction
@@ -9,6 +10,7 @@ import com.example.game.model.ItemCategory
 import com.example.game.model.Vocation
 import com.example.game.multiplayer.RemotePlayerState
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -21,30 +23,126 @@ enum class ScreenFacing {
     RIGHT
 }
 
+/**
+ * True 8-directional camera-relative isometric viewing octants (`entityFacing - cameraYaw`).
+ */
+enum class ScreenOctant(val label: String) {
+    FRONT("Front"),
+    FRONT_RIGHT("Front-Right"),
+    RIGHT("Right"),
+    BACK_RIGHT("Back-Right"),
+    BACK("Back"),
+    BACK_LEFT("Back-Left"),
+    LEFT("Left"),
+    FRONT_LEFT("Front-Left");
+
+    val isRear: Boolean
+        get() = this == BACK || this == BACK_LEFT || this == BACK_RIGHT
+}
+
+/**
+ * Continuous 2.5D/3D camera-relative orientation basis for an entity.
+ *
+ * Coordinate convention (right-handed entity-local 3D space):
+ * - `+localR`: entity's OWN right side (weapon hand). At FRONT (`relativeAngleRad == 0`), points screen-left (`-X`).
+ * - `+localF`: entity's forward facing (nose/chest). At FRONT (`relativeAngleRad == 0`), points toward viewer (`depth = +1`).
+ * - `+localUp`: vertical height above ground plane (foreshortened by ~38° isometric pitch).
+ */
 data class ResolvedScreenFacing(
     val quadrant: ScreenFacing,
     val screenDirX: Float,
-    val screenDirY: Float
-)
+    val screenDirY: Float,
+    val octant: ScreenOctant = ScreenOctant.FRONT,
+    val relativeAngleRad: Float = 0f,
+    val lightScreenX: Float = -0.72f,
+    val lightScreenY: Float = -0.62f
+) {
+    /** Horizontal screen-X component of entity's forward axis (`+1` = screen-right). */
+    val forwardScreenX: Float get() = sin(relativeAngleRad)
+
+    /** Depth component of entity's forward axis (`+1` = facing viewer, `-1` = facing away). */
+    val forwardDepth: Float get() = cos(relativeAngleRad)
+
+    /** Horizontal screen-X component of entity's OWN right-shoulder axis (`-1` when facing viewer). */
+    val rightScreenX: Float get() = -cos(relativeAngleRad)
+
+    /** Depth component of entity's OWN right-shoulder axis (`+1` when turned right, `-1` when turned left). */
+    val rightDepth: Float get() = sin(relativeAngleRad)
+
+    /** True whenever the entity's back is angled toward the camera (`depth < -0.18`). */
+    val isBackFacing: Boolean get() = forwardDepth < -0.18f
+
+    /** Depth of a 3D entity-local point (larger = closer to viewer = drawn in front). */
+    fun depthOf(localR: Float, localF: Float): Float =
+        localR * rightDepth + localF * forwardDepth
+
+    /**
+     * Projects an entity-local 3D offset `(localR, localF, localUp)` in logical units `u`
+     * into 2.5D isometric screen coordinates matching Rookvale's ~38° pitch.
+     */
+    fun project(
+        originX: Float,
+        originY: Float,
+        u: Float,
+        localR: Float,
+        localF: Float,
+        localUp: Float
+    ): Offset {
+        val sx = originX + (localR * rightScreenX + localF * forwardScreenX) * u
+        val depth = depthOf(localR, localF)
+        val sy = originY + depth * ISO_DEPTH_PITCH * u - localUp * ISO_UP_SCALE * u
+        return Offset(sx, sy)
+    }
+
+    companion object {
+        /** Isometric depth foreshortening factor (`sin(~38°) * 0.72 ≈ 0.44`). */
+        const val ISO_DEPTH_PITCH = 0.44f
+        /** Vertical foreshortening factor (`cos(~24°) ≈ 0.92`) for solid 2.5D proportions. */
+        const val ISO_UP_SCALE = 0.92f
+    }
+}
 
 /**
- * Resolves a character's or monster's screen-space orientation relative to the active 360-degree
- * camera yaw (`cameraYawDeg`) and either a combat target delta or world cardinal direction.
+ * Resolves a character's or monster's continuous 3D camera-relative orientation (`entityFacing - cameraYaw`)
+ * and 8-directional octant, plus smooth angular interpolation and screen-space light direction.
  */
 object ScreenFacingResolver {
+
+    fun directionToWorldRadians(direction: Direction): Float =
+        atan2(direction.dy.toDouble(), direction.dx.toDouble()).toFloat()
+
+    fun vectorToWorldRadians(dx: Float, dy: Float, fallback: Direction): Float =
+        if (hypot(dx, dy) > 0.05f) atan2(dy.toDouble(), dx.toDouble()).toFloat()
+        else directionToWorldRadians(fallback)
+
+    /** Shortest-arc smooth angular interpolation in radians (handles `±PI` wrap cleanly). */
+    fun shortestAngleLerp(currentRad: Float, targetRad: Float, alpha: Float): Float {
+        var diff = (targetRad - currentRad) % (2f * PI.toFloat())
+        if (diff > PI.toFloat()) diff -= 2f * PI.toFloat()
+        if (diff < -PI.toFloat()) diff += 2f * PI.toFloat()
+        return currentRad + diff * alpha.coerceIn(0f, 1f)
+    }
+
     fun resolve(
         worldFacing: Direction,
         cameraYawDeg: Float,
         targetDeltaX: Float = 0f,
         targetDeltaY: Float = 0f
     ): ResolvedScreenFacing {
-        val useTarget = hypot(targetDeltaX, targetDeltaY) > 0.05f
-        val wx = if (useTarget) targetDeltaX else worldFacing.dx.toFloat()
-        val wy = if (useTarget) targetDeltaY else worldFacing.dy.toFloat()
+        val worldRad = vectorToWorldRadians(targetDeltaX, targetDeltaY, worldFacing)
+        return resolveFromRadians(worldRad, cameraYawDeg)
+    }
 
-        val rad = IsometricCamera.normalizeYawDeg(cameraYawDeg) * (PI / 180.0)
-        val cosY = cos(rad).toFloat()
-        val sinY = sin(rad).toFloat()
+    fun resolveFromRadians(
+        worldFacingRad: Float,
+        cameraYawDeg: Float
+    ): ResolvedScreenFacing {
+        val wx = cos(worldFacingRad)
+        val wy = sin(worldFacingRad)
+
+        val camRad = IsometricCamera.normalizeYawDeg(cameraYawDeg) * (PI / 180.0)
+        val cosY = cos(camRad).toFloat()
+        val sinY = sin(camRad).toFloat()
 
         // Match IsometricCamera projection axes: +sx is screen-right, +sy is screen-down (toward viewer)
         val rawSx = wx * cosY - wy * sinY
@@ -53,15 +151,82 @@ object ScreenFacingResolver {
         val sx = rawSx / len
         val sy = rawSy / len
 
-        // Angle in [-180, 180]: at default 45° yaw, SOUTH=+135° (FRONT), EAST=+45° (RIGHT), NORTH=-45° (BACK), WEST=-135° (LEFT)
-        val angleDeg = (atan2(sy.toDouble(), sx.toDouble()) * (180.0 / PI)).toFloat()
+        // Continuous camera-relative yaw where 0 rad = facing directly toward camera (+sy, sx=0)
+        val relRad = atan2(sx.toDouble(), sy.toDouble()).toFloat()
+        val relDeg = (relRad * (180.0 / PI)).toFloat()
+
+        val octant = octantFromRelativeDeg(relDeg)
+
+        // Preserve legacy 4-way quadrant mapping (at default 45° yaw: SOUTH->FRONT, EAST->RIGHT, NORTH->BACK, WEST->LEFT)
+        val screenAngleDeg = (atan2(sy.toDouble(), sx.toDouble()) * (180.0 / PI)).toFloat()
         val quadrant = when {
-            angleDeg in 55f..160f -> ScreenFacing.FRONT
-            angleDeg in -25f..55f -> ScreenFacing.RIGHT
-            angleDeg in -125f..-25f -> ScreenFacing.BACK
+            screenAngleDeg in 55f..160f -> ScreenFacing.FRONT
+            screenAngleDeg in -25f..55f -> ScreenFacing.RIGHT
+            screenAngleDeg in -125f..-25f -> ScreenFacing.BACK
             else -> ScreenFacing.LEFT
         }
-        return ResolvedScreenFacing(quadrant = quadrant, screenDirX = sx, screenDirY = sy)
+
+        // Project canonical world light vector into screen space, gently stabilized to keep warm upper-left readability
+        val rawLx = IsometricLightingEngine.LIGHT_DIR_X * cosY - IsometricLightingEngine.LIGHT_DIR_Y * sinY
+        val rawLy = IsometricLightingEngine.LIGHT_DIR_X * sinY + IsometricLightingEngine.LIGHT_DIR_Y * cosY
+        val blendedLx = (rawLx * 0.55f - 0.55f).coerceIn(-0.92f, 0.92f)
+        val blendedLy = (rawLy * 0.35f - 0.65f).coerceIn(-0.95f, -0.25f)
+
+        return ResolvedScreenFacing(
+            quadrant = quadrant,
+            screenDirX = sx,
+            screenDirY = sy,
+            octant = octant,
+            relativeAngleRad = relRad,
+            lightScreenX = blendedLx,
+            lightScreenY = blendedLy
+        )
+    }
+
+    /**
+     * Resolves a direct camera-relative angle in degrees (`0° = FRONT`, `45° = FRONT_RIGHT`, `90° = RIGHT`,
+     * `135° = BACK_RIGHT`, `180° = BACK`, `-135° = BACK_LEFT`, `-90° = LEFT`, `-45° = FRONT_LEFT`).
+     * Used by interactive 8-directional paper-doll preview stages.
+     */
+    fun resolveForRelativeAngleDeg(relativeDeg: Float): ResolvedScreenFacing {
+        var norm = relativeDeg % 360f
+        if (norm > 180f) norm -= 360f
+        if (norm <= -180f) norm += 360f
+        val relRad = (norm * PI / 180.0).toFloat()
+        val sx = sin(relRad)
+        val sy = cos(relRad)
+        val octant = octantFromRelativeDeg(norm)
+        val quadrant = when {
+            abs(norm) <= 45f -> ScreenFacing.FRONT
+            norm in 45f..135f -> ScreenFacing.RIGHT
+            norm in -135f..-45f -> ScreenFacing.LEFT
+            else -> ScreenFacing.BACK
+        }
+        return ResolvedScreenFacing(
+            quadrant = quadrant,
+            screenDirX = sx,
+            screenDirY = sy,
+            octant = octant,
+            relativeAngleRad = relRad,
+            lightScreenX = -0.72f,
+            lightScreenY = -0.62f
+        )
+    }
+
+    fun octantFromRelativeDeg(relDeg: Float): ScreenOctant {
+        var norm = relDeg % 360f
+        if (norm > 180f) norm -= 360f
+        if (norm <= -180f) norm += 360f
+        return when {
+            norm in -22.5f..22.5f -> ScreenOctant.FRONT
+            norm in 22.5f..67.5f -> ScreenOctant.FRONT_RIGHT
+            norm in 67.5f..112.5f -> ScreenOctant.RIGHT
+            norm in 112.5f..157.5f -> ScreenOctant.BACK_RIGHT
+            norm in -67.5f..-22.5f -> ScreenOctant.FRONT_LEFT
+            norm in -112.5f..-67.5f -> ScreenOctant.LEFT
+            norm in -157.5f..-112.5f -> ScreenOctant.BACK_LEFT
+            else -> ScreenOctant.BACK
+        }
     }
 }
 

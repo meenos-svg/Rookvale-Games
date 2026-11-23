@@ -59,6 +59,7 @@ import com.example.ui.theme.ObsidianVoid
 import com.example.ui.theme.PoisonGreen
 import com.example.ui.theme.TargetRed
 import com.example.ui.theme.TorchGold
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.hypot
@@ -68,9 +69,9 @@ import kotlin.math.sin
 private sealed class DepthSortableItem(val depth: Float, val subOrder: Int) {
     class TallTile(depth: Float, val tx: Int, val ty: Int, val tile: TileType) : DepthSortableItem(depth, 1)
     class NpcItem(depth: Float, val npc: NpcSpot) : DepthSortableItem(depth, 2)
-    class MonsterItem(depth: Float, val monster: MonsterEntity, val fx: Float, val fy: Float) : DepthSortableItem(depth, 3)
-    class RemotePlayerItem(depth: Float, val player: RemotePlayerState, val fx: Float, val fy: Float, val moveFrac: Float) : DepthSortableItem(depth, 4)
-    class LocalPlayerItem(depth: Float, val fx: Float, val fy: Float, val moveFrac: Float) : DepthSortableItem(depth, 5)
+    class MonsterItem(depth: Float, val monster: MonsterEntity, val fx: Float, val fy: Float, val facingRad: Float) : DepthSortableItem(depth, 3)
+    class RemotePlayerItem(depth: Float, val player: RemotePlayerState, val fx: Float, val fy: Float, val moveFrac: Float, val facingRad: Float) : DepthSortableItem(depth, 4)
+    class LocalPlayerItem(depth: Float, val fx: Float, val fy: Float, val moveFrac: Float, val facingRad: Float) : DepthSortableItem(depth, 5)
 }
 
 /**
@@ -183,6 +184,10 @@ fun GameCanvasView(
     val reusableTileMatrix = remember { Matrix() }
     val remoteVisualPos = remember { HashMap<String, FloatArray>(16) }
     val activeRemoteIds = remember { HashSet<String>(16) }
+    val localFacingRad = remember { floatArrayOf(ScreenFacingResolver.directionToWorldRadians(Direction.SOUTH)) }
+    val remoteFacingRad = remember { HashMap<String, Float>(16) }
+    val monsterFacingRad = remember { HashMap<Int, Float>(64) }
+    val activeMonsterIds = remember { HashSet<Int>(64) }
     val lerpClockMs = remember { longArrayOf(SystemClock.uptimeMillis()) }
     val reusableTilePaint = remember {
         Paint().apply {
@@ -406,28 +411,53 @@ fun GameCanvasView(
                 }
             }
 
+            val localRegionId = normalizeRegionId(st.regionId)
+            val dtSec = ((now - lerpClockMs[0]).coerceIn(1L, 120L)) / 1000f
+            lerpClockMs[0] = now
+            val smoothAlpha = (1f - exp(-10.5f * dtSec)).coerceIn(0.08f, 1f)
+            val turnAlpha = (1f - exp(-14.0f * dtSec)).coerceIn(0.12f, 1f)
+
+            activeMonsterIds.clear()
             st.monsters.forEach { m ->
                 if (m.floor == st.floor && m.x in (bounds.minTx - 1)..(bounds.maxTx + 1) && m.y in (bounds.minTy - 1)..(bounds.maxTy + 1)) {
+                    activeMonsterIds.add(m.id)
                     val mFrac = ((now - m.lastMoveTimeMs).toFloat() / 220f).coerceIn(0f, 1f)
                     val mxF = m.lastMoveFromX + (m.x - m.lastMoveFromX) * mFrac
                     val myF = m.lastMoveFromY + (m.y - m.lastMoveFromY) * mFrac
+
+                    val dxToHero = camPlayerX - mxF
+                    val dyToHero = camPlayerY - myF
+                    val faceTarget = m.id == st.targetMonsterId || (m.targetPlayerId == null && hypot(dxToHero, dyToHero) <= 4.5f)
+                    val moveDx = if (mFrac < 0.99f) (m.x - m.lastMoveFromX).toFloat() else 0f
+                    val moveDy = if (mFrac < 0.99f) (m.y - m.lastMoveFromY).toFloat() else 0f
+                    val desiredRad = when {
+                        faceTarget -> ScreenFacingResolver.vectorToWorldRadians(dxToHero, dyToHero, m.facing)
+                        hypot(moveDx, moveDy) > 0.05f -> ScreenFacingResolver.vectorToWorldRadians(moveDx, moveDy, m.facing)
+                        else -> ScreenFacingResolver.directionToWorldRadians(m.facing)
+                    }
+                    val prevRad = monsterFacingRad[m.id]
+                    val smoothRad = if (prevRad == null) desiredRad else ScreenFacingResolver.shortestAngleLerp(prevRad, desiredRad, turnAlpha)
+                    monsterFacingRad[m.id] = smoothRad
+
                     depthQueue.add(
                         DepthSortableItem.MonsterItem(
                             depth = camera.depthOf(mxF, myF),
                             monster = m,
                             fx = mxF,
-                            fy = myF
+                            fy = myF,
+                            facingRad = smoothRad
                         )
                     )
                 }
             }
+            if (monsterFacingRad.size > activeMonsterIds.size) {
+                val mIter = monsterFacingRad.keys.iterator()
+                while (mIter.hasNext()) {
+                    if (mIter.next() !in activeMonsterIds) mIter.remove()
+                }
+            }
 
-            val localRegionId = normalizeRegionId(st.regionId)
-            val dtSec = ((now - lerpClockMs[0]).coerceIn(1L, 120L)) / 1000f
-            lerpClockMs[0] = now
-            val smoothAlpha = (1f - exp(-10.5f * dtSec)).coerceIn(0.08f, 1f)
             activeRemoteIds.clear()
-
             latestRemotePlayers.forEach { rp ->
                 if (rp.floor != st.floor || normalizeRegionId(rp.regionId) != localRegionId) return@forEach
                 activeRemoteIds.add(rp.playerId)
@@ -451,8 +481,19 @@ fun GameCanvasView(
                     visX = snappedX
                     visY = snappedY
                 }
-                val isGliding = hypot(targetX - visX, targetY - visY) > 0.03f
+                val glideDx = targetX - visX
+                val glideDy = targetY - visY
+                val isGliding = hypot(glideDx, glideDy) > 0.03f
                 val rpMoveFrac = if (isGliding) 0.5f else ((now - rp.lastMoveMs).toFloat() / 190f).coerceIn(0f, 1f)
+                val desiredRpRad = if (hypot(glideDx, glideDy) > 0.04f) {
+                    ScreenFacingResolver.vectorToWorldRadians(glideDx, glideDy, rp.direction)
+                } else {
+                    ScreenFacingResolver.directionToWorldRadians(rp.direction)
+                }
+                val prevRpRad = remoteFacingRad[rp.playerId]
+                val smoothRpRad = if (prevRpRad == null) desiredRpRad else ScreenFacingResolver.shortestAngleLerp(prevRpRad, desiredRpRad, turnAlpha)
+                remoteFacingRad[rp.playerId] = smoothRpRad
+
                 if (visX >= bounds.minTx - 2 && visX <= bounds.maxTx + 2 &&
                     visY >= bounds.minTy - 2 && visY <= bounds.maxTy + 2
                 ) {
@@ -462,7 +503,8 @@ fun GameCanvasView(
                             player = rp,
                             fx = visX,
                             fy = visY,
-                            moveFrac = rpMoveFrac
+                            moveFrac = rpMoveFrac,
+                            facingRad = smoothRpRad
                         )
                     )
                 }
@@ -470,16 +512,40 @@ fun GameCanvasView(
             if (remoteVisualPos.size > activeRemoteIds.size) {
                 val iter = remoteVisualPos.keys.iterator()
                 while (iter.hasNext()) {
-                    if (iter.next() !in activeRemoteIds) iter.remove()
+                    val key = iter.next()
+                    if (key !in activeRemoteIds) {
+                        iter.remove()
+                        remoteFacingRad.remove(key)
+                    }
                 }
             }
+
+            val lockedMonster = st.targetMonsterId?.let { tid ->
+                st.monsters.firstOrNull { it.id == tid && it.floor == st.floor }
+            }
+            val desiredLocalRad = when {
+                lockedMonster != null -> ScreenFacingResolver.vectorToWorldRadians(
+                    lockedMonster.x.toFloat() - camPlayerX,
+                    lockedMonster.y.toFloat() - camPlayerY,
+                    st.playerFacing
+                )
+                moveFrac < 0.99f && hypot((st.playerX - st.prevPlayerX).toFloat(), (st.playerY - st.prevPlayerY).toFloat()) > 0.05f ->
+                    ScreenFacingResolver.vectorToWorldRadians(
+                        (st.playerX - st.prevPlayerX).toFloat(),
+                        (st.playerY - st.prevPlayerY).toFloat(),
+                        st.playerFacing
+                    )
+                else -> ScreenFacingResolver.directionToWorldRadians(st.playerFacing)
+            }
+            localFacingRad[0] = ScreenFacingResolver.shortestAngleLerp(localFacingRad[0], desiredLocalRad, turnAlpha)
 
             depthQueue.add(
                 DepthSortableItem.LocalPlayerItem(
                     depth = camera.depthOf(camPlayerX, camPlayerY),
                     fx = camPlayerX,
                     fy = camPlayerY,
-                    moveFrac = moveFrac
+                    moveFrac = moveFrac,
+                    facingRad = localFacingRad[0]
                 )
             )
 
@@ -523,8 +589,7 @@ fun GameCanvasView(
                             m = item.monster,
                             fx = item.fx,
                             fy = item.fy,
-                            playerFx = camPlayerX,
-                            playerFy = camPlayerY,
+                            facingRad = item.facingRad,
                             state = st,
                             camera = camera,
                             path = reusablePath,
@@ -543,6 +608,7 @@ fun GameCanvasView(
                             fx = item.fx,
                             fy = item.fy,
                             moveFrac = item.moveFrac,
+                            facingRad = item.facingRad,
                             state = st,
                             camera = camera,
                             path = reusablePath,
@@ -561,6 +627,7 @@ fun GameCanvasView(
                             fx = item.fx,
                             fy = item.fy,
                             moveFrac = item.moveFrac,
+                            facingRad = item.facingRad,
                             camera = camera,
                             path = reusablePath,
                             hw = hw,
@@ -708,12 +775,16 @@ private fun DrawScope.drawIsometricNpc(
 ) {
     val c = camera.tileCenterToScreen(npc.x.toFloat(), npc.y.toFloat())
     val feetY = c.y + hh * 0.14f
-    if (quality.drawCastShadows) {
-        IsometricLightingEngine.drawAngledCastShadow(this, camera, c.x, feetY, radiusScale = 0.96f, heightTiles = 0.85f, quality = quality)
-    } else {
-        IsometricTileDrawer.drawContactShadow(this, c.x, feetY, hw, hh, quality = quality)
-    }
-    val heightPx = spritePx * 0.96f
+    VolumetricShading.drawGroundedEntityShadow(
+        scope = this,
+        camera = camera,
+        cx = c.x,
+        feetY = feetY,
+        radiusScale = 1.06f,
+        heightTiles = 0.96f,
+        quality = quality
+    )
+    val heightPx = spritePx * VolumetricShading.HEROIC_HUMANOID_SCALE
     val resolvedFacing = ScreenFacingResolver.resolve(Direction.SOUTH, camera.yawDeg)
     ArticulatedHumanoidRenderer.drawNpc(
         scope = this,
@@ -726,7 +797,7 @@ private fun DrawScope.drawIsometricNpc(
         quality = quality,
         path = path
     )
-    val labelY = feetY - heightPx - 6f
+    val labelY = feetY - heightPx - 8f
     val prevColor = labelPaint.color
     if (npc.role == NpcRole.ORACLE) {
         labelPaint.color = android.graphics.Color.parseColor("#FFD447")
@@ -742,8 +813,7 @@ private fun DrawScope.drawIsometricMonster(
     m: MonsterEntity,
     fx: Float,
     fy: Float,
-    playerFx: Float,
-    playerFy: Float,
+    facingRad: Float,
     state: GameWorldState,
     camera: IsometricCamera,
     path: Path,
@@ -759,43 +829,39 @@ private fun DrawScope.drawIsometricMonster(
     val feetY = c.y + hh * 0.14f
     val isBoss = m.type.isBoss
     val heightScale = OrganicMonsterRenderer.heightScaleFor(m.type)
-    val heightPx = spritePx * 0.94f * heightScale
+    val heightPx = spritePx * VolumetricShading.HEROIC_MONSTER_SCALE * heightScale
+    val u = heightPx / 46f
 
     if (m.id == state.targetMonsterId) {
         val pulseAlpha = if (state.autoFollowTarget && ((now / 220L) % 2L) == 0L) 1.0f else 0.78f
         IsometricTileDrawer.drawRotatedQuad(
-            this, path, camera, c.x, c.y, fracU = 0.96f, fracV = 0.96f,
+            this, path, camera, c.x, c.y, fracU = 0.98f, fracV = 0.98f,
             fillColor = TargetRed.copy(alpha = 0.18f),
             strokeColor = TargetRed.copy(alpha = pulseAlpha),
             strokeWidth = if (state.autoFollowTarget) 4.8f else 3.8f
         )
     }
 
-    if (quality.drawCastShadows) {
-        IsometricLightingEngine.drawAngledCastShadow(
-            this, camera, c.x, feetY,
-            radiusScale = (0.94f * heightScale).coerceIn(0.65f, 1.38f),
-            heightTiles = if (isBoss) 1.15f else 0.80f * heightScale,
-            quality = quality
-        )
-    } else {
-        IsometricTileDrawer.drawContactShadow(this, c.x, feetY, hw, hh, scale = (0.94f * heightScale).coerceIn(0.65f, 1.35f), quality = quality)
-    }
-
     val moveAge = now - m.lastMoveTimeMs
     val walkPhase = if (moveAge in 0L..280L) ((now + m.id * 97L) / 70f) else 0f
     val attackAge = now - m.lastAttackTimeMs
     val lungeProgress = if (attackAge in 0L..320L) (attackAge.toFloat() / 320f) else 0f
+    val lungeEase = if (lungeProgress in 0.001f..0.999f) sin(lungeProgress * PI.toFloat()) else 0f
+    val hopLift = if (abs(walkPhase) > 0.01f) abs(sin(walkPhase)) * 0.42f else 0f
 
-    // Face local player smoothly when aggroed or nearby in combat
-    val dxToHero = playerFx - fx
-    val dyToHero = playerFy - fy
-    val faceTarget = m.id == state.targetMonsterId || (m.targetPlayerId == null && hypot(dxToHero, dyToHero) <= 4.5f)
-    val resolvedFacing = ScreenFacingResolver.resolve(
-        worldFacing = m.facing,
-        cameraYawDeg = camera.yawDeg,
-        targetDeltaX = if (faceTarget) dxToHero else 0f,
-        targetDeltaY = if (faceTarget) dyToHero else 0f
+    val resolvedFacing = ScreenFacingResolver.resolveFromRadians(facingRad, camera.yawDeg)
+
+    VolumetricShading.drawGroundedEntityShadow(
+        scope = this,
+        camera = camera,
+        cx = c.x,
+        feetY = feetY,
+        radiusScale = (1.02f * heightScale).coerceIn(0.72f, 1.48f),
+        heightTiles = if (isBoss) 1.28f else 0.92f * heightScale,
+        jumpLiftRatio = (hopLift + lungeEase * 0.25f).coerceIn(0f, 1f),
+        lungeShiftX = resolvedFacing.forwardScreenX * lungeEase * u * 6.0f,
+        lungeShiftY = resolvedFacing.forwardDepth * lungeEase * u * 2.8f,
+        quality = quality
     )
 
     OrganicMonsterRenderer.drawMonster(
@@ -858,6 +924,7 @@ private fun DrawScope.drawIsometricRemotePlayer(
     fx: Float,
     fy: Float,
     moveFrac: Float,
+    facingRad: Float,
     state: GameWorldState,
     camera: IsometricCamera,
     path: Path,
@@ -875,34 +942,45 @@ private fun DrawScope.drawIsometricRemotePlayer(
     if (rp.playerId == state.inspectedPlayerId && now < state.inspectedPlayerUntilMs) {
         val pulseAlpha = if (((now / 180L) % 2L) == 0L) 0.92f else 0.52f
         IsometricTileDrawer.drawRotatedQuad(
-            this, path, camera, c.x, c.y, fracU = 0.92f, fracV = 0.92f,
+            this, path, camera, c.x, c.y, fracU = 0.95f, fracV = 0.95f,
             fillColor = Color(0xFF47D7FF).copy(alpha = 0.16f),
             strokeColor = Color(0xFF47D7FF).copy(alpha = pulseAlpha),
             strokeWidth = 4f
         )
     }
 
-    if (quality.drawCastShadows) {
-        IsometricLightingEngine.drawAngledCastShadow(this, camera, c.x, feetY, radiusScale = 1.0f, heightTiles = 0.88f, quality = quality)
-    } else {
-        IsometricTileDrawer.drawContactShadow(this, c.x, feetY, hw, hh, quality = quality)
-    }
-
-    val haloCenter = Offset(c.x, c.y - spritePx * 0.35f)
-    if (rp.isPoisoned) drawCircle(PoisonGreen.copy(alpha = 0.28f), hw * 0.65f, haloCenter)
-    if (rp.isBurning) drawCircle(FireOrange.copy(alpha = 0.34f), hw * 0.68f, haloCenter)
-
+    val heightPx = spritePx * VolumetricShading.HEROIC_HUMANOID_SCALE
+    val u = heightPx / 46f
+    val walkPhase = if (moveFrac < 0.99f) (now / 62f) else 0f
     val actionAge = now - rp.lastActionMs
     val isAttackAction = rp.actionState == PlayerActionState.ATTACKING || rp.actionState == PlayerActionState.CASTING
     val attackProgress = if (isAttackAction && actionAge in 0L..360L) (actionAge.toFloat() / 360f) else 0f
+    val atkEase = if (attackProgress in 0.001f..0.999f) sin(attackProgress * PI.toFloat()) else 0f
+    val strideLift = if (abs(walkPhase) > 0.01f) abs(sin(walkPhase * PI.toFloat() * 2f)) * 0.35f else 0f
+    val resolvedFacing = ScreenFacingResolver.resolveFromRadians(facingRad, camera.yawDeg)
+
+    VolumetricShading.drawGroundedEntityShadow(
+        scope = this,
+        camera = camera,
+        cx = c.x,
+        feetY = feetY,
+        radiusScale = 1.08f,
+        heightTiles = 1.00f,
+        jumpLiftRatio = (strideLift + atkEase * 0.22f).coerceIn(0f, 1f),
+        lungeShiftX = resolvedFacing.forwardScreenX * atkEase * 4.2f * u,
+        lungeShiftY = resolvedFacing.forwardDepth * atkEase * 2.0f * u,
+        quality = quality
+    )
+
+    val haloCenter = Offset(c.x, feetY - heightPx * 0.42f)
+    if (rp.isPoisoned) drawCircle(PoisonGreen.copy(alpha = 0.28f), hw * 0.68f, haloCenter)
+    if (rp.isBurning) drawCircle(FireOrange.copy(alpha = 0.34f), hw * 0.72f, haloCenter)
+
     if (actionAge in 0L..420L && rp.actionState == PlayerActionState.HEALING) {
         val aFrac = 1f - (actionAge.toFloat() / 420f)
-        drawCircle(Color(0xFF4CE678).copy(alpha = 0.72f * aFrac), hw * (0.42f + 0.24f * (1f - aFrac)), haloCenter, style = Stroke(3.5f))
+        drawCircle(Color(0xFF4CE678).copy(alpha = 0.72f * aFrac), hw * (0.45f + 0.26f * (1f - aFrac)), haloCenter, style = Stroke(3.5f))
     }
 
-    val heightPx = spritePx * 0.96f
-    val walkPhase = if (moveFrac < 0.99f) (now / 62f) else 0f
-    val resolvedFacing = ScreenFacingResolver.resolve(rp.direction, camera.yawDeg)
     val appearance = PaperDollAppearance.fromRemotePlayer(rp)
 
     ArticulatedHumanoidRenderer.drawPlayer(
@@ -954,6 +1032,7 @@ private fun DrawScope.drawIsometricLocalPlayer(
     fx: Float,
     fy: Float,
     moveFrac: Float,
+    facingRad: Float,
     camera: IsometricCamera,
     path: Path,
     hw: Float,
@@ -966,34 +1045,32 @@ private fun DrawScope.drawIsometricLocalPlayer(
 ) {
     val c = camera.tileCenterToScreen(fx, fy)
     val feetY = c.y + hh * 0.14f
-
-    if (quality.drawCastShadows) {
-        IsometricLightingEngine.drawAngledCastShadow(this, camera, c.x, feetY, radiusScale = 1.05f, heightTiles = 0.92f, quality = quality)
-    } else {
-        IsometricTileDrawer.drawContactShadow(this, c.x, feetY, hw, hh, scale = 1.05f, quality = quality)
-    }
-
-    val auraCenter = Offset(c.x, c.y - spritePx * 0.35f)
-    if (state.poisonTicks > 0) drawCircle(PoisonGreen.copy(alpha = 0.28f), hw * 0.68f, auraCenter)
-    if (state.fireTicks > 0) drawCircle(FireOrange.copy(alpha = 0.34f), hw * 0.72f, auraCenter)
-
-    val targetMonster = state.targetMonsterId?.let { tid ->
-        state.monsters.firstOrNull { it.id == tid && it.floor == state.floor }
-    }
-    val targetDx = if (targetMonster != null) targetMonster.x.toFloat() - fx else 0f
-    val targetDy = if (targetMonster != null) targetMonster.y.toFloat() - fy else 0f
-
-    val resolvedFacing = ScreenFacingResolver.resolve(
-        worldFacing = state.playerFacing,
-        cameraYawDeg = camera.yawDeg,
-        targetDeltaX = targetDx,
-        targetDeltaY = targetDy
-    )
+    val heightPx = spritePx * VolumetricShading.HEROIC_HUMANOID_SCALE
+    val u = heightPx / 46f
 
     val walkPhase = if (moveFrac < 0.99f) (now / 62f) else 0f
     val attackAge = now - state.lastPlayerAttackMs
     val attackProgress = if (attackAge in 0L..340L) (attackAge.toFloat() / 340f) else 0f
-    val heightPx = spritePx * 0.98f
+    val atkEase = if (attackProgress in 0.001f..0.999f) sin(attackProgress * PI.toFloat()) else 0f
+    val strideLift = if (abs(walkPhase) > 0.01f) abs(sin(walkPhase * PI.toFloat() * 2f)) * 0.35f else 0f
+    val resolvedFacing = ScreenFacingResolver.resolveFromRadians(facingRad, camera.yawDeg)
+
+    VolumetricShading.drawGroundedEntityShadow(
+        scope = this,
+        camera = camera,
+        cx = c.x,
+        feetY = feetY,
+        radiusScale = 1.12f,
+        heightTiles = 1.04f,
+        jumpLiftRatio = (strideLift + atkEase * 0.22f).coerceIn(0f, 1f),
+        lungeShiftX = resolvedFacing.forwardScreenX * atkEase * 4.2f * u,
+        lungeShiftY = resolvedFacing.forwardDepth * atkEase * 2.0f * u,
+        quality = quality
+    )
+
+    val auraCenter = Offset(c.x, feetY - heightPx * 0.42f)
+    if (state.poisonTicks > 0) drawCircle(PoisonGreen.copy(alpha = 0.28f), hw * 0.72f, auraCenter)
+    if (state.fireTicks > 0) drawCircle(FireOrange.copy(alpha = 0.34f), hw * 0.76f, auraCenter)
 
     val appearance = PaperDollAppearance.fromEquipment(
         vocation = state.vocation,

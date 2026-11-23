@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -10,22 +9,24 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.withTransform
 import com.example.game.model.GraphicsQuality
 import com.example.game.model.MonsterType
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Crisp dark-ink-outlined, directionally shaded organic vector renderer for all 17 Rookvale
- * MonsterType species. Replaces blocky pixel rectangles with multi-part articulated creatures
- * featuring idle breathing, leg/wing/tail gait cycles, attack lunges, and quality-scaled effects.
+ * Volumetric 2.5D/3D 8-directional isometric renderer for all 17 Rookvale [MonsterType] species.
+ * Projects entity-local 3D skeletons `(localR, localF, localUp)` using `entityFacing - cameraYaw`,
+ * dynamically depth-sorts limbs, wings, tails, weapons, and heads across all 8 octants, and shades
+ * every body volume with warm top-left sunlight highlights, cool twilight core shadows, subtle rim
+ * lights (High/HD), and crisp `#14100E` dark ink outlines.
  */
 object OrganicMonsterRenderer {
 
-    private val INK = Color(0xFF14100E)
+    private val INK = VolumetricShading.INK
 
     fun heightScaleFor(type: MonsterType): Float = when (type) {
         MonsterType.WILD_RABBIT -> 0.72f
@@ -42,6 +43,20 @@ object OrganicMonsterRenderer {
         else -> 1.0f
     }
 
+    /**
+     * Pure deterministic 3D leg draw-order helper for quadrupeds (back-to-front by camera depth).
+     * Returns leg IDs from `"BL"`, `"BR"`, `"FL"`, `"FR"`.
+     */
+    fun computeQuadrupedLegOrder(facing: ResolvedScreenFacing): List<String> {
+        val entries = listOf(
+            "BL" to facing.depthOf(-4.2f, -6.5f),
+            "BR" to facing.depthOf(+4.2f, -6.5f),
+            "FL" to facing.depthOf(-4.2f, +5.5f),
+            "FR" to facing.depthOf(+4.2f, +5.5f)
+        )
+        return entries.sortedBy { it.second }.map { it.first }
+    }
+
     fun drawMonster(
         scope: DrawScope,
         cx: Float,
@@ -50,1014 +65,1342 @@ object OrganicMonsterRenderer {
         type: MonsterType,
         facing: ResolvedScreenFacing,
         walkPhase: Float,
-        lungeProgress: Float, // 0f = idle, (0f..1f) = forward attack lunge
+        lungeProgress: Float, // 0f = idle, (0f..1f) = forward 3D attack lunge
         animSeed: Int,
         nowMs: Long,
         quality: GraphicsQuality,
         path: Path
     ) = with(scope) {
         val u = heightPx / 46f
-        val outlineW = (u * 1.12f).coerceIn(1.1f, 2.7f)
+        val ow = (u * 1.10f).coerceIn(1.1f, 2.7f)
+        val useSpec = quality != GraphicsQuality.LOW
+        val useRim = quality == GraphicsQuality.HIGH || quality == GraphicsQuality.HD
         val seedRad = (animSeed % 360) * 0.01745f
         val timeSec = nowMs / 1000f
-        val breath = sin(timeSec * 3.1f + seedRad) * u * 0.7f
-        val stride = sin(walkPhase)
-        val bob = abs(stride) * u * 1.35f
-        val lungeImpulse = if (lungeProgress > 0.001f && lungeProgress < 0.999f) {
+        val breath = sin(timeSec * 3.1f + seedRad) * 0.72f
+        val isMoving = abs(walkPhase) > 0.01f
+        val stride = if (isMoving) sin(walkPhase) else 0f
+        val bobUp = if (isMoving) abs(stride) * 1.5f else 0f
+        val lunge = if (lungeProgress > 0.001f && lungeProgress < 0.999f) {
             sin(lungeProgress * PI.toFloat())
         } else 0f
 
-        val lungeX = facing.screenDirX * lungeImpulse * u * 6.5f
-        val lungeY = facing.screenDirY * lungeImpulse * u * 3.2f
-        val dirSign = when (facing.quadrant) {
-            ScreenFacing.LEFT -> -1f
-            ScreenFacing.RIGHT -> 1f
-            else -> if (facing.screenDirX < -0.15f) -1f else 1f
-        }
-        val baseX = cx + lungeX
-        val baseY = feetY + lungeY - bob
+        val ox = cx + facing.forwardScreenX * lunge * u * 6.0f
+        val oy = feetY + facing.forwardDepth * lunge * u * 2.8f
 
         when (type) {
-            MonsterType.WILD_RABBIT -> drawWildRabbit(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, quality, path)
-            MonsterType.CAVE_RAT -> drawCaveRat(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, quality, path)
-            MonsterType.YOUNG_SNAKE -> drawYoungSnake(baseX, baseY, u, outlineW, dirSign, timeSec + seedRad, lungeImpulse, quality, path)
-            MonsterType.CRAG_WOLF -> drawCragWolf(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, quality, path)
-            MonsterType.POISON_SPIDER -> drawPoisonSpider(baseX, baseY, u, outlineW, stride, timeSec + seedRad, lungeImpulse, quality, path)
-            MonsterType.SWAMP_TROLL -> drawSwampTroll(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, quality, path)
-            MonsterType.SKELETON -> drawSkeleton(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, quality, path)
-            MonsterType.GOBLIN_SCOUT -> drawGoblinScout(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, quality, path)
-            MonsterType.MINOTAUR -> drawMinotaur(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, quality, path)
-            MonsterType.ORC_WARRIOR -> drawOrcWarrior(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, quality, path)
-            MonsterType.GHOUL -> drawGhoul(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, timeSec + seedRad, quality, path)
-            MonsterType.FIRE_DEVIL -> drawFireDevil(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, timeSec + seedRad, quality, path)
-            MonsterType.CYCLOPS -> drawCyclops(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, quality, path)
-            MonsterType.DRAGON_HATCHLING -> drawDragon(baseX, baseY, u, outlineW, dirSign, stride, timeSec + seedRad, lungeImpulse, isElder = false, quality, path)
-            MonsterType.NECROMANCER -> drawNecromancer(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, timeSec + seedRad, quality, path)
-            MonsterType.DEMON_LORD -> drawDemonLord(baseX, baseY, u, outlineW, dirSign, stride, breath, lungeImpulse, timeSec + seedRad, quality, path)
-            MonsterType.ELDER_DRAGON -> drawDragon(baseX, baseY, u, outlineW, dirSign, stride, timeSec + seedRad, lungeImpulse, isElder = true, quality, path)
+            MonsterType.WILD_RABBIT -> drawQuadruped(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge,
+                style = QuadrupedStyle.RABBIT, useSpec = useSpec, useRim = useRim, path = path
+            )
+            MonsterType.CAVE_RAT -> drawQuadruped(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge,
+                style = QuadrupedStyle.RAT, useSpec = useSpec, useRim = useRim, path = path
+            )
+            MonsterType.CRAG_WOLF -> drawQuadruped(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge,
+                style = QuadrupedStyle.WOLF, useSpec = useSpec, useRim = useRim, path = path
+            )
+            MonsterType.YOUNG_SNAKE -> drawYoungSnake(
+                ox, oy, u, ow, facing, timeSec + seedRad, lunge, useSpec, useRim, path
+            )
+            MonsterType.POISON_SPIDER -> drawPoisonSpider(
+                ox, oy, u, ow, facing, walkPhase, timeSec + seedRad, lunge, useSpec, useRim, path
+            )
+            MonsterType.DRAGON_HATCHLING -> drawDragon3D(
+                ox, oy, u, ow, facing, stride, bobUp, timeSec + seedRad, lunge,
+                isElder = false, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.ELDER_DRAGON -> drawDragon3D(
+                ox, oy, u, ow, facing, stride, bobUp, timeSec + seedRad, lunge,
+                isElder = true, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.SWAMP_TROLL -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.SWAMP_TROLL, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.SKELETON -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.SKELETON, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.GOBLIN_SCOUT -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.GOBLIN_SCOUT, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.MINOTAUR -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.MINOTAUR, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.ORC_WARRIOR -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.ORC_WARRIOR, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.GHOUL -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.GHOUL, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.FIRE_DEVIL -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.FIRE_DEVIL, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.CYCLOPS -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.CYCLOPS, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.NECROMANCER -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.NECROMANCER, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.DEMON_LORD -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.DEMON_LORD, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
         }
 
-        // Crisp claw/fang slash arc on lunge for High/HD quality
-        if (lungeImpulse > 0.2f && (quality == GraphicsQuality.HIGH || quality == GraphicsQuality.HD)) {
-            val slashAlpha = (lungeImpulse * 0.72f).coerceIn(0f, 0.78f)
+        // Directional 3D attack slash arc on High/HD quality
+        if (lunge > 0.20f && (quality == GraphicsQuality.HIGH || quality == GraphicsQuality.HD)) {
+            val slashAlpha = (lunge * 0.76f).coerceIn(0f, 0.80f)
             val slashColor = when (type) {
                 MonsterType.FIRE_DEVIL, MonsterType.DEMON_LORD, MonsterType.ELDER_DRAGON, MonsterType.DRAGON_HATCHLING -> Color(0xFFFF7A26)
                 MonsterType.POISON_SPIDER, MonsterType.YOUNG_SNAKE, MonsterType.SWAMP_TROLL -> Color(0xFF7BFF33)
                 MonsterType.NECROMANCER, MonsterType.GHOUL -> Color(0xFFC07BFF)
                 else -> Color(0xFFFFE7B0)
             }
-            val arcCenter = Offset(baseX + dirSign * u * 10f, baseY - u * 18f)
+            val arcCenter = facing.project(ox, oy, u, 0f, 10.5f, 18f)
+            val aimDeg = (atan2(facing.forwardDepth.toDouble() * 0.55, facing.forwardScreenX.toDouble()) * 180.0 / PI).toFloat()
+            val arcR = u * 9.5f
             drawArc(
                 color = slashColor.copy(alpha = slashAlpha),
-                startAngle = if (dirSign > 0f) -60f else 120f,
-                sweepAngle = 115f,
+                startAngle = aimDeg - 58f,
+                sweepAngle = 116f,
                 useCenter = false,
-                topLeft = Offset(arcCenter.x - u * 9f, arcCenter.y - u * 9f),
-                size = Size(u * 18f, u * 18f),
+                topLeft = Offset(arcCenter.x - arcR, arcCenter.y - arcR * 0.78f),
+                size = Size(arcR * 2f, arcR * 1.56f),
                 style = Stroke(width = u * 2.4f, cap = StrokeCap.Round)
             )
         }
     }
 
     // -------------------------------------------------------------------------
-    // 1. WILD RABBIT — Soft rounded fur haunches, fluffy tail, long ears, hop
+    // 1. VOLUMETRIC 3D QUADRUPEDS (Wild Rabbit, Cave Rat, Crag Wolf)
     // -------------------------------------------------------------------------
-    private fun DrawScope.drawWildRabbit(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, quality: GraphicsQuality, path: Path
+
+    private enum class QuadrupedStyle { RABBIT, RAT, WOLF }
+
+    private fun DrawScope.drawQuadruped(
+        ox: Float,
+        oy: Float,
+        u: Float,
+        ow: Float,
+        facing: ResolvedScreenFacing,
+        stride: Float,
+        bobUp: Float,
+        breath: Float,
+        lunge: Float,
+        style: QuadrupedStyle,
+        useSpec: Boolean,
+        useRim: Boolean,
+        path: Path
     ) {
-        val furMain = Color(0xFFC9B093)
-        val furHi = Color(0xFFEBD9C3)
-        val furSh = Color(0xFF8B7157)
-        val hopY = abs(stride) * u * 3.5f + lunge * u * 2.5f
-        val y = feetY - hopY
-
-        // Fluffy white cotton tail
-        drawShadedCircle(cx - dir * u * 10.5f, y - u * 10f, u * 4.2f, Color(0xFFF6F1E8), Color.White, Color(0xFFC9C1B4), ow)
-
-        // Muscular rounded haunch
-        drawShadedOval(cx - dir * u * 4.5f, y - u * 10.5f, u * 13.5f, u * 11.5f, furMain, furHi, furSh, ow)
-        // Hind paw
-        drawShadedOval(cx - dir * u * 5.5f - stride * u * 2.5f, y - u * 3.5f, u * 8.5f, u * 4.2f, furHi, Color(0xFFF6ECDD), furSh, ow)
-
-        // Torso
-        drawShadedOval(cx + dir * u * 1.5f, y - u * 12.5f + breath * 0.5f, u * 14f, u * 11f, furMain, furHi, furSh, ow)
-        // Front paw
-        drawShadedOval(cx + dir * u * 6.5f + stride * u * 2.5f, y - u * 4f, u * 5.2f, u * 3.8f, furHi, Color(0xFFF6ECDD), furSh, ow)
-
-        // Long ears (back ear then front ear)
-        val earTwitch = sin(stride * 2f) * 6f
-        val headX = cx + dir * u * 7.5f
-        val headY = y - u * 19f + breath * 0.5f
-        withTransform({ rotate(dir * (-18f + earTwitch), Offset(headX - dir * u * 2f, headY - u * 3f)) }) {
-            drawShadedOval(headX - dir * u * 2.5f, headY - u * 11f, u * 4.6f, u * 12.5f, furSh, furMain, furSh, ow)
-        }
-        withTransform({ rotate(dir * (-6f - earTwitch * 0.6f), Offset(headX, headY - u * 3f)) }) {
-            drawShadedOval(headX - dir * u * 0.5f, headY - u * 11.5f, u * 4.8f, u * 13f, furMain, furHi, furSh, ow)
-            drawOval(Color(0xFFE6A2A8), Offset(headX - dir * u * 0.5f - u * 1.2f, headY - u * 15.5f), Size(u * 2.4f, u * 8.5f))
+        val (bodyMain, bodyHi, bodySh, bellyColor, accentColor) = when (style) {
+            QuadrupedStyle.RABBIT -> listOf(
+                Color(0xFFC8A682), Color(0xFFEAD4B7), Color(0xFF836447), Color(0xFFF6EFE6), Color(0xFFE8A4A8)
+            )
+            QuadrupedStyle.RAT -> listOf(
+                Color(0xFF6B625D), Color(0xFF948A84), Color(0xFF3E3734), Color(0xFF968780), Color(0xFFD68E92)
+            )
+            QuadrupedStyle.WOLF -> listOf(
+                Color(0xFF6B7482), Color(0xFFA0ACBD), Color(0xFF3A414E), Color(0xFFC2C9D4), Color(0xFFFFB733)
+            )
         }
 
-        // Head
-        drawShadedCircle(headX, headY, u * 6.5f, furMain, furHi, furSh, ow)
-        // Bright dark eye + catchlight + pink nose
-        drawCircle(INK, u * 1.35f, Offset(headX + dir * u * 2.5f, headY - u * 1.2f))
-        if (quality != GraphicsQuality.LOW) {
-            drawCircle(Color.White, u * 0.55f, Offset(headX + dir * u * 2.2f, headY - u * 1.6f))
+        val hopLift = when (style) {
+            QuadrupedStyle.RABBIT -> bobUp * 2.2f + lunge * 3.8f
+            QuadrupedStyle.RAT -> bobUp * 0.9f + lunge * 1.6f
+            QuadrupedStyle.WOLF -> bobUp * 1.3f + lunge * 2.4f
         }
-        drawCircle(Color(0xFFE58C96), u * 1.2f, Offset(headX + dir * u * 5.8f, headY + u * 0.6f))
-    }
+        val bodyUp = when (style) {
+            QuadrupedStyle.RABBIT -> 9.2f + hopLift + breath * 0.45f
+            QuadrupedStyle.RAT -> 7.2f + hopLift + breath * 0.4f
+            QuadrupedStyle.WOLF -> 13.8f + hopLift + breath * 0.55f
+        }
 
-    // -------------------------------------------------------------------------
-    // 2. CAVE RAT — Hunched furry rodent, curving pink tail, snout & whiskers
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawCaveRat(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, quality: GraphicsQuality, path: Path
-    ) {
-        val furMain = Color(0xFF7D6B5D)
-        val furHi = Color(0xFFA99585)
-        val furSh = Color(0xFF473B33)
-        val tailPink = Color(0xFFD5989B)
+        val legSpreadR = when (style) {
+            QuadrupedStyle.RABBIT -> 3.8f
+            QuadrupedStyle.RAT -> 3.6f
+            QuadrupedStyle.WOLF -> 4.6f
+        }
+        val backF = when (style) {
+            QuadrupedStyle.RABBIT -> -5.5f
+            QuadrupedStyle.RAT -> -6.5f
+            QuadrupedStyle.WOLF -> -7.5f
+        }
+        val frontF = when (style) {
+            QuadrupedStyle.RABBIT -> +4.2f
+            QuadrupedStyle.RAT -> +5.2f
+            QuadrupedStyle.WOLF -> +6.8f
+        }
 
-        // Curving pink tail
-        path.reset()
-        path.moveTo(cx - dir * u * 9f, feetY - u * 7f)
-        path.cubicTo(
-            cx - dir * u * 17f, feetY - u * 14f,
-            cx - dir * u * 19f, feetY - u * 3f,
-            cx - dir * u * 13f, feetY - u * 1.5f + stride * u * 1.5f
+        // 8 sortable 3D anatomical parts: 0=TAIL, 1=BL, 2=BR, 3=FL, 4=FR, 5=HAUNCH, 6=CHEST, 7=HEAD
+        val order = IntArray(8) { it }
+        val depths = floatArrayOf(
+            facing.depthOf(0f, backF - 6.0f),                                   // 0 TAIL
+            facing.depthOf(-legSpreadR, backF - stride * 2.5f) - 0.3f,          // 1 BL
+            facing.depthOf(+legSpreadR, backF + stride * 2.5f) - 0.3f,          // 2 BR
+            facing.depthOf(-legSpreadR, frontF + stride * 3.0f) - 0.2f,         // 3 FL
+            facing.depthOf(+legSpreadR, frontF - stride * 3.0f) - 0.2f,         // 4 FR
+            facing.depthOf(0f, backF * 0.55f),                                  // 5 HAUNCH
+            facing.depthOf(0f, frontF * 0.55f),                                 // 6 CHEST
+            facing.depthOf(0f, frontF + 4.8f) + 0.5f                            // 7 HEAD
         )
-        drawPath(path, INK, style = Stroke(width = u * 3.4f, cap = StrokeCap.Round))
-        drawPath(path, tailPink, style = Stroke(width = u * 1.8f, cap = StrokeCap.Round))
+        sortIndices(order, depths)
 
-        // Scurrying paws
-        drawShadedOval(cx - dir * u * 5f - stride * u * 2.2f, feetY - u * 2.8f, u * 6f, u * 3.2f, tailPink, Color(0xFFEEC1C3), Color(0xFF9F686B), ow)
-        drawShadedOval(cx + dir * u * 4.5f + stride * u * 2.2f, feetY - u * 2.8f, u * 5.5f, u * 3f, tailPink, Color(0xFFEEC1C3), Color(0xFF9F686B), ow)
+        for (i in 0 until 8) {
+            when (order[i]) {
+                0 -> { // TAIL
+                    val tailBase = facing.project(ox, oy, u, 0f, backF - 2.4f, bodyUp + 1.0f)
+                    when (style) {
+                        QuadrupedStyle.RABBIT -> {
+                            val tailPos = facing.project(ox, oy, u, 0f, backF - 4.5f, bodyUp + 1.6f)
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, tailPos.x, tailPos.y, u * 3.4f, u * 3.0f,
+                                main = Color(0xFFF6F1E9), highlight = Color.White, shadow = Color(0xFFBEB5A8),
+                                outlineW = ow * 0.85f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                                useSpecular = useSpec
+                            )
+                        }
+                        QuadrupedStyle.RAT -> {
+                            val wag = sin(stride * 2.2f + breath * 2f) * 3.2f
+                            val mid = facing.project(ox, oy, u, wag, backF - 9.5f, 3.2f)
+                            val tip = facing.project(ox, oy, u, -wag * 0.8f, backF - 15.5f, 4.6f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, tailBase, mid, u * 1.35f, u * 0.9f,
+                                main = accentColor, outlineW = ow * 0.72f, lightX = facing.lightScreenX, path = path
+                            )
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, mid, tip, u * 0.88f, u * 0.45f,
+                                main = accentColor, outlineW = ow * 0.65f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                        QuadrupedStyle.WOLF -> {
+                            val wag = sin(breath * 2.4f) * 2.6f
+                            val mid = facing.project(ox, oy, u, wag, backF - 6.8f, bodyUp - 1.2f)
+                            val tip = facing.project(ox, oy, u, wag * 1.4f, backF - 11.8f, bodyUp + 2.4f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, tailBase, mid, u * 2.6f, u * 2.2f,
+                                main = bodySh, highlight = bodyMain, shadow = VolumetricShading.coolShadow(bodySh, 0.4f),
+                                outlineW = ow * 0.88f, lightX = facing.lightScreenX, path = path
+                            )
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, mid, tip, u * 2.1f, u * 1.1f,
+                                main = bodyHi, highlight = Color(0xFFDDE4EE), shadow = bodySh,
+                                outlineW = ow * 0.82f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                    }
+                }
+                1, 2, 3, 4 -> { // 4 ARTICULATED LEGS
+                    val isBack = order[i] == 1 || order[i] == 2
+                    val isRight = order[i] == 2 || order[i] == 4
+                    val rSide = if (isRight) legSpreadR else -legSpreadR
+                    val fBase = if (isBack) backF else frontF
+                    val legPhase = if ((isBack && isRight) || (!isBack && !isRight)) stride else -stride
+                    val stepF = fBase + legPhase * (if (style == QuadrupedStyle.WOLF) 4.4f else 2.8f)
+                    val liftUp = (if (legPhase > 0f) legPhase * 2.2f else 0f) + if (style == QuadrupedStyle.RABBIT) hopLift * 0.35f else 0f
+                    val hip = facing.project(ox, oy, u, rSide * 0.82f, fBase, bodyUp - 1.5f)
+                    val knee = facing.project(ox, oy, u, rSide * 0.95f, (fBase + stepF) * 0.5f + if (isBack) -1.2f else 0.8f, bodyUp * 0.46f + liftUp * 0.6f)
+                    val paw = facing.project(ox, oy, u, rSide, stepF, 1.0f + liftUp)
 
-        // Hunched body
-        drawShadedOval(cx - dir * u * 1f, feetY - u * 9.5f + breath * 0.4f, u * 18f, u * 11.5f, furMain, furHi, furSh, ow)
+                    if (liftUp < 1.2f) {
+                        VolumetricShading.drawFootContactDot(this, paw, u * 2.2f, u * 1.2f)
+                    }
+                    val legMain = if (style == QuadrupedStyle.RAT) accentColor else bodyMain
+                    val legR = when (style) {
+                        QuadrupedStyle.RABBIT -> if (isBack) u * 2.6f else u * 1.8f
+                        QuadrupedStyle.RAT -> u * 1.45f
+                        QuadrupedStyle.WOLF -> if (isBack) u * 2.5f else u * 2.2f
+                    }
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, hip, knee, legR, legR * 0.78f,
+                        main = bodyMain, highlight = bodyHi, shadow = bodySh,
+                        outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                    )
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, knee, paw, legR * 0.76f, legR * 0.68f,
+                        main = legMain, highlight = if (style == QuadrupedStyle.RAT) accentColor else bodyHi,
+                        shadow = bodySh, outlineW = ow * 0.80f, lightX = facing.lightScreenX, path = path
+                    )
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, paw.x, paw.y, legR * 0.95f, legR * 0.62f,
+                        main = if (style == QuadrupedStyle.WOLF) bodySh else legMain,
+                        outlineW = ow * 0.75f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
+                    )
+                }
+                5 -> { // HAUNCH / REAR TORSO
+                    val haunch = facing.project(ox, oy, u, 0f, backF * 0.58f, bodyUp + 0.6f)
+                    val rx = when (style) {
+                        QuadrupedStyle.RABBIT -> u * (6.4f + abs(facing.forwardScreenX) * 2.0f)
+                        QuadrupedStyle.RAT -> u * (6.0f + abs(facing.forwardScreenX) * 2.4f)
+                        QuadrupedStyle.WOLF -> u * (6.8f + abs(facing.forwardScreenX) * 3.8f)
+                    }
+                    val ry = when (style) {
+                        QuadrupedStyle.RABBIT -> u * 5.8f
+                        QuadrupedStyle.RAT -> u * 4.8f
+                        QuadrupedStyle.WOLF -> u * 5.8f
+                    }
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, haunch.x, haunch.y, rx, ry,
+                        main = bodyMain, highlight = bodyHi, shadow = bodySh,
+                        outlineW = ow, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                }
+                6 -> { // CHEST / SHOULDERS / MANE
+                    val chest = facing.project(ox, oy, u, 0f, frontF * 0.58f, bodyUp + (if (style == QuadrupedStyle.WOLF) 1.6f else 0.8f))
+                    val rx = when (style) {
+                        QuadrupedStyle.RABBIT -> u * (5.6f + abs(facing.forwardScreenX) * 1.4f)
+                        QuadrupedStyle.RAT -> u * (5.2f + abs(facing.forwardScreenX) * 1.8f)
+                        QuadrupedStyle.WOLF -> u * (7.2f + abs(facing.forwardScreenX) * 2.8f)
+                    }
+                    val ry = when (style) {
+                        QuadrupedStyle.RABBIT -> u * 5.2f
+                        QuadrupedStyle.RAT -> u * 4.5f
+                        QuadrupedStyle.WOLF -> u * 6.4f
+                    }
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, chest.x, chest.y, rx, ry,
+                        main = if (style == QuadrupedStyle.WOLF) bodyHi else bodyMain,
+                        highlight = if (style == QuadrupedStyle.WOLF) bellyColor else bodyHi,
+                        shadow = bodySh,
+                        outlineW = ow, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                    // Wolf jagged shoulder ruff / mane tuft
+                    if (style == QuadrupedStyle.WOLF) {
+                        val ruff = facing.project(ox, oy, u, 0f, frontF * 0.80f, bodyUp + 3.2f)
+                        VolumetricShading.drawVolumetricEllipsoid(
+                            this, ruff.x, ruff.y, u * 5.8f, u * 4.2f,
+                            main = bodySh, highlight = bodyHi, shadow = VolumetricShading.coolShadow(bodySh, 0.35f),
+                            outlineW = ow * 0.9f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                            useSpecular = useSpec
+                        )
+                    }
+                }
+                7 -> { // HEAD, EARS, SNOUT, EYES (turns cleanly 360°)
+                    val headUp = when (style) {
+                        QuadrupedStyle.RABBIT -> bodyUp + 5.8f
+                        QuadrupedStyle.RAT -> bodyUp + 2.4f
+                        QuadrupedStyle.WOLF -> bodyUp + 6.2f + lunge * 1.4f
+                    }
+                    val headF = frontF + when (style) {
+                        QuadrupedStyle.RABBIT -> 3.4f
+                        QuadrupedStyle.RAT -> 4.6f
+                        QuadrupedStyle.WOLF -> 4.8f + lunge * 2.5f
+                    }
+                    val headPos = facing.project(ox, oy, u, 0f, headF, headUp)
 
-        // Pointed rodent head & snout
-        val hx = cx + dir * u * 8.5f
-        val hy = feetY - u * 11.5f - lunge * u * 1.5f
-        drawShadedCircle(hx - dir * u * 2.5f, hy - u * 5.2f, u * 3.2f, furSh, tailPink, furSh, ow)
-        path.reset()
-        path.moveTo(hx - dir * u * 5f, hy - u * 4.5f)
-        path.quadraticTo(hx + dir * u * 1f, hy - u * 5.5f, hx + dir * u * 7.5f, hy + u * 0.5f)
-        path.quadraticTo(hx + dir * u * 1.5f, hy + u * 4.2f, hx - dir * u * 5f, hy + u * 3.2f)
-        path.close()
-        drawPath(path, Brush.linearGradient(listOf(furHi, furMain, furSh), Offset(hx - u * 5f, hy - u * 5f), Offset(hx + u * 6f, hy + u * 4f)))
-        drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
+                    // Ears behind head if front-facing, or in front of forehead if rear-facing
+                    fun drawEars() {
+                        val earLen = when (style) {
+                            QuadrupedStyle.RABBIT -> 9.5f
+                            QuadrupedStyle.RAT -> 3.4f
+                            QuadrupedStyle.WOLF -> 5.2f
+                        }
+                        for (side in -1..1 step 2) {
+                            val rOff = side * (if (style == QuadrupedStyle.RABBIT) 2.4f else 3.2f)
+                            val earBase = facing.project(ox, oy, u, rOff, headF - 1.2f, headUp + 2.8f)
+                            val earTip = facing.project(
+                                ox, oy, u,
+                                rOff * 1.35f,
+                                headF - (if (style == QuadrupedStyle.RABBIT) 3.4f else 1.8f),
+                                headUp + 2.8f + earLen
+                            )
+                            if (style == QuadrupedStyle.RAT) {
+                                VolumetricShading.drawVolumetricEllipsoid(
+                                    this, earBase.x, earBase.y - u * 1.2f, u * 2.4f, u * 2.3f,
+                                    main = bodyMain, highlight = accentColor, shadow = bodySh,
+                                    outlineW = ow * 0.78f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                                    useSpecular = false
+                                )
+                            } else {
+                                VolumetricShading.drawVolumetricCylinder(
+                                    this, earBase, earTip,
+                                    rStart = u * (if (style == QuadrupedStyle.RABBIT) 2.0f else 1.8f),
+                                    rEnd = u * (if (style == QuadrupedStyle.RABBIT) 1.35f else 0.55f),
+                                    main = bodyMain, highlight = bodyHi, shadow = bodySh,
+                                    outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                                )
+                                if (!facing.isBackFacing && style == QuadrupedStyle.RABBIT) {
+                                    drawLine(
+                                        color = accentColor,
+                                        start = Offset((earBase.x + earTip.x) * 0.5f, (earBase.y + earTip.y) * 0.5f),
+                                        end = Offset(earBase.x + (earTip.x - earBase.x) * 0.78f, earBase.y + (earTip.y - earBase.y) * 0.78f),
+                                        strokeWidth = u * 1.3f,
+                                        cap = StrokeCap.Round
+                                    )
+                                }
+                            }
+                        }
+                    }
 
-        // Rounded front ear, crimson eye, nose & whiskers
-        drawShadedCircle(hx - dir * u * 0.5f, hy - u * 4.8f, u * 3.1f, furMain, tailPink, furSh, ow)
-        drawCircle(Color(0xFFE83A3A), u * 1.35f, Offset(hx + dir * u * 1.8f, hy - u * 1f))
-        drawCircle(Color(0xFFE58C96), u * 1.2f, Offset(hx + dir * u * 7.4f, hy + u * 0.4f))
-        if (quality != GraphicsQuality.LOW) {
-            drawLine(INK, Offset(hx + dir * u * 5.5f, hy + u * 1.4f), Offset(hx + dir * u * 9.5f, hy + u * 3.2f), strokeWidth = ow * 0.7f)
-            drawLine(INK, Offset(hx + dir * u * 5.5f, hy + u * 0.6f), Offset(hx + dir * u * 9.8f, hy - u * 1.2f), strokeWidth = ow * 0.7f)
-        }
-    }
+                    if (!facing.isBackFacing) drawEars()
 
-    // -------------------------------------------------------------------------
-    // 3. YOUNG SNAKE — S-coiled scaled viper, flared hood, flickering tongue
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawYoungSnake(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        t: Float, lunge: Float, quality: GraphicsQuality, path: Path
-    ) {
-        val scaleMain = Color(0xFF3FA34D)
-        val scaleHi = Color(0xFF7BE06B)
-        val scaleSh = Color(0xFF1F5D2B)
-        val belly = Color(0xFFCFE67E)
-        val sway = sin(t * 4.5f) * u * 2.4f
+                    val headRx = when (style) {
+                        QuadrupedStyle.RABBIT -> u * 4.8f
+                        QuadrupedStyle.RAT -> u * 4.4f
+                        QuadrupedStyle.WOLF -> u * 5.2f
+                    }
+                    val headRy = when (style) {
+                        QuadrupedStyle.RABBIT -> u * 4.4f
+                        QuadrupedStyle.RAT -> u * 3.6f
+                        QuadrupedStyle.WOLF -> u * 4.6f
+                    }
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, headPos.x, headPos.y, headRx, headRy,
+                        main = bodyMain, highlight = bodyHi, shadow = bodySh,
+                        outlineW = ow, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
 
-        // Coiled base
-        drawShadedOval(cx - dir * u * 2f, feetY - u * 4.5f, u * 20f, u * 7.5f, scaleMain, scaleHi, scaleSh, ow)
-        drawShadedOval(cx - dir * u * 1f, feetY - u * 8.5f, u * 15f, u * 6.5f, scaleMain, belly, scaleSh, ow)
+                    if (facing.isBackFacing) drawEars()
 
-        // Sinuous rising neck
-        val headX = cx + dir * (u * 5.5f + lunge * u * 5f) + sway * 0.6f
-        val headY = feetY - u * 22f + sin(t * 3.6f) * u * 1.2f
-        path.reset()
-        path.moveTo(cx - dir * u * 2f, feetY - u * 9f)
-        path.cubicTo(
-            cx - dir * u * 9f + sway, feetY - u * 15f,
-            cx + dir * u * 4f - sway * 0.5f, feetY - u * 18f,
-            headX, headY
-        )
-        drawPath(path, INK, style = Stroke(width = u * 7.8f, cap = StrokeCap.Round))
-        drawPath(path, scaleMain, style = Stroke(width = u * 5.4f, cap = StrokeCap.Round))
-        drawPath(path, scaleHi.copy(alpha = 0.7f), style = Stroke(width = u * 2.1f, cap = StrokeCap.Round))
+                    // Projecting 3D Snout / Muzzle (visible from front, 3/4, and side angles!)
+                    if (facing.forwardDepth > -0.45f) {
+                        val snoutLen = when (style) {
+                            QuadrupedStyle.RABBIT -> 2.8f
+                            QuadrupedStyle.RAT -> 5.0f
+                            QuadrupedStyle.WOLF -> 5.2f
+                        }
+                        val snoutPos = facing.project(ox, oy, u, 0f, headF + snoutLen, headUp - 1.1f)
+                        VolumetricShading.drawVolumetricEllipsoid(
+                            this, snoutPos.x, snoutPos.y,
+                            rx = u * (if (style == QuadrupedStyle.WOLF) 3.1f else 2.4f),
+                            ry = u * (if (style == QuadrupedStyle.WOLF) 2.5f else 2.0f),
+                            main = if (style == QuadrupedStyle.WOLF) bellyColor else bodyHi,
+                            highlight = Color.White.copy(alpha = 0.9f), shadow = bodySh,
+                            outlineW = ow * 0.82f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                            useSpecular = false
+                        )
+                        // Nose tip
+                        val nosePos = facing.project(ox, oy, u, 0f, headF + snoutLen + 1.8f, headUp - 0.7f)
+                        drawCircle(
+                            color = if (style == QuadrupedStyle.WOLF) INK else accentColor,
+                            radius = u * 1.15f,
+                            center = nosePos
+                        )
+                        // Wolf bared fangs on attack lunge
+                        if (style == QuadrupedStyle.WOLF && lunge > 0.15f) {
+                            for (s in -1..1 step 2) {
+                                val fang = facing.project(ox, oy, u, s * 1.4f, headF + snoutLen + 0.8f, headUp - 2.6f)
+                                drawCircle(Color.White, u * 0.95f, fang)
+                            }
+                        }
+                    }
 
-        // Flared viper hood behind head
-        drawShadedOval(headX - dir * u * 1.8f, headY + u * 2.5f, u * 10.5f, u * 7.2f, scaleMain, belly, scaleSh, ow)
-
-        // Angular viper head
-        path.reset()
-        path.moveTo(headX - dir * u * 5.5f, headY - u * 2.5f)
-        path.lineTo(headX + dir * u * 6.5f, headY - u * 0.5f)
-        path.lineTo(headX + dir * u * 2.5f, headY + u * 3.5f)
-        path.lineTo(headX - dir * u * 5.5f, headY + u * 2.5f)
-        path.close()
-        drawPath(path, Brush.linearGradient(listOf(scaleHi, scaleMain, scaleSh), Offset(headX - u * 5f, headY - u * 3f), Offset(headX + u * 6f, headY + u * 4f)))
-        drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
-
-        // Slitted golden eye
-        drawCircle(Color(0xFFFFD84D), u * 1.6f, Offset(headX + dir * u * 1.4f, headY - u * 0.6f))
-        drawLine(INK, Offset(headX + dir * u * 1.4f, headY - u * 1.8f), Offset(headX + dir * u * 1.4f, headY + u * 0.6f), strokeWidth = ow * 0.8f)
-
-        // Flickering forked crimson tongue
-        if (sin(t * 7f) > -0.2f || lunge > 0.1f) {
-            val tx = headX + dir * u * 6.5f
-            val ty = headY + u * 0.5f
-            val tipX = tx + dir * u * 4.5f
-            drawLine(Color(0xFFE63946), Offset(tx, ty), Offset(tipX, ty + u * 0.6f), strokeWidth = ow * 0.9f, cap = StrokeCap.Round)
-            drawLine(Color(0xFFE63946), Offset(tipX, ty + u * 0.6f), Offset(tipX + dir * u * 2f, ty - u * 0.8f), strokeWidth = ow * 0.7f)
-            drawLine(Color(0xFFE63946), Offset(tipX, ty + u * 0.6f), Offset(tipX + dir * u * 2f, ty + u * 2.1f), strokeWidth = ow * 0.7f)
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // 4. CRAG WOLF — Quadruped muscular body, jagged mane, snout, glowing eyes
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawCragWolf(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, quality: GraphicsQuality, path: Path
-    ) {
-        val furMain = Color(0xFF72767D)
-        val furHi = Color(0xFFA7ACB5)
-        val furSh = Color(0xFF3E4148)
-        val maneCol = Color(0xFF4F535C)
-        val bodyY = feetY - u * 16.5f + breath * 0.6f
-
-        // Bushy tail
-        path.reset()
-        path.moveTo(cx - dir * u * 11f, bodyY - u * 1f)
-        path.quadraticTo(cx - dir * u * 19f, bodyY - u * 7f + stride * u * 2f, cx - dir * u * 21f, bodyY + u * 1f)
-        path.quadraticTo(cx - dir * u * 15f, bodyY + u * 3.5f, cx - dir * u * 10f, bodyY + u * 2f)
-        path.close()
-        drawPath(path, furSh)
-        drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
-
-        // Far legs (back & front)
-        drawQuadLeg(cx - dir * u * 7.5f, bodyY + u * 3f, feetY, -stride * u * 4.5f, u, ow, furSh, furMain)
-        drawQuadLeg(cx + dir * u * 7f, bodyY + u * 3f, feetY, stride * u * 4.5f, u, ow, furSh, furMain)
-
-        // Muscular quadruped torso
-        drawShadedOval(cx, bodyY, u * 25f, u * 12.5f, furMain, furHi, furSh, ow)
-
-        // Near legs (back & front)
-        drawQuadLeg(cx - dir * u * 9f, bodyY + u * 3.5f, feetY, stride * u * 5f, u, ow, furMain, furHi)
-        drawQuadLeg(cx + dir * u * 5.5f, bodyY + u * 3.5f, feetY, -stride * u * 5f + lunge * u * 3f, u, ow, furMain, furHi)
-
-        // Jagged fur mane around shoulders
-        val neckX = cx + dir * u * 9.5f
-        val neckY = bodyY - u * 3f
-        path.reset()
-        path.moveTo(neckX - dir * u * 5f, neckY - u * 5f)
-        path.lineTo(neckX + dir * u * 1f, neckY - u * 9f)
-        path.lineTo(neckX + dir * u * 6f, neckY - u * 4f)
-        path.lineTo(neckX + dir * u * 5f, neckY + u * 5f)
-        path.lineTo(neckX - dir * u * 2f, neckY + u * 7f)
-        path.lineTo(neckX - dir * u * 6f, neckY + u * 2f)
-        path.close()
-        drawPath(path, maneCol)
-        drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
-
-        // Pointed wolf head, ears & snout
-        val hx = cx + dir * u * 14f
-        val hy = bodyY - u * 6.5f - lunge * u * 1.2f
-        // Pointed ears
-        path.reset()
-        path.moveTo(hx - dir * u * 3.5f, hy - u * 3.5f)
-        path.lineTo(hx - dir * u * 5f, hy - u * 10.5f)
-        path.lineTo(hx - dir * u * 0.5f, hy - u * 4.5f)
-        path.close()
-        drawPath(path, furSh)
-        drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
-
-        // Head + snout
-        path.reset()
-        path.moveTo(hx - dir * u * 5f, hy - u * 5f)
-        path.lineTo(hx + dir * u * 3f, hy - u * 4.5f)
-        path.lineTo(hx + dir * u * 8.5f, hy - u * 0.5f)
-        path.lineTo(hx + dir * u * 7f, hy + u * 2.8f)
-        path.lineTo(hx - dir * u * 3.5f, hy + u * 3.8f)
-        path.close()
-        drawPath(path, Brush.linearGradient(listOf(furHi, furMain, furSh), Offset(hx - u * 5f, hy - u * 5f), Offset(hx + u * 8f, hy + u * 4f)))
-        drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
-
-        // Front ear
-        path.reset()
-        path.moveTo(hx - dir * u * 1.5f, hy - u * 4f)
-        path.lineTo(hx - dir * u * 2.2f, hy - u * 10.5f)
-        path.lineTo(hx + dir * u * 1.5f, hy - u * 4f)
-        path.close()
-        drawPath(path, furMain)
-        drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
-
-        // Glowing amber eye & fangs
-        if (quality != GraphicsQuality.LOW) {
-            drawCircle(Color(0xFFFFB830).copy(alpha = 0.4f), u * 2.6f, Offset(hx + dir * u * 2f, hy - u * 1.6f))
-        }
-        drawCircle(Color(0xFFFFCF40), u * 1.35f, Offset(hx + dir * u * 2f, hy - u * 1.6f))
-        drawCircle(INK, u * 1.15f, Offset(hx + dir * u * 8.2f, hy - u * 0.4f))
-        drawLine(Color.White, Offset(hx + dir * u * 5.2f, hy + u * 2.2f), Offset(hx + dir * u * 5.4f, hy + u * 4.2f), strokeWidth = ow * 0.85f)
-    }
-
-    private fun DrawScope.drawQuadLeg(
-        hipX: Float, hipY: Float, feetY: Float, swingX: Float, u: Float, ow: Float, fill: Color, highlight: Color
-    ) {
-        val kneeX = hipX + swingX * 0.45f
-        val kneeY = (hipY + feetY) * 0.5f
-        val pawX = hipX + swingX
-        val pawY = feetY - u * 1.8f
-        drawLine(INK, Offset(hipX, hipY), Offset(kneeX, kneeY), strokeWidth = u * 4.2f, cap = StrokeCap.Round)
-        drawLine(INK, Offset(kneeX, kneeY), Offset(pawX, pawY), strokeWidth = u * 3.6f, cap = StrokeCap.Round)
-        drawLine(fill, Offset(hipX, hipY), Offset(kneeX, kneeY), strokeWidth = u * 2.4f, cap = StrokeCap.Round)
-        drawLine(highlight, Offset(kneeX, kneeY), Offset(pawX, pawY), strokeWidth = u * 2f, cap = StrokeCap.Round)
-    }
-
-    // -------------------------------------------------------------------------
-    // 5. POISON SPIDER — Segmented cephalothorax/abdomen, 8 articulated legs
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawPoisonSpider(
-        cx: Float, feetY: Float, u: Float, ow: Float,
-        stride: Float, t: Float, lunge: Float, quality: GraphicsQuality, path: Path
-    ) {
-        val chitinMain = Color(0xFF2B2836)
-        val chitinHi = Color(0xFF56506B)
-        val chitinSh = Color(0xFF14121B)
-        val venom = Color(0xFF7BFF33)
-        val bodyY = feetY - u * 11f - lunge * u * 2f
-
-        // 8 Articulated spider legs (4 left, 4 right) in alternating gait
-        for (side in listOf(-1f, 1f)) {
-            for (i in 0..3) {
-                val spread = (i - 1.5f) * 0.55f
-                val phase = if ((i + (if (side > 0f) 0 else 1)) % 2 == 0) stride else -stride
-                val anchorX = cx + side * u * (3.5f + i * 0.4f)
-                val anchorY = bodyY + (i - 1.5f) * u * 1.8f
-                val kneeX = cx + side * u * (13.5f + abs(i - 1.5f) * 2.2f)
-                val kneeY = bodyY - u * (7.5f - i * 1.4f) + phase * u * 2.4f
-                val footX = cx + side * u * (19.5f - abs(i - 1.5f) * 1.4f) + spread * u * 2f
-                val footY = feetY - u * (2.5f - i * 0.9f) + phase * u * 1.8f
-                drawLine(INK, Offset(anchorX, anchorY), Offset(kneeX, kneeY), strokeWidth = u * 3.2f, cap = StrokeCap.Round)
-                drawLine(INK, Offset(kneeX, kneeY), Offset(footX, footY), strokeWidth = u * 2.6f, cap = StrokeCap.Round)
-                drawLine(chitinHi, Offset(anchorX, anchorY), Offset(kneeX, kneeY), strokeWidth = u * 1.5f, cap = StrokeCap.Round)
-                drawLine(chitinMain, Offset(kneeX, kneeY), Offset(footX, footY), strokeWidth = u * 1.3f, cap = StrokeCap.Round)
+                    // Eyes (when face is visible toward camera)
+                    if (!facing.isBackFacing) {
+                        val eyeColor = when (style) {
+                            QuadrupedStyle.RABBIT -> INK
+                            QuadrupedStyle.RAT -> Color(0xFFFF4545)
+                            QuadrupedStyle.WOLF -> accentColor
+                        }
+                        for (side in -1..1 step 2) {
+                            val eyeDepth = facing.depthOf(side * 2.4f, headF + 3.2f)
+                            if (eyeDepth > facing.depthOf(0f, headF) - 1.2f) {
+                                val ep = facing.project(ox, oy, u, side * 2.3f, headF + 2.8f, headUp + 0.8f)
+                                drawCircle(INK, u * 1.35f, ep)
+                                drawCircle(eyeColor, u * 0.92f, ep)
+                                if (style == QuadrupedStyle.RABBIT) {
+                                    drawCircle(Color.White, u * 0.35f, Offset(ep.x - u * 0.3f, ep.y - u * 0.3f))
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
-
-        // Plump venom-marked abdomen (rear)
-        val abdY = bodyY - u * 6.5f + sin(t * 3.5f) * u * 0.6f
-        drawShadedOval(cx, abdY, u * 17.5f, u * 14f, chitinMain, chitinHi, chitinSh, ow)
-        // Venomous hourglass / chevron markings
-        path.reset()
-        path.moveTo(cx, abdY - u * 4.5f)
-        path.lineTo(cx + u * 3.5f, abdY)
-        path.lineTo(cx, abdY + u * 4.5f)
-        path.lineTo(cx - u * 3.5f, abdY)
-        path.close()
-        drawPath(path, venom)
-        drawPath(path, INK, style = Stroke(width = ow * 0.7f))
-
-        // Cephalothorax (front)
-        val cephY = bodyY + u * 2.5f
-        drawShadedCircle(cx, cephY, u * 6.2f, chitinMain, chitinHi, chitinSh, ow)
-
-        // Clustered glowing green eyes
-        val eyeGlow = 0.55f + 0.35f * sin(t * 5f)
-        if (quality != GraphicsQuality.LOW) {
-            drawCircle(venom.copy(alpha = eyeGlow * 0.4f), u * 5.2f, Offset(cx, cephY + u * 2.2f))
-        }
-        drawCircle(venom, u * 1.4f, Offset(cx - u * 2.2f, cephY + u * 1.8f))
-        drawCircle(venom, u * 1.4f, Offset(cx + u * 2.2f, cephY + u * 1.8f))
-        drawCircle(venom, u * 0.95f, Offset(cx - u * 4.1f, cephY + u * 0.8f))
-        drawCircle(venom, u * 0.95f, Offset(cx + u * 4.1f, cephY + u * 0.8f))
-
-        // Curved venom fangs
-        drawLine(venom, Offset(cx - u * 2.5f, cephY + u * 5f), Offset(cx - u * 1.5f, cephY + u * 8.2f), strokeWidth = ow * 1.2f, cap = StrokeCap.Round)
-        drawLine(venom, Offset(cx + u * 2.5f, cephY + u * 5f), Offset(cx + u * 1.5f, cephY + u * 8.2f), strokeWidth = ow * 1.2f, cap = StrokeCap.Round)
     }
 
     // -------------------------------------------------------------------------
-    // 6. SWAMP TROLL — Hunched mossy brute, tusks, heavy gnarled club
+    // 2. VOLUMETRIC 3D ARACHNID (Poison Spider — 8 depth-sorted 3D jointed legs)
     // -------------------------------------------------------------------------
-    private fun DrawScope.drawSwampTroll(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, quality: GraphicsQuality, path: Path
+
+    private fun DrawScope.drawPoisonSpider(
+        ox: Float,
+        oy: Float,
+        u: Float,
+        ow: Float,
+        facing: ResolvedScreenFacing,
+        walkPhase: Float,
+        t: Float,
+        lunge: Float,
+        useSpec: Boolean,
+        useRim: Boolean,
+        path: Path
     ) {
-        val skin = Color(0xFF5D7A47)
-        val hi = Color(0xFF88AB68)
-        val sh = Color(0xFF334725)
-        val moss = Color(0xFF3A5F28)
+        val bodyMain = Color(0xFF282430)
+        val bodyHi = Color(0xFF564D66)
+        val bodySh = Color(0xFF131018)
+        val venomGreen = Color(0xFF7BFF33)
+        val bodyUp = 10.5f + sin(t * 3.6f) * 0.7f + lunge * 2.6f
 
-        drawHumanoidMonsterLegs(cx, feetY, u, ow, stride, skin, hi, sh, Color(0xFF4F3823))
-
-        // Broad hunched torso
-        val torsoY = feetY - u * 23f + breath
-        drawShadedOval(cx - dir * u * 1f, torsoY, u * 20f, u * 18f, skin, hi, sh, ow)
-        // Mossy ragged loincloth & shoulder moss
-        drawShadedOval(cx, torsoY + u * 7f, u * 17f, u * 6.5f, Color(0xFF5C4228), Color(0xFF805D3B), Color(0xFF362516), ow)
-        drawShadedOval(cx - dir * u * 3f, torsoY - u * 6.5f, u * 14f, u * 6f, moss, Color(0xFF699B44), Color(0xFF1F3815), ow)
-
-        // Heavy club arm (swings forward on lunge!)
-        val armAngle = dir * (-35f + lunge * 95f + stride * 12f)
-        val shoulder = Offset(cx + dir * u * 8.5f, torsoY - u * 4f)
-        withTransform({ rotate(armAngle, shoulder) }) {
-            drawShadedLimb(shoulder, Offset(shoulder.x + dir * u * 5f, shoulder.y + u * 11f), u * 4.5f, skin, hi, ow)
-            // Gnarled wooden club
-            val hand = Offset(shoulder.x + dir * u * 5.5f, shoulder.y + u * 11.5f)
-            drawShadedLimb(hand, Offset(hand.x + dir * u * 12f, hand.y - u * 8f), u * 4.8f, Color(0xFF6E4A29), Color(0xFF9C6D41), ow)
-            drawShadedCircle(hand.x + dir * u * 12.5f, hand.y - u * 8.5f, u * 4.2f, Color(0xFF6E4A29), Color(0xFF9C6D41), Color(0xFF3C2512), ow)
+        // 10 sortable items: 0..7 = 8 articulated 3D legs (4 left, 4 right), 8 = ABDOMEN, 9 = CEPHALOTHORAX
+        val legLocalF = floatArrayOf(-5.5f, -1.8f, +2.0f, +5.6f, -5.5f, -1.8f, +2.0f, +5.6f)
+        val legSide = floatArrayOf(-1f, -1f, -1f, -1f, +1f, +1f, +1f, +1f)
+        val order = IntArray(10) { it }
+        val depths = FloatArray(10) { idx ->
+            when (idx) {
+                in 0..7 -> facing.depthOf(legSide[idx] * 11.5f, legLocalF[idx] * 1.2f)
+                8 -> facing.depthOf(0f, -7.2f)
+                else -> facing.depthOf(0f, +4.2f) + 0.3f
+            }
         }
+        sortIndices(order, depths)
 
-        // Low-set hunched head with tusks
-        val hx = cx + dir * u * 4f
-        val hy = torsoY - u * 9.5f
-        drawShadedCircle(hx, hy, u * 6.8f, skin, hi, sh, ow)
-        drawCircle(Color(0xFFFFD147), u * 1.3f, Offset(hx + dir * u * 2.5f, hy - u * 1.2f))
-        // Tusks
-        drawLine(Color(0xFFF3EAD3), Offset(hx + dir * u * 3f, hy + u * 3.5f), Offset(hx + dir * u * 4.5f, hy + u * 0.5f), strokeWidth = ow * 1.2f, cap = StrokeCap.Round)
-        drawLine(Color(0xFFF3EAD3), Offset(hx + dir * u * 0.5f, hy + u * 3.8f), Offset(hx + dir * u * 1.4f, hy + u * 1.2f), strokeWidth = ow * 1.1f, cap = StrokeCap.Round)
-    }
+        for (i in 0 until 10) {
+            when (val id = order[i]) {
+                in 0..7 -> {
+                    val side = legSide[id]
+                    val fBase = legLocalF[id]
+                    val tripod = if ((id % 2) == 0) 1f else -1f
+                    val step = if (abs(walkPhase) > 0.01f) sin(walkPhase + tripod * 1.4f) else sin(t * 2.8f + id) * 0.18f
+                    val lift = (step * 2.2f).coerceAtLeast(0f)
+                    val coxa = facing.project(ox, oy, u, side * 3.5f, fBase * 0.55f + 1.0f, bodyUp - 0.5f)
+                    val knee = facing.project(ox, oy, u, side * 10.5f, fBase * 1.15f + step * 1.8f, bodyUp + 6.5f + lift * 0.6f)
+                    val foot = facing.project(ox, oy, u, side * 16.2f, fBase * 1.65f + step * 2.4f, 0.8f + lift)
 
-    // -------------------------------------------------------------------------
-    // 7. SKELETON — Articulated bone limbs, ribcage, skull, sword & buckler
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawSkeleton(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, quality: GraphicsQuality, path: Path
-    ) {
-        val bone = Color(0xFFE7DEC9)
-        val boneHi = Color(0xFFFAF5E8)
-        val boneSh = Color(0xFFA89C84)
-        val torsoY = feetY - u * 23.5f + breath * 0.5f
-
-        // Skeletal legs
-        for (side in listOf(-1f, 1f)) {
-            val swing = stride * side * u * 3.8f
-            val hip = Offset(cx + side * u * 3.2f, feetY - u * 15.5f)
-            val knee = Offset(hip.x + swing * 0.5f, feetY - u * 8f)
-            val foot = Offset(hip.x + swing, feetY - u * 1.5f)
-            drawShadedLimb(hip, knee, u * 2.7f, bone, boneHi, ow)
-            drawShadedLimb(knee, foot, u * 2.5f, bone, boneHi, ow)
-        }
-
-        // Pelvis & spine + ribcage
-        drawShadedOval(cx, feetY - u * 15.5f, u * 10.5f, u * 4.8f, bone, boneHi, boneSh, ow)
-        drawShadedLimb(Offset(cx, feetY - u * 16f), Offset(cx, torsoY - u * 6f), u * 2.6f, bone, boneHi, ow)
-        for (r in 0..2) {
-            val ry = torsoY - u * 4f + r * u * 3.1f
-            drawShadedOval(cx, ry, u * (11.5f - r * 1.3f), u * 2.4f, bone, boneHi, boneSh, ow)
-        }
-
-        // Offhand cracked iron buckler
-        drawShadedCircle(cx - dir * u * 9f, torsoY + u * 1.5f, u * 5.6f, Color(0xFF7D7B78), Color(0xFFB3B0AA), Color(0xFF3E3C3A), ow)
-        drawCircle(Color(0xFF9E6E3B), u * 1.6f, Offset(cx - dir * u * 9f, torsoY + u * 1.5f))
-
-        // Sword arm + notched rusty blade
-        val shPos = Offset(cx + dir * u * 6.5f, torsoY - u * 4.5f)
-        withTransform({ rotate(dir * (-25f + lunge * 95f + stride * 10f), shPos) }) {
-            val hand = Offset(shPos.x + dir * u * 5.5f, shPos.y + u * 8.5f)
-            drawShadedLimb(shPos, hand, u * 2.5f, bone, boneHi, ow)
-            drawShadedLimb(hand, Offset(hand.x + dir * u * 12f, hand.y - u * 10f), u * 2.4f, Color(0xFFA7AEB5), Color(0xFFE1E6EB), ow)
-            drawLine(Color(0xFF8C5B2B), Offset(hand.x - dir * u * 2f, hand.y - u * 2f), Offset(hand.x + dir * u * 2.5f, hand.y + u * 2.5f), strokeWidth = u * 1.8f, cap = StrokeCap.Round)
-        }
-
-        // Skull with dark eye sockets
-        val hy = torsoY - u * 11.5f
-        drawShadedCircle(cx, hy, u * 6.2f, bone, boneHi, boneSh, ow)
-        drawShadedOval(cx, hy + u * 4.2f, u * 6.5f, u * 4f, bone, boneHi, boneSh, ow)
-        drawCircle(INK, u * 1.65f, Offset(cx + dir * u * 2.2f - u * 0.5f, hy - u * 0.5f))
-        drawCircle(INK, u * 1.5f, Offset(cx + dir * u * 2.2f + u * 2.4f, hy - u * 0.5f))
-        if (quality != GraphicsQuality.LOW) {
-            drawCircle(Color(0xFF7CFFCB), u * 0.65f, Offset(cx + dir * u * 2.2f - u * 0.5f, hy - u * 0.5f))
-            drawCircle(Color(0xFF7CFFCB), u * 0.65f, Offset(cx + dir * u * 2.2f + u * 2.4f, hy - u * 0.5f))
+                    if (lift < 1.1f) {
+                        VolumetricShading.drawFootContactDot(this, foot, u * 1.8f, u * 1.0f)
+                    }
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, coxa, knee, u * 1.55f, u * 1.25f,
+                        main = bodyMain, highlight = bodyHi, shadow = bodySh,
+                        outlineW = ow * 0.82f, lightX = facing.lightScreenX, path = path
+                    )
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, knee, foot, u * 1.22f, u * 0.68f,
+                        main = bodyMain, highlight = bodyHi, shadow = bodySh,
+                        outlineW = ow * 0.78f, lightX = facing.lightScreenX, path = path
+                    )
+                    // Toxic green knuckle accent
+                    drawCircle(venomGreen.copy(alpha = 0.78f), u * 0.85f, knee)
+                }
+                8 -> { // BULBOUS GLOSSY ABDOMEN (with hourglass dorsal marking)
+                    val abd = facing.project(ox, oy, u, 0f, -7.2f, bodyUp + 2.8f)
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, abd.x, abd.y, u * 9.0f, u * 7.6f,
+                        main = bodyMain, highlight = bodyHi, shadow = bodySh,
+                        outlineW = ow * 1.05f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                    // Venomous dorsal hourglass marking (clear from top/rear/3-4 angles)
+                    val markTop = facing.project(ox, oy, u, 0f, -5.8f, bodyUp + 8.5f)
+                    val markBot = facing.project(ox, oy, u, 0f, -10.8f, bodyUp + 6.4f)
+                    val markMid = Offset((markTop.x + markBot.x) * 0.5f, (markTop.y + markBot.y) * 0.5f)
+                    drawCircle(venomGreen, u * 2.2f, markTop)
+                    drawCircle(venomGreen, u * 1.6f, markBot)
+                    drawCircle(Color(0xFFD8FF9E), u * 0.9f, markMid)
+                }
+                9 -> { // CEPHALOTHORAX + CLUSTERED EYES + VENOM FANGS
+                    val ceph = facing.project(ox, oy, u, 0f, +4.2f, bodyUp)
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, ceph.x, ceph.y, u * 5.8f, u * 4.8f,
+                        main = bodyMain, highlight = bodyHi, shadow = bodySh,
+                        outlineW = ow, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                    if (!facing.isBackFacing) {
+                        // 4 glowing venomous green eyes
+                        val eyeOffsets = floatArrayOf(-2.4f, -0.9f, +0.9f, +2.4f)
+                        for (idx in eyeOffsets.indices) {
+                            val r = eyeOffsets[idx]
+                            val ep = facing.project(ox, oy, u, r, +8.4f, bodyUp + if (idx == 1 || idx == 2) 1.4f else 0.7f)
+                            drawCircle(INK, u * 1.25f, ep)
+                            drawCircle(venomGreen, u * 0.9f, ep)
+                        }
+                        // Dripping mandibles
+                        for (side in -1..1 step 2) {
+                            val fBase = facing.project(ox, oy, u, side * 2.1f, +8.2f, bodyUp - 1.5f)
+                            val fTip = facing.project(ox, oy, u, side * 1.5f, +10.2f + lunge * 2.2f, bodyUp - 4.4f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, fBase, fTip, u * 1.2f, u * 0.45f,
+                                main = Color(0xFF433C4D), highlight = venomGreen, shadow = INK,
+                                outlineW = ow * 0.7f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 
     // -------------------------------------------------------------------------
-    // 8. GOBLIN SCOUT — Pointed ears, hunched agile frame, hood, sling/dagger
+    // 3. VOLUMETRIC 3D SERPENT (Young Snake — stacked coils + turning 3D hood)
     // -------------------------------------------------------------------------
-    private fun DrawScope.drawGoblinScout(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, quality: GraphicsQuality, path: Path
+
+    private fun DrawScope.drawYoungSnake(
+        ox: Float,
+        oy: Float,
+        u: Float,
+        ow: Float,
+        facing: ResolvedScreenFacing,
+        t: Float,
+        lunge: Float,
+        useSpec: Boolean,
+        useRim: Boolean,
+        path: Path
     ) {
-        val skin = Color(0xFF6B9943)
-        val hi = Color(0xFF9AC966)
-        val sh = Color(0xFF395922)
-        val cloth = Color(0xFF7B5634)
+        val scaleMain = Color(0xFF3E8F43)
+        val scaleHi = Color(0xFF7AD665)
+        val scaleSh = Color(0xFF1F4E24)
+        val belly = Color(0xFFD8D08B)
+        val sway = sin(t * 4.2f) * 2.6f
 
-        drawHumanoidMonsterLegs(cx, feetY, u * 0.88f, ow, stride, skin, hi, sh, Color(0xFF47311E))
-
-        val torsoY = feetY - u * 20f + breath
-        drawShadedOval(cx, torsoY, u * 14f, u * 13f, cloth, Color(0xFFA6784B), Color(0xFF462F1B), ow)
-
-        // Dagger/sling arm
-        val shPos = Offset(cx + dir * u * 6.5f, torsoY - u * 3f)
-        withTransform({ rotate(dir * (-20f + lunge * 90f), shPos) }) {
-            val hand = Offset(shPos.x + dir * u * 5f, shPos.y + u * 7f)
-            drawShadedLimb(shPos, hand, u * 3.1f, skin, hi, ow)
-            drawShadedLimb(hand, Offset(hand.x + dir * u * 8.5f, hand.y - u * 4f), u * 2.2f, Color(0xFFB4BCC4), Color(0xFFEDF2F7), ow)
+        // Stacked 3D coiled rings resting on ground
+        for (ring in 0..2) {
+            val rUp = 2.6f + ring * 3.6f
+            val rF = -ring * 1.2f
+            val rx = u * (10.5f - ring * 1.7f)
+            val ry = u * (5.0f - ring * 0.6f)
+            val rc = facing.project(ox, oy, u, sway * 0.15f * ring, rF, rUp)
+            VolumetricShading.drawVolumetricEllipsoid(
+                this, rc.x, rc.y, rx, ry,
+                main = scaleMain, highlight = scaleHi, shadow = scaleSh,
+                outlineW = ow, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                useSpecular = useSpec, useRim = useRim && ring == 0
+            )
+            // Dorsal diamond pattern stripe
+            val stripe = facing.project(ox, oy, u, -3.5f + ring * 1.5f, rF, rUp + 1.4f)
+            drawCircle(scaleSh.copy(alpha = 0.65f), u * 1.5f, stripe)
         }
 
-        // Head + big pointed ears
-        val hx = cx + dir * u * 2f
-        val hy = torsoY - u * 9.5f
-        for (earSide in listOf(-1f, 1f)) {
-            path.reset()
-            path.moveTo(hx + earSide * u * 4.5f, hy - u * 1f)
-            path.lineTo(hx + earSide * u * 12.5f, hy - u * 4.5f)
-            path.lineTo(hx + earSide * u * 5f, hy + u * 2.5f)
-            path.close()
-            drawPath(path, skin)
-            drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
-        }
-        drawShadedCircle(hx, hy, u * 6.2f, skin, hi, sh, ow)
-        // Tattered scout hood
-        drawArc(cloth, 190f, 160f, true, Offset(hx - u * 6.8f, hy - u * 7.2f), Size(u * 13.6f, u * 11f))
-        drawArc(INK, 190f, 160f, false, Offset(hx - u * 6.8f, hy - u * 7.2f), Size(u * 13.6f, u * 11f), style = Stroke(ow))
-        // Glowing yellow eyes
-        drawCircle(Color(0xFFFFE147), u * 1.4f, Offset(hx + dir * u * 2.4f, hy - u * 0.5f))
-    }
+        // Rising sinuous S-neck projecting toward entity facing
+        val neckBase = facing.project(ox, oy, u, 0f, 0f, 9.8f)
+        val neckMid = facing.project(ox, oy, u, sway * 0.7f, 3.8f + lunge * 2.5f, 17.5f)
+        val headPos = facing.project(ox, oy, u, sway * 0.35f, 7.6f + lunge * 5.2f, 23.8f - lunge * 1.8f)
 
-    // -------------------------------------------------------------------------
-    // 9. MINOTAUR — Horned bull-warrior, bronze fur, brass nose ring, battleaxe
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawMinotaur(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, quality: GraphicsQuality, path: Path
-    ) {
-        val fur = Color(0xFF7D4B2B)
-        val hi = Color(0xFFAD6D44)
-        val sh = Color(0xFF472814)
-
-        drawHumanoidMonsterLegs(cx, feetY, u, ow, stride, fur, hi, sh, Color(0xFF231B18))
-
-        val torsoY = feetY - u * 24f + breath
-        drawShadedOval(cx, torsoY, u * 21f, u * 17.5f, fur, hi, sh, ow)
-        // Leather war harness
-        drawLine(Color(0xFF472C16), Offset(cx - u * 8f, torsoY - u * 7f), Offset(cx + u * 8f, torsoY + u * 7f), strokeWidth = u * 3f)
-        drawShadedOval(cx, torsoY + u * 7.5f, u * 16f, u * 5.2f, Color(0xFF5A371C), Color(0xFF8A5933), Color(0xFF331D0E), ow)
-
-        // Heavy battleaxe arm
-        val shPos = Offset(cx + dir * u * 9f, torsoY - u * 4f)
-        withTransform({ rotate(dir * (-35f + lunge * 105f), shPos) }) {
-            val hand = Offset(shPos.x + dir * u * 5.5f, shPos.y + u * 10f)
-            drawShadedLimb(shPos, hand, u * 4.5f, fur, hi, ow)
-            val tip = Offset(hand.x + dir * u * 14f, hand.y - u * 10f)
-            drawShadedLimb(hand, tip, u * 2.2f, Color(0xFF6B4423), Color(0xFF9C693B), ow)
-            // Curved double-bit steel axehead
-            drawShadedOval(tip.x, tip.y, u * 8.5f, u * 10.5f, Color(0xFFA6B1BC), Color(0xFFE3EAF0), Color(0xFF56606B), ow)
-        }
-
-        // Bull head + sweeping ivory horns + brass nose ring
-        val hx = cx + dir * u * 2.5f
-        val hy = torsoY - u * 10.5f
-        for (s in listOf(-1f, 1f)) {
-            path.reset()
-            path.moveTo(hx + s * u * 4.5f, hy - u * 3f)
-            path.quadraticTo(hx + s * u * 12f, hy - u * 4f, hx + s * u * 13.5f, hy - u * 11.5f)
-            path.quadraticTo(hx + s * u * 9f, hy - u * 7f, hx + s * u * 4.5f, hy - u * 5.5f)
-            path.close()
-            drawPath(path, Color(0xFFEFE4CC))
-            drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
-        }
-        drawShadedOval(hx, hy, u * 12.5f, u * 11.5f, fur, hi, sh, ow)
-        drawShadedOval(hx + dir * u * 3.5f, hy + u * 3.2f, u * 8f, u * 5.2f, Color(0xFF5C351E), fur, sh, ow)
-        drawCircle(Color(0xFFE8BC58), u * 2.1f, Offset(hx + dir * u * 5.5f, hy + u * 5.2f), style = Stroke(u * 1.1f))
-        drawCircle(Color(0xFFFF5238), u * 1.35f, Offset(hx + dir * u * 2.8f, hy - u * 1.2f))
-    }
-
-    // -------------------------------------------------------------------------
-    // 10. ORC WARRIOR — Green muscular fighter, pauldrons, cleaver & iron shield
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawOrcWarrior(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, quality: GraphicsQuality, path: Path
-    ) {
-        val skin = Color(0xFF557C3A)
-        val hi = Color(0xFF7FA85C)
-        val sh = Color(0xFF2D471C)
-        val iron = Color(0xFF7A838C)
-        val ironHi = Color(0xFFB8C2CC)
-        val ironSh = Color(0xFF42484F)
-
-        drawHumanoidMonsterLegs(cx, feetY, u, ow, stride, skin, hi, sh, Color(0xFF3E2918))
-
-        val torsoY = feetY - u * 23.5f + breath
-        drawShadedOval(cx, torsoY, u * 19.5f, u * 16.5f, Color(0xFF594330), Color(0xFF82654A), Color(0xFF332418), ow)
-        // Iron pauldrons
-        drawShadedCircle(cx - u * 8.5f, torsoY - u * 4.5f, u * 4.8f, iron, ironHi, ironSh, ow)
-        drawShadedCircle(cx + u * 8.5f, torsoY - u * 4.5f, u * 4.8f, iron, ironHi, ironSh, ow)
-
-        // Bolted iron shield (offhand)
-        drawShadedOval(cx - dir * u * 10.5f, torsoY + u * 2f, u * 10f, u * 13f, iron, ironHi, ironSh, ow)
-
-        // Jagged cleaver arm
-        val shPos = Offset(cx + dir * u * 8.5f, torsoY - u * 4f)
-        withTransform({ rotate(dir * (-30f + lunge * 98f), shPos) }) {
-            val hand = Offset(shPos.x + dir * u * 5f, shPos.y + u * 9f)
-            drawShadedLimb(shPos, hand, u * 4.1f, skin, hi, ow)
-            drawShadedLimb(hand, Offset(hand.x + dir * u * 12f, hand.y - u * 9f), u * 3.6f, iron, ironHi, ow)
-        }
-
-        // Fierce orc head with tusks
-        val hy = torsoY - u * 11f
-        drawShadedCircle(cx, hy, u * 6.5f, skin, hi, sh, ow)
-        drawCircle(Color(0xFFFF4D38), u * 1.3f, Offset(cx + dir * u * 2.5f, hy - u * 1f))
-        drawLine(Color(0xFFF6EFE0), Offset(cx + dir * u * 2.8f, hy + u * 3.5f), Offset(cx + dir * u * 4.2f, hy + u * 0.8f), strokeWidth = ow * 1.15f)
-    }
-
-    // -------------------------------------------------------------------------
-    // 11. GHOUL — Gaunt tattered undead, outstretched claws, grave-mist wisps
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawGhoul(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, t: Float, quality: GraphicsQuality, path: Path
-    ) {
-        val skin = Color(0xFF7B947E)
-        val hi = Color(0xFFA7BFA9)
-        val sh = Color(0xFF425245)
-        val shroud = Color(0xFF4E4A59)
-
-        if (quality != GraphicsQuality.LOW) {
-            drawCircle(Color(0xFF7BFF9C).copy(alpha = 0.14f + 0.08f * sin(t * 4f)), u * 14f, Offset(cx, feetY - u * 18f))
-        }
-
-        drawHumanoidMonsterLegs(cx, feetY, u * 0.96f, ow, stride, skin, hi, sh, shroud)
-        val torsoY = feetY - u * 22.5f + breath
-        drawShadedOval(cx + dir * u * 1.5f, torsoY, u * 14f, u * 16f, shroud, Color(0xFF746F84), Color(0xFF282530), ow)
-
-        // Outstretched clawed arms
-        val reach = u * (9f + lunge * 7f)
-        val sh1 = Offset(cx + dir * u * 5f, torsoY - u * 4f)
-        val cl1 = Offset(sh1.x + dir * reach, sh1.y + u * 2f + sin(t * 5f) * u * 1.5f)
-        drawShadedLimb(sh1, cl1, u * 3f, skin, hi, ow)
-        drawLine(Color(0xFFE6F0D8), cl1, Offset(cl1.x + dir * u * 3.5f, cl1.y + u * 1.5f), strokeWidth = ow)
-        drawLine(Color(0xFFE6F0D8), cl1, Offset(cl1.x + dir * u * 3.5f, cl1.y - u * 1.2f), strokeWidth = ow)
-
-        val hy = torsoY - u * 10.5f
-        drawShadedCircle(cx + dir * u * 2.5f, hy, u * 6.2f, skin, hi, sh, ow)
-        drawCircle(Color(0xFF9BFF80), u * 1.45f, Offset(cx + dir * u * 5f, hy - u * 0.8f))
-    }
-
-    // -------------------------------------------------------------------------
-    // 12. FIRE DEVIL — Lithe crimson fiend, horns, barbed tail, flaming claws
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawFireDevil(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, t: Float, quality: GraphicsQuality, path: Path
-    ) {
-        val skin = Color(0xFFC93424)
-        val hi = Color(0xFFFF6645)
-        val sh = Color(0xFF6B140C)
-        val flame = Color(0xFFFFB830)
-
-        // Barbed tail
-        path.reset()
-        path.moveTo(cx - dir * u * 6f, feetY - u * 15f)
-        path.cubicTo(cx - dir * u * 17f, feetY - u * 10f, cx - dir * u * 19f, feetY - u * 22f, cx - dir * u * 14f, feetY - u * 25f + sin(t * 6f) * u * 2f)
-        drawPath(path, INK, style = Stroke(width = u * 3f, cap = StrokeCap.Round))
-        drawPath(path, sh, style = Stroke(width = u * 1.6f, cap = StrokeCap.Round))
-
-        drawHumanoidMonsterLegs(cx, feetY, u, ow, stride, skin, hi, sh, Color(0xFF281614))
-        val torsoY = feetY - u * 23f + breath
-        drawShadedOval(cx, torsoY, u * 15.5f, u * 16f, skin, hi, sh, ow)
-
-        // Flaming clawed arm
-        val shPos = Offset(cx + dir * u * 7f, torsoY - u * 4f)
-        val hand = Offset(shPos.x + dir * u * (7.5f + lunge * 6f), shPos.y + u * (4f - lunge * 6f))
-        drawShadedLimb(shPos, hand, u * 3.4f, skin, hi, ow)
-        if (quality != GraphicsQuality.LOW) {
-            drawCircle(flame.copy(alpha = 0.55f), u * (4.5f + 0.8f * sin(t * 10f)), hand)
-        }
-        drawCircle(Color(0xFFFFF0A8), u * 2.2f, hand)
-
-        // Horned fiend head
-        val hy = torsoY - u * 11f
-        for (s in listOf(-1f, 1f)) {
-            path.reset()
-            path.moveTo(cx + s * u * 3.5f, hy - u * 4f)
-            path.quadraticTo(cx + s * u * 8.5f, hy - u * 9f, cx + s * u * 7f, hy - u * 13.5f)
-            path.quadraticTo(cx + s * u * 5f, hy - u * 9f, cx + s * u * 2f, hy - u * 5.5f)
-            path.close()
-            drawPath(path, Color(0xFF2E1E1D))
-            drawPath(path, INK, style = Stroke(ow))
-        }
-        drawShadedCircle(cx, hy, u * 6.2f, skin, hi, sh, ow)
-        drawCircle(flame, u * 1.5f, Offset(cx + dir * u * 2.4f, hy - u * 1f))
-    }
-
-    // -------------------------------------------------------------------------
-    // 13. CYCLOPS — Towering muscular giant, single glowing eye, massive club
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawCyclops(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, quality: GraphicsQuality, path: Path
-    ) {
-        val skin = Color(0xFFC48A5E)
-        val hi = Color(0xFFE8B48B)
-        val sh = Color(0xFF7D5031)
-
-        drawHumanoidMonsterLegs(cx, feetY, u * 1.05f, ow, stride, skin, hi, sh, Color(0xFF52351E))
-
-        val torsoY = feetY - u * 25f + breath
-        drawShadedOval(cx, torsoY, u * 23f, u * 20f, skin, hi, sh, ow)
-        // Cross-chest leather strap & loincloth
-        drawLine(Color(0xFF4D2E18), Offset(cx - u * 9.5f, torsoY - u * 8f), Offset(cx + u * 9.5f, torsoY + u * 8f), strokeWidth = u * 3.6f)
-        drawShadedOval(cx, torsoY + u * 8.5f, u * 18f, u * 6.5f, Color(0xFF613D22), Color(0xFF8C5A34), Color(0xFF382111), ow)
-
-        // Massive boulder-club arm
-        val shPos = Offset(cx + dir * u * 10.5f, torsoY - u * 5f)
-        withTransform({ rotate(dir * (-40f + lunge * 110f), shPos) }) {
-            val hand = Offset(shPos.x + dir * u * 6f, shPos.y + u * 11f)
-            drawShadedLimb(shPos, hand, u * 5.2f, skin, hi, ow)
-            val clubTop = Offset(hand.x + dir * u * 14f, hand.y - u * 11f)
-            drawShadedLimb(hand, clubTop, u * 5.2f, Color(0xFF6B4729), Color(0xFF9C6D44), ow)
-            drawShadedCircle(clubTop.x, clubTop.y, u * 5.2f, Color(0xFF6B4729), Color(0xFF9C6D44), Color(0xFF3A2311), ow)
-        }
-
-        // Giant head with ONE central eye
-        val hy = torsoY - u * 12.5f
-        drawShadedCircle(cx, hy, u * 7.2f, skin, hi, sh, ow)
-        drawCircle(Color.White, u * 2.9f, Offset(cx + dir * u * 2f, hy - u * 1.2f))
-        drawCircle(INK, u * 2.9f, Offset(cx + dir * u * 2f, hy - u * 1.2f), style = Stroke(ow * 0.9f))
-        drawCircle(Color(0xFFFFB02E), u * 1.6f, Offset(cx + dir * u * 2.3f, hy - u * 1.2f))
-        drawCircle(INK, u * 0.75f, Offset(cx + dir * u * 2.5f, hy - u * 1.2f))
-    }
-
-    // -------------------------------------------------------------------------
-    // 14 & 17. DRAGON HATCHLING & ELDER DRAGON — Sweeping wings, serpentine neck
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawDragon(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, t: Float, lunge: Float, isElder: Boolean, quality: GraphicsQuality, path: Path
-    ) {
-        val scale = if (isElder) Color(0xFFB52B24) else Color(0xFF2E8A47)
-        val scaleHi = if (isElder) Color(0xFFFF6E4A) else Color(0xFF66C975)
-        val scaleSh = if (isElder) Color(0xFF5E100E) else Color(0xFF174A26)
-        val belly = if (isElder) Color(0xFFE8B454) else Color(0xFFCDE07A)
-        val wingMembrane = if (isElder) Color(0xFF7D1B18) else Color(0xFF236636)
-        val flap = sin(t * (if (isElder) 4.2f else 6.2f)) * u * 5.5f
-        val bodyY = feetY - u * 15f
-
-        if (isElder && quality != GraphicsQuality.LOW) {
-            drawCircle(Color(0xFFFF7A26).copy(alpha = 0.22f + 0.08f * sin(t * 5f)), u * 22f, Offset(cx, bodyY - u * 6f))
-        }
-
-        // Spiked lashing tail
-        path.reset()
-        path.moveTo(cx - dir * u * 9f, bodyY + u * 2f)
-        path.cubicTo(
-            cx - dir * u * 20f, bodyY + u * 6f,
-            cx - dir * u * 23f, bodyY - u * 4f + sin(t * 4f) * u * 3f,
-            cx - dir * u * 18f, bodyY - u * 9f + sin(t * 4f) * u * 3f
+        VolumetricShading.drawVolumetricCylinder(
+            this, neckBase, neckMid, u * 3.4f, u * 2.8f,
+            main = scaleMain, highlight = scaleHi, shadow = scaleSh,
+            outlineW = ow, lightX = facing.lightScreenX, path = path
         )
-        drawPath(path, INK, style = Stroke(width = u * 5.2f, cap = StrokeCap.Round))
-        drawPath(path, scale, style = Stroke(width = u * 3.2f, cap = StrokeCap.Round))
-
-        // Far bat-wing
-        drawDragonWing(cx - dir * u * 3f, bodyY - u * 5f, dir * -1f, u, ow, flap * 0.85f, scaleSh, wingMembrane, path)
-
-        // Clawed legs
-        drawQuadLeg(cx - dir * u * 6f, bodyY + u * 4f, feetY, stride * u * 3.5f, u, ow, scaleSh, scale)
-        drawQuadLeg(cx + dir * u * 5f, bodyY + u * 4f, feetY, -stride * u * 3.5f, u, ow, scale, scaleHi)
-
-        // Scaled arched torso & golden/plated belly
-        drawShadedOval(cx, bodyY, u * 21f, u * 13.5f, scale, scaleHi, scaleSh, ow)
-        drawShadedOval(cx + dir * u * 2f, bodyY + u * 3f, u * 14f, u * 6.5f, belly, Color(0xFFFFE79E), scaleSh, ow * 0.8f)
-
-        // Near sweeping bat-wing
-        drawDragonWing(cx - dir * u * 1f, bodyY - u * 4f, dir, u * 1.08f, ow, flap, scale, wingMembrane, path)
-
-        // Sinuous dragon neck & horned skull
-        val hx = cx + dir * (u * 12f + lunge * u * 5f)
-        val hy = bodyY - u * 15f - sin(t * 3.2f) * u * 1.5f
-        path.reset()
-        path.moveTo(cx + dir * u * 5f, bodyY - u * 3f)
-        path.quadraticTo(cx + dir * u * 12f, bodyY - u * 9f, hx - dir * u * 2f, hy + u * 2f)
-        drawPath(path, INK, style = Stroke(width = u * 8.2f, cap = StrokeCap.Round))
-        drawPath(path, scale, style = Stroke(width = u * 5.6f, cap = StrokeCap.Round))
-
-        // Crowned dragon horns
-        path.reset()
-        path.moveTo(hx - dir * u * 2f, hy - u * 3f)
-        path.lineTo(hx - dir * u * 10f, hy - u * 10f)
-        path.lineTo(hx - dir * u * 4f, hy - u * 1f)
-        path.close()
-        drawPath(path, if (isElder) Color(0xFFF5C85B) else Color(0xFFE8DFC5))
-        drawPath(path, INK, style = Stroke(ow))
-
-        // Dragon snout + fiery eye + ember breath on lunge
-        path.reset()
-        path.moveTo(hx - dir * u * 5f, hy - u * 4.5f)
-        path.lineTo(hx + dir * u * 8.5f, hy - u * 1.5f)
-        path.lineTo(hx + dir * u * 7f, hy + u * 3.2f)
-        path.lineTo(hx - dir * u * 4.5f, hy + u * 3.5f)
-        path.close()
-        drawPath(path, Brush.linearGradient(listOf(scaleHi, scale, scaleSh), Offset(hx - u * 5f, hy - u * 5f), Offset(hx + u * 8f, hy + u * 4f)))
-        drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
-        drawCircle(Color(0xFFFFE14D), u * 1.6f, Offset(hx + dir * u * 1.8f, hy - u * 1.2f))
-
-        if ((lunge > 0.15f || isElder) && quality != GraphicsQuality.LOW) {
-            val fireCenter = Offset(hx + dir * u * 10f, hy + u * 1.5f)
-            drawCircle(Color(0xFFFF7A26).copy(alpha = if (lunge > 0.15f) 0.8f else 0.35f), u * (2.5f + lunge * 5.5f), fireCenter)
-            drawCircle(Color(0xFFFFF0A0).copy(alpha = if (lunge > 0.15f) 0.9f else 0.45f), u * (1.2f + lunge * 2.8f), fireCenter)
-        }
-    }
-
-    private fun DrawScope.drawDragonWing(
-        rootX: Float, rootY: Float, dir: Float, u: Float, ow: Float,
-        flap: Float, sparColor: Color, membrane: Color, path: Path
-    ) {
-        val tipX = rootX - dir * u * 16f
-        val tipY = rootY - u * 15f + flap
-        val midX = rootX - dir * u * 9f
-        val midY = rootY - u * 4f + flap * 0.5f
-        path.reset()
-        path.moveTo(rootX, rootY)
-        path.lineTo(rootX - dir * u * 7f, rootY - u * 13f + flap * 0.7f)
-        path.lineTo(tipX, tipY)
-        path.quadraticTo(tipX + dir * u * 4f, midY, midX, midY + u * 3f)
-        path.quadraticTo(rootX - dir * u * 4f, rootY + u * 2f, rootX, rootY + u * 3f)
-        path.close()
-        drawPath(path, membrane)
-        drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
-        drawLine(sparColor, Offset(rootX, rootY), Offset(tipX, tipY), strokeWidth = ow * 1.4f, cap = StrokeCap.Round)
-    }
-
-    // -------------------------------------------------------------------------
-    // 15. NECROMANCER — Hooded obsidian/crimson cultist, skull staff, soul wisps
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawNecromancer(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, t: Float, quality: GraphicsQuality, path: Path
-    ) {
-        val robe = Color(0xFF281D33)
-        val robeHi = Color(0xFF4C3963)
-        val robeSh = Color(0xFF120C18)
-        val trim = Color(0xFFA82438)
-        val violet = Color(0xFFC978FF)
-
-        // Sweeping hooded robe skirt
-        path.reset()
-        path.moveTo(cx - u * 7.5f, feetY - u * 29f + breath)
-        path.lineTo(cx + u * 7.5f, feetY - u * 29f + breath)
-        path.lineTo(cx + u * 11f + stride * u * 1.2f, feetY - u * 1.5f)
-        path.lineTo(cx - u * 11f - stride * u * 1.2f, feetY - u * 1.5f)
-        path.close()
-        drawPath(path, Brush.linearGradient(listOf(robeHi, robe, robeSh), Offset(cx - u * 10f, feetY - u * 28f), Offset(cx + u * 10f, feetY)))
-        drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
-        // Crimson vertical stole
-        drawLine(trim, Offset(cx, feetY - u * 28f + breath), Offset(cx, feetY - u * 3f), strokeWidth = u * 3.4f)
-
-        // Skull-topped arcane staff
-        val staffX = cx + dir * u * 10.5f
-        val staffTopY = feetY - u * 39f - lunge * u * 4f
-        drawShadedLimb(Offset(staffX, feetY - u * 3f), Offset(staffX, staffTopY + u * 4f), u * 2.4f, Color(0xFF4A3832), Color(0xFF7A6158), ow)
-        drawShadedCircle(staffX, staffTopY, u * 3.6f, Color(0xFFE8E0CE), Color.White, Color(0xFF9C9280), ow)
-        if (quality != GraphicsQuality.LOW) {
-            drawCircle(violet.copy(alpha = 0.45f + 0.25f * sin(t * 7f)), u * 6.5f, Offset(staffX, staffTopY))
-        }
-        drawCircle(violet, u * 1.6f, Offset(staffX, staffTopY))
-
-        // Deep pointed cultist hood & glowing eyes
-        val hy = feetY - u * 34.5f + breath
-        path.reset()
-        path.moveTo(cx, hy - u * 9.5f)
-        path.lineTo(cx + u * 8.5f, hy + u * 4.5f)
-        path.lineTo(cx - u * 8.5f, hy + u * 4.5f)
-        path.close()
-        drawPath(path, robe)
-        drawPath(path, INK, style = Stroke(width = ow, join = StrokeJoin.Round))
-        drawOval(INK, Offset(cx - u * 4.5f, hy - u * 3.5f), Size(u * 9f, u * 7.5f))
-        drawCircle(violet, u * 1.35f, Offset(cx - u * 1.8f + dir * u * 0.8f, hy))
-        drawCircle(violet, u * 1.35f, Offset(cx + u * 1.8f + dir * u * 0.8f, hy))
-
-        // Orbiting soul wisps on Medium/High/HD
-        if (quality != GraphicsQuality.LOW) {
-            val wispX = cx + cos(t * 3.2f) * u * 13f
-            val wispY = feetY - u * 22f + sin(t * 3.2f) * u * 4f
-            drawCircle(violet.copy(alpha = 0.35f), u * 3.6f, Offset(wispX, wispY))
-            drawCircle(Color(0xFFF3D9FF), u * 1.5f, Offset(wispX, wispY))
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // 16. DEMON LORD — Colossal horned dreadlord, wings, molten runes, blade
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawDemonLord(
-        cx: Float, feetY: Float, u: Float, ow: Float, dir: Float,
-        stride: Float, breath: Float, lunge: Float, t: Float, quality: GraphicsQuality, path: Path
-    ) {
-        val skin = Color(0xFF8C1D1B)
-        val hi = Color(0xFFD13A2E)
-        val sh = Color(0xFF3E0A0B)
-        val molten = Color(0xFFFFAE2B)
-
-        if (quality != GraphicsQuality.LOW) {
-            drawCircle(Color(0xFFFF5E1A).copy(alpha = 0.24f + 0.1f * sin(t * 5f)), u * 21f, Offset(cx, feetY - u * 22f))
-        }
-
-        val torsoY = feetY - u * 25.5f + breath
-        // Jagged demonic wings behind shoulders
-        drawDragonWing(cx - u * 5f, torsoY - u * 6f, 1f, u * 0.95f, ow, sin(t * 4.5f) * u * 3f, Color(0xFF2B1214), Color(0xFF4F1316), path)
-        drawDragonWing(cx + u * 5f, torsoY - u * 6f, -1f, u * 0.95f, ow, sin(t * 4.5f) * u * 3f, Color(0xFF2B1214), Color(0xFF4F1316), path)
-
-        drawHumanoidMonsterLegs(cx, feetY, u * 1.08f, ow, stride, skin, hi, sh, Color(0xFF1F1618))
-
-        // Broad muscular dreadlord chest + glowing molten chest runes
-        drawShadedOval(cx, torsoY, u * 24f, u * 20f, skin, hi, sh, ow)
-        drawLine(molten, Offset(cx - u * 4.5f, torsoY - u * 4f), Offset(cx, torsoY + u * 3f), strokeWidth = u * 1.8f, cap = StrokeCap.Round)
-        drawLine(molten, Offset(cx + u * 4.5f, torsoY - u * 4f), Offset(cx, torsoY + u * 3f), strokeWidth = u * 1.8f, cap = StrokeCap.Round)
-
-        // Blazing hellfire greatsword
-        val shPos = Offset(cx + dir * u * 11f, torsoY - u * 5f)
-        withTransform({ rotate(dir * (-38f + lunge * 112f), shPos) }) {
-            val hand = Offset(shPos.x + dir * u * 6f, shPos.y + u * 10f)
-            drawShadedLimb(shPos, hand, u * 4.8f, skin, hi, ow)
-            val bladeTip = Offset(hand.x + dir * u * 18f, hand.y - u * 15f)
-            drawLine(INK, hand, bladeTip, strokeWidth = u * 5.6f, cap = StrokeCap.Round)
-            drawLine(Color(0xFFFF5E1A), hand, bladeTip, strokeWidth = u * 3.6f, cap = StrokeCap.Round)
-            drawLine(Color(0xFFFFE98A), hand, bladeTip, strokeWidth = u * 1.5f, cap = StrokeCap.Round)
-        }
-
-        // Dreadlord skull-horned head
-        val hy = torsoY - u * 13f
-        for (s in listOf(-1f, 1f)) {
-            path.reset()
-            path.moveTo(cx + s * u * 4.5f, hy - u * 3f)
-            path.quadraticTo(cx + s * u * 15f, hy - u * 7f, cx + s * u * 13f, hy - u * 16.5f)
-            path.quadraticTo(cx + s * u * 9f, hy - u * 10f, cx + s * u * 3f, hy - u * 6f)
-            path.close()
-            drawPath(path, Color(0xFF2B1B1D))
-            drawPath(path, INK, style = Stroke(ow))
-        }
-        drawShadedCircle(cx, hy, u * 7.2f, skin, hi, sh, ow)
-        drawCircle(molten, u * 1.6f, Offset(cx - u * 2.2f + dir * u * 1f, hy - u * 1f))
-        drawCircle(molten, u * 1.6f, Offset(cx + u * 2.2f + dir * u * 1f, hy - u * 1f))
-    }
-
-    // -------------------------------------------------------------------------
-    // Shared Shaded Organic Primitives
-    // -------------------------------------------------------------------------
-    private fun DrawScope.drawHumanoidMonsterLegs(
-        cx: Float, feetY: Float, u: Float, ow: Float, stride: Float,
-        skin: Color, hi: Color, sh: Color, bootColor: Color
-    ) {
-        for (side in listOf(-1f, 1f)) {
-            val swing = stride * side * u * 4.2f
-            val hip = Offset(cx + side * u * 4.2f, feetY - u * 15f)
-            val ankle = Offset(hip.x + swing, feetY - u * 3f)
-            drawShadedLimb(hip, ankle, u * 4.6f, skin, hi, ow)
-            drawShadedOval(ankle.x, feetY - u * 2.4f, u * 6.5f, u * 4.2f, bootColor, skin, sh, ow)
-        }
-    }
-
-    private fun DrawScope.drawShadedCircle(
-        cx: Float, cy: Float, radius: Float,
-        main: Color, hi: Color, sh: Color, outlineW: Float
-    ) {
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(hi, main, sh),
-                center = Offset(cx - radius * 0.35f, cy - radius * 0.35f),
-                radius = radius * 1.45f
-            ),
-            radius = radius,
-            center = Offset(cx, cy)
+        // Flared cobra/viper hood
+        val hoodPos = facing.project(ox, oy, u, sway * 0.45f, 5.8f + lunge * 3.8f, 21.4f)
+        VolumetricShading.drawVolumetricEllipsoid(
+            this, hoodPos.x, hoodPos.y, u * 5.6f, u * 4.4f,
+            main = if (facing.isBackFacing) scaleMain else belly,
+            highlight = if (facing.isBackFacing) scaleHi else Color(0xFFFFF3B8),
+            shadow = scaleSh,
+            outlineW = ow * 0.92f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+            useSpecular = useSpec
         )
-        drawCircle(INK, radius = radius, center = Offset(cx, cy), style = Stroke(width = outlineW))
-    }
-
-    private fun DrawScope.drawShadedOval(
-        cx: Float, cy: Float, width: Float, height: Float,
-        main: Color, hi: Color, sh: Color, outlineW: Float
-    ) {
-        val topLeft = Offset(cx - width * 0.5f, cy - height * 0.5f)
-        val size = Size(width, height)
-        drawOval(
-            brush = Brush.linearGradient(
-                colors = listOf(hi, main, sh),
-                start = topLeft,
-                end = Offset(topLeft.x + width, topLeft.y + height)
-            ),
-            topLeft = topLeft,
-            size = size
+        VolumetricShading.drawVolumetricCylinder(
+            this, neckMid, headPos, u * 2.7f, u * 2.5f,
+            main = scaleMain, highlight = scaleHi, shadow = scaleSh,
+            outlineW = ow * 0.92f, lightX = facing.lightScreenX, path = path
         )
-        drawOval(INK, topLeft = topLeft, size = size, style = Stroke(width = outlineW))
+
+        // Angular 3D viper head
+        VolumetricShading.drawVolumetricEllipsoid(
+            this, headPos.x, headPos.y, u * 4.5f, u * 3.4f,
+            main = scaleMain, highlight = scaleHi, shadow = scaleSh,
+            outlineW = ow, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+            useSpecular = useSpec, useRim = useRim
+        )
+
+        if (!facing.isBackFacing) {
+            for (side in -1..1 step 2) {
+                val ep = facing.project(ox, oy, u, sway * 0.35f + side * 2.0f, 10.2f + lunge * 5.2f, 24.4f - lunge * 1.8f)
+                drawCircle(INK, u * 1.2f, ep)
+                drawCircle(Color(0xFFFFD84A), u * 0.85f, ep)
+            }
+            // Flickering crimson forked tongue
+            if (sin(t * 7.5f) > 0.1f || lunge > 0.15f) {
+                val tBase = facing.project(ox, oy, u, sway * 0.35f, 11.4f + lunge * 5.2f, 22.8f - lunge * 1.8f)
+                val tMid = facing.project(ox, oy, u, sway * 0.35f, 14.8f + lunge * 6.0f, 22.0f - lunge * 1.8f)
+                val tFork1 = facing.project(ox, oy, u, sway * 0.35f - 1.4f, 16.8f + lunge * 6.0f, 21.4f - lunge * 1.8f)
+                val tFork2 = facing.project(ox, oy, u, sway * 0.35f + 1.4f, 16.8f + lunge * 6.0f, 21.4f - lunge * 1.8f)
+                drawLine(Color(0xFFE63946), tBase, tMid, strokeWidth = u * 1.0f, cap = StrokeCap.Round)
+                drawLine(Color(0xFFE63946), tMid, tFork1, strokeWidth = u * 0.85f, cap = StrokeCap.Round)
+                drawLine(Color(0xFFE63946), tMid, tFork2, strokeWidth = u * 0.85f, cap = StrokeCap.Round)
+            }
+        }
     }
 
-    private fun DrawScope.drawShadedLimb(
-        start: Offset, end: Offset, thickness: Float,
-        main: Color, hi: Color, outlineW: Float
+    // -------------------------------------------------------------------------
+    // 4. VOLUMETRIC 3D DRAGONS (Dragon Hatchling & Elder Dragon)
+    // -------------------------------------------------------------------------
+
+    private fun DrawScope.drawDragon3D(
+        ox: Float,
+        oy: Float,
+        u: Float,
+        ow: Float,
+        facing: ResolvedScreenFacing,
+        stride: Float,
+        bobUp: Float,
+        t: Float,
+        lunge: Float,
+        isElder: Boolean,
+        useSpec: Boolean,
+        useRim: Boolean,
+        quality: GraphicsQuality,
+        path: Path
     ) {
-        drawLine(INK, start, end, strokeWidth = thickness + outlineW * 1.8f, cap = StrokeCap.Round)
-        drawLine(main, start, end, strokeWidth = thickness, cap = StrokeCap.Round)
-        drawLine(hi.copy(alpha = 0.65f), start, end, strokeWidth = thickness * 0.38f, cap = StrokeCap.Round)
+        val scaleMain = if (isElder) Color(0xFF9E1F1F) else Color(0xFF2E7D4A)
+        val scaleHi = if (isElder) Color(0xFFE34A32) else Color(0xFF5DC47A)
+        val scaleSh = if (isElder) Color(0xFF520C0E) else Color(0xFF154225)
+        val belly = if (isElder) Color(0xFFE8B44C) else Color(0xFFD9CC7A)
+        val wingMembrane = if (isElder) Color(0xFF5E1618) else Color(0xFF205434)
+        val wingSpan = if (isElder) 22f else 17f
+        val flap = sin(t * 5.0f) * 5.5f + lunge * 4.0f
+        val bodyUp = 15.5f + bobUp + sin(t * 2.8f) * 0.8f
+
+        // 9 sortable 3D parts: 0=TAIL, 1=LEFT_WING, 2=RIGHT_WING, 3=BL, 4=BR, 5=FL, 6=FR, 7=BODY, 8=NECK_HEAD
+        val order = IntArray(9) { it }
+        val depths = floatArrayOf(
+            facing.depthOf(0f, -13.5f),                        // 0 TAIL
+            facing.depthOf(-wingSpan * 0.55f, -1.5f),          // 1 LEFT_WING
+            facing.depthOf(+wingSpan * 0.55f, -1.5f),          // 2 RIGHT_WING
+            facing.depthOf(-5.2f, -6.5f) - 0.3f,               // 3 BL
+            facing.depthOf(+5.2f, -6.5f) - 0.3f,               // 4 BR
+            facing.depthOf(-5.2f, +5.8f) - 0.2f,               // 5 FL
+            facing.depthOf(+5.2f, +5.8f) - 0.2f,               // 6 FR
+            facing.depthOf(0f, 0f),                            // 7 BODY
+            facing.depthOf(0f, +9.8f) + 0.6f                   // 8 NECK_HEAD
+        )
+        sortIndices(order, depths)
+
+        for (i in 0 until 9) {
+            when (order[i]) {
+                0 -> { // LASHING SPIKED TAIL
+                    val wag = sin(t * 3.4f) * 4.5f
+                    val base = facing.project(ox, oy, u, 0f, -6.5f, bodyUp - 1.5f)
+                    val mid = facing.project(ox, oy, u, wag, -13.5f, bodyUp - 5.5f)
+                    val tip = facing.project(ox, oy, u, -wag * 0.8f, -20.5f, bodyUp - 2.0f)
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, base, mid, u * 3.8f, u * 2.4f,
+                        main = scaleMain, highlight = scaleHi, shadow = scaleSh,
+                        outlineW = ow * 0.92f, lightX = facing.lightScreenX, path = path
+                    )
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, mid, tip, u * 2.3f, u * 1.0f,
+                        main = scaleMain, highlight = scaleHi, shadow = scaleSh,
+                        outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                    )
+                    // Tail spade tip
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, tip.x, tip.y, u * 2.6f, u * 1.9f,
+                        main = belly, highlight = Color(0xFFFFF2B0), shadow = scaleSh,
+                        outlineW = ow * 0.78f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
+                    )
+                }
+                1, 2 -> { // 3D BAT WINGS (Left / Right)
+                    val side = if (order[i] == 1) -1f else 1f
+                    val shoulder = facing.project(ox, oy, u, side * 4.2f, +1.5f, bodyUp + 3.5f)
+                    val elbow = facing.project(ox, oy, u, side * (wingSpan * 0.56f), -1.0f, bodyUp + 12.5f + flap * 0.7f)
+                    val tip = facing.project(ox, oy, u, side * wingSpan, -5.5f, bodyUp + 8.0f + flap)
+                    val trailing1 = facing.project(ox, oy, u, side * (wingSpan * 0.72f), -7.0f, bodyUp + 1.5f + flap * 0.45f)
+                    val trailing2 = facing.project(ox, oy, u, side * (wingSpan * 0.36f), -5.0f, bodyUp + 0.5f + flap * 0.25f)
+
+                    path.reset()
+                    path.moveTo(shoulder.x, shoulder.y)
+                    path.lineTo(elbow.x, elbow.y)
+                    path.lineTo(tip.x, tip.y)
+                    path.quadraticTo(trailing1.x, trailing1.y + u * 2.5f, trailing1.x, trailing1.y)
+                    path.quadraticTo(trailing2.x, trailing2.y + u * 2.0f, trailing2.x, trailing2.y)
+                    path.lineTo(shoulder.x, shoulder.y)
+                    path.close()
+                    drawPath(
+                        path = path,
+                        brush = Brush.linearGradient(
+                            colors = listOf(scaleMain, wingMembrane, VolumetricShading.coolShadow(wingMembrane, 0.45f)),
+                            start = elbow,
+                            end = trailing2
+                        )
+                    )
+                    drawPath(path, INK, style = Stroke(width = ow * 0.85f, join = StrokeJoin.Round))
+                    // Wing bone spars
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, shoulder, elbow, u * 1.5f, u * 1.25f,
+                        main = scaleHi, highlight = belly, shadow = scaleSh,
+                        outlineW = ow * 0.72f, lightX = facing.lightScreenX, path = path
+                    )
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, elbow, tip, u * 1.2f, u * 0.65f,
+                        main = scaleMain, highlight = scaleHi, shadow = scaleSh,
+                        outlineW = ow * 0.68f, lightX = facing.lightScreenX, path = path
+                    )
+                    drawLine(INK.copy(alpha = 0.72f), elbow, trailing1, strokeWidth = ow * 0.7f)
+                }
+                3, 4, 5, 6 -> { // 4 CLAWED DRAGON LEGS
+                    val isBack = order[i] == 3 || order[i] == 4
+                    val side = if (order[i] == 4 || order[i] == 6) 1f else -1f
+                    val fBase = if (isBack) -5.8f else +5.2f
+                    val phase = if ((isBack && side > 0) || (!isBack && side < 0)) stride else -stride
+                    val hip = facing.project(ox, oy, u, side * 4.5f, fBase, bodyUp - 2.0f)
+                    val foot = facing.project(ox, oy, u, side * 5.6f, fBase + phase * 3.5f, 1.2f + (phase * 1.8f).coerceAtLeast(0f))
+                    VolumetricShading.drawFootContactDot(this, foot, u * 2.6f, u * 1.4f)
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, hip, foot, u * 2.9f, u * 2.2f,
+                        main = scaleMain, highlight = scaleHi, shadow = scaleSh,
+                        outlineW = ow * 0.9f, lightX = facing.lightScreenX, path = path
+                    )
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, foot.x, foot.y, u * 2.8f, u * 1.7f,
+                        main = scaleSh, highlight = belly, shadow = INK,
+                        outlineW = ow * 0.8f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
+                    )
+                }
+                7 -> { // VOLUMETRIC SCALED BODY + BELLY PLATES
+                    val body = facing.project(ox, oy, u, 0f, -0.5f, bodyUp)
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, body.x, body.y,
+                        rx = u * (9.2f + abs(facing.forwardScreenX) * 3.2f),
+                        ry = u * 7.6f,
+                        main = scaleMain, highlight = scaleHi, shadow = scaleSh,
+                        outlineW = ow * 1.05f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                    if (!facing.isBackFacing) {
+                        val chestPlate = facing.project(ox, oy, u, 0f, +4.8f, bodyUp - 1.2f)
+                        VolumetricShading.drawVolumetricEllipsoid(
+                            this, chestPlate.x, chestPlate.y, u * 5.2f, u * 4.2f,
+                            main = belly, highlight = Color(0xFFFFF0B8), shadow = VolumetricShading.coolShadow(belly, 0.4f),
+                            outlineW = ow * 0.78f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
+                        )
+                    } else {
+                        // Dorsal ridge spines on back
+                        for (s in -1..1) {
+                            val sp = facing.project(ox, oy, u, 0f, s * 3.8f - 1.0f, bodyUp + 6.8f)
+                            drawCircle(belly, u * 1.5f, sp)
+                            drawCircle(INK, u * 1.5f, sp, style = Stroke(ow * 0.65f))
+                        }
+                    }
+                }
+                8 -> { // RISING NECK + HORNED DRAGON HEAD + FIRE BREATH
+                    val neckBase = facing.project(ox, oy, u, 0f, +5.8f, bodyUp + 3.2f)
+                    val headPos = facing.project(ox, oy, u, 0f, +10.2f + lunge * 4.0f, bodyUp + 12.2f - lunge * 1.5f)
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, neckBase, headPos, u * 3.8f, u * 3.0f,
+                        main = scaleMain, highlight = scaleHi, shadow = scaleSh,
+                        outlineW = ow, lightX = facing.lightScreenX, path = path
+                    )
+                    // Sweeping back-curved golden/obsidian horns
+                    for (side in -1..1 step 2) {
+                        val hBase = facing.project(ox, oy, u, side * 2.4f, +8.8f + lunge * 4.0f, bodyUp + 14.5f)
+                        val hTip = facing.project(ox, oy, u, side * 5.2f, +4.2f + lunge * 4.0f, bodyUp + 20.5f)
+                        VolumetricShading.drawVolumetricCylinder(
+                            this, hBase, hTip, u * 1.5f, u * 0.55f,
+                            main = if (isElder) Color(0xFF2E272B) else belly,
+                            highlight = Color(0xFFFFE7A0), shadow = INK,
+                            outlineW = ow * 0.78f, lightX = facing.lightScreenX, path = path
+                        )
+                    }
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, headPos.x, headPos.y, u * 5.4f, u * 4.5f,
+                        main = scaleMain, highlight = scaleHi, shadow = scaleSh,
+                        outlineW = ow, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                    if (facing.forwardDepth > -0.45f) {
+                        val snout = facing.project(ox, oy, u, 0f, +15.2f + lunge * 4.2f, bodyUp + 10.8f - lunge * 1.5f)
+                        VolumetricShading.drawVolumetricEllipsoid(
+                            this, snout.x, snout.y, u * 3.6f, u * 2.8f,
+                            main = scaleMain, highlight = scaleHi, shadow = scaleSh,
+                            outlineW = ow * 0.88f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
+                        )
+                        // Flame breath cone on attack lunge
+                        if (lunge > 0.18f && quality != GraphicsQuality.LOW) {
+                            val flameTip = facing.project(ox, oy, u, 0f, +25.0f + lunge * 6.0f, bodyUp + 8.5f)
+                            drawLine(Color(0xFFFF6A1A).copy(alpha = 0.75f * lunge), snout, flameTip, strokeWidth = u * 5.2f, cap = StrokeCap.Round)
+                            drawLine(Color(0xFFFFEE73).copy(alpha = 0.85f * lunge), snout, flameTip, strokeWidth = u * 2.4f, cap = StrokeCap.Round)
+                        }
+                    }
+                    if (!facing.isBackFacing) {
+                        for (side in -1..1 step 2) {
+                            val ep = facing.project(ox, oy, u, side * 2.4f, +13.0f + lunge * 4.0f, bodyUp + 12.8f - lunge * 1.5f)
+                            drawCircle(INK, u * 1.4f, ep)
+                            drawCircle(Color(0xFFFFCF33), u * 1.0f, ep)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. VOLUMETRIC 3D BIPEDAL / HUMANOID MONSTERS (10 distinct species)
+    // -------------------------------------------------------------------------
+
+    private enum class BipedMonsterStyle {
+        SWAMP_TROLL,
+        SKELETON,
+        GOBLIN_SCOUT,
+        MINOTAUR,
+        ORC_WARRIOR,
+        GHOUL,
+        FIRE_DEVIL,
+        CYCLOPS,
+        NECROMANCER,
+        DEMON_LORD
+    }
+
+    private fun DrawScope.drawBipedMonster(
+        ox: Float,
+        oy: Float,
+        u: Float,
+        ow: Float,
+        facing: ResolvedScreenFacing,
+        stride: Float,
+        bobUp: Float,
+        breath: Float,
+        lunge: Float,
+        t: Float,
+        species: BipedMonsterStyle,
+        useSpec: Boolean,
+        useRim: Boolean,
+        quality: GraphicsQuality,
+        path: Path
+    ) {
+        val (skinMain, skinHi, skinSh) = when (species) {
+            BipedMonsterStyle.SWAMP_TROLL -> Triple(Color(0xFF4F7A46), Color(0xFF7CB26B), Color(0xFF284524))
+            BipedMonsterStyle.SKELETON -> Triple(Color(0xFFE6DEC8), Color(0xFFFFFBF0), Color(0xFF9C917A))
+            BipedMonsterStyle.GOBLIN_SCOUT -> Triple(Color(0xFF5D8F3B), Color(0xFF8CC45E), Color(0xFF2F4F1C))
+            BipedMonsterStyle.MINOTAUR -> Triple(Color(0xFF7A4428), Color(0xFFAC6944), Color(0xFF422112))
+            BipedMonsterStyle.ORC_WARRIOR -> Triple(Color(0xFF51703B), Color(0xFF7CA15B), Color(0xFF283B1C))
+            BipedMonsterStyle.GHOUL -> Triple(Color(0xFF7D857B), Color(0xFFAAB5A8), Color(0xFF444A45))
+            BipedMonsterStyle.FIRE_DEVIL -> Triple(Color(0xFFC9331E), Color(0xFFFF6D3B), Color(0xFF6B120B))
+            BipedMonsterStyle.CYCLOPS -> Triple(Color(0xFFA6744E), Color(0xFFD6A074), Color(0xFF5E3C23))
+            BipedMonsterStyle.NECROMANCER -> Triple(Color(0xFF2A2236), Color(0xFF524469), Color(0xFF140F1C))
+            BipedMonsterStyle.DEMON_LORD -> Triple(Color(0xFF8F1B1E), Color(0xFFD93B32), Color(0xFF450A0E))
+        }
+
+        val torsoWidth = when (species) {
+            BipedMonsterStyle.DEMON_LORD, BipedMonsterStyle.CYCLOPS, BipedMonsterStyle.MINOTAUR -> 10.2f
+            BipedMonsterStyle.SWAMP_TROLL, BipedMonsterStyle.ORC_WARRIOR -> 9.2f
+            BipedMonsterStyle.SKELETON, BipedMonsterStyle.GHOUL -> 6.8f
+            BipedMonsterStyle.GOBLIN_SCOUT -> 7.2f
+            else -> 8.2f
+        }
+        val shoulderR = torsoWidth * 0.96f
+        val hipUp = 13.5f + bobUp
+        val shoulderUp = 28.5f + bobUp + breath * 0.55f
+        val headUp = 36.2f + bobUp + breath * 0.6f
+        val hasWings = species == BipedMonsterStyle.DEMON_LORD
+        val hasTail = species == BipedMonsterStyle.FIRE_DEVIL || species == BipedMonsterStyle.DEMON_LORD
+        val hasCape = species == BipedMonsterStyle.NECROMANCER || species == BipedMonsterStyle.GHOUL
+
+        // 8 sortable layers: 0=BACK_EXTRAS(wings/tail/cape), 1=L_LEG, 2=R_LEG, 3=L_ARM_OFF, 4=R_ARM_WEAP, 5=TORSO, 6=HEAD
+        val order = IntArray(7) { it }
+        val depths = floatArrayOf(
+            if (facing.isBackFacing && hasCape) 0.4f else facing.depthOf(0f, -6.5f) - 1.2f, // 0 BACK_EXTRAS
+            facing.depthOf(-3.6f, -stride * 4.0f) - 0.6f,                                    // 1 L_LEG
+            facing.depthOf(+3.6f, +stride * 4.0f) - 0.6f,                                    // 2 R_LEG
+            facing.depthOf(-shoulderR, 1.5f),                                                // 3 L_ARM_OFF
+            facing.depthOf(+shoulderR, 2.5f + lunge * 4.5f),                                 // 4 R_ARM_WEAP
+            0.0f,                                                                            // 5 TORSO
+            0.7f + facing.forwardDepth * 0.35f                                               // 6 HEAD
+        )
+        sortIndices(order, depths)
+
+        for (i in 0 until 7) {
+            when (order[i]) {
+                0 -> { // WINGS / TAIL / NECRO CAPE
+                    if (hasWings) {
+                        val flap = sin(t * 4.0f) * 3.8f + lunge * 4.0f
+                        for (side in -1..1 step 2) {
+                            val sh = facing.project(ox, oy, u, side * 5.0f, -3.5f, shoulderUp)
+                            val tip = facing.project(ox, oy, u, side * 23.0f, -9.5f, shoulderUp + 12.5f + flap)
+                            val bot = facing.project(ox, oy, u, side * 14.5f, -7.5f, hipUp + 1.0f + flap * 0.4f)
+                            path.reset()
+                            path.moveTo(sh.x, sh.y)
+                            path.lineTo(tip.x, tip.y)
+                            path.quadraticTo((tip.x + bot.x) * 0.5f, bot.y + u * 2.5f, bot.x, bot.y)
+                            path.lineTo(sh.x, sh.y)
+                            path.close()
+                            drawPath(
+                                path = path,
+                                brush = Brush.linearGradient(
+                                    colors = listOf(Color(0xFF3A1219), Color(0xFF1A090E)),
+                                    start = tip,
+                                    end = sh
+                                )
+                            )
+                            drawPath(path, INK, style = Stroke(ow * 0.9f, join = StrokeJoin.Round))
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, sh, tip, u * 1.8f, u * 0.8f,
+                                main = Color(0xFF2B181E), highlight = Color(0xFFFF6D3B), shadow = INK,
+                                outlineW = ow * 0.72f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                    }
+                    if (hasTail) {
+                        val wag = sin(t * 4.8f) * 3.8f
+                        val tb = facing.project(ox, oy, u, 0f, -4.5f, hipUp)
+                        val tm = facing.project(ox, oy, u, wag, -11.5f, hipUp - 4.0f)
+                        val tt = facing.project(ox, oy, u, wag * 1.4f, -15.5f, hipUp + 1.5f)
+                        VolumetricShading.drawVolumetricCylinder(
+                            this, tb, tm, u * 1.6f, u * 1.0f,
+                            main = skinMain, highlight = skinHi, shadow = skinSh,
+                            outlineW = ow * 0.75f, lightX = facing.lightScreenX, path = path
+                        )
+                        VolumetricShading.drawVolumetricCylinder(
+                            this, tm, tt, u * 1.0f, u * 0.55f,
+                            main = skinSh, highlight = skinHi, shadow = INK,
+                            outlineW = ow * 0.68f, lightX = facing.lightScreenX, path = path
+                        )
+                    }
+                    if (hasCape) {
+                        val capeColor = if (species == BipedMonsterStyle.NECROMANCER) Color(0xFF5E162B) else Color(0xFF474F49)
+                        val topL = facing.project(ox, oy, u, -6.5f, -3.5f, shoulderUp)
+                        val topR = facing.project(ox, oy, u, +6.5f, -3.5f, shoulderUp)
+                        val botR = facing.project(ox, oy, u, +8.2f, -5.8f, 4.0f + bobUp * 0.3f)
+                        val botL = facing.project(ox, oy, u, -8.2f, -5.8f, 4.0f + bobUp * 0.3f)
+                        path.reset()
+                        path.moveTo(topL.x, topL.y)
+                        path.lineTo(topR.x, topR.y)
+                        path.lineTo(botR.x, botR.y)
+                        path.quadraticTo((botL.x + botR.x) * 0.5f, maxOf(botL.y, botR.y) + u * 2.0f, botL.x, botL.y)
+                        path.close()
+                        drawPath(path, capeColor)
+                        drawPath(path, INK, style = Stroke(ow * 0.85f, join = StrokeJoin.Round))
+                    }
+                }
+                1, 2 -> { // LEGS (with contact dots & species foot shapes)
+                    val isRight = order[i] == 2
+                    val side = if (isRight) 1f else -1f
+                    val step = if (isRight) stride else -stride
+                    val hip = facing.project(ox, oy, u, side * 3.6f, 0f, hipUp)
+                    val foot = facing.project(ox, oy, u, side * 4.0f, step * 4.4f, 1.4f + (step * 1.8f).coerceAtLeast(0f))
+                    VolumetricShading.drawFootContactDot(this, foot, u * 2.6f, u * 1.3f)
+
+                    if (species == BipedMonsterStyle.NECROMANCER) {
+                        // Flowing lower robe skirt covers legs cleanly
+                        VolumetricShading.drawVolumetricCylinder(
+                            this, hip, foot, u * 4.2f, u * 4.8f,
+                            main = skinMain, highlight = skinHi, shadow = skinSh,
+                            outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                        )
+                    } else {
+                        val legR = if (species == BipedMonsterStyle.SKELETON) u * 1.45f else u * 2.9f
+                        VolumetricShading.drawVolumetricCylinder(
+                            this, hip, foot, legR, legR * 0.82f,
+                            main = skinMain, highlight = skinHi, shadow = skinSh,
+                            outlineW = ow * 0.9f, lightX = facing.lightScreenX, path = path
+                        )
+                        val footColor = when (species) {
+                            BipedMonsterStyle.MINOTAUR, BipedMonsterStyle.DEMON_LORD, BipedMonsterStyle.FIRE_DEVIL -> Color(0xFF261C1B)
+                            else -> skinSh
+                        }
+                        VolumetricShading.drawVolumetricEllipsoid(
+                            this, foot.x, foot.y, legR * 1.15f, legR * 0.65f,
+                            main = footColor, highlight = skinMain, shadow = INK,
+                            outlineW = ow * 0.8f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
+                        )
+                    }
+                }
+                5 -> { // VOLUMETRIC 3D TORSO (species armor, ribcage, molten runes, belt)
+                    val topC = facing.project(ox, oy, u, 0f, 0f, shoulderUp)
+                    val botC = facing.project(ox, oy, u, 0f, 0f, hipUp)
+                    val profileScale = 0.72f + 0.28f * abs(facing.forwardDepth)
+                    val topHW = u * torsoWidth * profileScale
+                    val botHW = u * (torsoWidth * 0.74f) * profileScale
+
+                    if (species == BipedMonsterStyle.SKELETON) {
+                        // 3D Spine + curved ivory ribs + pelvis
+                        VolumetricShading.drawVolumetricCylinder(
+                            this, topC, botC, u * 1.8f, u * 1.6f,
+                            main = skinMain, highlight = skinHi, shadow = skinSh,
+                            outlineW = ow * 0.82f, lightX = facing.lightScreenX, path = path
+                        )
+                        for (rib in 0..2) {
+                            val rUp = shoulderUp - 2.5f - rib * 3.6f
+                            val rc = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -1.2f else +1.2f, rUp)
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, rc.x, rc.y, topHW * (0.92f - rib * 0.08f), u * 1.45f,
+                                main = skinMain, highlight = skinHi, shadow = skinSh,
+                                outlineW = ow * 0.78f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
+                            )
+                        }
+                        VolumetricShading.drawVolumetricEllipsoid(
+                            this, botC.x, botC.y, botHW * 0.95f, u * 2.5f,
+                            main = skinMain, highlight = skinHi, shadow = skinSh,
+                            outlineW = ow * 0.82f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
+                        )
+                    } else {
+                        val torsoMain = when (species) {
+                            BipedMonsterStyle.ORC_WARRIOR -> Color(0xFF5D4029)
+                            BipedMonsterStyle.GOBLIN_SCOUT -> Color(0xFF6B4C2E)
+                            else -> skinMain
+                        }
+                        val torsoHi = when (species) {
+                            BipedMonsterStyle.ORC_WARRIOR -> Color(0xFF8C6342)
+                            BipedMonsterStyle.GOBLIN_SCOUT -> Color(0xFF966E45)
+                            else -> skinHi
+                        }
+                        val torsoSh = VolumetricShading.coolShadow(torsoMain, 0.48f)
+                        VolumetricShading.drawVolumetricTorso(
+                            scope = this,
+                            topCenter = topC,
+                            bottomCenter = botC,
+                            topHalfW = topHW,
+                            botHalfW = botHW,
+                            domeHeight = u * 3.4f,
+                            main = torsoMain,
+                            highlight = torsoHi,
+                            shadow = torsoSh,
+                            outlineW = ow,
+                            lightX = facing.lightScreenX,
+                            useRim = useRim,
+                            path = path
+                        )
+
+                        // Species torso details (chest runes, leather cross-strap, crimson necromancer stole)
+                        when (species) {
+                            BipedMonsterStyle.DEMON_LORD, BipedMonsterStyle.FIRE_DEVIL -> {
+                                val runeC = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -3.2f else +3.5f, (shoulderUp + hipUp) * 0.54f)
+                                drawCircle(Color(0xFFFF7A26).copy(alpha = 0.75f), u * 3.4f, runeC)
+                                drawCircle(Color(0xFFFFE77A), u * 1.7f, runeC)
+                            }
+                            BipedMonsterStyle.CYCLOPS, BipedMonsterStyle.MINOTAUR -> {
+                                val strapStart = facing.project(ox, oy, u, -6.5f, 0f, shoulderUp)
+                                val strapEnd = facing.project(ox, oy, u, +5.5f, 0f, hipUp + 1.5f)
+                                drawLine(Color(0xFF3E2614), strapStart, strapEnd, strokeWidth = u * 2.6f, cap = StrokeCap.Round)
+                                drawLine(Color(0xFFD9A64C), strapStart, strapEnd, strokeWidth = u * 0.75f)
+                            }
+                            BipedMonsterStyle.NECROMANCER -> {
+                                val trimTop = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -2.8f else +3.2f, shoulderUp)
+                                val trimBot = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -2.8f else +3.2f, hipUp - 3.5f)
+                                drawLine(Color(0xFF9C2240), trimTop, trimBot, strokeWidth = u * 2.8f, cap = StrokeCap.Round)
+                                drawLine(Color(0xFFD9A84E), trimTop, trimBot, strokeWidth = u * 0.7f)
+                            }
+                            else -> Unit
+                        }
+                    }
+                }
+                3 -> { // LEFT ARM + OFFHAND SHIELD / CLAW / ORB
+                    val sh = facing.project(ox, oy, u, -shoulderR, 0f, shoulderUp - 1.5f)
+                    val hand = facing.project(ox, oy, u, -shoulderR - 1.5f, +4.2f - stride * 2.2f, hipUp + 4.5f)
+                    val armR = if (species == BipedMonsterStyle.SKELETON) u * 1.35f else u * 2.4f
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, sh, hand, armR, armR * 0.82f,
+                        main = skinMain, highlight = skinHi, shadow = skinSh,
+                        outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                    )
+                    // Offhand shields for armed foes (Skeleton, Goblin Scout, Orc Warrior)
+                    if (species == BipedMonsterStyle.SKELETON || species == BipedMonsterStyle.GOBLIN_SCOUT || species == BipedMonsterStyle.ORC_WARRIOR) {
+                        val shC = facing.project(ox, oy, u, -shoulderR - 2.6f, +5.8f, hipUp + 5.2f)
+                        val isIron = species == BipedMonsterStyle.ORC_WARRIOR
+                        val shieldRx = u * (if (isIron) 4.4f else 3.8f) * (0.55f + 0.45f * abs(facing.forwardDepth))
+                        VolumetricShading.drawVolumetricEllipsoid(
+                            this, shC.x, shC.y, shieldRx, u * (if (isIron) 5.8f else 4.4f),
+                            main = if (isIron) Color(0xFF5D6775) else Color(0xFF8A592E),
+                            highlight = if (isIron) Color(0xFFB3C0D4) else Color(0xFFBF8652),
+                            shadow = Color(0xFF2B211B),
+                            outlineW = ow * 0.9f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                            useSpecular = useSpec
+                        )
+                        drawCircle(Color(0xFFD9A84E), u * 1.15f, shC)
+                    } else if (species == BipedMonsterStyle.NECROMANCER && quality != GraphicsQuality.LOW) {
+                        // Orbiting violet soul wisp
+                        val wisp = facing.project(ox, oy, u, -shoulderR - 3.5f + cos(t * 4f) * 1.8f, +5.0f, hipUp + 8.5f + sin(t * 4f) * 1.8f)
+                        drawCircle(Color(0xFFAE5CFF).copy(alpha = 0.45f), u * 3.4f, wisp)
+                        drawCircle(Color(0xFFE8C8FF), u * 1.5f, wisp)
+                    }
+                }
+                4 -> { // RIGHT ARM + 3D WEAPON (Club, Sword, Battleaxe, Cleaver, Trident, Staff, Greatsword)
+                    val sh = facing.project(ox, oy, u, +shoulderR, 0f, shoulderUp - 1.5f)
+                    val swingF = 4.6f + stride * 2.2f + lunge * 6.5f
+                    val swingUp = hipUp + 5.0f + lunge * 4.5f
+                    val hand = facing.project(ox, oy, u, +shoulderR + 1.2f, swingF, swingUp)
+                    val armR = if (species == BipedMonsterStyle.SKELETON) u * 1.35f else u * 2.5f
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, sh, hand, armR, armR * 0.85f,
+                        main = skinMain, highlight = skinHi, shadow = skinSh,
+                        outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                    )
+
+                    val tip = facing.project(ox, oy, u, +shoulderR + 3.2f, swingF + 9.5f + lunge * 5.0f, swingUp + 12.5f - lunge * 6.0f)
+                    when (species) {
+                        BipedMonsterStyle.SWAMP_TROLL, BipedMonsterStyle.CYCLOPS -> {
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, hand, tip, u * 1.5f, u * 3.6f,
+                                main = Color(0xFF754C29), highlight = Color(0xFFA87648), shadow = Color(0xFF3E2410),
+                                outlineW = ow * 0.9f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                        BipedMonsterStyle.SKELETON, BipedMonsterStyle.ORC_WARRIOR, BipedMonsterStyle.GOBLIN_SCOUT -> {
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, hand, tip, u * 1.35f, u * 0.75f,
+                                main = Color(0xFF9EA8B8), highlight = Color(0xFFE8F0FC), shadow = Color(0xFF4F5866),
+                                outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                        BipedMonsterStyle.MINOTAUR -> {
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, hand, tip, u * 1.1f, u * 1.1f,
+                                main = Color(0xFF6B4323), outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
+                            )
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, tip.x, tip.y, u * 4.4f, u * 3.2f,
+                                main = Color(0xFF9DA8B8), highlight = Color(0xFFF0F5FC), shadow = Color(0xFF47505E),
+                                outlineW = ow * 0.9f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec
+                            )
+                        }
+                        BipedMonsterStyle.FIRE_DEVIL, BipedMonsterStyle.DEMON_LORD -> {
+                            val bladeW = if (species == BipedMonsterStyle.DEMON_LORD) u * 2.5f else u * 1.4f
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, hand, tip, bladeW, bladeW * 0.55f,
+                                main = Color(0xFFFF6D26), highlight = Color(0xFFFFEE88), shadow = Color(0xFF6B140C),
+                                outlineW = ow * 0.9f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                        BipedMonsterStyle.NECROMANCER -> {
+                            val staffBot = facing.project(ox, oy, u, +shoulderR + 1.0f, swingF - 1.5f, 2.0f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, staffBot, tip, u * 1.15f, u * 1.05f,
+                                main = Color(0xFF3E2924), highlight = Color(0xFF6E4B42), shadow = INK,
+                                outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
+                            )
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, tip.x, tip.y, u * 2.6f, u * 2.4f,
+                                main = Color(0xFFE6DEC8), highlight = Color(0xFFD08CFF), shadow = Color(0xFF5A4E44),
+                                outlineW = ow * 0.78f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec
+                            )
+                        }
+                        BipedMonsterStyle.GHOUL -> {
+                            // Elongated hooked necrotic claws
+                            drawLine(Color(0xFFCFD9C8), hand, tip, strokeWidth = u * 1.4f, cap = StrokeCap.Round)
+                        }
+                    }
+                }
+                6 -> { // TURNING 3D HEAD (Horns, Tusks, Ears, Single Cyclops Eye, Hood)
+                    val headPos = facing.project(ox, oy, u, 0f, +1.0f, headUp)
+                    val headR = when (species) {
+                        BipedMonsterStyle.CYCLOPS, BipedMonsterStyle.DEMON_LORD -> u * 5.8f
+                        BipedMonsterStyle.GOBLIN_SCOUT -> u * 5.2f
+                        else -> u * 5.4f
+                    }
+
+                    // Goblin long pointed side-swept ears (visible across all 8 octants!)
+                    if (species == BipedMonsterStyle.GOBLIN_SCOUT) {
+                        for (side in -1..1 step 2) {
+                            val eb = facing.project(ox, oy, u, side * 4.5f, +0.5f, headUp + 0.5f)
+                            val et = facing.project(ox, oy, u, side * 10.8f, -1.0f, headUp + 2.8f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, eb, et, u * 1.8f, u * 0.5f,
+                                main = skinMain, highlight = skinHi, shadow = skinSh,
+                                outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                    }
+
+                    // Sweeping 3D Horns (Minotaur, Fire Devil, Demon Lord)
+                    if (species == BipedMonsterStyle.MINOTAUR || species == BipedMonsterStyle.FIRE_DEVIL || species == BipedMonsterStyle.DEMON_LORD) {
+                        val hornColor = if (species == BipedMonsterStyle.MINOTAUR) Color(0xFFE8DFC8) else Color(0xFF2B2226)
+                        val hornSpan = if (species == BipedMonsterStyle.DEMON_LORD) 10.5f else 8.4f
+                        for (side in -1..1 step 2) {
+                            val hb = facing.project(ox, oy, u, side * 3.8f, +0.5f, headUp + 3.5f)
+                            val ht = facing.project(ox, oy, u, side * hornSpan, +2.0f, headUp + 9.2f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, hb, ht, u * 1.8f, u * 0.55f,
+                                main = hornColor, highlight = Color(0xFFFFF4DC), shadow = INK,
+                                outlineW = ow * 0.82f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                    }
+
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, headPos.x, headPos.y, headR, headR * 0.94f,
+                        main = skinMain, highlight = skinHi, shadow = skinSh,
+                        outlineW = ow, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+
+                    // Face features ONLY when facing toward or sideways to the camera!
+                    if (!facing.isBackFacing) {
+                        when (species) {
+                            BipedMonsterStyle.CYCLOPS -> {
+                                // Iconic huge central eye
+                                val eye = facing.project(ox, oy, u, 0f, +5.8f, headUp + 0.8f)
+                                drawCircle(INK, u * 2.8f, eye)
+                                drawCircle(Color(0xFFFFF8E8), u * 2.2f, eye)
+                                drawCircle(Color(0xFFE04832), u * 1.25f, eye)
+                                drawCircle(INK, u * 0.6f, eye)
+                            }
+                            BipedMonsterStyle.NECROMANCER -> {
+                                // Shadowed hood void with glowing violet eyes
+                                val voidP = facing.project(ox, oy, u, 0f, +4.4f, headUp - 0.2f)
+                                drawOval(
+                                    color = Color(0xFF0B0812),
+                                    topLeft = Offset(voidP.x - u * 3.5f, voidP.y - u * 3.4f),
+                                    size = Size(u * 7.0f, u * 6.8f)
+                                )
+                                for (side in -1..1 step 2) {
+                                    val ep = facing.project(ox, oy, u, side * 1.6f, +5.4f, headUp + 0.4f)
+                                    drawCircle(Color(0xFFCC7BFF), u * 1.0f, ep)
+                                }
+                            }
+                            BipedMonsterStyle.SKELETON -> {
+                                for (side in -1..1 step 2) {
+                                    val ep = facing.project(ox, oy, u, side * 1.9f, +5.4f, headUp + 0.5f)
+                                    drawCircle(INK, u * 1.45f, ep)
+                                    drawCircle(Color(0xFF66FFE3), u * 0.55f, ep)
+                                }
+                                val jaw = facing.project(ox, oy, u, 0f, +5.4f, headUp - 2.6f)
+                                drawLine(INK, Offset(jaw.x - u * 2.0f, jaw.y), Offset(jaw.x + u * 2.0f, jaw.y), strokeWidth = ow * 0.85f)
+                            }
+                            else -> {
+                                val eyeColor = when (species) {
+                                    BipedMonsterStyle.DEMON_LORD, BipedMonsterStyle.FIRE_DEVIL -> Color(0xFFFFD83B)
+                                    BipedMonsterStyle.GHOUL -> Color(0xFF8CFF7A)
+                                    BipedMonsterStyle.GOBLIN_SCOUT -> Color(0xFFFFE04A)
+                                    else -> Color(0xFFFF5238)
+                                }
+                                for (side in -1..1 step 2) {
+                                    val ep = facing.project(ox, oy, u, side * 2.1f, +5.4f, headUp + 0.8f)
+                                    drawCircle(INK, u * 1.3f, ep)
+                                    drawCircle(eyeColor, u * 0.9f, ep)
+                                }
+                                // Tusks for Orc / Troll / Minotaur nose ring
+                                if (species == BipedMonsterStyle.ORC_WARRIOR || species == BipedMonsterStyle.SWAMP_TROLL) {
+                                    for (side in -1..1 step 2) {
+                                        val tk = facing.project(ox, oy, u, side * 2.0f, +5.8f, headUp - 2.4f)
+                                        drawCircle(Color(0xFFF5EED6), u * 1.05f, tk)
+                                        drawCircle(INK, u * 1.05f, tk, style = Stroke(ow * 0.55f))
+                                    }
+                                } else if (species == BipedMonsterStyle.MINOTAUR) {
+                                    val ring = facing.project(ox, oy, u, 0f, +6.6f, headUp - 2.2f)
+                                    drawCircle(Color(0xFFF0C450), u * 1.55f, ring, style = Stroke(u * 0.85f))
+                                }
+                            }
+                        }
+                    } else if (species == BipedMonsterStyle.ORC_WARRIOR || species == BipedMonsterStyle.SWAMP_TROLL) {
+                        // Back-of-head dark hair / topknot detail visible when viewed from behind
+                        val braid = facing.project(ox, oy, u, 0f, -4.6f, headUp + 1.2f)
+                        VolumetricShading.drawVolumetricEllipsoid(
+                            this, braid.x, braid.y, u * 2.8f, u * 3.4f,
+                            main = Color(0xFF28201B), highlight = Color(0xFF4D3F35), shadow = INK,
+                            outlineW = ow * 0.78f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /** Zero-allocation in-place insertion sort of small 3D layer index arrays by depth. */
+    private fun sortIndices(order: IntArray, depths: FloatArray) {
+        for (i in 1 until order.size) {
+            val keyIdx = order[i]
+            val keyD = depths[keyIdx]
+            var j = i - 1
+            while (j >= 0 && depths[order[j]] > keyD) {
+                order[j + 1] = order[j]
+                j--
+            }
+            order[j + 1] = keyIdx
+        }
     }
 }

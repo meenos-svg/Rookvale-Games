@@ -13,15 +13,21 @@ import com.example.game.multiplayer.LocalPlayerPresencePayload
 import com.example.game.multiplayer.RealtimeMultiplayerManager
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.ui.screens.ArmorVisualKind
+import com.example.ui.screens.ArticulatedHumanoidRenderer
 import com.example.ui.screens.BootsVisualKind
 import com.example.ui.screens.HelmetVisualKind
+import com.example.ui.screens.HumanoidPart
 import com.example.ui.screens.IsometricCamera
 import com.example.ui.screens.OffhandVisualKind
 import com.example.ui.screens.OrganicMonsterRenderer
 import com.example.ui.screens.PaperDollAppearance
 import com.example.ui.screens.ScreenFacing
 import com.example.ui.screens.ScreenFacingResolver
+import com.example.ui.screens.ScreenOctant
+import com.example.ui.screens.VolumetricShading
 import com.example.ui.screens.WeaponVisualKind
+import kotlin.math.PI
+import kotlin.math.abs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -297,5 +303,92 @@ class ArticulatedEntityAndPaperDollTest {
         assertEquals(ArmorVisualKind.ROBE, miraLook.armorKind)
         assertEquals(HelmetVisualKind.WIZARD_HAT, miraLook.helmetKind)
         assertEquals(BootsVisualKind.TRAVELER, miraLook.bootsKind)
+    }
+
+    @Test
+    fun eightDirectionalOctantsAndRearViewsResolveAcrossFull360Rotation() {
+        val expected = listOf(
+            0f to ScreenOctant.FRONT,
+            45f to ScreenOctant.FRONT_RIGHT,
+            90f to ScreenOctant.RIGHT,
+            135f to ScreenOctant.BACK_RIGHT,
+            180f to ScreenOctant.BACK,
+            -135f to ScreenOctant.BACK_LEFT,
+            -90f to ScreenOctant.LEFT,
+            -45f to ScreenOctant.FRONT_LEFT
+        )
+        for ((deg, oct) in expected) {
+            val resolved = ScreenFacingResolver.resolveForRelativeAngleDeg(deg)
+            assertEquals("Angle $deg should map to $oct", oct, resolved.octant)
+            assertEquals("Rear flag mismatch for $oct", oct.isRear, resolved.isBackFacing)
+        }
+
+        // Rotating cameraYaw around a stationary SOUTH-facing hero sweeps smoothly through FRONT -> LEFT -> BACK -> RIGHT
+        val yaw0 = ScreenFacingResolver.resolve(Direction.SOUTH, 0f)
+        val yaw90 = ScreenFacingResolver.resolve(Direction.SOUTH, 90f)
+        val yaw180 = ScreenFacingResolver.resolve(Direction.SOUTH, 180f)
+        val yaw270 = ScreenFacingResolver.resolve(Direction.SOUTH, 270f)
+        assertEquals(ScreenOctant.FRONT, yaw0.octant)
+        assertEquals(ScreenOctant.LEFT, yaw90.octant)
+        assertEquals(ScreenOctant.BACK, yaw180.octant)
+        assertEquals(ScreenOctant.RIGHT, yaw270.octant)
+        assertTrue(yaw180.isBackFacing)
+    }
+
+    @Test
+    fun humanoidDynamicDepthSortingPlacesFarLimbBehindTorsoAndRearCapeOnBack() {
+        // Facing RIGHT (+90°): left arm/offhand is far side (behind torso), right weapon arm is near side (in front)
+        val rightOrder = ArticulatedHumanoidRenderer.computePartDrawOrder(
+            ScreenFacingResolver.resolveForRelativeAngleDeg(90f)
+        )
+        assertTrue(rightOrder.indexOf(HumanoidPart.LEFT_ARM_OFFHAND) < rightOrder.indexOf(HumanoidPart.TORSO))
+        assertTrue(rightOrder.indexOf(HumanoidPart.RIGHT_ARM_WEAPON) > rightOrder.indexOf(HumanoidPart.TORSO))
+
+        // Facing LEFT (-90°): right weapon arm is far side (behind torso), left offhand arm is near side (in front)
+        val leftOrder = ArticulatedHumanoidRenderer.computePartDrawOrder(
+            ScreenFacingResolver.resolveForRelativeAngleDeg(-90f)
+        )
+        assertTrue(leftOrder.indexOf(HumanoidPart.RIGHT_ARM_WEAPON) < leftOrder.indexOf(HumanoidPart.TORSO))
+        assertTrue(leftOrder.indexOf(HumanoidPart.LEFT_ARM_OFFHAND) > leftOrder.indexOf(HumanoidPart.TORSO))
+
+        // Facing BACK (180°): cape drapes over back (draws AFTER torso), while front-reaching arms draw BEFORE torso
+        val backOrder = ArticulatedHumanoidRenderer.computePartDrawOrder(
+            ScreenFacingResolver.resolveForRelativeAngleDeg(180f)
+        )
+        assertTrue(backOrder.indexOf(HumanoidPart.BACK_CAPE) > backOrder.indexOf(HumanoidPart.TORSO))
+        assertTrue(backOrder.indexOf(HumanoidPart.RIGHT_ARM_WEAPON) < backOrder.indexOf(HumanoidPart.TORSO))
+
+        // Facing FRONT (0°): cape sits behind torso
+        val frontOrder = ArticulatedHumanoidRenderer.computePartDrawOrder(
+            ScreenFacingResolver.resolveForRelativeAngleDeg(0f)
+        )
+        assertTrue(frontOrder.indexOf(HumanoidPart.BACK_CAPE) < frontOrder.indexOf(HumanoidPart.TORSO))
+    }
+
+    @Test
+    fun quadrupedLegDepthOrderAndShortestAngleLerpWrapCleanly() {
+        // Facing FRONT (0°): back legs draw BEFORE front legs
+        val frontLegs = OrganicMonsterRenderer.computeQuadrupedLegOrder(
+            ScreenFacingResolver.resolveForRelativeAngleDeg(0f)
+        )
+        assertTrue(frontLegs.indexOf("BL") < frontLegs.indexOf("FL"))
+        assertTrue(frontLegs.indexOf("BR") < frontLegs.indexOf("FR"))
+
+        // Facing BACK (180°): front legs are farther away and draw BEFORE back legs
+        val backLegs = OrganicMonsterRenderer.computeQuadrupedLegOrder(
+            ScreenFacingResolver.resolveForRelativeAngleDeg(180f)
+        )
+        assertTrue(backLegs.indexOf("FL") < backLegs.indexOf("BL"))
+        assertTrue(backLegs.indexOf("FR") < backLegs.indexOf("BR"))
+
+        // Shortest-arc lerp across +PI / -PI boundary moves smoothly across PI instead of spinning 340 degrees
+        val start = (170.0 * PI / 180.0).toFloat()
+        val target = (-170.0 * PI / 180.0).toFloat()
+        val mid = ScreenFacingResolver.shortestAngleLerp(start, target, 0.5f)
+        assertTrue("Expected shortest arc near PI, got $mid", abs(abs(mid) - PI.toFloat()) < 0.05f)
+
+        // Heroic grounded scale (~20% larger than 1.0)
+        assertTrue(VolumetricShading.HEROIC_HUMANOID_SCALE in 1.15f..1.25f)
+        assertTrue(VolumetricShading.HEROIC_MONSTER_SCALE in 1.12f..1.25f)
     }
 }
