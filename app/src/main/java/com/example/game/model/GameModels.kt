@@ -476,7 +476,8 @@ enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
     CRYSTAL_PILLAR(false),
     TEMPLE_PEW(false),
     WEAPON_RACK(false),
-    MOORED_BOAT(false);
+    MOORED_BOAT(false),
+    WOOD_BED(false);
 
     fun oreVeinKind(): OreVeinKind? = when (this) {
         ORE_OCHRE -> OreVeinKind.OCHRE

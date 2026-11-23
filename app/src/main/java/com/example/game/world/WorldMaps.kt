@@ -582,57 +582,111 @@ object WorldMaps {
             grid.set(lx, ly, TileType.LANTERN_POST)
         }
 
-        // Temple Sanctuary Building (188..204, 174..187)
+        // Temple Sanctuary Complex (188..204, 174..187) — split into North Sanctuary Nave + West & East 7x7 Cleric Quarters
         grid.fillRect(188, 174, 204, 187, TileType.TEMPLE_FLOOR)
         grid.drawWallBorder(188, 174, 204, 187, TileType.TEMPLE_WALL)
-        // Grand 5-tile open South Portico opening onto Sanctuary Plaza
-        grid.fillRect(194, 187, 198, 188, TileType.TEMPLE_FLOOR)
-        grid.set(193, 187, TileType.GATE_PILLAR)
-        grid.set(199, 187, TileType.GATE_PILLAR)
+        // Interior room partition along y = 181 creating cozy North Nave (17x8) and flanking 7x7 side rooms
+        for (x in 189..203) {
+            if (x !in 190..191 && x !in 195..197 && x !in 201..202) {
+                grid.set(x, 181, TileType.TEMPLE_WALL)
+            }
+        }
+        // Flanking vestibule partitions at x = 194 & x = 198 (south half y = 182..186) with double-wide doorways (y = 183..184)
+        for (y in 182..186) {
+            if (y !in 183..184) {
+                grid.set(194, y, TileType.TEMPLE_WALL)
+                grid.set(198, y, TileType.TEMPLE_WALL)
+            }
+        }
+        // Grand 3-tile open South Portico opening onto Sanctuary Plaza (195..197)
+        grid.fillRect(195, 187, 197, 188, TileType.TEMPLE_FLOOR)
+        grid.set(194, 187, TileType.GATE_PILLAR)
+        grid.set(198, 187, TileType.GATE_PILLAR)
         grid.set(192, 189, TileType.LANTERN_POST)
         grid.set(200, 189, TileType.LANTERN_POST)
-        // Temple Altar, Sanctuary Pews & Open Walkways around Brother Alden (193,179) & The Oracle (199,179)
+        // North Sanctuary: Marble Altar, Bookshelves, Pews & open walkways around Brother Alden (193,179) & The Oracle (199,179)
         grid.set(196, 177, TileType.TEMPLE_ALTAR)
-        listOf(191 to 182, 191 to 184, 201 to 182, 201 to 184).forEach { (px, py) ->
+        listOf(189 to 175, 190 to 175, 202 to 175, 203 to 175).forEach { (bx, by) ->
+            grid.set(bx, by, TileType.BOOKSHELF)
+        }
+        listOf(190 to 177, 202 to 177).forEach { (px, py) ->
             grid.set(px, py, TileType.TEMPLE_PEW)
         }
+        // West Cleric Dormitory (188..194, 181..187 — 7x7): Cozy beds, bookshelf & supply barrel
+        grid.set(189, 183, TileType.WOOD_BED)
+        grid.set(189, 185, TileType.WOOD_BED)
+        grid.set(191, 186, TileType.BOOKSHELF)
+        grid.set(192, 182, TileType.CRATE_BARREL)
+        // East Oracle Study & Rest Chamber (198..204, 181..187 — 7x7): Bed, bookshelves & pew
+        grid.set(203, 185, TileType.WOOD_BED)
+        grid.set(202, 186, TileType.BOOKSHELF)
+        grid.set(203, 182, TileType.BOOKSHELF)
+        grid.set(200, 185, TileType.TEMPLE_PEW)
         // Keep spawn tile (196, 192) crystal clear cobblestone in Sanctuary Plaza
         grid.set(TEMPLE_SPAWN_X, TEMPLE_SPAWN_Y, TileType.COBBLESTONE)
 
         // --- DISTRICT 2: GRAND MARKET & DEPOT QUARTER (x = 152..180, y = 174..212) ---
-        // Town Depot Hall (156..172, 176..188)
+        // Town Depot Hall (156..172, 176..188) — split into cozy Vault Room (9x13) & Quartermaster Bunk/Cargo Rooms (9x7 + 9x7)
         grid.fillRect(156, 176, 172, 188, TileType.WOOD_PLANK_FLOOR)
         grid.drawWallBorder(156, 176, 172, 188, TileType.TIMBER_WALL)
+        // Half-timbered partition wall down x = 164 with double-wide interior archway (y = 181..183)
+        for (y in 177..187) {
+            if (y !in 181..183) {
+                grid.set(164, y, TileType.TIMBER_WALL)
+            }
+        }
         // Warm glowing windows along Depot north & south walls
-        listOf(160 to 176, 164 to 176, 168 to 176, 159 to 188, 169 to 188).forEach { (wx, wy) ->
+        listOf(160 to 176, 168 to 176, 159 to 188, 169 to 188).forEach { (wx, wy) ->
             grid.set(wx, wy, TileType.TIMBER_WINDOW_WALL)
         }
-        // Wide South & East Archways
-        grid.fillRect(163, 188, 165, 189, TileType.WOOD_PLANK_FLOOR)
+        // Double-wide South & East Timber-Lintel Doorways
+        grid.fillRect(160, 188, 162, 189, TileType.WOOD_PLANK_FLOOR)
+        grid.fillRect(167, 188, 168, 189, TileType.WOOD_PLANK_FLOOR)
         grid.fillRect(172, 181, 173, 183, TileType.WOOD_PLANK_FLOOR)
-        // Iron-bound Depot Chests & Supply Crates/Barrels
+        // West Vault Room: 3 Iron-bound Depot Chests, Clerk Counter, Bookshelf & Crates
         grid.set(158, 179, TileType.DEPOT_CHEST)
         grid.set(158, 182, TileType.DEPOT_CHEST)
         grid.set(158, 185, TileType.DEPOT_CHEST)
-        listOf(161 to 178, 169 to 178, 169 to 186).forEach { (cx, cy) ->
-            grid.set(cx, cy, TileType.CRATE_BARREL)
-        }
+        grid.set(161, 178, TileType.SHOP_COUNTER)
+        grid.set(162, 177, TileType.BOOKSHELF)
+        grid.set(161, 186, TileType.CRATE_BARREL)
+        // East Quartermaster Room: Cozy Bunk Beds, Bookshelf & Stacked Barrels/Crates
+        grid.set(167, 178, TileType.WOOD_BED)
+        grid.set(170, 178, TileType.WOOD_BED)
+        grid.set(166, 186, TileType.BOOKSHELF)
+        grid.set(169, 186, TileType.CRATE_BARREL)
+        grid.set(170, 185, TileType.CRATE_BARREL)
+        grid.set(173, 179, TileType.LANTERN_POST)
+        grid.set(173, 185, TileType.LANTERN_POST)
 
-        // Alaric's Shop Building (156..170, 198..210)
+        // Alaric's Market Hall (156..170, 198..210) — split into cozy 9x13 Shopfront & 7x13 Merchant Living Quarters
         grid.fillRect(156, 198, 170, 210, TileType.WOOD_PLANK_FLOOR)
         grid.drawWallBorder(156, 198, 170, 210, TileType.TIMBER_WALL)
-        listOf(159 to 198, 167 to 198, 160 to 210, 166 to 210).forEach { (wx, wy) ->
+        // Interior half-timbered partition at x = 164 with double-wide doorway (y = 203..205)
+        for (y in 199..209) {
+            if (y !in 203..205) {
+                grid.set(164, y, TileType.TIMBER_WALL)
+            }
+        }
+        listOf(158 to 198, 167 to 198, 159 to 210, 167 to 210).forEach { (wx, wy) ->
             grid.set(wx, wy, TileType.TIMBER_WINDOW_WALL)
         }
-        // Wide North & East Archways
-        grid.fillRect(162, 197, 164, 198, TileType.WOOD_PLANK_FLOOR)
+        // Double-wide North & East Timber-Lintel Doorways
+        grid.fillRect(160, 197, 162, 198, TileType.WOOD_PLANK_FLOOR)
         grid.fillRect(170, 203, 171, 205, TileType.WOOD_PLANK_FLOOR)
-        // Shop Counters, Weapon Rack, Crates & Alaric at (162, 204)
-        grid.set(161, 201, TileType.SHOP_COUNTER)
-        grid.set(163, 201, TileType.SHOP_COUNTER)
+        // West Shopfront: Alaric's Counters, Weapon Rack, Bookshelf, Crates & Alaric at (162, 204)
+        grid.set(160, 201, TileType.SHOP_COUNTER)
+        grid.set(162, 201, TileType.SHOP_COUNTER)
         grid.set(158, 201, TileType.WEAPON_RACK)
-        grid.set(167, 200, TileType.CRATE_BARREL)
+        grid.set(157, 206, TileType.BOOKSHELF)
+        grid.set(158, 208, TileType.CRATE_BARREL)
         grid.set(162, 204, TileType.WOOD_PLANK_FLOOR)
+        // East Merchant Quarters: Cozy Beds, Bookshelf, Armory Rack & Storage Barrels
+        grid.set(166, 200, TileType.WOOD_BED)
+        grid.set(168, 200, TileType.WOOD_BED)
+        grid.set(169, 207, TileType.WEAPON_RACK)
+        grid.set(166, 208, TileType.CRATE_BARREL)
+        grid.set(168, 208, TileType.BOOKSHELF)
 
         // Open-Air Market Plaza & Colorful Awning Stalls (172..181, 196..210)
         grid.fillRect(171, 195, 181, 211, TileType.COBBLESTONE)
@@ -648,22 +702,38 @@ object WorldMaps {
         grid.set(154, 171, TileType.LANTERN_POST)
 
         // --- DISTRICT 3: ARCANE & RUNECRAFTING QUARTER (x = 214..246, y = 172..188) ---
+        // Split into 3 connected ~7x10 cozy Academy Chambers: West Study, Central Rune Sanctum & East Archive
         grid.fillRect(216, 174, 234, 187, TileType.ARCANE_FLOOR)
         grid.drawWallBorder(216, 174, 234, 187, TileType.TIMBER_WALL)
-        listOf(220 to 174, 230 to 174, 220 to 187, 230 to 187).forEach { (wx, wy) ->
+        // Interior partitions at x = 222 and x = 229 with double-wide archways (y = 180..182)
+        for (y in 175..186) {
+            if (y !in 180..182) {
+                grid.set(222, y, TileType.TIMBER_WALL)
+                grid.set(229, y, TileType.TIMBER_WALL)
+            }
+        }
+        listOf(219 to 174, 225 to 174, 231 to 174, 219 to 187, 231 to 187).forEach { (wx, wy) ->
             grid.set(wx, wy, TileType.TIMBER_WINDOW_WALL)
         }
-        // Wide South & West Archways
+        // Double-wide South & West Timber-Lintel Doorways
         grid.fillRect(224, 187, 226, 189, TileType.ARCANE_FLOOR)
         grid.fillRect(215, 180, 216, 182, TileType.ARCANE_FLOOR)
-        // Runecrafting Altar, Crystal Pillars & Scholar Bookshelves
+        // Central Rune Sanctum (222..229): Runecrafting Altar, Crystal Pillars & Scholar Bookshelves
         grid.set(225, 179, TileType.RUNECRAFTING_TABLE)
-        listOf(219 to 177, 231 to 177, 219 to 184, 231 to 184).forEach { (cx, cy) ->
-            grid.set(cx, cy, TileType.CRYSTAL_PILLAR)
-        }
-        listOf(222 to 175, 223 to 175, 227 to 175, 228 to 175).forEach { (bx, by) ->
-            grid.set(bx, by, TileType.BOOKSHELF)
-        }
+        listOf(224 to 184, 227 to 184).forEach { (cx, cy) -> grid.set(cx, cy, TileType.CRYSTAL_PILLAR) }
+        listOf(224 to 175, 225 to 175, 227 to 175).forEach { (bx, by) -> grid.set(bx, by, TileType.BOOKSHELF) }
+        // West Apprentice Study (216..222): Crystal Pillar, Bookshelves & Dormitory Bed
+        grid.set(219, 177, TileType.CRYSTAL_PILLAR)
+        grid.set(218, 175, TileType.BOOKSHELF)
+        grid.set(220, 175, TileType.BOOKSHELF)
+        grid.set(218, 185, TileType.WOOD_BED)
+        grid.set(220, 185, TileType.CRATE_BARREL)
+        // East Arcane Archive (229..234): Crystal Pillar, Bookshelves, Bed & Supply Barrel
+        grid.set(231, 177, TileType.CRYSTAL_PILLAR)
+        grid.set(231, 175, TileType.BOOKSHELF)
+        grid.set(232, 175, TileType.BOOKSHELF)
+        grid.set(232, 185, TileType.WOOD_BED)
+        grid.set(231, 183, TileType.CRATE_BARREL)
         // City Sewers Entrance (Floor -1) neatly beside Academy courtyard
         grid.fillRect(239, 176, 245, 183, TileType.COBBLESTONE)
         grid.set(242, 179, TileType.STAIRS_DOWN)
@@ -671,28 +741,50 @@ object WorldMaps {
         grid.set(244, 177, TileType.LANTERN_POST)
 
         // --- DISTRICT 4: CRAFT & FLETCHING WARD + LOGGING ORCHARD (x = 214..254, y = 196..218) ---
+        // Split into 2 cozy ~9x9 open-top connected workshops: Stone-walled Blacksmith Forge + Timber Fletching Hall
         grid.fillRect(216, 198, 234, 211, TileType.COBBLESTONE)
-        grid.fillRect(218, 200, 232, 209, TileType.WOOD_PLANK_FLOOR)
-        // Back wall + open fenced courtyard sides
-        for (x in 216..234) grid.set(x, 198, if (x in 220..222 || x in 228..230) TileType.TIMBER_WINDOW_WALL else TileType.TIMBER_WALL)
-        for (y in 199..211) {
-            if (y !in 203..206) {
-                grid.set(216, y, TileType.WOOD_FENCE)
-                grid.set(234, y, TileType.WOOD_FENCE)
-            }
+        grid.fillRect(217, 199, 224, 207, TileType.COBBLESTONE) // Stone-floored Blacksmith Forge
+        grid.fillRect(226, 199, 233, 207, TileType.WOOD_PLANK_FLOOR) // Timber-floored Fletching Workshop
+        // Mortared Stone Walls enclosing the Forge (216..225, 198..208) & Half-Timbered Walls enclosing Fletching (225..234, 198..208)
+        for (x in 216..225) {
+            grid.set(x, 198, TileType.STONE_WALL)
+            if (x !in 220..221) grid.set(x, 208, TileType.STONE_WALL)
+        }
+        for (y in 198..208) {
+            if (y !in 203..204) grid.set(216, y, TileType.STONE_WALL)
+            if (y !in 203..205) grid.set(225, y, TileType.TIMBER_WALL)
+        }
+        for (x in 226..234) {
+            grid.set(x, 198, if (x in 229..231) TileType.TIMBER_WINDOW_WALL else TileType.TIMBER_WALL)
+            if (x !in 229..230) grid.set(x, 208, TileType.TIMBER_WALL)
+        }
+        for (y in 198..208) {
+            if (y !in 203..204) grid.set(234, y, TileType.TIMBER_WALL)
+        }
+        // Open fenced front craft yard along y = 211
+        for (y in 209..211) {
+            grid.set(216, y, TileType.WOOD_FENCE)
+            grid.set(234, y, TileType.WOOD_FENCE)
         }
         for (x in 217..233) {
-            if (x !in 222..228) grid.set(x, 211, TileType.WOOD_FENCE)
+            if (x !in 221..229) grid.set(x, 211, TileType.WOOD_FENCE)
         }
-        // Glowing Forge, Anvil, Fletching Benches, Weapon Racks & Stacked Logs/Crates
+        // West Blacksmith Forge: Glowing Lava/Coal Smelting Furnace, Horned Anvil, Weapon Rack & Coal Barrels
         grid.set(219, 201, TileType.SMELTING_FURNACE)
         grid.set(223, 201, TileType.BLACKSMITH_ANVIL)
+        grid.set(218, 206, TileType.WEAPON_RACK)
+        grid.set(223, 206, TileType.CRATE_BARREL)
+        // East Fletching Workshop: Fletching Benches, Bookshelf, Master Bed & Lumber Crates
         grid.set(228, 201, TileType.FLETCHING_BENCH)
         grid.set(231, 201, TileType.FLETCHING_BENCH)
-        grid.set(219, 207, TileType.WEAPON_RACK)
-        grid.set(231, 207, TileType.CRATE_BARREL)
+        grid.set(232, 206, TileType.WOOD_BED)
+        grid.set(227, 206, TileType.CRATE_BARREL)
+        grid.set(227, 199, TileType.BOOKSHELF)
+        // Tall Timber Street Lanterns outside the Craft Ward
         grid.set(215, 202, TileType.LANTERN_POST)
         grid.set(235, 202, TileType.LANTERN_POST)
+        grid.set(220, 211, TileType.LANTERN_POST)
+        grid.set(230, 211, TileType.LANTERN_POST)
 
         // Rookvale Logging Orchard (spaced choppable trees right beside Fletching Ward!)
         for (y in 196..218) {

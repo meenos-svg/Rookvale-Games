@@ -286,7 +286,7 @@ fun GameCanvasView(
             val chunkSize = floorMap.chunkedGrid.chunkSize
             val hw = camera.halfW
             val hh = camera.halfH
-            val spritePx = (camera.tileW * 0.78f * quality.spriteScaleMultiplier).roundToInt().coerceIn(32, 168)
+            val spritePx = (camera.tileW * 0.78f * quality.spriteScaleMultiplier).roundToInt().coerceIn(36, 320)
 
             depthQueue.clear()
             visibleLights.clear()
@@ -567,7 +567,9 @@ fun GameCanvasView(
                             cx = c.x,
                             cy = c.y,
                             nowMs = now,
-                            quality = quality
+                            quality = quality,
+                            playerFx = camPlayerX,
+                            playerFy = camPlayerY
                         )
                     }
                     is DepthSortableItem.NpcItem -> {
@@ -642,22 +644,8 @@ fun GameCanvasView(
                 }
             }
 
-            // PASS 3B: Smart Cutaway Pitched Building Roofs (fade translucent as player nears, vanish indoors!)
-            if (quality.drawCutawayRoofs) {
-                for (b in floorMap.buildings) {
-                    if (b.maxX >= bounds.minTx && b.minX <= bounds.maxTx && b.maxY >= bounds.minTy && b.minY <= bounds.maxTy) {
-                        IsometricTileDrawer.drawBuildingCutawayRoof(
-                            scope = this,
-                            path = reusablePath,
-                            cam = camera,
-                            building = b,
-                            playerFx = camPlayerX,
-                            playerFy = camPlayerY,
-                            quality = quality
-                        )
-                    }
-                }
-            }
+            // PASS 3B: Open-Top Cutaway Architecture (no opaque/tinted roofs blocking interiors;
+            // foreground tall 2.4x walls dynamically lower & soften around the player in PASS 3).
 
             // PASS 4: Projectiles, Spells, Splashes & Sparks (also registers moving spell lights!)
             drawIsometricProjectiles(st, camera, hw, now, quality, visibleLights)

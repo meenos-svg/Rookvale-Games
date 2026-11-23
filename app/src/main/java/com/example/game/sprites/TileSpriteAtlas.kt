@@ -103,6 +103,7 @@ object TileSpriteAtlas {
         TileType.TEMPLE_PEW -> drawWoodPier()
         TileType.WEAPON_RACK -> drawBlacksmithAnvil()
         TileType.MOORED_BOAT -> drawWater(frame)
+        TileType.WOOD_BED -> drawShopCounter()
     }
 
     private fun drawGrass(): ImageBitmap {

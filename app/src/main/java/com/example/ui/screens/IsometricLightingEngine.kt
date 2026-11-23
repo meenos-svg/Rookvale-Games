@@ -180,52 +180,50 @@ object IsometricLightingEngine {
         val self = floorMap.tileAt(tx, ty)
         if (isAoOccluder(self) || self == TileType.WATER || self == TileType.LAVA) return
 
-        val aoAlpha = if (quality.drawHdStonePolish) 0.34f else 0.27f
-        val aoColor = Color(0xFF070B18).copy(alpha = aoAlpha)
-        val castColor = Color(0xFF070B1A).copy(alpha = if (quality.drawHdStonePolish) 0.22f else 0.16f)
+        val aoAlpha = if (quality.drawHdStonePolish) 0.46f else 0.36f
+        val aoColor = Color(0xFF060914).copy(alpha = aoAlpha)
+        val castColor = Color(0xFF060916).copy(alpha = if (quality.drawHdStonePolish) 0.32f else 0.24f)
 
         val nOcc = isAoOccluder(floorMap.tileAt(tx, ty - 1))
         val sOcc = isAoOccluder(floorMap.tileAt(tx, ty + 1))
         val wOcc = isAoOccluder(floorMap.tileAt(tx - 1, ty))
         val eOcc = isAoOccluder(floorMap.tileAt(tx + 1, ty))
 
-        // Base contact AO along shared wall/cliff edges
+        // Base contact AO along shared wall/cliff edges + dark directional floor shadow cast by 2.4x walls
         if (nOcc) {
             IsometricTileDrawer.drawRotatedQuad(
                 scope, path, cam, cx, cy,
-                fracU = 1.02f, fracV = 0.22f, offsetV = -0.39f, fillColor = aoColor
+                fracU = 1.02f, fracV = 0.26f, offsetV = -0.37f, fillColor = aoColor
             )
-            // North wall casts extended soft twilight shadow southward onto this tile
             if (quality.drawCastShadows) {
                 IsometricTileDrawer.drawRotatedQuad(
                     scope, path, cam, cx, cy,
-                    fracU = 1.02f, fracV = 0.44f, offsetV = -0.26f, fillColor = castColor
+                    fracU = 1.02f, fracV = 0.64f, offsetV = -0.18f, fillColor = castColor
                 )
             }
         }
         if (wOcc) {
             IsometricTileDrawer.drawRotatedQuad(
                 scope, path, cam, cx, cy,
-                fracU = 0.22f, fracV = 1.02f, offsetU = -0.39f, fillColor = aoColor
+                fracU = 0.26f, fracV = 1.02f, offsetU = -0.37f, fillColor = aoColor
             )
-            // West wall casts extended soft twilight shadow eastward onto this tile
             if (quality.drawCastShadows) {
                 IsometricTileDrawer.drawRotatedQuad(
                     scope, path, cam, cx, cy,
-                    fracU = 0.46f, fracV = 1.02f, offsetU = -0.25f, fillColor = castColor
+                    fracU = 0.64f, fracV = 1.02f, offsetU = -0.18f, fillColor = castColor
                 )
             }
         }
         if (sOcc) {
             IsometricTileDrawer.drawRotatedQuad(
                 scope, path, cam, cx, cy,
-                fracU = 1.02f, fracV = 0.18f, offsetV = 0.41f, fillColor = aoColor
+                fracU = 1.02f, fracV = 0.20f, offsetV = 0.40f, fillColor = aoColor
             )
         }
         if (eOcc) {
             IsometricTileDrawer.drawRotatedQuad(
                 scope, path, cam, cx, cy,
-                fracU = 0.18f, fracV = 1.02f, offsetU = 0.41f, fillColor = aoColor
+                fracU = 0.20f, fracV = 1.02f, offsetU = 0.40f, fillColor = aoColor
             )
         }
     }

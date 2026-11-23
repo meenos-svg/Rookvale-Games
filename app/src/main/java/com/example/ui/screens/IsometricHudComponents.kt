@@ -210,6 +210,7 @@ private fun minimapTileColor(tile: TileType): Color = when (tile) {
     TileType.WOOD_FENCE -> Color(0xFF735030)
     TileType.LANTERN_POST -> Color(0xFFFFD86B)
     TileType.MARKET_AWNING -> Color(0xFFC9443C)
+    TileType.WOOD_BED -> Color(0xFFC44B45)
     TileType.CRATE_BARREL, TileType.TEMPLE_PEW -> Color(0xFF946B3C)
     TileType.TREE_STUMP -> Color(0xFF5A422C)
     TileType.DEPOT_CHEST, TileType.MINI_DEPOT, TileType.SHOP_COUNTER, TileType.TEMPLE_ALTAR -> Color(0xFF5CE1FF)

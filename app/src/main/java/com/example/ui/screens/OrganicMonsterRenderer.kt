@@ -29,17 +29,19 @@ object OrganicMonsterRenderer {
     private val INK = VolumetricShading.INK
 
     fun heightScaleFor(type: MonsterType): Float = when (type) {
-        MonsterType.WILD_RABBIT -> 0.72f
-        MonsterType.CAVE_RAT -> 0.74f
-        MonsterType.YOUNG_SNAKE -> 0.78f
-        MonsterType.POISON_SPIDER -> 0.88f
-        MonsterType.GOBLIN_SCOUT -> 0.90f
-        MonsterType.CRAG_WOLF -> 0.94f
-        MonsterType.SWAMP_TROLL, MonsterType.MINOTAUR, MonsterType.ORC_WARRIOR -> 1.06f
-        MonsterType.CYCLOPS -> 1.18f
-        MonsterType.DRAGON_HATCHLING -> 1.10f
-        MonsterType.DEMON_LORD -> 1.32f
-        MonsterType.ELDER_DRAGON -> 1.36f
+        MonsterType.WILD_RABBIT -> 0.68f
+        MonsterType.CAVE_RAT -> 0.70f
+        MonsterType.YOUNG_SNAKE -> 0.76f
+        MonsterType.POISON_SPIDER -> 0.90f
+        MonsterType.GOBLIN_SCOUT -> 0.88f
+        MonsterType.CRAG_WOLF -> 1.08f
+        MonsterType.ORC_WARRIOR -> 1.14f
+        MonsterType.SWAMP_TROLL -> 1.18f
+        MonsterType.MINOTAUR -> 1.20f
+        MonsterType.DRAGON_HATCHLING -> 1.20f
+        MonsterType.CYCLOPS -> 1.24f
+        MonsterType.DEMON_LORD -> 1.28f
+        MonsterType.ELDER_DRAGON -> 1.32f
         else -> 1.0f
     }
 
@@ -72,7 +74,7 @@ object OrganicMonsterRenderer {
         path: Path
     ) = with(scope) {
         val u = heightPx / 46f
-        val ow = (u * 1.10f).coerceIn(1.1f, 2.7f)
+        val ow = (u * 1.36f).coerceIn(1.5f, 3.4f)
         val useSpec = quality != GraphicsQuality.LOW
         val useRim = quality == GraphicsQuality.HIGH || quality == GraphicsQuality.HD
         val seedRad = (animSeed % 360) * 0.01745f
@@ -356,16 +358,16 @@ object OrganicMonsterRenderer {
                     )
                 }
                 6 -> { // CHEST / SHOULDERS / MANE
-                    val chest = facing.project(ox, oy, u, 0f, frontF * 0.58f, bodyUp + (if (style == QuadrupedStyle.WOLF) 1.6f else 0.8f))
+                    val chest = facing.project(ox, oy, u, 0f, frontF * 0.58f, bodyUp + (if (style == QuadrupedStyle.WOLF) 2.0f else 0.8f))
                     val rx = when (style) {
                         QuadrupedStyle.RABBIT -> u * (5.6f + abs(facing.forwardScreenX) * 1.4f)
                         QuadrupedStyle.RAT -> u * (5.2f + abs(facing.forwardScreenX) * 1.8f)
-                        QuadrupedStyle.WOLF -> u * (7.2f + abs(facing.forwardScreenX) * 2.8f)
+                        QuadrupedStyle.WOLF -> u * (8.4f + abs(facing.forwardScreenX) * 3.2f)
                     }
                     val ry = when (style) {
                         QuadrupedStyle.RABBIT -> u * 5.2f
                         QuadrupedStyle.RAT -> u * 4.5f
-                        QuadrupedStyle.WOLF -> u * 6.4f
+                        QuadrupedStyle.WOLF -> u * 7.2f
                     }
                     VolumetricShading.drawVolumetricEllipsoid(
                         this, chest.x, chest.y, rx, ry,
@@ -375,15 +377,24 @@ object OrganicMonsterRenderer {
                         outlineW = ow, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
                         useSpecular = useSpec, useRim = useRim
                     )
-                    // Wolf jagged shoulder ruff / mane tuft
+                    // Alpha Crag Wolf jagged sculpted shoulder ruff & spiked mane tufts
                     if (style == QuadrupedStyle.WOLF) {
-                        val ruff = facing.project(ox, oy, u, 0f, frontF * 0.80f, bodyUp + 3.2f)
+                        val ruff = facing.project(ox, oy, u, 0f, frontF * 0.82f, bodyUp + 3.8f)
                         VolumetricShading.drawVolumetricEllipsoid(
-                            this, ruff.x, ruff.y, u * 5.8f, u * 4.2f,
+                            this, ruff.x, ruff.y, u * 6.8f, u * 4.8f,
                             main = bodySh, highlight = bodyHi, shadow = VolumetricShading.coolShadow(bodySh, 0.35f),
-                            outlineW = ow * 0.9f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                            outlineW = ow * 0.92f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
                             useSpecular = useSpec
                         )
+                        for (s in -1..1 step 2) {
+                            val tuftB = facing.project(ox, oy, u, s * 4.6f, frontF * 0.72f, bodyUp + 4.8f)
+                            val tuftT = facing.project(ox, oy, u, s * 7.8f, frontF * 0.45f, bodyUp + 7.6f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, tuftB, tuftT, u * 1.9f, u * 0.55f,
+                                main = bodySh, highlight = bodyHi, shadow = INK,
+                                outlineW = ow * 0.75f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
                     }
                 }
                 7 -> { // HEAD, EARS, SNOUT, EYES (turns cleanly 360°)
@@ -488,11 +499,14 @@ object OrganicMonsterRenderer {
                             radius = u * 1.15f,
                             center = nosePos
                         )
-                        // Wolf bared fangs on attack lunge
-                        if (style == QuadrupedStyle.WOLF && lunge > 0.15f) {
+                        // Wolf bared gleaming fangs (prominent idle snarl & wider lunge bite)
+                        if (style == QuadrupedStyle.WOLF) {
+                            val fangScale = if (lunge > 0.15f) 1.25f else 0.92f
                             for (s in -1..1 step 2) {
-                                val fang = facing.project(ox, oy, u, s * 1.4f, headF + snoutLen + 0.8f, headUp - 2.6f)
-                                drawCircle(Color.White, u * 0.95f, fang)
+                                val fangBase = facing.project(ox, oy, u, s * 1.5f, headF + snoutLen + 0.6f, headUp - 2.0f)
+                                val fangTip = facing.project(ox, oy, u, s * 1.5f, headF + snoutLen + 1.0f, headUp - 3.6f * fangScale)
+                                drawLine(INK, fangBase, fangTip, strokeWidth = u * 1.85f, cap = StrokeCap.Round)
+                                drawLine(Color.White, fangBase, fangTip, strokeWidth = u * 1.05f, cap = StrokeCap.Round)
                             }
                         }
                     }
@@ -752,9 +766,9 @@ object OrganicMonsterRenderer {
         val scaleSh = if (isElder) Color(0xFF520C0E) else Color(0xFF154225)
         val belly = if (isElder) Color(0xFFE8B44C) else Color(0xFFD9CC7A)
         val wingMembrane = if (isElder) Color(0xFF5E1618) else Color(0xFF205434)
-        val wingSpan = if (isElder) 22f else 17f
-        val flap = sin(t * 5.0f) * 5.5f + lunge * 4.0f
-        val bodyUp = 15.5f + bobUp + sin(t * 2.8f) * 0.8f
+        val wingSpan = if (isElder) 25.5f else 19.0f
+        val flap = sin(t * 5.0f) * 5.8f + lunge * 4.2f
+        val bodyUp = 16.0f + bobUp + sin(t * 2.8f) * 0.8f
 
         // 9 sortable 3D parts: 0=TAIL, 1=LEFT_WING, 2=RIGHT_WING, 3=BL, 4=BR, 5=FL, 6=FR, 7=BODY, 8=NECK_HEAD
         val order = IntArray(9) { it }
@@ -856,8 +870,8 @@ object OrganicMonsterRenderer {
                     val body = facing.project(ox, oy, u, 0f, -0.5f, bodyUp)
                     VolumetricShading.drawVolumetricEllipsoid(
                         this, body.x, body.y,
-                        rx = u * (9.2f + abs(facing.forwardScreenX) * 3.2f),
-                        ry = u * 7.6f,
+                        rx = u * ((if (isElder) 10.8f else 9.6f) + abs(facing.forwardScreenX) * 3.6f),
+                        ry = u * (if (isElder) 8.4f else 7.8f),
                         main = scaleMain, highlight = scaleHi, shadow = scaleSh,
                         outlineW = ow * 1.05f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
                         useSpecular = useSpec, useRim = useRim
@@ -977,16 +991,21 @@ object OrganicMonsterRenderer {
         }
 
         val torsoWidth = when (species) {
-            BipedMonsterStyle.DEMON_LORD, BipedMonsterStyle.CYCLOPS, BipedMonsterStyle.MINOTAUR -> 10.2f
-            BipedMonsterStyle.SWAMP_TROLL, BipedMonsterStyle.ORC_WARRIOR -> 9.2f
-            BipedMonsterStyle.SKELETON, BipedMonsterStyle.GHOUL -> 6.8f
-            BipedMonsterStyle.GOBLIN_SCOUT -> 7.2f
-            else -> 8.2f
+            BipedMonsterStyle.DEMON_LORD, BipedMonsterStyle.CYCLOPS, BipedMonsterStyle.MINOTAUR -> 11.8f
+            BipedMonsterStyle.SWAMP_TROLL, BipedMonsterStyle.ORC_WARRIOR -> 10.4f
+            BipedMonsterStyle.SKELETON, BipedMonsterStyle.GHOUL -> 7.0f
+            BipedMonsterStyle.GOBLIN_SCOUT -> 7.4f
+            else -> 8.6f
         }
-        val shoulderR = torsoWidth * 0.96f
+        val isHeavyBrute = species == BipedMonsterStyle.DEMON_LORD ||
+            species == BipedMonsterStyle.CYCLOPS ||
+            species == BipedMonsterStyle.MINOTAUR ||
+            species == BipedMonsterStyle.SWAMP_TROLL ||
+            species == BipedMonsterStyle.ORC_WARRIOR
+        val shoulderR = torsoWidth * 0.98f
         val hipUp = 13.5f + bobUp
-        val shoulderUp = 28.5f + bobUp + breath * 0.55f
-        val headUp = 36.2f + bobUp + breath * 0.6f
+        val shoulderUp = 28.8f + bobUp + breath * 0.55f
+        val headUp = 36.6f + bobUp + breath * 0.6f
         val hasWings = species == BipedMonsterStyle.DEMON_LORD
         val hasTail = species == BipedMonsterStyle.FIRE_DEVIL || species == BipedMonsterStyle.DEMON_LORD
         val hasCape = species == BipedMonsterStyle.NECROMANCER || species == BipedMonsterStyle.GHOUL
@@ -1156,18 +1175,39 @@ object OrganicMonsterRenderer {
                             path = path
                         )
 
+                        // Sculpted muscular deltoid shoulder masses & pectoral ink definition on heavy brutes/bosses
+                        if (isHeavyBrute) {
+                            for (side in -1..1 step 2) {
+                                val deltoid = facing.project(ox, oy, u, side * shoulderR * 0.96f, 0.4f, shoulderUp - 0.8f)
+                                VolumetricShading.drawVolumetricEllipsoid(
+                                    this, deltoid.x, deltoid.y, u * 4.4f, u * 3.8f,
+                                    main = skinMain, highlight = skinHi, shadow = skinSh,
+                                    outlineW = ow * 0.92f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                                    useSpecular = useSpec, useRim = useRim
+                                )
+                            }
+                            if (!facing.isBackFacing) {
+                                val pecL = facing.project(ox, oy, u, -3.4f, 4.2f, shoulderUp - 4.4f)
+                                val pecM = facing.project(ox, oy, u, 0f, 4.6f, shoulderUp - 5.6f)
+                                val pecR = facing.project(ox, oy, u, +3.4f, 4.2f, shoulderUp - 4.4f)
+                                drawLine(INK.copy(alpha = 0.72f), pecL, pecM, strokeWidth = ow * 0.68f, cap = StrokeCap.Round)
+                                drawLine(INK.copy(alpha = 0.72f), pecM, pecR, strokeWidth = ow * 0.68f, cap = StrokeCap.Round)
+                            }
+                        }
+
                         // Species torso details (chest runes, leather cross-strap, crimson necromancer stole)
                         when (species) {
                             BipedMonsterStyle.DEMON_LORD, BipedMonsterStyle.FIRE_DEVIL -> {
-                                val runeC = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -3.2f else +3.5f, (shoulderUp + hipUp) * 0.54f)
-                                drawCircle(Color(0xFFFF7A26).copy(alpha = 0.75f), u * 3.4f, runeC)
-                                drawCircle(Color(0xFFFFE77A), u * 1.7f, runeC)
+                                val runeC = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -3.4f else +3.8f, (shoulderUp + hipUp) * 0.54f)
+                                drawCircle(Color(0xFFFF7A26).copy(alpha = 0.82f), u * 3.9f, runeC)
+                                drawCircle(Color(0xFFFFEE88), u * 1.95f, runeC)
                             }
                             BipedMonsterStyle.CYCLOPS, BipedMonsterStyle.MINOTAUR -> {
-                                val strapStart = facing.project(ox, oy, u, -6.5f, 0f, shoulderUp)
-                                val strapEnd = facing.project(ox, oy, u, +5.5f, 0f, hipUp + 1.5f)
-                                drawLine(Color(0xFF3E2614), strapStart, strapEnd, strokeWidth = u * 2.6f, cap = StrokeCap.Round)
-                                drawLine(Color(0xFFD9A64C), strapStart, strapEnd, strokeWidth = u * 0.75f)
+                                val strapStart = facing.project(ox, oy, u, -7.2f, 0f, shoulderUp)
+                                val strapEnd = facing.project(ox, oy, u, +6.2f, 0f, hipUp + 1.5f)
+                                drawLine(INK, strapStart, strapEnd, strokeWidth = u * 3.6f, cap = StrokeCap.Round)
+                                drawLine(Color(0xFF472B16), strapStart, strapEnd, strokeWidth = u * 2.5f, cap = StrokeCap.Round)
+                                drawLine(Color(0xFFE8B958), strapStart, strapEnd, strokeWidth = u * 0.85f)
                             }
                             BipedMonsterStyle.NECROMANCER -> {
                                 val trimTop = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -2.8f else +3.2f, shoulderUp)
@@ -1296,17 +1336,17 @@ object OrganicMonsterRenderer {
                         }
                     }
 
-                    // Sweeping 3D Horns (Minotaur, Fire Devil, Demon Lord)
+                    // Sweeping heavy sculpted 3D Horns (Minotaur, Fire Devil, Demon Lord)
                     if (species == BipedMonsterStyle.MINOTAUR || species == BipedMonsterStyle.FIRE_DEVIL || species == BipedMonsterStyle.DEMON_LORD) {
                         val hornColor = if (species == BipedMonsterStyle.MINOTAUR) Color(0xFFE8DFC8) else Color(0xFF2B2226)
-                        val hornSpan = if (species == BipedMonsterStyle.DEMON_LORD) 10.5f else 8.4f
+                        val hornSpan = if (species == BipedMonsterStyle.DEMON_LORD) 12.2f else 9.6f
                         for (side in -1..1 step 2) {
-                            val hb = facing.project(ox, oy, u, side * 3.8f, +0.5f, headUp + 3.5f)
-                            val ht = facing.project(ox, oy, u, side * hornSpan, +2.0f, headUp + 9.2f)
+                            val hb = facing.project(ox, oy, u, side * 4.0f, +0.5f, headUp + 3.6f)
+                            val ht = facing.project(ox, oy, u, side * hornSpan, +2.4f, headUp + 10.6f)
                             VolumetricShading.drawVolumetricCylinder(
-                                this, hb, ht, u * 1.8f, u * 0.55f,
+                                this, hb, ht, u * 2.25f, u * 0.65f,
                                 main = hornColor, highlight = Color(0xFFFFF4DC), shadow = INK,
-                                outlineW = ow * 0.82f, lightX = facing.lightScreenX, path = path
+                                outlineW = ow * 0.88f, lightX = facing.lightScreenX, path = path
                             )
                         }
                     }
@@ -1360,15 +1400,15 @@ object OrganicMonsterRenderer {
                                 }
                                 for (side in -1..1 step 2) {
                                     val ep = facing.project(ox, oy, u, side * 2.1f, +5.4f, headUp + 0.8f)
-                                    drawCircle(INK, u * 1.3f, ep)
-                                    drawCircle(eyeColor, u * 0.9f, ep)
+                                    drawCircle(INK, u * 1.55f, ep)
+                                    drawCircle(eyeColor, u * 1.12f, ep)
                                 }
-                                // Tusks for Orc / Troll / Minotaur nose ring
-                                if (species == BipedMonsterStyle.ORC_WARRIOR || species == BipedMonsterStyle.SWAMP_TROLL) {
+                                // Prominent tusks for Orc / Swamp Troll / Demon Lord fangs
+                                if (species == BipedMonsterStyle.ORC_WARRIOR || species == BipedMonsterStyle.SWAMP_TROLL || species == BipedMonsterStyle.DEMON_LORD) {
                                     for (side in -1..1 step 2) {
-                                        val tk = facing.project(ox, oy, u, side * 2.0f, +5.8f, headUp - 2.4f)
-                                        drawCircle(Color(0xFFF5EED6), u * 1.05f, tk)
-                                        drawCircle(INK, u * 1.05f, tk, style = Stroke(ow * 0.55f))
+                                        val tk = facing.project(ox, oy, u, side * 2.1f, +5.9f, headUp - 2.3f)
+                                        drawCircle(Color(0xFFF7F0DA), u * 1.25f, tk)
+                                        drawCircle(INK, u * 1.25f, tk, style = Stroke(ow * 0.65f))
                                     }
                                 } else if (species == BipedMonsterStyle.MINOTAUR) {
                                     val ring = facing.project(ox, oy, u, 0f, +6.6f, headUp - 2.2f)

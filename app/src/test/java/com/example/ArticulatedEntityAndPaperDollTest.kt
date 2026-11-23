@@ -8,16 +8,19 @@ import com.example.game.model.DEFAULT_REGION_ID
 import com.example.game.model.Direction
 import com.example.game.model.EquippedGear
 import com.example.game.model.MonsterType
+import com.example.game.model.TileType
 import com.example.game.model.Vocation
 import com.example.game.multiplayer.LocalPlayerPresencePayload
 import com.example.game.multiplayer.RealtimeMultiplayerManager
 import com.example.game.multiplayer.RemotePlayerState
+import com.example.game.world.WorldMaps
 import com.example.ui.screens.ArmorVisualKind
 import com.example.ui.screens.ArticulatedHumanoidRenderer
 import com.example.ui.screens.BootsVisualKind
 import com.example.ui.screens.HelmetVisualKind
 import com.example.ui.screens.HumanoidPart
 import com.example.ui.screens.IsometricCamera
+import com.example.ui.screens.IsometricTileDrawer
 import com.example.ui.screens.OffhandVisualKind
 import com.example.ui.screens.OrganicMonsterRenderer
 import com.example.ui.screens.PaperDollAppearance
@@ -390,5 +393,116 @@ class ArticulatedEntityAndPaperDollTest {
         // Heroic grounded scale (~20% larger than 1.0)
         assertTrue(VolumetricShading.HEROIC_HUMANOID_SCALE in 1.15f..1.25f)
         assertTrue(VolumetricShading.HEROIC_MONSTER_SCALE in 1.12f..1.25f)
+    }
+
+    @Test
+    fun heroicCameraZoomBoundsHeroHeightAndBossProportionsMeetTargetRatios() {
+        assertEquals(0.70f, IsometricCamera.MIN_ZOOM, 0.001f)
+        assertEquals(2.00f, IsometricCamera.MAX_ZOOM, 0.001f)
+        assertEquals(2.40f, IsometricTileDrawer.TALL_WALL_HEIGHT_MULT, 0.001f)
+
+        val cam = IsometricCamera()
+        cam.configure(
+            viewportW = 1080f,
+            viewportH = 2200f,
+            camTileX = 196f,
+            camTileY = 192f,
+            zoomFactor = 1.0f,
+            cameraYawDeg = IsometricCamera.DEFAULT_YAW_DEG
+        )
+
+        val defaultSpritePx = cam.tileW * 0.78f
+        val heroHeightTiles = (defaultSpritePx * VolumetricShading.HEROIC_HUMANOID_SCALE) / cam.tileH
+        assertTrue("Expected hero height in 1.80..2.05 tiles, got $heroHeightTiles", heroHeightTiles in 1.80f..2.05f)
+
+        val eliteAndBosses = listOf(
+            MonsterType.CRAG_WOLF,
+            MonsterType.ORC_WARRIOR,
+            MonsterType.SWAMP_TROLL,
+            MonsterType.MINOTAUR,
+            MonsterType.CYCLOPS,
+            MonsterType.DEMON_LORD,
+            MonsterType.ELDER_DRAGON
+        )
+        for (species in eliteAndBosses) {
+            val monsterTiles = (defaultSpritePx * OrganicMonsterRenderer.heightScaleFor(species) * VolumetricShading.HEROIC_MONSTER_SCALE) / cam.tileH
+            assertTrue("Expected $species ($monsterTiles tiles) taller than hero ($heroHeightTiles tiles)", monsterTiles > heroHeightTiles)
+        }
+
+        val demonTiles = (defaultSpritePx * OrganicMonsterRenderer.heightScaleFor(MonsterType.DEMON_LORD) * VolumetricShading.HEROIC_MONSTER_SCALE) / cam.tileH
+        val dragonTiles = (defaultSpritePx * OrganicMonsterRenderer.heightScaleFor(MonsterType.ELDER_DRAGON) * VolumetricShading.HEROIC_MONSTER_SCALE) / cam.tileH
+        assertTrue("Expected Demon Lord >= 2.25 tiles tall, got $demonTiles", demonTiles >= 2.25f)
+        assertTrue("Expected Elder Dragon >= 2.30 tiles tall, got $dragonTiles", dragonTiles >= 2.30f)
+    }
+
+    @Test
+    fun foregroundWallCutawayLowersAndSoftensWallsInFrontOfPlayerAcross360Rotation() {
+        val cam = IsometricCamera()
+        val px = 160f
+        val py = 182f
+
+        // Test all 4 diagonal camera yaws: walls closer to the camera (positive depthDelta) lower & fade,
+        // while walls behind the player (negative depthDelta) and distant walls remain at full height.
+        val yawAndFrontOffset = listOf(
+            45f to (2 to 2),
+            135f to (2 to -2),
+            225f to (-2 to -2),
+            315f to (-2 to 2)
+        )
+        for ((yaw, offset) in yawAndFrontOffset) {
+            cam.configure(1080f, 1920f, px, py, 1.0f, yaw)
+            val frontWall = IsometricTileDrawer.computeWallCutaway(
+                cam = cam,
+                wallTx = px.toInt() + offset.first,
+                wallTy = py.toInt() + offset.second,
+                playerFx = px,
+                playerFy = py
+            )
+            assertTrue("Expected foreground wall at yaw=$yaw to lower, got ${frontWall.heightScale}", frontWall.heightScale < 0.70f)
+            assertTrue("Expected foreground wall at yaw=$yaw to soften alpha, got ${frontWall.alpha}", frontWall.alpha < 0.85f)
+
+            val rearWall = IsometricTileDrawer.computeWallCutaway(
+                cam = cam,
+                wallTx = px.toInt() - offset.first,
+                wallTy = py.toInt() - offset.second,
+                playerFx = px,
+                playerFy = py
+            )
+            assertEquals("Rear wall at yaw=$yaw should remain full height", 1.0f, rearWall.heightScale, 0.001f)
+            assertEquals("Rear wall at yaw=$yaw should remain opaque", 1.0f, rearWall.alpha, 0.001f)
+
+            val distantWall = IsometricTileDrawer.computeWallCutaway(
+                cam = cam,
+                wallTx = px.toInt() + offset.first * 4,
+                wallTy = py.toInt() + offset.second * 4,
+                playerFx = px,
+                playerFy = py
+            )
+            assertEquals("Distant wall at yaw=$yaw should remain full height", 1.0f, distantWall.heightScale, 0.001f)
+        }
+    }
+
+    @Test
+    fun partitionedTownRoomsIncludeRichInteriorPropsAndPreserveSafeCoordinates() {
+        val surface = WorldMaps.getFloor(0)
+        val counts = mutableMapOf<TileType, Int>()
+        for (y in 170..215) {
+            for (x in 152..238) {
+                val t = surface.tileAt(x, y)
+                counts[t] = (counts[t] ?: 0) + 1
+            }
+        }
+        assertTrue("Expected wooden beds in partitioned cozy rooms", (counts[TileType.WOOD_BED] ?: 0) >= 6)
+        assertTrue("Expected bookshelves in town rooms", (counts[TileType.BOOKSHELF] ?: 0) >= 6)
+        assertTrue("Expected glowing smelting furnace in forge room", (counts[TileType.SMELTING_FURNACE] ?: 0) >= 1)
+        assertTrue("Expected blacksmith anvil in forge room", (counts[TileType.BLACKSMITH_ANVIL] ?: 0) >= 1)
+        assertTrue("Expected stone temple altar", (counts[TileType.TEMPLE_ALTAR] ?: 0) >= 1)
+        assertTrue("Expected street lantern posts outside town buildings", (counts[TileType.LANTERN_POST] ?: 0) >= 4)
+
+        // Critical coordinates remain walkable & unblocked
+        assertTrue(surface.tileAt(WorldMaps.TEMPLE_SPAWN_X, WorldMaps.TEMPLE_SPAWN_Y).walkable)
+        assertTrue(surface.tileAt(WorldMaps.ORACLE_X - 1, WorldMaps.ORACLE_Y).walkable)
+        assertTrue(surface.tileAt(162, 204).walkable) // Alaric
+        assertTrue(surface.tileAt(193, 179).walkable) // Brother Alden
     }
 }

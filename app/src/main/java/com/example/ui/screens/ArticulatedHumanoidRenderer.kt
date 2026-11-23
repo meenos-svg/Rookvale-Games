@@ -88,7 +88,7 @@ object ArticulatedHumanoidRenderer {
         path: Path
     ) = with(scope) {
         val u = heightPx / 46f
-        val ow = (u * 1.10f).coerceIn(1.1f, 2.8f)
+        val ow = (u * 1.38f).coerceIn(1.5f, 3.4f)
         val useSpecular = quality != GraphicsQuality.LOW
         val useRim = quality == GraphicsQuality.HIGH || quality == GraphicsQuality.HD
 
@@ -264,21 +264,27 @@ object ArticulatedHumanoidRenderer {
 
         val legPal = appearance.legsPalette
         VolumetricShading.drawVolumetricCylinder(
-            this, hip, knee, 2.7f * u, 2.4f * u,
+            this, hip, knee, 3.05f * u, 2.65f * u,
             legPal.primary, legPal.highlight, legPal.shadow, ow, facing.lightScreenX, useSpecular, path
         )
         val bootPal = appearance.bootsPalette
         VolumetricShading.drawVolumetricCylinder(
-            this, knee, ankle, 2.4f * u, 2.25f * u,
+            this, knee, ankle, 2.65f * u, 2.35f * u,
             bootPal.primary, bootPal.highlight, bootPal.shadow, ow, facing.lightScreenX, useSpecular, path
+        )
+        // Sculpted boot cuff / armored knee greave
+        VolumetricShading.drawVolumetricEllipsoid(
+            this, knee.x, knee.y, 2.55f * u, 1.55f * u,
+            bootPal.accent, bootPal.highlight, bootPal.shadow, ow * 0.72f,
+            facing.lightScreenX, facing.lightScreenY, useSpecular = appearance.bootsKind == BootsVisualKind.PLATE && useSpecular
         )
         // Foreshortened 3D boot foot capsule extending forward along facing
         VolumetricShading.drawVolumetricCylinder(
-            this, ankle, toe, 2.3f * u, 2.0f * u,
+            this, ankle, toe, 2.45f * u, 2.1f * u,
             bootPal.primary, bootPal.highlight, bootPal.shadow, ow, facing.lightScreenX, useSpecular, path
         )
         if (appearance.bootsKind == BootsVisualKind.PLATE && useSpecular) {
-            drawCircle(SPECULAR_WHITE.copy(alpha = 0.45f), 0.95f * u, knee)
+            drawCircle(SPECULAR_WHITE.copy(alpha = 0.55f), 1.05f * u, knee)
         }
     }
 
@@ -298,11 +304,12 @@ object ArticulatedHumanoidRenderer {
         val chestTop = facing.project(ox, oy, u, 0f, 0f, 29.2f + bobUp)
         val waist = facing.project(ox, oy, u, 0f, 0f, 15.6f + bobUp)
 
-        // Cylindrical foreshortened width subtly narrows in side profile and broadens in front/back
-        val profileFactor = 0.72f + 0.28f * abs(facing.forwardDepth)
-        val topHalfW = (7.4f * profileFactor + (if (appearance.armorKind == ArmorVisualKind.PLATE || appearance.armorKind == ArmorVisualKind.WYRMSCALE) 0.9f else 0f)) * u
-        val botHalfW = (if (appearance.armorKind == ArmorVisualKind.ROBE) 8.4f else 5.6f * profileFactor) * u
-        val domeH = 3.2f * u
+        // Heroic broad shoulders tapering into an athletic waist (foreshortened cleanly in side profile)
+        val profileFactor = 0.74f + 0.26f * abs(facing.forwardDepth)
+        val armorBulk = if (appearance.armorKind == ArmorVisualKind.PLATE || appearance.armorKind == ArmorVisualKind.WYRMSCALE) 1.15f else 0f
+        val topHalfW = (8.2f * profileFactor + armorBulk) * u
+        val botHalfW = (if (appearance.armorKind == ArmorVisualKind.ROBE) 8.6f else 5.2f * profileFactor) * u
+        val domeH = 3.5f * u
 
         // Flowing lower robe skirt for Mage Robes
         if (appearance.armorKind == ArmorVisualKind.ROBE) {
@@ -429,10 +436,10 @@ object ArticulatedHumanoidRenderer {
         useSpecular: Boolean,
         useRim: Boolean
     ) {
-        val pos = facing.project(ox, oy, u, localSide * 7.2f, 0.2f, 27.6f + bobUp)
+        val pos = facing.project(ox, oy, u, localSide * 7.8f, 0.2f, 27.8f + bobUp)
         val isArmored = appearance.armorKind == ArmorVisualKind.PLATE || appearance.armorKind == ArmorVisualKind.WYRMSCALE
-        val rx = (if (isArmored) 3.8f else 2.9f) * u
-        val ry = (if (isArmored) 3.1f else 2.5f) * u
+        val rx = (if (isArmored) 4.3f else 3.3f) * u
+        val ry = (if (isArmored) 3.5f else 2.8f) * u
         val pal = appearance.armorPalette
         VolumetricShading.drawVolumetricEllipsoid(
             this, pos.x, pos.y, rx, ry,
@@ -449,7 +456,7 @@ object ArticulatedHumanoidRenderer {
                 useCenter = false,
                 topLeft = Offset(pos.x - rx * 0.78f, pos.y - ry * 0.55f),
                 size = Size(rx * 1.56f, ry * 1.30f),
-                style = Stroke(width = 1.05f * u, cap = StrokeCap.Round)
+                style = Stroke(width = 1.25f * u, cap = StrokeCap.Round)
             )
         }
     }
@@ -514,18 +521,30 @@ object ArticulatedHumanoidRenderer {
                 drawCircle(INK, 1.05f * u, eR)
                 if (useSpecular) drawCircle(Color.White, 0.36f * u, Offset(eR.x - 0.25f * u, eR.y - 0.28f * u))
             }
-            // Subtle nose shadow shifting with continuous yaw
+            // Crisp comic brow & nose definition shifting with continuous yaw
             val nose = facing.project(ox, oy, u, 0f, 6.0f, 33.8f + bobUp)
-            drawCircle(appearance.skinShadow, 0.75f * u, nose)
+            drawCircle(appearance.skinShadow, 0.80f * u, nose)
 
-            // Sculpted volumetric hair crown when bareheaded
-            if (appearance.helmetKind == HelmetVisualKind.NONE) {
-                val crown = facing.project(ox, oy, u, 0f, -0.8f, 38.8f + bobUp)
+            // Sculpted jaw beard accent for rugged Knights when front-facing
+            if (appearance.vocation == Vocation.KNIGHT && appearance.helmetKind != HelmetVisualKind.MAGE_HOOD) {
+                val chin = facing.project(ox, oy, u, 0f, 5.1f, 31.8f + bobUp)
                 VolumetricShading.drawVolumetricEllipsoid(
-                    this, crown.x, crown.y, headR * 1.04f, headR * 0.62f,
+                    this, chin.x, chin.y, 3.2f * u, 2.0f * u,
+                    hp.primary, hp.highlight, hp.shadow, ow * 0.62f,
+                    facing.lightScreenX, facing.lightScreenY, useSpecular = false
+                )
+            }
+
+            // Sculpted volumetric hair crown & comic hair locks when bareheaded
+            if (appearance.helmetKind == HelmetVisualKind.NONE) {
+                val crown = facing.project(ox, oy, u, 0f, -0.8f, 39.0f + bobUp)
+                VolumetricShading.drawVolumetricEllipsoid(
+                    this, crown.x, crown.y, headR * 1.08f, headR * 0.66f,
                     hp.primary, hp.highlight, hp.shadow, ow,
                     facing.lightScreenX, facing.lightScreenY, useSpecular = useSpecular
                 )
+                val browLock = facing.project(ox, oy, u, 1.4f, 4.4f, 38.4f + bobUp)
+                drawLine(hp.highlight, crown, browLock, strokeWidth = 1.4f * u, cap = StrokeCap.Round)
             }
         }
 
@@ -683,24 +702,30 @@ object ArticulatedHumanoidRenderer {
     ) {
         val useSpec = quality != GraphicsQuality.LOW
         val useRim = quality == GraphicsQuality.HIGH || quality == GraphicsQuality.HD
-        val shPos = facing.project(ox, oy, u, -7.2f, 0.3f, 26.8f + bobUp)
+        val shPos = facing.project(ox, oy, u, -7.8f, 0.3f, 27.0f + bobUp)
         val hasShield = appearance.offhandKind != OffhandVisualKind.NONE
-        val handF = if (hasShield) 5.4f + atkEase * 1.4f else 2.2f + stride * 3.8f
+        val handF = if (hasShield) 5.6f + atkEase * 1.4f else 2.2f + stride * 3.8f
         val handUp = if (hasShield) 20.6f + bobUp else 17.5f + bobUp
-        val elbow = facing.project(ox, oy, u, -8.4f, handF * 0.45f, 21.8f + bobUp)
-        val hand = facing.project(ox, oy, u, -7.6f, handF, handUp)
+        val elbow = facing.project(ox, oy, u, -9.0f, handF * 0.45f, 21.8f + bobUp)
+        val hand = facing.project(ox, oy, u, -8.2f, handF, handUp)
 
         val sleevePal = appearance.armorPalette
+        val bracerPal = if (appearance.armorKind == ArmorVisualKind.PLATE || appearance.armorKind == ArmorVisualKind.WYRMSCALE) {
+            appearance.armorPalette
+        } else {
+            appearance.bootsPalette
+        }
         VolumetricShading.drawVolumetricCylinder(
-            this, shPos, elbow, 2.3f * u, 2.0f * u,
+            this, shPos, elbow, 2.65f * u, 2.25f * u,
             sleevePal.primary, sleevePal.highlight, sleevePal.shadow, ow, facing.lightScreenX, useSpec, path
         )
+        // Armored bracer forearm transitioning into sculpted hand
         VolumetricShading.drawVolumetricCylinder(
-            this, elbow, hand, 1.95f * u, 1.75f * u,
-            appearance.skinPrimary, appearance.skinHighlight, appearance.skinShadow, ow, facing.lightScreenX, false, path
+            this, elbow, hand, 2.25f * u, 1.90f * u,
+            bracerPal.primary, bracerPal.highlight, bracerPal.shadow, ow, facing.lightScreenX, useSpec, path
         )
         VolumetricShading.drawVolumetricEllipsoid(
-            this, hand.x, hand.y, 1.9f * u, 1.7f * u,
+            this, hand.x, hand.y, 2.05f * u, 1.85f * u,
             appearance.skinPrimary, appearance.skinHighlight, appearance.skinShadow, ow * 0.85f,
             facing.lightScreenX, facing.lightScreenY, useSpecular = false
         )
@@ -832,23 +857,28 @@ object ArticulatedHumanoidRenderer {
         val useSpec = quality != GraphicsQuality.LOW
         val useRim = quality == GraphicsQuality.HIGH || quality == GraphicsQuality.HD
 
-        val shPos = facing.project(ox, oy, u, +7.2f, 0.3f, 26.8f + bobUp)
-        val swingF = 3.2f - stride * 3.8f + atkEase * 7.8f
-        val swingUp = 18.6f + bobUp + atkEase * 5.2f
-        val elbow = facing.project(ox, oy, u, +8.4f, swingF * 0.45f, 21.8f + bobUp + atkEase * 1.5f)
-        val hand = facing.project(ox, oy, u, +7.6f, swingF, swingUp)
+        val shPos = facing.project(ox, oy, u, +7.8f, 0.3f, 27.0f + bobUp)
+        val swingF = 3.2f - stride * 3.8f + atkEase * 8.0f
+        val swingUp = 18.6f + bobUp + atkEase * 5.4f
+        val elbow = facing.project(ox, oy, u, +9.0f, swingF * 0.45f, 21.8f + bobUp + atkEase * 1.5f)
+        val hand = facing.project(ox, oy, u, +8.2f, swingF, swingUp)
 
         val sleevePal = appearance.armorPalette
+        val bracerPal = if (appearance.armorKind == ArmorVisualKind.PLATE || appearance.armorKind == ArmorVisualKind.WYRMSCALE) {
+            appearance.armorPalette
+        } else {
+            appearance.bootsPalette
+        }
         VolumetricShading.drawVolumetricCylinder(
-            this, shPos, elbow, 2.3f * u, 2.0f * u,
+            this, shPos, elbow, 2.65f * u, 2.25f * u,
             sleevePal.primary, sleevePal.highlight, sleevePal.shadow, ow, facing.lightScreenX, useSpec, path
         )
         VolumetricShading.drawVolumetricCylinder(
-            this, elbow, hand, 1.95f * u, 1.75f * u,
-            appearance.skinPrimary, appearance.skinHighlight, appearance.skinShadow, ow, facing.lightScreenX, false, path
+            this, elbow, hand, 2.25f * u, 1.90f * u,
+            bracerPal.primary, bracerPal.highlight, bracerPal.shadow, ow, facing.lightScreenX, useSpec, path
         )
         VolumetricShading.drawVolumetricEllipsoid(
-            this, hand.x, hand.y, 1.9f * u, 1.7f * u,
+            this, hand.x, hand.y, 2.05f * u, 1.85f * u,
             appearance.skinPrimary, appearance.skinHighlight, appearance.skinShadow, ow * 0.85f,
             facing.lightScreenX, facing.lightScreenY, useSpecular = false
         )
@@ -908,12 +938,19 @@ object ArticulatedHumanoidRenderer {
                     pal.primary, pal.highlight, pal.shadow, ow, facing.lightScreenX, useHighlightStrip = true, path = path
                 )
                 if (useSpec) {
-                    // Razor metallic reflection streak along blade fuller
+                    // Crisp beveled metallic fuller & razor reflection gleam along blade
                     drawLine(
-                        SPECULAR_WHITE.copy(alpha = 0.65f),
-                        Offset(hand.x + (tip.x - hand.x) * 0.16f, hand.y + (tip.y - hand.y) * 0.16f),
-                        Offset(hand.x + (tip.x - hand.x) * 0.86f, hand.y + (tip.y - hand.y) * 0.86f),
-                        strokeWidth = (bladeRadius * 0.38f).coerceAtLeast(0.9f),
+                        pal.shadow.copy(alpha = 0.60f),
+                        Offset(hand.x + (tip.x - hand.x) * 0.14f, hand.y + (tip.y - hand.y) * 0.14f),
+                        Offset(hand.x + (tip.x - hand.x) * 0.72f, hand.y + (tip.y - hand.y) * 0.72f),
+                        strokeWidth = (bladeRadius * 0.28f).coerceAtLeast(0.8f),
+                        cap = StrokeCap.Round
+                    )
+                    drawLine(
+                        SPECULAR_WHITE.copy(alpha = 0.82f),
+                        Offset(hand.x + (tip.x - hand.x) * 0.16f - 0.5f * u, hand.y + (tip.y - hand.y) * 0.16f - 0.5f * u),
+                        Offset(hand.x + (tip.x - hand.x) * 0.88f - 0.3f * u, hand.y + (tip.y - hand.y) * 0.88f - 0.3f * u),
+                        strokeWidth = (bladeRadius * 0.42f).coerceAtLeast(1.0f),
                         cap = StrokeCap.Round
                     )
                 }
@@ -1061,7 +1098,7 @@ object ArticulatedHumanoidRenderer {
         path: Path
     ) = with(scope) {
         val u = heightPx / 46f
-        val ow = (u * 1.10f).coerceIn(1.1f, 2.8f)
+        val ow = (u * 1.38f).coerceIn(1.5f, 3.4f)
         val useSpec = quality != GraphicsQuality.LOW
         val useRim = quality == GraphicsQuality.HIGH || quality == GraphicsQuality.HD
         val bobUp = if (role == NpcRole.ORACLE) {
