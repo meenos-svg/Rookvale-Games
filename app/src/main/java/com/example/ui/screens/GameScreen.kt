@@ -89,8 +89,12 @@ fun GameScreen(
     onLootAll: (String) -> Unit,
     onLootCorpseItem: (String, Int) -> Unit = { _, _ -> },
     onLootCorpseGold: (String) -> Unit = {},
-    onDepositItem: (String) -> Unit,
-    onWithdrawItem: (String) -> Unit,
+    onDepositItem: (String, Int) -> Unit,
+    onWithdrawItem: (String, Int) -> Unit,
+    onDepositGold: (Int) -> Unit = {},
+    onDepositAllGold: () -> Unit = {},
+    onWithdrawGold: (Long) -> Unit = {},
+    onWithdrawAllGold: () -> Unit = {},
     onBuyItem: (String) -> Unit,
     onSellItem: (String) -> Unit,
     onCraftRecipe: (String) -> Unit,
@@ -194,6 +198,7 @@ fun GameScreen(
                 onReturnTitle = onReturnTitle,
                 onTargetMonster = onTargetMonster,
                 onInspectAlly = onInspectAlly,
+                onWalkToTile = onWalkToTile,
                 modifier = Modifier.align(Alignment.TopEnd)
             )
 
@@ -246,6 +251,10 @@ fun GameScreen(
                     onLootCorpseGold = onLootCorpseGold,
                     onDepositItem = onDepositItem,
                     onWithdrawItem = onWithdrawItem,
+                    onDepositGold = onDepositGold,
+                    onDepositAllGold = onDepositAllGold,
+                    onWithdrawGold = onWithdrawGold,
+                    onWithdrawAllGold = onWithdrawAllGold,
                     onBuyItem = onBuyItem,
                     onSellItem = onSellItem,
                     onCraftRecipe = onCraftRecipe,

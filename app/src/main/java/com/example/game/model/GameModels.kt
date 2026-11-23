@@ -12,10 +12,25 @@ const val V2_TO_V3_OFFSET_Y = 146
 const val DEFAULT_REGION_ID = "rookvale_valley"
 const val WORLD_CHUNK_SIZE = 32
 const val OVERLAND_REGION_SIZE = 400
+
+/**
+ * Normalizes any legacy, blank, or mixed-case region identifier so online clients
+ * and saved characters always agree on canonical region IDs (defaulting to "rookvale_valley").
+ */
+fun normalizeRegionId(raw: String?): String {
+    val cleaned = raw?.trim()?.lowercase()?.replace(' ', '_')
+        ?.filter { it.isLetterOrDigit() || it == '_' || it == '-' }
+        .orEmpty()
+    return when (cleaned) {
+        "", "rookvale", "rookvale_city", "rookvale_overland", "overland", "default", "main", "valley" -> DEFAULT_REGION_ID
+        else -> cleaned
+    }
+}
 const val ORACLE_MIN_LEVEL = 20
 const val TOOL_BAG_WEIGHT_MULTIPLIER = 0.5
-const val BASE_MAX_CAP_OZ = 400.0
-const val ADVENTURER_CAP_PER_LEVEL_OZ = 25.0
+const val BASE_MAX_CAP_OZ = 1500.0
+const val ADVENTURER_CAP_PER_LEVEL_OZ = 125.0
+const val GOLD_COIN_WEIGHT_OZ = 0.01
 const val TREE_REGROW_TICKS = 60
 const val TREE_CHOP_COOLDOWN_MS = 900L
 
@@ -68,7 +83,7 @@ enum class Vocation(
     ADVENTURER(
         displayName = "Adventurer",
         subtitle = "Rookvale Novice",
-        description = "Blank-slate explorer free to train any weapon, shield, rune, or gathering skill until Level 20 (+25 oz/lvl Cap).",
+        description = "Blank-slate explorer free to train any weapon, shield, rune, or gathering skill until Level 20 (+125 oz/lvl Cap).",
         hpPerLevel = 10,
         mpPerLevel = 10,
         capPerLevel = ADVENTURER_CAP_PER_LEVEL_OZ,
@@ -85,11 +100,11 @@ enum class Vocation(
     KNIGHT(
         displayName = "Knight",
         subtitle = "Vanguard of Steel",
-        description = "Instant +250 oz Cap surge at promotion, +40 oz/lvl thereafter, high HP growth, and mastery of Tier 3-4 melee gear.",
+        description = "Instant +1,250 oz Cap surge at promotion, +200 oz/lvl thereafter, high HP growth, and mastery of Tier 3-4 melee gear.",
         hpPerLevel = 15,
         mpPerLevel = 5,
-        capPerLevel = 40.0,
-        promotionCapBonus = 250.0,
+        capPerLevel = 200.0,
+        promotionCapBonus = 1250.0,
         baseHp = 185,
         baseMp = 35,
         baseCap = BASE_MAX_CAP_OZ,
@@ -102,11 +117,11 @@ enum class Vocation(
     PALADIN(
         displayName = "Paladin",
         subtitle = "Sacred Marksman",
-        description = "Instant +180 oz Cap surge at promotion, +32 oz/lvl thereafter, rapid Distance progression, and mastery of bows & arbalests.",
+        description = "Instant +900 oz Cap surge at promotion, +160 oz/lvl thereafter, rapid Distance progression, and mastery of bows & arbalests.",
         hpPerLevel = 10,
         mpPerLevel = 15,
-        capPerLevel = 32.0,
-        promotionCapBonus = 180.0,
+        capPerLevel = 160.0,
+        promotionCapBonus = 900.0,
         baseHp = 155,
         baseMp = 75,
         baseCap = BASE_MAX_CAP_OZ,
@@ -119,11 +134,11 @@ enum class Vocation(
     MAGE(
         displayName = "Mage",
         subtitle = "Arcane Runecaster",
-        description = "Instant +120 oz Cap surge at promotion, +25 oz/lvl thereafter, massive MP growth, and mastery of Tier 3-4 staves & runes.",
+        description = "Instant +600 oz Cap surge at promotion, +125 oz/lvl thereafter, massive MP growth, and mastery of Tier 3-4 staves & runes.",
         hpPerLevel = 5,
         mpPerLevel = 30,
-        capPerLevel = 25.0,
-        promotionCapBonus = 120.0,
+        capPerLevel = 125.0,
+        promotionCapBonus = 600.0,
         baseHp = 135,
         baseMp = 140,
         baseCap = BASE_MAX_CAP_OZ,
@@ -749,7 +764,9 @@ data class DeathReport(
     val floorDropped: Int,
     val corpseX: Int,
     val corpseY: Int,
-    val droppedItemsCount: Int
+    val droppedItemsCount: Int,
+    val droppedGold: Int = 0,
+    val safeBankGold: Long = 0L
 )
 
 @JsonClass(generateAdapter = true)
@@ -767,6 +784,7 @@ data class PlayerSaveData(
     val maxSoul: Int,
     val maxCapOz: Double,
     val gold: Int,
+    val bankGold: Long = 0L,
     val floor: Int,
     val x: Int,
     val y: Int,
@@ -785,7 +803,8 @@ data class PlayerSaveData(
     val boundAttackRuneId: String? = null,
     val boundHealRuneId: String? = "healing_rune",
     val customHotbarSlots: List<String?> = listOf(null, null),
-    val regionId: String = DEFAULT_REGION_ID
+    val regionId: String = DEFAULT_REGION_ID,
+    val facingName: String = Direction.SOUTH.name
 )
 
 enum class LightingDetailMode {
@@ -820,7 +839,14 @@ enum class GraphicsQuality(
     val treeDetailLayers: Int,
     val cullMargin: Int,
     val spriteScaleMultiplier: Float,
-    val strokeScale: Float
+    val strokeScale: Float,
+    val useProceduralTileTextures: Boolean,
+    val useDirectionalLighting: Boolean,
+    val drawAmbientOcclusion: Boolean,
+    val drawCastShadows: Boolean,
+    val drawTwilightAtmosphere: Boolean,
+    val drawPointLightPools: Boolean,
+    val useHdPostProcessShader: Boolean
 ) {
     LOW(
         displayName = "Low",
@@ -840,7 +866,14 @@ enum class GraphicsQuality(
         treeDetailLayers = 1,
         cullMargin = 2,
         spriteScaleMultiplier = 0.90f,
-        strokeScale = 0.85f
+        strokeScale = 0.85f,
+        useProceduralTileTextures = false,
+        useDirectionalLighting = false,
+        drawAmbientOcclusion = false,
+        drawCastShadows = false,
+        drawTwilightAtmosphere = false,
+        drawPointLightPools = false,
+        useHdPostProcessShader = false
     ),
     MEDIUM(
         displayName = "Medium",
@@ -860,13 +893,20 @@ enum class GraphicsQuality(
         treeDetailLayers = 2,
         cullMargin = 3,
         spriteScaleMultiplier = 1.0f,
-        strokeScale = 1.0f
+        strokeScale = 1.0f,
+        useProceduralTileTextures = false,
+        useDirectionalLighting = false,
+        drawAmbientOcclusion = false,
+        drawCastShadows = false,
+        drawTwilightAtmosphere = false,
+        drawPointLightPools = false,
+        useHdPostProcessShader = false
     ),
     HIGH(
         displayName = "High",
         shortBadge = "HIGH",
-        summaryNote = "Full details & dynamic lighting",
-        capabilityTags = listOf("Full foliage", "Flickering glows", "Full particles"),
+        summaryNote = "Pixel-mosaic tiles, twilight glow & shadows",
+        capabilityTags = listOf("Pixel-mosaic tiles", "Directional shadows", "Twilight lights"),
         drawGroundClutter = true,
         drawWildflowers = true,
         drawShorelineDetails = true,
@@ -880,13 +920,20 @@ enum class GraphicsQuality(
         treeDetailLayers = 3,
         cullMargin = 4,
         spriteScaleMultiplier = 1.0f,
-        strokeScale = 1.0f
+        strokeScale = 1.0f,
+        useProceduralTileTextures = true,
+        useDirectionalLighting = true,
+        drawAmbientOcclusion = true,
+        drawCastShadows = true,
+        drawTwilightAtmosphere = true,
+        drawPointLightPools = true,
+        useHdPostProcessShader = false
     ),
     HD(
         displayName = "HD",
         shortBadge = "HD",
-        summaryNote = "Maximum visual fidelity",
-        capabilityTags = listOf("HD trim & polish", "Enhanced water", "Rich lighting & FX"),
+        summaryNote = "Maximum fidelity, bloom & twilight shader",
+        capabilityTags = listOf("HD mosaic & water", "Multi-layer bloom", "Twilight shader"),
         drawGroundClutter = true,
         drawWildflowers = true,
         drawShorelineDetails = true,
@@ -900,7 +947,14 @@ enum class GraphicsQuality(
         treeDetailLayers = 3,
         cullMargin = 4,
         spriteScaleMultiplier = 1.06f,
-        strokeScale = 1.15f
+        strokeScale = 1.15f,
+        useProceduralTileTextures = true,
+        useDirectionalLighting = true,
+        drawAmbientOcclusion = true,
+        drawCastShadows = true,
+        drawTwilightAtmosphere = true,
+        drawPointLightPools = true,
+        useHdPostProcessShader = true
     );
 
     companion object {
@@ -950,8 +1004,9 @@ data class GameWorldState(
     val maxMp: Int = 55,
     val soul: Int = 100,
     val maxSoul: Int = 100,
-    val maxCapOz: Double = 400.0,
+    val maxCapOz: Double = BASE_MAX_CAP_OZ,
     val gold: Int = 120,
+    val bankGold: Long = 0L,
     val regionId: String = DEFAULT_REGION_ID,
     val floor: Int = 0,
     val playerX: Int = 196,
@@ -1004,7 +1059,7 @@ data class GameWorldState(
         val bpWeight = backpack.sumOf { ItemCatalog.get(it.itemId).weightOz * it.count }
         val tbWeight = toolBagWeightOz()
         val eqWeight = equipment.totalWeightOz()
-        val goldWeight = gold * 0.1
+        val goldWeight = gold * GOLD_COIN_WEIGHT_OZ
         return bpWeight + tbWeight + eqWeight + goldWeight
     }
 
@@ -1118,9 +1173,9 @@ data class GameWorldState(
     companion object {
         /**
          * Canonical Rookvale carrying capacity progression:
-         * - Levels 1..20 (Adventurer): 400.0 oz base + 25.0 oz per level gained (Lvl 20 = 875.0 oz).
-         * - Level 20 Oracle Job Advance: generous instant weight surge (+250 Knight / +180 Paladin / +120 Mage)
-         *   plus boosted post-20 per-level growth (+40 Knight / +32 Paladin / +25 Mage).
+         * - Levels 1..20 (Adventurer): 1500.0 oz base + 125.0 oz per level gained (Lvl 20 = 3875.0 oz).
+         * - Level 20 Oracle Job Advance: proportionally scaled weight surge (+1250 Knight / +900 Paladin / +600 Mage)
+         *   plus boosted post-20 per-level growth (+200 Knight / +160 Paladin / +125 Mage).
          */
         fun maxCapForLevel(level: Int, vocation: Vocation = Vocation.ADVENTURER): Double {
             val safeLevel = level.coerceAtLeast(1)

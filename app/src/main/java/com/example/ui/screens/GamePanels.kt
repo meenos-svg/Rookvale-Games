@@ -95,8 +95,12 @@ fun SlideUpGamePanel(
     onLootAll: (String) -> Unit,
     onLootCorpseItem: (String, Int) -> Unit = { _, _ -> },
     onLootCorpseGold: (String) -> Unit = {},
-    onDepositItem: (String) -> Unit,
-    onWithdrawItem: (String) -> Unit,
+    onDepositItem: (String, Int) -> Unit,
+    onWithdrawItem: (String, Int) -> Unit,
+    onDepositGold: (Int) -> Unit = {},
+    onDepositAllGold: () -> Unit = {},
+    onWithdrawGold: (Long) -> Unit = {},
+    onWithdrawAllGold: () -> Unit = {},
     onBuyItem: (String) -> Unit,
     onSellItem: (String) -> Unit,
     onCraftRecipe: (String) -> Unit,
@@ -179,7 +183,15 @@ fun SlideUpGamePanel(
                     ActivePanel.EQUIPMENT -> EquipmentPanelContent(state, onUnequipSlot)
                     ActivePanel.BACKPACK -> BackpackPanelContent(state, onUseItem, onDropItem, onBindRune)
                     ActivePanel.SKILLS -> SkillsPanelContent(state)
-                    ActivePanel.DEPOT -> DepotPanelContent(state, onDepositItem, onWithdrawItem)
+                    ActivePanel.DEPOT -> DepotPanelContent(
+                        state = state,
+                        onDepositItem = onDepositItem,
+                        onWithdrawItem = onWithdrawItem,
+                        onDepositGold = onDepositGold,
+                        onDepositAllGold = onDepositAllGold,
+                        onWithdrawGold = onWithdrawGold,
+                        onWithdrawAllGold = onWithdrawAllGold
+                    )
                     ActivePanel.SHOP -> ShopPanelContent(state, onBuyItem, onSellItem)
                     ActivePanel.FURNACE -> SmeltingFurnaceContent(state, onCraftRecipe)
                     ActivePanel.ANVIL -> BlacksmithAnvilContent(state, onCraftRecipe)
@@ -603,65 +615,6 @@ private fun SkillBarRow(
 }
 
 @Composable
-private fun DepotPanelContent(
-    state: GameWorldState,
-    onDeposit: (String) -> Unit,
-    onWithdraw: (String) -> Unit
-) {
-    var tab by remember { mutableIntStateOf(0) }
-    val depotEntries = remember(state.depot) { state.depot.withStableKeys("depot_in") }
-    val carriedEntries = remember(state.toolBag, state.backpack) {
-        state.allCarriedItems().withStableKeys("depot_pack")
-    }
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            PanelTabChip(
-                text = "In Depot (${depotEntries.size})",
-                selected = tab == 0,
-                onClick = { tab = 0 },
-                modifier = Modifier.weight(1f).testTag("depot_tab_in")
-            )
-            PanelTabChip(
-                text = "Deposit Pack (${carriedEntries.size})",
-                selected = tab == 1,
-                onClick = { tab = 1 },
-                modifier = Modifier.weight(1f).testTag("depot_tab_pack")
-            )
-        }
-        val activeEntries = if (tab == 0) depotEntries else carriedEntries
-        if (activeEntries.isEmpty()) {
-            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                Text(if (tab == 0) "Your Depot Chest is empty." else "No carried items to deposit.", color = ParchmentMuted)
-            }
-        } else {
-            LazyColumn(
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(activeEntries, key = { it.key }) { entry ->
-                    val stack = entry.stack
-                    val def = ItemCatalog.get(stack.itemId)
-                    val sub = if (def.isTool) {
-                        "Tool Bag • ${formatOz(def.carriedWeightOz() * stack.count)} oz • ${def.description}"
-                    } else {
-                        "${formatOz(def.weightOz * stack.count)} oz • ${def.description}"
-                    }
-                    ItemActionRow(
-                        stack = stack,
-                        subtitleOverride = sub,
-                        primaryLabel = if (tab == 0) "Take" else "Store",
-                        onPrimary = { if (tab == 0) onWithdraw(stack.itemId) else onDeposit(stack.itemId) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun ShopPanelContent(
     state: GameWorldState,
     onBuy: (String) -> Unit,
@@ -948,7 +901,7 @@ private fun LootCorpseContent(
 }
 
 @Composable
-private fun PanelTabChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun PanelTabChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         color = if (selected) TorchGold else StoneSurface,
         shape = RoundedCornerShape(6.dp),
@@ -962,7 +915,7 @@ private fun PanelTabChip(text: String, selected: Boolean, onClick: () -> Unit, m
 }
 
 @Composable
-private fun ItemActionRow(
+internal fun ItemActionRow(
     stack: ItemStack,
     primaryLabel: String,
     onPrimary: () -> Unit,
@@ -1034,7 +987,11 @@ fun DeathPenaltyDialog(report: DeathReport, onDismiss: () -> Unit) {
                 Surface(color = StoneSurface, shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, StoneBorderLight), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("• Penalty: -10% XP (-${report.xpLost} XP) & -10% skill progress", style = MaterialTheme.typography.labelMedium, color = HealthCrimson)
-                        Text("• Dropped Main Bag (${report.droppedItemsCount} items) left at Floor ${report.floorDropped} (${report.corpseX}, ${report.corpseY})", style = MaterialTheme.typography.labelMedium, color = TorchGold)
+                        val goldDropText = if (report.droppedGold > 0) " & ${report.droppedGold} gp" else ""
+                        Text("• Dropped Main Bag (${report.droppedItemsCount} items$goldDropText) left at Floor ${report.floorDropped} (${report.corpseX}, ${report.corpseY})", style = MaterialTheme.typography.labelMedium, color = TorchGold)
+                        if (report.safeBankGold > 0L) {
+                            Text("• Your ${String.format(Locale.US, "%,d", report.safeBankGold)} gp in the Bank Vault stayed completely safe.", style = MaterialTheme.typography.labelSmall, color = ExpEmerald)
+                        }
                         Text("• Your strapped Tool Bag (Rope, Pickaxes, Hatchet, Rod) remained safe with you so you can retrieve your corpse.", style = MaterialTheme.typography.labelSmall, color = ParchmentMuted)
                     }
                 }
@@ -1050,7 +1007,7 @@ fun DeathPenaltyDialog(report: DeathReport, onDismiss: () -> Unit) {
     }
 }
 
-private data class KeyedItemStack(
+internal data class KeyedItemStack(
     val key: String,
     val stack: ItemStack
 )
@@ -1059,7 +1016,7 @@ private data class KeyedItemStack(
  * Produces an immutable list snapshot with deterministic, guaranteed-unique LazyColumn keys
  * even when duplicate non-stackable items exist or when the last item of a stack is removed.
  */
-private fun List<ItemStack>.withStableKeys(prefix: String): List<KeyedItemStack> {
+internal fun List<ItemStack>.withStableKeys(prefix: String): List<KeyedItemStack> {
     val snapshot = this.toList()
     val seenPerId = HashMap<String, Int>(snapshot.size)
     val result = ArrayList<KeyedItemStack>(snapshot.size)

@@ -24,6 +24,7 @@ import com.example.game.model.GameWorldState
 import com.example.game.model.GraphicsQuality
 import com.example.game.model.PlayerSkills
 import com.example.game.model.Vocation
+import com.example.game.model.normalizeRegionId
 import com.example.game.multiplayer.ChatChannel
 import com.example.game.multiplayer.ConnectionStatus
 import com.example.game.multiplayer.LocalPlayerPresencePayload
@@ -98,6 +99,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private var attackSubTickJob: Job? = null
     private var walkLoopJob: Job? = null
     private var cloudAutoSaveJob: Job? = null
+    private var onlinePresenceSyncJob: Job? = null
     private var skillDebounceSaveJob: Job? = null
     private var lastStepMs: Long = 0L
     private var lastBackgroundSaveMs: Long = 0L
@@ -703,6 +705,56 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+
+        // 2-second Supabase public.players fallback poll + live position sync & Realtime heartbeat
+        onlinePresenceSyncJob = viewModelScope.launch(Dispatchers.IO) {
+            var lastPushedKey = ""
+            var lastCloudPushMs = 0L
+            var lastBroadcastHeartbeatMs = 0L
+            while (true) {
+                if (_screen.value == AppScreen.PLAYING && cloudRepository.isCloudConfigured()) {
+                    val cur = _world.value
+                    if (cur.saveId.isNotBlank()) {
+                        val nowMs = System.currentTimeMillis()
+                        val normalizedRegion = normalizeRegionId(cur.regionId)
+                        val stateKey = "${cur.playerX}:${cur.playerY}:${cur.floor}:$normalizedRegion:${cur.hp}:${cur.playerFacing.name}"
+
+                        // Keep public.players updated promptly on movement or every 10s so active players stay inside the 60s window
+                        if (stateKey != lastPushedKey || nowMs - lastCloudPushMs >= 10_000L) {
+                            lastPushedKey = stateKey
+                            lastCloudPushMs = nowMs
+                            persistCurrentState(silent = true)
+                        }
+
+                        // Periodic Realtime broadcast heartbeat so late joiners / dropped packets self-heal quickly
+                        if (nowMs - lastBroadcastHeartbeatMs >= 4_000L) {
+                            lastBroadcastHeartbeatMs = nowMs
+                            if (multiplayerManager.uiState.value.status == ConnectionStatus.ONLINE) {
+                                multiplayerManager.broadcastLocalState(cur.toPresencePayload())
+                            }
+                        }
+
+                        // Lightweight 2-second fallback poll on public.players (last 60s, excluding self by UUID & name)
+                        val polled = runCatching {
+                            cloudRepository.fetchRecentOnlinePlayers(
+                                sinceEpochMs = nowMs - 60_000L,
+                                excludePlayerId = cur.saveId,
+                                excludeCharacterName = cur.playerName
+                            )
+                        }.getOrDefault(emptyList())
+
+                        multiplayerManager.mergePolledPlayers(
+                            polled = polled,
+                            localFloor = cur.floor,
+                            localRegionId = normalizedRegion,
+                            localPlayerId = cur.saveId,
+                            localPlayerName = cur.playerName
+                        )
+                    }
+                }
+                delay(2_000L)
+            }
+        }
     }
 
     private fun stopGameLoops() {
@@ -710,11 +762,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         worldTickJob?.cancel()
         walkLoopJob?.cancel()
         cloudAutoSaveJob?.cancel()
+        onlinePresenceSyncJob?.cancel()
         skillDebounceSaveJob?.cancel()
         attackSubTickJob = null
         worldTickJob = null
         walkLoopJob = null
         cloudAutoSaveJob = null
+        onlinePresenceSyncJob = null
         skillDebounceSaveJob = null
     }
 
@@ -778,8 +832,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun GameWorldState.toPresencePayload(
         actionState: PlayerActionState = PlayerActionState.IDLE
-    ): LocalPlayerPresencePayload =
-        LocalPlayerPresencePayload(
+    ): LocalPlayerPresencePayload {
+        val nowMs = System.currentTimeMillis()
+        return LocalPlayerPresencePayload(
             playerId = saveId,
             name = playerName,
             level = level,
@@ -789,14 +844,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             x = playerX,
             y = playerY,
             floor = floor,
+            regionId = normalizeRegionId(regionId),
             hp = hp,
             maxHp = maxHp,
-            joinedAt = System.currentTimeMillis(),
+            joinedAt = nowMs,
+            lastSeenMs = nowMs,
             isPoisoned = poisonTicks > 0,
             isBurning = fireTicks > 0,
             direction = playerFacing,
             actionState = actionState
         )
+    }
 
     fun checkForGitHubUpdates() {
         viewModelScope.launch {
@@ -1230,11 +1288,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (looted) persistCurrentState(silent = true)
     }
 
-    fun depositItem(itemId: String) {
-        if (itemId.isBlank()) return
+    fun depositItem(itemId: String, count: Int = 1) {
+        if (itemId.isBlank() || count <= 0) return
         var changed = false
         _world.update { prev ->
-            val next = GameEngine.depositItem(prev, itemId)
+            val next = GameEngine.depositItem(prev, itemId, count)
             if (next.depot != prev.depot || next.backpack != prev.backpack || next.toolBag != prev.toolBag) {
                 changed = true
             }
@@ -1243,12 +1301,60 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (changed) persistCurrentState(silent = true)
     }
 
-    fun withdrawItem(itemId: String) {
-        if (itemId.isBlank()) return
+    fun withdrawItem(itemId: String, count: Int = 1) {
+        if (itemId.isBlank() || count <= 0) return
         var changed = false
         _world.update { prev ->
-            val next = GameEngine.withdrawItem(prev, itemId)
+            val next = GameEngine.withdrawItem(prev, itemId, count)
             if (next.depot != prev.depot || next.backpack != prev.backpack || next.toolBag != prev.toolBag) {
+                changed = true
+            }
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
+    }
+
+    fun depositGold(amount: Int) {
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.depositGold(prev, amount)
+            if (next.gold != prev.gold || next.bankGold != prev.bankGold) {
+                changed = true
+            }
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
+    }
+
+    fun depositAllGold() {
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.depositAllGold(prev)
+            if (next.gold != prev.gold || next.bankGold != prev.bankGold) {
+                changed = true
+            }
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
+    }
+
+    fun withdrawGold(amount: Long) {
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.withdrawGold(prev, amount)
+            if (next.gold != prev.gold || next.bankGold != prev.bankGold) {
+                changed = true
+            }
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
+    }
+
+    fun withdrawAllGold() {
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.withdrawAllGold(prev)
+            if (next.gold != prev.gold || next.bankGold != prev.bankGold) {
                 changed = true
             }
             next

@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.os.SystemClock
@@ -44,6 +45,7 @@ import com.example.game.model.ParticleDetailLevel
 import com.example.game.model.ProjectileKind
 import com.example.game.model.ThreatBand
 import com.example.game.model.TileType
+import com.example.game.model.normalizeRegionId
 import com.example.game.multiplayer.PlayerActionState
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.sprites.EntitySpriteAtlas
@@ -57,6 +59,7 @@ import com.example.ui.theme.PoisonGreen
 import com.example.ui.theme.TargetRed
 import com.example.ui.theme.TorchGold
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -176,7 +179,19 @@ fun GameCanvasView(
 
     val camera = remember { IsometricCamera() }
     val reusablePath = remember { Path() }
+    val reusableTileMatrix = remember { Matrix() }
+    val remoteVisualPos = remember { HashMap<String, FloatArray>(16) }
+    val activeRemoteIds = remember { HashSet<String>(16) }
+    val lerpClockMs = remember { longArrayOf(SystemClock.uptimeMillis()) }
+    val reusableTilePaint = remember {
+        Paint().apply {
+            isFilterBitmap = false // Nearest-neighbor keeps handcrafted pixel-mosaic tiles razor sharp!
+            isAntiAlias = false
+        }
+    }
     val depthQueue = remember { ArrayList<DepthSortableItem>(256) }
+    val visibleLights = remember { ArrayList<ScenePointLight>(128) }
+    val hdPostProcess = remember { HdPostProcessRenderer() }
 
     Box(modifier = modifier.fillMaxSize()) {
         Canvas(
@@ -268,8 +283,9 @@ fun GameCanvasView(
             val spritePx = (camera.tileW * 0.78f * quality.spriteScaleMultiplier).roundToInt().coerceIn(32, 168)
 
             depthQueue.clear()
+            visibleLights.clear()
 
-            // PASS 1: Chunk-Culled & Rotated-Viewport-Culled 2.5D Terrain Quads
+            // PASS 1: Chunk-Culled & Rotated-Viewport-Culled 2.5D Terrain Quads (Pixel-Mosaic in High/HD)
             for (cy in chunkBounds.minChunkY..chunkBounds.maxChunkY) {
                 val yStart = maxOf(bounds.minTy, cy * chunkSize)
                 val yEnd = minOf(bounds.maxTy, (cy + 1) * chunkSize - 1)
@@ -303,8 +319,22 @@ fun GameCanvasView(
                                 cx = center.x,
                                 cy = center.y,
                                 nowMs = now,
-                                quality = quality
+                                quality = quality,
+                                tileMatrix = reusableTileMatrix,
+                                tilePaint = reusableTilePaint
                             )
+
+                            if (quality.drawPointLightPools) {
+                                IsometricLightingEngine.collectTilePointLight(
+                                    tile = renderTile,
+                                    tx = tx,
+                                    ty = ty,
+                                    cx = center.x,
+                                    cy = center.y,
+                                    cam = camera,
+                                    outLights = visibleLights
+                                )
+                            }
 
                             if (IsometricTileDrawer.isTallProp(renderTile)) {
                                 depthQueue.add(
@@ -391,20 +421,55 @@ fun GameCanvasView(
                 }
             }
 
+            val localRegionId = normalizeRegionId(st.regionId)
+            val dtSec = ((now - lerpClockMs[0]).coerceIn(1L, 120L)) / 1000f
+            lerpClockMs[0] = now
+            val smoothAlpha = (1f - exp(-10.5f * dtSec)).coerceIn(0.08f, 1f)
+            activeRemoteIds.clear()
+
             latestRemotePlayers.forEach { rp ->
-                if (rp.floor == st.floor && rp.x in (bounds.minTx - 1)..(bounds.maxTx + 1) && rp.y in (bounds.minTy - 1)..(bounds.maxTy + 1)) {
-                    val rpMoveFrac = ((now - rp.lastMoveMs).toFloat() / 190f).coerceIn(0f, 1f)
-                    val rpX = rp.prevX + (rp.x - rp.prevX) * rpMoveFrac
-                    val rpY = rp.prevY + (rp.y - rp.prevY) * rpMoveFrac
+                if (rp.floor != st.floor || normalizeRegionId(rp.regionId) != localRegionId) return@forEach
+                activeRemoteIds.add(rp.playerId)
+                val targetX = rp.x.toFloat()
+                val targetY = rp.y.toFloat()
+                val vis = remoteVisualPos[rp.playerId]
+                val visX: Float
+                val visY: Float
+                if (vis == null || vis[2].toInt() != rp.floor || hypot(targetX - vis[0], targetY - vis[1]) > 12f) {
+                    val fresh = floatArrayOf(targetX, targetY, rp.floor.toFloat())
+                    remoteVisualPos[rp.playerId] = fresh
+                    visX = targetX
+                    visY = targetY
+                } else {
+                    val nx = vis[0] + (targetX - vis[0]) * smoothAlpha
+                    val ny = vis[1] + (targetY - vis[1]) * smoothAlpha
+                    val snappedX = if (abs(targetX - nx) < 0.015f) targetX else nx
+                    val snappedY = if (abs(targetY - ny) < 0.015f) targetY else ny
+                    vis[0] = snappedX
+                    vis[1] = snappedY
+                    visX = snappedX
+                    visY = snappedY
+                }
+                val isGliding = hypot(targetX - visX, targetY - visY) > 0.03f
+                val rpMoveFrac = if (isGliding) 0.5f else ((now - rp.lastMoveMs).toFloat() / 190f).coerceIn(0f, 1f)
+                if (visX >= bounds.minTx - 2 && visX <= bounds.maxTx + 2 &&
+                    visY >= bounds.minTy - 2 && visY <= bounds.maxTy + 2
+                ) {
                     depthQueue.add(
                         DepthSortableItem.RemotePlayerItem(
-                            depth = camera.depthOf(rpX, rpY),
+                            depth = camera.depthOf(visX, visY),
                             player = rp,
-                            fx = rpX,
-                            fy = rpY,
+                            fx = visX,
+                            fy = visY,
                             moveFrac = rpMoveFrac
                         )
                     )
+                }
+            }
+            if (remoteVisualPos.size > activeRemoteIds.size) {
+                val iter = remoteVisualPos.keys.iterator()
+                while (iter.hasNext()) {
+                    if (iter.next() !in activeRemoteIds) iter.remove()
                 }
             }
 
@@ -514,7 +579,31 @@ fun GameCanvasView(
                 }
             }
 
-            // PASS 4: Landmarks (Subtle Isometric Banners)
+            // PASS 4: Projectiles, Spells, Splashes & Sparks (also registers moving spell lights!)
+            drawIsometricProjectiles(st, camera, hw, now, quality, visibleLights)
+
+            // PASS 5: Moody Twilight Atmospheric Grade & Dynamic Warm/Arcane Point-Light Pools
+            if (quality.drawTwilightAtmosphere || quality.drawPointLightPools) {
+                IsometricLightingEngine.drawTwilightAndPointLightPass(
+                    scope = this,
+                    floorId = st.floor,
+                    nowMs = now,
+                    quality = quality,
+                    lights = visibleLights
+                )
+            }
+
+            // PASS 6: HD Post-Processing (Android 13+ AGSL RuntimeShader with clean Compose gradient fallback)
+            if (quality.drawHdVignette) {
+                hdPostProcess.drawHdPostProcess(
+                    scope = this,
+                    quality = quality,
+                    floorId = st.floor,
+                    nowMs = now
+                )
+            }
+
+            // PASS 7: Crisp Unshaded Landmarks & Floating Combat / Resource Text (Always 100% legible!)
             WorldMaps.landmarks.forEach { lm ->
                 if (lm.floor == st.floor && lm.x in bounds.minTx..bounds.maxTx && lm.y in bounds.minTy..bounds.maxTy) {
                     val c = camera.tileCenterToScreen(lm.x.toFloat(), lm.y.toFloat())
@@ -531,10 +620,6 @@ fun GameCanvasView(
                 }
             }
 
-            // PASS 5: Projectiles, Spells, Splashes & Sparks in Isometric Space
-            drawIsometricProjectiles(st, camera, hw, now, quality)
-
-            // PASS 6: Floating Combat & Resource Text
             st.floatingTexts.forEach { ft ->
                 if (ft.floor != st.floor) return@forEach
                 val age = (now - ft.createdAtMs).toFloat()
@@ -563,23 +648,6 @@ fun GameCanvasView(
                     drawText(ft.text, fx, fy, outlinePaint)
                     drawText(ft.text, fx, fy, floatingPaint)
                 }
-            }
-
-            // PASS 7: HD Subtle Atmospheric Edge Vignette
-            if (quality.drawHdVignette && size.width > 0f && size.height > 0f) {
-                val radius = maxOf(size.width, size.height) * 0.72f
-                drawRect(
-                    brush = Brush.radialGradient(
-                        colorStops = arrayOf(
-                            0.0f to Color.Transparent,
-                            0.68f to Color.Transparent,
-                            1.0f to Color(0x4A090706)
-                        ),
-                        center = Offset(size.width * 0.5f, size.height * 0.5f),
-                        radius = radius
-                    ),
-                    size = size
-                )
             }
         }
     }
@@ -625,7 +693,11 @@ private fun DrawScope.drawIsometricNpc(
     quality: GraphicsQuality = GraphicsQuality.DEFAULT
 ) {
     val c = camera.tileCenterToScreen(npc.x.toFloat(), npc.y.toFloat())
-    IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, quality = quality)
+    if (quality.drawCastShadows) {
+        IsometricLightingEngine.drawAngledCastShadow(this, camera, c.x, c.y + hh * 0.10f, radiusScale = 0.96f, heightTiles = 0.85f, quality = quality)
+    } else {
+        IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, quality = quality)
+    }
     if (npc.role == NpcRole.ORACLE && quality != GraphicsQuality.LOW) {
         val auraAlpha = if (animFrame == 0) 0.36f else 0.18f
         drawCircle(
@@ -682,7 +754,16 @@ private fun DrawScope.drawIsometricMonster(
         )
     }
 
-    IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, scale = if (isBoss) 1.3f else 0.96f, quality = quality)
+    if (quality.drawCastShadows) {
+        IsometricLightingEngine.drawAngledCastShadow(
+            this, camera, c.x, c.y + hh * 0.10f,
+            radiusScale = if (isBoss) 1.32f else 0.96f,
+            heightTiles = if (isBoss) 1.15f else 0.80f,
+            quality = quality
+        )
+    } else {
+        IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, scale = if (isBoss) 1.3f else 0.96f, quality = quality)
+    }
 
     val mFrame = (((now + (m.id * 170L)) / 420L) % 2L).toInt()
     val drawX = (c.x - drawSize * 0.5f).roundToInt()
@@ -764,7 +845,11 @@ private fun DrawScope.drawIsometricRemotePlayer(
         )
     }
 
-    IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, quality = quality)
+    if (quality.drawCastShadows) {
+        IsometricLightingEngine.drawAngledCastShadow(this, camera, c.x, c.y + hh * 0.10f, radiusScale = 1.0f, heightTiles = 0.88f, quality = quality)
+    } else {
+        IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, quality = quality)
+    }
 
     val haloCenter = Offset(c.x, c.y - spritePx * 0.35f)
     if (rp.isPoisoned) drawCircle(PoisonGreen.copy(alpha = 0.28f), hw * 0.65f, haloCenter)
@@ -808,6 +893,11 @@ private fun DrawScope.drawIsometricRemotePlayer(
     val prevColor = labelPaint.color
     labelPaint.color = android.graphics.Color.parseColor("#8CF0FF")
     val tag = "${rp.name} [Lvl ${rp.level}]"
+    val tagWidth = labelPaint.measureText(tag)
+    val pipCenter = Offset(c.x - tagWidth * 0.5f - 9f, rBarY - 12f)
+    drawCircle(Color.Black, radius = 4.6f, center = pipCenter)
+    drawCircle(TorchGold, radius = 3.6f, center = pipCenter)
+    drawCircle(Color(0xFF47D7FF), radius = 2.4f, center = pipCenter)
     drawContext.canvas.nativeCanvas.apply {
         drawText(tag, c.x, rBarY - 5f, labelShadowPaint)
         drawText(tag, c.x, rBarY - 5f, labelPaint)
@@ -833,7 +923,11 @@ private fun DrawScope.drawIsometricLocalPlayer(
     val c = camera.tileCenterToScreen(fx, fy)
     val playerFrame = if (moveFrac < 1f) ((now / 110L) % 2L).toInt() else animFrame
 
-    IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, scale = 1.05f, quality = quality)
+    if (quality.drawCastShadows) {
+        IsometricLightingEngine.drawAngledCastShadow(this, camera, c.x, c.y + hh * 0.10f, radiusScale = 1.05f, heightTiles = 0.92f, quality = quality)
+    } else {
+        IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, scale = 1.05f, quality = quality)
+    }
 
     val auraCenter = Offset(c.x, c.y - spritePx * 0.35f)
     if (state.poisonTicks > 0) drawCircle(PoisonGreen.copy(alpha = 0.28f), hw * 0.68f, auraCenter)
@@ -879,7 +973,8 @@ private fun DrawScope.drawIsometricProjectiles(
     camera: IsometricCamera,
     hw: Float,
     now: Long,
-    quality: GraphicsQuality = GraphicsQuality.DEFAULT
+    quality: GraphicsQuality = GraphicsQuality.DEFAULT,
+    outLights: MutableList<ScenePointLight>? = null
 ) {
     val particleLevel = quality.particleLevel
     state.projectiles.forEach { proj ->
@@ -899,6 +994,10 @@ private fun DrawScope.drawIsometricProjectiles(
         val arcLift = sin(t * Math.PI).toFloat() * hw * 0.45f
         val px = start.x + (end.x - start.x) * t
         val py = start.y + (end.y - start.y) * t - hw * 0.35f - arcLift
+
+        if (quality.drawPointLightPools && outLights != null) {
+            IsometricLightingEngine.collectProjectilePointLight(proj.kind, px, py, hw, outLights)
+        }
 
         // HD enriched trailing spell wake along flight path
         val prevT = (t - 0.14f).coerceAtLeast(0f)

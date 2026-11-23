@@ -145,7 +145,7 @@ object GameEngine {
         val isLegacyV1 = save.mapVersion < 2
         val isLegacyV2 = save.mapVersion == 2
         val floorMap = WorldMaps.getFloor(save.floor)
-        val resolvedRegionId = save.regionId.ifBlank { DEFAULT_REGION_ID }
+        val resolvedRegionId = normalizeRegionId(save.regionId)
 
         var targetX = save.x
         var targetY = save.y
@@ -240,12 +240,14 @@ object GameEngine {
             maxSoul = save.maxSoul,
             maxCapOz = maxOf(save.maxCapOz, GameWorldState.maxCapForLevel(save.level, voc)),
             gold = save.gold,
+            bankGold = save.bankGold.coerceAtLeast(0L),
             regionId = resolvedRegionId,
             floor = save.floor,
             playerX = targetX,
             playerY = targetY,
             prevPlayerX = targetX,
             prevPlayerY = targetY,
+            playerFacing = runCatching { Direction.valueOf(save.facingName) }.getOrDefault(Direction.SOUTH),
             poisonTicks = save.poisonTicks,
             fireTicks = save.fireTicks,
             skills = save.skills,
@@ -279,6 +281,7 @@ object GameEngine {
             maxSoul = state.maxSoul,
             maxCapOz = state.maxCapOz,
             gold = state.gold,
+            bankGold = state.bankGold.coerceAtLeast(0L),
             floor = state.floor,
             x = state.playerX,
             y = state.playerY,
@@ -299,7 +302,8 @@ object GameEngine {
             boundAttackRuneId = state.boundAttackRuneId,
             boundHealRuneId = state.boundHealRuneId,
             customHotbarSlots = List(2) { idx -> state.customHotbarSlots.getOrNull(idx) },
-            regionId = state.regionId.ifBlank { DEFAULT_REGION_ID }
+            regionId = normalizeRegionId(state.regionId),
+            facingName = state.playerFacing.name
         )
     }
 
@@ -2115,6 +2119,8 @@ object GameEngine {
         )
 
         val droppedCount = state.backpack.sumOf { it.count }
+        val droppedGold = state.gold.coerceAtLeast(0)
+        val safeBankGold = state.bankGold.coerceAtLeast(0L)
         val playerCorpse = CorpseEntity(
             id = "p_${UUID.randomUUID()}",
             floor = state.floor,
@@ -2122,13 +2128,20 @@ object GameEngine {
             y = state.playerY,
             label = "${state.playerName}'s Fallen Backpack",
             isPlayerCorpse = true,
-            gold = 0,
+            gold = droppedGold,
             items = state.backpack
         )
-        val updatedCorpses = if (state.backpack.isNotEmpty()) state.corpses + playerCorpse else state.corpses
+        val updatedCorpses = if (state.backpack.isNotEmpty() || droppedGold > 0) state.corpses + playerCorpse else state.corpses
         // Tool Bag stays strapped to the adventurer on death (ensuring a Rope is always available for recovery)
         val keptTools = if (state.toolBag.any { it.itemId == "rope" }) state.toolBag
         else addItemPublic(state.toolBag, "rope", 1)
+
+        val goldDropNote = when {
+            droppedGold > 0 && safeBankGold > 0L -> " Dropped $droppedGold gp in your Fallen Backpack; ${formatGold(safeBankGold)} gp stayed safe in Bank."
+            droppedGold > 0 -> " Dropped $droppedGold gp in your Fallen Backpack."
+            safeBankGold > 0L -> " Your ${formatGold(safeBankGold)} gp in the Bank Vault stayed safe."
+            else -> ""
+        }
 
         return state.copy(
             level = newLevel,
@@ -2138,6 +2151,8 @@ object GameEngine {
             mp = newMaxMp,
             maxMp = newMaxMp,
             maxCapOz = newMaxCap,
+            gold = 0,
+            bankGold = safeBankGold,
             floor = 0,
             playerX = WorldMaps.TEMPLE_SPAWN_X,
             playerY = WorldMaps.TEMPLE_SPAWN_Y,
@@ -2154,8 +2169,8 @@ object GameEngine {
             autoFollowTarget = false,
             walkPath = emptyList(),
             activePanel = ActivePanel.NONE,
-            deathReport = DeathReport(xpLost, state.floor, state.playerX, state.playerY, droppedCount)
-        ).addLogInternal("You died! Lost $xpLost XP (-10%). Main Bag dropped on Floor ${state.floor}; Tool Bag remained strapped.")
+            deathReport = DeathReport(xpLost, state.floor, state.playerX, state.playerY, droppedCount, droppedGold, safeBankGold)
+        ).addLogInternal("You died! Lost $xpLost XP (-10%). Main Bag dropped on Floor ${state.floor}; Tool Bag remained strapped.$goldDropNote")
     }
 
     internal fun grantExperience(state: GameWorldState, xpGain: Long, fx: Float, fy: Float, nowMs: Long): GameWorldState {
@@ -2430,15 +2445,17 @@ object GameEngine {
     }
 
     /**
-     * Transfers gold coins from a corpse or Fallen Backpack into the player's pouch, up to remaining Cap (0.1 oz/gp).
+     * Transfers gold coins from a corpse or Fallen Backpack into the player's pouch, up to remaining Cap (0.01 oz/gp).
      * Automatically removes the corpse and closes the loot panel once completely emptied.
      */
     fun lootGoldFromCorpse(state: GameWorldState, corpseId: String, nowMs: Long): GameWorldState {
         val corpse = state.corpses.firstOrNull { it.id == corpseId } ?: return state
         if (corpse.gold <= 0) return state
-        val affordableGold = (state.remainingCapOz() / 0.1).toInt().coerceAtMost(corpse.gold)
+        val intRoom = (Int.MAX_VALUE.toLong() - state.gold.toLong()).coerceAtLeast(0L)
+        val capRoom = ((state.remainingCapOz() + 1e-6) / GOLD_COIN_WEIGHT_OZ).toLong().coerceAtLeast(0L)
+        val affordableGold = minOf(capRoom, corpse.gold.toLong(), intRoom).toInt()
         if (affordableGold <= 0) {
-            return state.addLogInternal("Too heavy! Need at least 0.1 oz Cap to loot Gold Coins.")
+            return state.addLogInternal("Too heavy! Need at least 0.01 oz Cap to loot Gold Coins.")
         }
         val remainingGold = corpse.gold - affordableGold
         val isEmptyNow = remainingGold == 0 && corpse.items.isEmpty()
@@ -2526,7 +2543,9 @@ object GameEngine {
         var remainingGold = corpse.gold
         var lootedGold = 0
         if (remainingGold > 0) {
-            val affordableGold = (s.remainingCapOz() / 0.1).toInt().coerceAtMost(remainingGold)
+            val intRoom = (Int.MAX_VALUE.toLong() - s.gold.toLong()).coerceAtLeast(0L)
+            val capRoom = ((s.remainingCapOz() + 1e-6) / GOLD_COIN_WEIGHT_OZ).toLong().coerceAtLeast(0L)
+            val affordableGold = minOf(capRoom, remainingGold.toLong(), intRoom).toInt()
             if (affordableGold > 0) {
                 s = s.copy(gold = s.gold + affordableGold)
                 remainingGold -= affordableGold
@@ -2564,17 +2583,19 @@ object GameEngine {
         ).addLogInternal(msg)
     }
 
-    fun depositItem(state: GameWorldState, itemId: String): GameWorldState {
+    fun depositItem(state: GameWorldState, itemId: String, requestedCount: Int = 1): GameWorldState {
         return try {
             val cleanId = itemId.trim()
-            if (cleanId.isEmpty() || !state.hasItem(cleanId)) return state
+            val available = state.itemCount(cleanId)
+            if (cleanId.isEmpty() || available <= 0 || requestedCount <= 0) return state
             val def = ItemCatalog.get(cleanId)
             val unitWeight = def.carriedWeightOz()
             if (!unitWeight.isFinite() || unitWeight < 0.0) {
                 return state.addLogInternal("Warning: Could not deposit ${def.name} (invalid item weight).")
             }
-            val afterRemove = removeCarriedItem(state, cleanId, 1)
-            val updatedDepot = addItemPublic(afterRemove.depot, cleanId, 1)
+            val actualCount = requestedCount.coerceAtMost(available)
+            val afterRemove = removeCarriedItem(state, cleanId, actualCount)
+            val updatedDepot = addItemPublic(afterRemove.depot, cleanId, actualCount)
             val updated = afterRemove.copy(
                 backpack = afterRemove.backpack.toList(),
                 toolBag = afterRemove.toolBag.toList(),
@@ -2585,7 +2606,8 @@ object GameEngine {
             if (!capCheck.isFinite()) {
                 return state.addLogInternal("Warning: Cap recalculation failed while depositing ${def.name}.")
             }
-            updated.addLogInternal("Stored ${def.name} in Depot.")
+            val qtyLabel = if (actualCount > 1) "${actualCount}x ${def.name}" else def.name
+            updated.addLogInternal("Stored $qtyLabel in Depot.")
         } catch (t: Throwable) {
             state.addLogInternal("Warning: Failed to deposit item (${t.message ?: "unexpected error"}).").copy(
                 backpack = state.backpack.toList(),
@@ -2595,24 +2617,35 @@ object GameEngine {
         }
     }
 
-    fun withdrawItem(state: GameWorldState, itemId: String): GameWorldState {
+    fun withdrawItem(state: GameWorldState, itemId: String, requestedCount: Int = 1): GameWorldState {
         return try {
             val cleanId = itemId.trim()
-            if (cleanId.isEmpty() || state.depot.none { it.itemId == cleanId && it.count > 0 }) return state
+            val available = state.depot.filter { it.itemId == cleanId && it.count > 0 }.sumOf { it.count }
+            if (cleanId.isEmpty() || available <= 0 || requestedCount <= 0) return state
             val def = ItemCatalog.get(cleanId)
             val neededWeight = def.carriedWeightOz()
             if (!neededWeight.isFinite() || neededWeight < 0.0) {
                 return state.addLogInternal("Warning: Could not withdraw ${def.name} (invalid item weight).")
             }
             val currentRemainingCap = state.remainingCapOz()
-            if (!currentRemainingCap.isFinite() || currentRemainingCap + 1e-6 < neededWeight) {
+            if (!currentRemainingCap.isFinite()) {
+                return state.addLogInternal("Warning: Cap recalculation failed while withdrawing ${def.name}.")
+            }
+            val desiredCount = requestedCount.coerceAtMost(available)
+            val maxAffordable = if (neededWeight <= 0.0) {
+                desiredCount
+            } else {
+                ((currentRemainingCap + 1e-6) / neededWeight).toInt().coerceAtLeast(0)
+            }
+            val actualCount = minOf(desiredCount, maxAffordable)
+            if (actualCount <= 0) {
                 return state.addLogInternal(
                     "Not enough Cap (${String.format(java.util.Locale.US, "%.1f", neededWeight)} oz needed)."
                 )
             }
             val destNote = if (def.isTool) " into Tool Bag" else ""
-            val depotAfterRemove = removeItemPublic(state.depot, cleanId, 1)
-            val updated = addCarriedItem(state.copy(depot = depotAfterRemove), cleanId, 1)
+            val depotAfterRemove = removeItemPublic(state.depot, cleanId, actualCount)
+            val updated = addCarriedItem(state.copy(depot = depotAfterRemove), cleanId, actualCount)
             val safeUpdated = updated.copy(
                 backpack = updated.backpack.toList(),
                 toolBag = updated.toolBag.toList(),
@@ -2621,7 +2654,13 @@ object GameEngine {
             if (!safeUpdated.remainingCapOz().isFinite()) {
                 return state.addLogInternal("Warning: Cap recalculation failed while withdrawing ${def.name}.")
             }
-            safeUpdated.addLogInternal("Withdrew ${def.name}$destNote from Depot.")
+            val msg = if (actualCount < desiredCount) {
+                "Withdrew $actualCount/$desiredCount ${def.name}$destNote from Depot (Cap limit reached)."
+            } else {
+                val qtyLabel = if (actualCount > 1) "${actualCount}x ${def.name}" else def.name
+                "Withdrew $qtyLabel$destNote from Depot."
+            }
+            safeUpdated.addLogInternal(msg)
         } catch (t: Throwable) {
             state.addLogInternal("Warning: Failed to withdraw item (${t.message ?: "unexpected error"}).").copy(
                 backpack = state.backpack.toList(),
@@ -2630,6 +2669,58 @@ object GameEngine {
             )
         }
     }
+
+    fun depositGold(state: GameWorldState, amount: Int): GameWorldState {
+        if (amount <= 0) return state.addLogInternal("Enter a positive gold amount to deposit.")
+        if (state.gold <= 0) return state.addLogInternal("You have no carried gold to deposit.")
+        val actual = amount.coerceAtMost(state.gold)
+        val newBank = (state.bankGold.coerceAtLeast(0L) + actual.toLong()).coerceAtLeast(0L)
+        return state.copy(
+            gold = state.gold - actual,
+            bankGold = newBank
+        ).addLogInternal("Deposited ${formatGold(actual.toLong())} gp into your Bank Vault (Balance: ${formatGold(newBank)} gp).")
+    }
+
+    fun depositAllGold(state: GameWorldState): GameWorldState {
+        if (state.gold <= 0) return state.addLogInternal("You have no carried gold to deposit.")
+        return depositGold(state, state.gold)
+    }
+
+    fun withdrawGold(state: GameWorldState, amount: Long): GameWorldState {
+        if (amount <= 0L) return state.addLogInternal("Enter a positive gold amount to withdraw.")
+        val availableBank = state.bankGold.coerceAtLeast(0L)
+        if (availableBank <= 0L) return state.addLogInternal("Your Bank Vault is empty.")
+        val desired = amount.coerceAtMost(availableBank)
+        val intRoom = (Int.MAX_VALUE.toLong() - state.gold.toLong()).coerceAtLeast(0L)
+        val capRoom = ((state.remainingCapOz() + 1e-6) / GOLD_COIN_WEIGHT_OZ).toLong().coerceAtLeast(0L)
+        val actual = minOf(desired, intRoom, capRoom)
+        if (actual <= 0L) {
+            return if (capRoom <= 0L) {
+                state.addLogInternal("Not enough Cap! Need at least 0.01 oz per gp to withdraw gold.")
+            } else {
+                state.addLogInternal("Your carried gold pouch is full.")
+            }
+        }
+        val newBank = (availableBank - actual).coerceAtLeast(0L)
+        val newGold = state.gold + actual.toInt()
+        val msg = if (actual < desired) {
+            "Withdrew ${formatGold(actual)} gp from Bank Vault (Cap limit reached; ${formatGold(newBank)} gp left in Bank)."
+        } else {
+            "Withdrew ${formatGold(actual)} gp from your Bank Vault (Balance: ${formatGold(newBank)} gp)."
+        }
+        return state.copy(
+            gold = newGold,
+            bankGold = newBank
+        ).addLogInternal(msg)
+    }
+
+    fun withdrawAllGold(state: GameWorldState): GameWorldState {
+        val availableBank = state.bankGold.coerceAtLeast(0L)
+        if (availableBank <= 0L) return state.addLogInternal("Your Bank Vault is empty.")
+        return withdrawGold(state, availableBank)
+    }
+
+    private fun formatGold(amount: Long): String = String.format(java.util.Locale.US, "%,d", amount)
 
     fun buyShopItem(state: GameWorldState, itemId: String): GameWorldState {
         val def = ItemCatalog.get(itemId)

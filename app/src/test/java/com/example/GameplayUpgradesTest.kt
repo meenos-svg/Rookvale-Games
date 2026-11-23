@@ -29,12 +29,12 @@ class GameplayUpgradesTest {
         val lvl1 = GameEngine.createNewWorld(name = "Alden")
         assertEquals(1, lvl1.level)
         assertEquals(Vocation.ADVENTURER, lvl1.vocation)
-        assertEquals(400.0, lvl1.maxCapOz, 0.01)
+        assertEquals(1500.0, lvl1.maxCapOz, 0.01)
 
-        // Level up to Level 2 -> +25 oz = 425.0 oz
+        // Level up to Level 2 -> +125 oz = 1625.0 oz
         val lvl2 = GameEngine.grantExperience(lvl1, xpGain = 100L, fx = lvl1.playerX.toFloat(), fy = lvl1.playerY.toFloat(), nowMs = 1_000L)
         assertEquals(2, lvl2.level)
-        assertEquals(425.0, lvl2.maxCapOz, 0.01)
+        assertEquals(1625.0, lvl2.maxCapOz, 0.01)
 
         // Verify remaining Cap updates cleanly when unequipping and dropping gear
         val capBeforeUnequip = lvl2.remainingCapOz()
@@ -46,10 +46,10 @@ class GameplayUpgradesTest {
             droppedArmor.remainingCapOz() > capBeforeUnequip + 10.0
         )
 
-        // Level 20 Adventurer baseline = 400 + 19 * 25 = 875.0 oz
-        assertEquals(875.0, GameWorldState.maxCapForLevel(ORACLE_MIN_LEVEL, Vocation.ADVENTURER), 0.01)
+        // Level 20 Adventurer baseline = 1500 + 19 * 125 = 3875.0 oz
+        assertEquals(3875.0, GameWorldState.maxCapForLevel(ORACLE_MIN_LEVEL, Vocation.ADVENTURER), 0.01)
 
-        // Level 20 Oracle Promotion: Knight (+250 oz surge -> 1125.0 oz, then +40 oz/lvl)
+        // Level 20 Oracle Promotion: Knight (+1250 oz surge -> 5125.0 oz, then +200 oz/lvl)
         val adv20 = lvl1.copy(
             level = ORACLE_MIN_LEVEL,
             xp = lvl1.xpForLevel(ORACLE_MIN_LEVEL),
@@ -57,29 +57,29 @@ class GameplayUpgradesTest {
         )
         val knight20 = GameEngine.promoteVocation(adv20, Vocation.KNIGHT, nowMs = 2_000L)
         assertEquals(Vocation.KNIGHT, knight20.vocation)
-        assertEquals(1125.0, knight20.maxCapOz, 0.01)
+        assertEquals(5125.0, knight20.maxCapOz, 0.01)
         val xpTo21 = knight20.xpForLevel(21) - knight20.xp
         val knight21 = GameEngine.grantExperience(knight20, xpGain = xpTo21, fx = knight20.playerX.toFloat(), fy = knight20.playerY.toFloat(), nowMs = 3_000L)
         assertEquals(21, knight21.level)
-        assertEquals(1165.0, knight21.maxCapOz, 0.01)
+        assertEquals(5325.0, knight21.maxCapOz, 0.01)
 
-        // Level 20 Oracle Promotion: Paladin (+180 oz surge -> 1055.0 oz, then +32 oz/lvl)
+        // Level 20 Oracle Promotion: Paladin (+900 oz surge -> 4775.0 oz, then +160 oz/lvl)
         val paladin20 = GameEngine.promoteVocation(adv20, Vocation.PALADIN, nowMs = 2_000L)
-        assertEquals(1055.0, paladin20.maxCapOz, 0.01)
-        assertEquals(1087.0, GameWorldState.maxCapForLevel(21, Vocation.PALADIN), 0.01)
+        assertEquals(4775.0, paladin20.maxCapOz, 0.01)
+        assertEquals(4935.0, GameWorldState.maxCapForLevel(21, Vocation.PALADIN), 0.01)
 
-        // Level 20 Oracle Promotion: Mage (+120 oz surge -> 995.0 oz, then +25 oz/lvl)
+        // Level 20 Oracle Promotion: Mage (+600 oz surge -> 4475.0 oz, then +125 oz/lvl)
         val mage20 = GameEngine.promoteVocation(adv20, Vocation.MAGE, nowMs = 2_000L)
-        assertEquals(995.0, mage20.maxCapOz, 0.01)
-        assertEquals(1020.0, GameWorldState.maxCapForLevel(21, Vocation.MAGE), 0.01)
+        assertEquals(4475.0, mage20.maxCapOz, 0.01)
+        assertEquals(4600.0, GameWorldState.maxCapForLevel(21, Vocation.MAGE), 0.01)
 
         // Cloud save codec preserves upgraded maxCapOz and upgrades legacy low-Cap saves on decode
         val saveData = GameEngine.toSaveData(knight21)
         val encoded = CloudSavePayloadCodec.encode(saveData)
         val decoded = CloudSavePayloadCodec.decode(encoded, saveData.slotId, saveData.name)
-        assertEquals(1165.0, decoded.maxCapOz, 0.01)
+        assertEquals(5325.0, decoded.maxCapOz, 0.01)
         val hydrated = GameEngine.fromSaveData(decoded)
-        assertEquals(1165.0, hydrated.maxCapOz, 0.01)
+        assertEquals(5325.0, hydrated.maxCapOz, 0.01)
     }
 
     @Test

@@ -1,9 +1,11 @@
 package com.example.game.multiplayer
 
 import com.example.game.model.AdventurerPalette
+import com.example.game.model.DEFAULT_REGION_ID
 import com.example.game.model.Direction
 import com.example.game.model.FloatingTextKind
 import com.example.game.model.Vocation
+import com.example.game.model.normalizeRegionId
 import com.example.game.world.WorldMaps
 
 enum class PlayerActionState {
@@ -56,7 +58,9 @@ data class RemotePlayerState(
     val isBurning: Boolean = false,
     val direction: Direction = Direction.SOUTH,
     val actionState: PlayerActionState = PlayerActionState.IDLE,
-    val lastActionMs: Long = 0L
+    val lastActionMs: Long = 0L,
+    val regionId: String = DEFAULT_REGION_ID,
+    val lastSeenMs: Long = joinedAt
 )
 
 data class LocalPlayerPresencePayload(
@@ -75,7 +79,9 @@ data class LocalPlayerPresencePayload(
     val isPoisoned: Boolean = false,
     val isBurning: Boolean = false,
     val direction: Direction = Direction.SOUTH,
-    val actionState: PlayerActionState = PlayerActionState.IDLE
+    val actionState: PlayerActionState = PlayerActionState.IDLE,
+    val regionId: String = DEFAULT_REGION_ID,
+    val lastSeenMs: Long = joinedAt
 )
 
 data class SyncedMonsterSnapshot(
@@ -256,6 +262,8 @@ object MultiplayerSanitizer {
 
     fun clampTunicIndex(idx: Int): Int = idx.coerceIn(0, AdventurerPalette.tunicColors.lastIndex)
     fun clampHairIndex(idx: Int): Int = idx.coerceIn(0, AdventurerPalette.hairColors.lastIndex)
+
+    fun sanitizeRegionId(raw: String?): String = normalizeRegionId(raw)
 
     fun clampCoord(floor: Int, x: Int, y: Int): Pair<Int, Int> {
         val fl = WorldMaps.getFloor(floor)

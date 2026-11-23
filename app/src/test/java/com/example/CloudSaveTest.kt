@@ -10,6 +10,7 @@ import com.example.game.cloud.PinHasher
 import com.example.game.cloud.SupabaseCloudSaveRepository
 import com.example.game.engine.GameEngine
 import com.example.game.model.EquippedGear
+import com.example.game.model.GameWorldState
 import com.example.game.model.ItemStack
 import com.example.game.model.PlayerSkills
 import com.example.game.model.SkillProgress
@@ -144,7 +145,9 @@ class CloudSaveTest {
             mp = 140,
             maxMp = 180,
             soul = 92,
+            maxCapOz = GameWorldState.maxCapForLevel(24, Vocation.PALADIN),
             gold = 4_250,
+            bankGold = 18_500L,
             floor = -2,
             playerX = 18,
             playerY = 22,
@@ -170,6 +173,7 @@ class CloudSaveTest {
 
         // Verify expected top-level save_data JSON keys exist
         assertTrue(encoded.has("cap"))
+        assertTrue(encoded.has("bankGold"))
         assertTrue(encoded.has("skills"))
         assertTrue(encoded.has("equippedItems"))
         assertTrue(encoded.has("backpackItems"))
@@ -181,6 +185,7 @@ class CloudSaveTest {
         assertEquals(original.hp, decoded.hp)
         assertEquals(original.maxCapOz, decoded.maxCapOz, 0.01)
         assertEquals(original.gold, decoded.gold)
+        assertEquals(original.bankGold, decoded.bankGold)
         assertEquals(original.floor, decoded.floor)
         assertEquals(original.x, decoded.x)
         assertEquals(original.y, decoded.y)

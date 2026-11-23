@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import com.example.game.model.CURRENT_MAP_VERSION
 import com.example.game.model.CorpseEntity
 import com.example.game.model.DEFAULT_REGION_ID
+import com.example.game.model.Direction
 import com.example.game.model.EquippedGear
 import com.example.game.model.GameWorldState
 import com.example.game.model.ItemStack
@@ -12,7 +13,10 @@ import com.example.game.model.PlayerSaveData
 import com.example.game.model.PlayerSkills
 import com.example.game.model.SkillProgress
 import com.example.game.model.Vocation
+import com.example.game.model.normalizeRegionId
 import com.example.game.multiplayer.MultiplayerConfig
+import com.example.game.multiplayer.MultiplayerSanitizer
+import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.world.WorldMaps
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -186,10 +190,12 @@ object CloudSavePayloadCodec {
             put("cap", data.maxCapOz)
             put("maxCapOz", data.maxCapOz)
             put("gold", data.gold)
-            put("regionId", data.regionId.ifBlank { DEFAULT_REGION_ID })
+            put("bankGold", data.bankGold.coerceAtLeast(0L))
+            put("regionId", normalizeRegionId(data.regionId))
             put("floor", data.floor)
             put("x", data.x)
             put("y", data.y)
+            put("facing", data.facingName.ifBlank { Direction.SOUTH.name })
             put("poisonTicks", data.poisonTicks)
             put("fireTicks", data.fireTicks)
             put("mapVersion", data.mapVersion)
@@ -314,7 +320,7 @@ object CloudSavePayloadCodec {
         val parsedLevel = json.optInt("level", 1).coerceIn(1, 999)
         val parsedVocationName = json.optNullableString("vocationName") ?: "ADVENTURER"
         val parsedVocation = runCatching { Vocation.valueOf(parsedVocationName) }.getOrDefault(Vocation.ADVENTURER)
-        val rawCapVal = if (json.has("cap")) json.optDouble("cap", 400.0) else json.optDouble("maxCapOz", 400.0)
+        val rawCapVal = if (json.has("cap")) json.optDouble("cap", com.example.game.model.BASE_MAX_CAP_OZ) else json.optDouble("maxCapOz", com.example.game.model.BASE_MAX_CAP_OZ)
         val hydratedMaxCap = maxOf(rawCapVal, GameWorldState.maxCapForLevel(parsedLevel, parsedVocation))
 
         return PlayerSaveData(
@@ -331,6 +337,7 @@ object CloudSavePayloadCodec {
             maxSoul = maxSoul,
             maxCapOz = hydratedMaxCap,
             gold = json.optInt("gold", 0).coerceAtLeast(0),
+            bankGold = json.optLong("bankGold", 0L).coerceAtLeast(0L),
             floor = json.optInt("floor", 0).coerceIn(-4, 0),
             x = json.optInt("x", WorldMaps.TEMPLE_SPAWN_X),
             y = json.optInt("y", WorldMaps.TEMPLE_SPAWN_Y),
@@ -356,7 +363,10 @@ object CloudSavePayloadCodec {
                     } else null
                 }
             },
-            regionId = json.optNullableString("regionId")?.takeIf { it.isNotBlank() } ?: DEFAULT_REGION_ID
+            regionId = normalizeRegionId(json.optNullableString("regionId")),
+            facingName = MultiplayerSanitizer.safeDirection(
+                json.optNullableString("facing") ?: json.optNullableString("direction")
+            ).name
         )
     }
 
@@ -1005,6 +1015,95 @@ class SupabaseCloudSaveRepository(
         return runCatching {
             httpClient.newCall(req).execute().use { resp -> resp.isSuccessful }
         }.getOrDefault(false)
+    }
+
+    /**
+     * Lightweight fallback poll on `public.players` returning recently active online heroes
+     * (`updated_at >= sinceEpochMs`), excluding the local player by both UUID and case-insensitive name.
+     */
+    suspend fun fetchRecentOnlinePlayers(
+        sinceEpochMs: Long,
+        excludePlayerId: String,
+        excludeCharacterName: String,
+        limit: Int = 50
+    ): List<RemotePlayerState> = withContext(Dispatchers.IO) {
+        val base = MultiplayerConfig.restPlayersBaseUrl(urlProvider(), anonKeyProvider()) ?: return@withContext emptyList()
+        val isoSince = IsoTimestampUtil.formatUtc(sinceEpochMs)
+        val url = base.toHttpUrlOrNull()?.newBuilder()
+            ?.addQueryParameter("select", "player_id,character_name,save_data,updated_at")
+            ?.addQueryParameter("updated_at", "gte.$isoSince")
+            ?.addQueryParameter("order", "updated_at.desc")
+            ?.addQueryParameter("limit", limit.coerceIn(1, 100).toString())
+            ?.build()
+            ?: return@withContext emptyList()
+
+        val req = baseRequestBuilder(url.toString()).get().build()
+        val cleanExcludeId = MultiplayerSanitizer.sanitizeId(excludePlayerId)
+        val cleanExcludeName = PinHasher.normalizeNameKey(excludeCharacterName)
+
+        runCatching {
+            httpClient.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList()
+                val body = resp.body?.string().orEmpty()
+                val arr = JSONArray(body)
+                val out = ArrayList<RemotePlayerState>(arr.length())
+                for (i in 0 until arr.length()) {
+                    val row = arr.optJSONObject(i) ?: continue
+                    val pid = MultiplayerSanitizer.sanitizeId(row.optString("player_id", ""))
+                    val rawName = row.optString("character_name", "").trim()
+                    if (pid.isBlank()) continue
+                    if (cleanExcludeId.isNotBlank() && pid.equals(cleanExcludeId, ignoreCase = true)) continue
+                    if (cleanExcludeName.isNotBlank() && PinHasher.normalizeNameKey(rawName) == cleanExcludeName) continue
+
+                    val saveObj = row.optJSONObject("save_data")
+                        ?: row.optString("save_data", "").takeIf { it.startsWith("{") }?.let { JSONObject(it) }
+                        ?: continue
+                    val updatedAtMs = IsoTimestampUtil.parseUtcMillis(row.optString("updated_at", ""))
+                        .takeIf { it > 0L } ?: nowProvider()
+                    if (updatedAtMs < sinceEpochMs - 5_000L) continue
+
+                    val floor = saveObj.optInt("floor", 0)
+                    if (!MultiplayerSanitizer.isValidFloor(floor)) continue
+                    val (cx, cy) = MultiplayerSanitizer.clampCoord(
+                        floor,
+                        saveObj.optInt("x", WorldMaps.TEMPLE_SPAWN_X),
+                        saveObj.optInt("y", WorldMaps.TEMPLE_SPAWN_Y)
+                    )
+                    val maxHp = saveObj.optInt("maxHp", 150).coerceIn(1, 50_000)
+                    val hp = saveObj.optInt("hp", maxHp).coerceIn(0, maxHp)
+                    val regionId = normalizeRegionId(saveObj.optString("regionId", ""))
+                    val facingRaw = saveObj.optString("facing", "").ifBlank { saveObj.optString("direction", "") }
+                    val name = MultiplayerSanitizer.sanitizeName(
+                        rawName.ifBlank { saveObj.optString("name", "") }
+                    )
+                    out.add(
+                        RemotePlayerState(
+                            playerId = pid,
+                            name = name,
+                            level = saveObj.optInt("level", 1).coerceIn(1, 999),
+                            vocation = MultiplayerSanitizer.safeVocation(saveObj.optString("vocationName", "")),
+                            tunicColorIndex = MultiplayerSanitizer.clampTunicIndex(saveObj.optInt("tunicColorIndex", 0)),
+                            hairColorIndex = MultiplayerSanitizer.clampHairIndex(saveObj.optInt("hairColorIndex", 0)),
+                            x = cx,
+                            y = cy,
+                            prevX = cx,
+                            prevY = cy,
+                            lastMoveMs = 0L,
+                            floor = floor,
+                            regionId = regionId,
+                            hp = hp,
+                            maxHp = maxHp,
+                            joinedAt = updatedAtMs,
+                            lastSeenMs = updatedAtMs,
+                            isPoisoned = saveObj.optInt("poisonTicks", 0) > 0,
+                            isBurning = saveObj.optInt("fireTicks", 0) > 0,
+                            direction = MultiplayerSanitizer.safeDirection(facingRaw)
+                        )
+                    )
+                }
+                out
+            }
+        }.getOrDefault(emptyList())
     }
 
     private fun baseRequestBuilder(url: String): Request.Builder {

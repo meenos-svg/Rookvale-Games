@@ -28,7 +28,7 @@ object ItemCatalog {
         ItemDefinition("hatchet", "Hatchet", ItemCategory.TOOL_HATCHET, 18.0, buyPrice = 65, sellPrice = 22, description = "Sturdy woodcutter's hatchet. Tap adjacent overland trees to chop Wood Logs."),
         ItemDefinition("health_potion", "Health Potion", ItemCategory.POTION_HP, 2.7, buyPrice = 45, sellPrice = 18, restoreAmount = 95, stackable = true, description = "Restores ~95 HP and eases poison."),
         ItemDefinition("mana_potion", "Mana Potion", ItemCategory.POTION_MP, 2.7, buyPrice = 50, sellPrice = 20, restoreAmount = 80, stackable = true, description = "Restores ~80 Mana instantly."),
-        ItemDefinition("blank_rune", "Blank Rune", ItemCategory.RUNE_BLANK, 0.8, buyPrice = 15, sellPrice = 5, stackable = true, description = "Uninscribed runestone. Take to Rookvale's Runecrafting Table to imbue spells."),
+        ItemDefinition("blank_rune", "Blank Rune", ItemCategory.RUNE_BLANK, 0.3, buyPrice = 15, sellPrice = 5, stackable = true, description = "Uninscribed runestone. Take to Rookvale's Runecrafting Table to imbue spells."),
         ItemDefinition("magic_dart_rune", "Arcane Dart Rune", ItemCategory.RUNE_ATTACK, 1.0, sellPrice = 8, attack = 28, range = 5, requiredMagicLevel = 1, runeTier = 1, manaCost = 8, stackable = true, description = "Tier 1 offensive rune (Magic Lv 1). Fires a crisp arcane bolt."),
         ItemDefinition("healing_rune", "Intense Healing Rune", ItemCategory.RUNE_HEAL, 1.1, sellPrice = 16, restoreAmount = 135, range = 5, requiredMagicLevel = 4, runeTier = 1, manaCost = 14, stackable = true, description = "Healing rune (Magic Lv 4). Restores strong HP on self or a tapped ally & eases poison."),
         ItemDefinition("hmm_rune", "Heavy Magic Missile", ItemCategory.RUNE_ATTACK, 1.2, sellPrice = 24, attack = 48, range = 5, requiredMagicLevel = 7, runeTier = 2, manaCost = 14, stackable = true, description = "Tier 2 offensive rune (Magic Lv 7). Piercing lightning bolt with arcane shock."),
@@ -57,8 +57,8 @@ object ItemCatalog {
         ItemDefinition("moonforge_ingot", "Moonforge Ingot", ItemCategory.METAL_INGOT, 24.0, sellPrice = 165, stackable = true, description = "Radiant deep-forged bar smelted from Pale Starstone and Cinder Pitch."),
 
         // --- Original Monster & Gathering Crafting Materials ---
-        ItemDefinition("wood_log", "Wood Log", ItemCategory.CRAFT_MATERIAL, 6.0, sellPrice = 8, stackable = true, description = "Fresh timber chopped from overland trees. Fletched into bows & arrows at Rookvale's Fletching Workbench."),
-        ItemDefinition("wild_feather", "Wild Feather", ItemCategory.CRAFT_MATERIAL, 0.3, sellPrice = 6, stackable = true, description = "Light fletching plume dropped by outskirts critters & Goblin Scouts."),
+        ItemDefinition("wood_log", "Wood Log", ItemCategory.CRAFT_MATERIAL, 2.0, sellPrice = 8, stackable = true, description = "Fresh timber chopped from overland trees. Fletched into bows & arrows at Rookvale's Fletching Workbench."),
+        ItemDefinition("wild_feather", "Wild Feather", ItemCategory.CRAFT_MATERIAL, 0.1, sellPrice = 6, stackable = true, description = "Light fletching plume dropped by outskirts critters & Goblin Scouts."),
         ItemDefinition("brindle_hide", "Brindle Hide", ItemCategory.CRAFT_MATERIAL, 3.2, sellPrice = 16, stackable = true, description = "Tough grey-striped pelt stripped from Crag Wolves & Trolls."),
         ItemDefinition("jagged_ivory", "Jagged Ivory", ItemCategory.CRAFT_MATERIAL, 1.4, sellPrice = 14, stackable = true, description = "Razor predator fang used for blades and fletching."),
         ItemDefinition("spider_silk", "Gossamer Strand", ItemCategory.CRAFT_MATERIAL, 0.8, sellPrice = 24, stackable = true, description = "Tensile subterranean silk spun by Poison Spiders."),
@@ -100,11 +100,11 @@ object ItemCatalog {
         ItemDefinition("cinderheart_rod", "Cinderheart Rod", ItemCategory.WEAPON_WAND, 31.0, sellPrice = 640, attack = 52, range = 5, attackIntervalMs = 1100L, manaCost = 12, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 16, isTwoHanded = true, preferredVocation = Vocation.MAGE, description = "Volcanic 2H staff crowned with an Ember Heart. Mage Tier 4 mastery."),
 
         // --- Craftable Ammunition (Ammo Slot) ---
-        ItemDefinition("wooden_arrows", "Wooden Arrows", ItemCategory.AMMO, 0.35, sellPrice = 1, attack = 4, ammoKind = AmmoKind.SHAFTS, stackable = true, description = "Hand-fletched hardwood arrows for Shortbows & Hunting Bows."),
-        ItemDefinition("ochre_shafts", "Ochre-Fletched Shafts", ItemCategory.AMMO, 0.4, sellPrice = 2, attack = 6, ammoKind = AmmoKind.SHAFTS, stackable = true, description = "Light forged arrows for Shortbows, Hunting Bows & Recurves."),
-        ItemDefinition("venom_shafts", "Venom-Barbed Shafts", ItemCategory.AMMO, 0.5, sellPrice = 5, attack = 12, ammoKind = AmmoKind.SHAFTS, stackable = true, description = "Bile-coated arrows forged for Recurves & Warbows."),
-        ItemDefinition("quenchsteel_quarrels", "Quenchsteel Quarrels", ItemCategory.AMMO, 0.7, sellPrice = 6, attack = 15, ammoKind = AmmoKind.QUARRELS, stackable = true, description = "Heavy steel bolts crafted for Arbalests."),
-        ItemDefinition("starlight_quarrels", "Starlight Quarrels", ItemCategory.AMMO, 0.6, sellPrice = 12, attack = 24, ammoKind = AmmoKind.QUARRELS, stackable = true, description = "Moonforge-tipped bolts of lethal precision."),
+        ItemDefinition("wooden_arrows", "Wooden Arrows", ItemCategory.AMMO, 0.1, sellPrice = 1, attack = 4, ammoKind = AmmoKind.SHAFTS, stackable = true, description = "Hand-fletched hardwood arrows for Shortbows & Hunting Bows."),
+        ItemDefinition("ochre_shafts", "Ochre-Fletched Shafts", ItemCategory.AMMO, 0.12, sellPrice = 2, attack = 6, ammoKind = AmmoKind.SHAFTS, stackable = true, description = "Light forged arrows for Shortbows, Hunting Bows & Recurves."),
+        ItemDefinition("venom_shafts", "Venom-Barbed Shafts", ItemCategory.AMMO, 0.15, sellPrice = 5, attack = 12, ammoKind = AmmoKind.SHAFTS, stackable = true, description = "Bile-coated arrows forged for Recurves & Warbows."),
+        ItemDefinition("quenchsteel_quarrels", "Quenchsteel Quarrels", ItemCategory.AMMO, 0.2, sellPrice = 6, attack = 15, ammoKind = AmmoKind.QUARRELS, stackable = true, description = "Heavy steel bolts crafted for Arbalests."),
+        ItemDefinition("starlight_quarrels", "Starlight Quarrels", ItemCategory.AMMO, 0.18, sellPrice = 12, attack = 24, ammoKind = AmmoKind.QUARRELS, stackable = true, description = "Moonforge-tipped bolts of lethal precision."),
 
         // --- Legacy V1 Weapons (Kept for 100% Save Backward Compatibility; not sold or dropped) ---
         ItemDefinition("short_sword", "Short Sword", ItemCategory.WEAPON_MELEE, 28.0, sellPrice = 18, attack = 14, defense = 10, attackIntervalMs = 1000L, requiredSkillType = SkillType.MELEE, requiredSkillLevel = 10, description = "Heirloom blade from early Rookvale expeditions."),

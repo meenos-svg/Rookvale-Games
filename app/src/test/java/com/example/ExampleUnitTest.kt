@@ -6,6 +6,7 @@ import com.example.game.model.ActivePanel
 import com.example.game.model.CorpseEntity
 import com.example.game.model.CURRENT_MAP_VERSION
 import com.example.game.model.EquippedGear
+import com.example.game.model.GameWorldState
 import com.example.game.model.ItemCatalog
 import com.example.game.model.ItemCategory
 import com.example.game.model.ItemStack
@@ -43,7 +44,7 @@ class ExampleUnitTest {
         // Identical balanced stats regardless of cosmetic colors
         assertEquals(150, heroA.maxHp)
         assertEquals(55, heroA.maxMp)
-        assertEquals(400.0, heroA.maxCapOz, 0.01)
+        assertEquals(1500.0, heroA.maxCapOz, 0.01)
         assertEquals(heroA.maxHp, heroB.maxHp)
         assertEquals(heroA.maxMp, heroB.maxMp)
         assertEquals(heroA.maxCapOz, heroB.maxCapOz, 0.01)
@@ -145,7 +146,7 @@ class ExampleUnitTest {
             hp = 340,
             maxMp = 245,
             mp = 245,
-            maxCapOz = 685.0
+            maxCapOz = GameWorldState.maxCapForLevel(ORACLE_MIN_LEVEL, Vocation.ADVENTURER)
         )
         val promoted = GameEngine.promoteVocation(lvl20, Vocation.KNIGHT, 2000L)
         assertEquals(Vocation.KNIGHT, promoted.vocation)
@@ -157,22 +158,22 @@ class ExampleUnitTest {
         assertEquals(13, promoted.skills.magic.level)
         assertEquals(12, promoted.skills.fishing.level)
         assertEquals(16, promoted.skills.mining.level)
-        // Classic Tibia forward-only: current Level 20 maxHp/maxMp/maxCapOz are NOT retroactively altered
+        // Forward-only HP/MP preserved, plus Knight's Level 20 Cap promotion surge
         assertEquals(340, promoted.maxHp)
         assertEquals(245, promoted.maxMp)
-        assertEquals(685.0, promoted.maxCapOz, 0.01)
+        assertEquals(GameWorldState.maxCapForLevel(ORACLE_MIN_LEVEL, Vocation.KNIGHT), promoted.maxCapOz, 0.01)
 
         // Re-promotion is blocked once chosen
         val secondAttempt = GameEngine.promoteVocation(promoted, Vocation.MAGE, 3000L)
         assertEquals(Vocation.KNIGHT, secondAttempt.vocation)
 
-        // Next level up (20 -> 21) applies Knight's forward growth (+15 HP, +5 MP, +25 oz)
+        // Next level up (20 -> 21) applies Knight's forward growth (+15 HP, +5 MP, +200 oz)
         val xpNeeded = promoted.xpForLevel(21) - promoted.xp
         val lvl21 = GameEngine.grantExperience(promoted, xpNeeded, promoted.playerX.toFloat(), promoted.playerY.toFloat(), 4000L)
         assertEquals(21, lvl21.level)
         assertEquals(340 + Vocation.KNIGHT.hpPerLevel, lvl21.maxHp)
         assertEquals(245 + Vocation.KNIGHT.mpPerLevel, lvl21.maxMp)
-        assertEquals(685.0 + Vocation.KNIGHT.capPerLevel, lvl21.maxCapOz, 0.01)
+        assertEquals(promoted.maxCapOz + Vocation.KNIGHT.capPerLevel, lvl21.maxCapOz, 0.01)
     }
 
     @Test
