@@ -1072,10 +1072,43 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (changed) persistCurrentState(silent = true)
     }
 
+    fun lootCorpseItem(corpseId: String, stackIndex: Int) {
+        val now = SystemClock.uptimeMillis()
+        var looted = false
+        _world.update { prev ->
+            val next = GameEngine.lootItemFromCorpse(prev, corpseId, stackIndex, now)
+            if (next.backpack != prev.backpack || next.toolBag != prev.toolBag || next.corpses != prev.corpses) {
+                looted = true
+            }
+            next
+        }
+        if (looted) persistCurrentState(silent = true)
+    }
+
+    fun lootCorpseGold(corpseId: String) {
+        val now = SystemClock.uptimeMillis()
+        var looted = false
+        _world.update { prev ->
+            val next = GameEngine.lootGoldFromCorpse(prev, corpseId, now)
+            if (next.gold != prev.gold || next.corpses != prev.corpses) {
+                looted = true
+            }
+            next
+        }
+        if (looted) persistCurrentState(silent = true)
+    }
+
     fun lootAllCorpse(corpseId: String) {
         val now = SystemClock.uptimeMillis()
-        _world.update { GameEngine.lootAllFromCorpse(it, corpseId, now) }
-        persistCurrentState(silent = true)
+        var looted = false
+        _world.update { prev ->
+            val next = GameEngine.lootAllFromCorpse(prev, corpseId, now)
+            if (next.gold != prev.gold || next.backpack != prev.backpack || next.toolBag != prev.toolBag || next.corpses != prev.corpses) {
+                looted = true
+            }
+            next
+        }
+        if (looted) persistCurrentState(silent = true)
     }
 
     fun depositItem(itemId: String) {

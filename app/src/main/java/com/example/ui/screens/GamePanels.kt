@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +19,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -41,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -83,6 +88,8 @@ fun SlideUpGamePanel(
     onDropItem: (String) -> Unit,
     onUnequipSlot: (EquipmentSlot) -> Unit,
     onLootAll: (String) -> Unit,
+    onLootCorpseItem: (String, Int) -> Unit = { _, _ -> },
+    onLootCorpseGold: (String) -> Unit = {},
     onDepositItem: (String) -> Unit,
     onWithdrawItem: (String) -> Unit,
     onBuyItem: (String) -> Unit,
@@ -113,6 +120,7 @@ fun SlideUpGamePanel(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 250.dp, max = 400.dp)
+            .pointerInput(Unit) { detectTapGestures { /* Consume taps on panel surface so background map doesn't walk */ } }
             .testTag("slide_up_panel_${state.activePanel.name.lowercase()}")
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -120,42 +128,53 @@ fun SlideUpGamePanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(StoneElevated)
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                    .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = title.uppercase(),
                     style = MaterialTheme.typography.titleMedium,
                     color = TorchGold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                Spacer(Modifier.width(6.dp))
                 Text(
                     text = "Cap ${formatOz(state.remainingCapOz())}/${formatOz(state.maxCapOz)} oz",
                     style = MaterialTheme.typography.labelMedium,
-                    color = ParchmentMuted
+                    color = if (state.remainingCapOz() < 20.0) HealthCrimson else ParchmentMuted
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(2.dp))
                 IconButton(
                     onClick = onClose,
-                    modifier = Modifier.size(36.dp).testTag("close_panel_button")
+                    modifier = Modifier.size(48.dp).testTag("close_panel_button")
                 ) {
                     Icon(Icons.Default.Close, stringResource(R.string.action_close), tint = ParchmentLight)
                 }
             }
             HorizontalDivider(color = StoneBorderDark, thickness = 1.dp)
 
-            when (state.activePanel) {
-                ActivePanel.EQUIPMENT -> EquipmentPanelContent(state, onUnequipSlot)
-                ActivePanel.BACKPACK -> BackpackPanelContent(state, onUseItem, onDropItem, onBindRune)
-                ActivePanel.SKILLS -> SkillsPanelContent(state)
-                ActivePanel.DEPOT -> DepotPanelContent(state, onDepositItem, onWithdrawItem)
-                ActivePanel.SHOP -> ShopPanelContent(state, onBuyItem, onSellItem)
-                ActivePanel.FURNACE -> SmeltingFurnaceContent(state, onCraftRecipe)
-                ActivePanel.ANVIL -> BlacksmithAnvilContent(state, onCraftRecipe)
-                ActivePanel.FLETCHING_BENCH -> FletchingBenchContent(state, onCraftRecipe)
-                ActivePanel.RUNECRAFTING_TABLE -> RunecraftingTableContent(state, onCraftRecipe)
-                ActivePanel.LOOT_CORPSE -> LootCorpseContent(state.corpses.firstOrNull { it.id == state.inspectingCorpseId }, onLootAll)
-                ActivePanel.ORACLE, ActivePanel.NONE -> Unit
+            Box(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                when (state.activePanel) {
+                    ActivePanel.EQUIPMENT -> EquipmentPanelContent(state, onUnequipSlot)
+                    ActivePanel.BACKPACK -> BackpackPanelContent(state, onUseItem, onDropItem, onBindRune)
+                    ActivePanel.SKILLS -> SkillsPanelContent(state)
+                    ActivePanel.DEPOT -> DepotPanelContent(state, onDepositItem, onWithdrawItem)
+                    ActivePanel.SHOP -> ShopPanelContent(state, onBuyItem, onSellItem)
+                    ActivePanel.FURNACE -> SmeltingFurnaceContent(state, onCraftRecipe)
+                    ActivePanel.ANVIL -> BlacksmithAnvilContent(state, onCraftRecipe)
+                    ActivePanel.FLETCHING_BENCH -> FletchingBenchContent(state, onCraftRecipe)
+                    ActivePanel.RUNECRAFTING_TABLE -> RunecraftingTableContent(state, onCraftRecipe)
+                    ActivePanel.LOOT_CORPSE -> LootCorpseContent(
+                        state = state,
+                        corpse = state.corpses.firstOrNull { it.id == state.inspectingCorpseId },
+                        onLootItem = onLootCorpseItem,
+                        onLootGold = onLootCorpseGold,
+                        onLootAll = onLootAll
+                    )
+                    ActivePanel.ORACLE, ActivePanel.NONE -> Unit
+                }
             }
         }
     }
@@ -647,33 +666,228 @@ private fun ShopPanelContent(
 }
 
 @Composable
-private fun LootCorpseContent(corpse: CorpseEntity?, onLootAll: (String) -> Unit) {
-    if (corpse == null) {
+private fun LootCorpseContent(
+    state: GameWorldState,
+    corpse: CorpseEntity?,
+    onLootItem: (String, Int) -> Unit,
+    onLootGold: (String) -> Unit,
+    onLootAll: (String) -> Unit
+) {
+    if (corpse == null || (corpse.gold <= 0 && corpse.items.isEmpty())) {
         Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
             Text("Corpse has already been looted.", color = ParchmentMuted)
         }
         return
     }
-    Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (corpse.gold > 0) {
-            Text("Gold Coins: ${corpse.gold} gp (${formatOz(corpse.gold * 0.1)} oz)", style = MaterialTheme.typography.labelLarge, color = TorchGold)
-        }
-        corpse.items.forEach { stack ->
-            val def = ItemCatalog.get(stack.itemId)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+    val remainingCap = state.remainingCapOz()
+    val totalStacks = corpse.items.size + if (corpse.gold > 0) 1 else 0
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Scrollable list of tappable loot items (plus tappable Gold Coins row)
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (corpse.gold > 0) {
+                item(key = "corpse_gold_${corpse.id}") {
+                    val goldWeight = corpse.gold * 0.1
+                    val canTakeAnyGold = remainingCap + 1e-6 >= 0.1
+                    Surface(
+                        color = StoneSurface,
+                        shape = RoundedCornerShape(6.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            if (canTakeAnyGold) TorchGold.copy(alpha = 0.75f) else HealthCrimson.copy(alpha = 0.55f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 52.dp)
+                            .clickable { onLootGold(corpse.id) }
+                            .testTag("corpse_gold_row")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .background(ObsidianVoid, RoundedCornerShape(4.dp))
+                                    .border(1.dp, TorchGold.copy(alpha = 0.6f), RoundedCornerShape(4.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MonetizationOn,
+                                    contentDescription = "Gold Coins",
+                                    tint = TorchGold,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Gold Coins x${corpse.gold}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = TorchGold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "${formatOz(goldWeight)} oz • Tap to loot",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (canTakeAnyGold) ParchmentMuted else HealthCrimson
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        if (canTakeAnyGold) TorchGold else StoneBorderDark,
+                                        RoundedCornerShape(6.dp)
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = if (canTakeAnyGold) "Take" else "Heavy",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = if (canTakeAnyGold) ObsidianVoid else ParchmentMuted
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            itemsIndexed(
+                items = corpse.items,
+                key = { idx, stack -> "corpse_${corpse.id}_${idx}_${stack.itemId}_${stack.count}" }
+            ) { index, stack ->
+                val def = ItemCatalog.get(stack.itemId)
                 val icon = remember(stack.itemId) { EntitySpriteAtlas.itemIcon(stack.itemId) }
-                PixelSpritePreview(icon, Modifier.size(26.dp).background(ObsidianVoid, RoundedCornerShape(4.dp)))
-                Spacer(Modifier.width(8.dp))
-                Text("${stack.count}x ${def.name} (${formatOz(def.weightOz * stack.count)} oz)", style = MaterialTheme.typography.bodyLarge, color = ParchmentLight)
+                val unitWeight = def.carriedWeightOz()
+                val stackWeight = unitWeight * stack.count
+                val canTakeOne = remainingCap + 1e-6 >= unitWeight
+                val canTakeAll = remainingCap + 1e-6 >= stackWeight
+
+                Surface(
+                    color = StoneSurface,
+                    shape = RoundedCornerShape(6.dp),
+                    border = BorderStroke(
+                        1.dp,
+                        when {
+                            canTakeAll -> StoneBorderLight.copy(alpha = 0.85f)
+                            canTakeOne -> TorchAmber.copy(alpha = 0.7f)
+                            else -> HealthCrimson.copy(alpha = 0.55f)
+                        }
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 54.dp)
+                        .clickable { onLootItem(corpse.id, index) }
+                        .testTag("corpse_item_row_$index")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        PixelSpritePreview(
+                            bitmap = icon,
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(ObsidianVoid, RoundedCornerShape(4.dp))
+                                .border(1.dp, StoneBorderDark, RoundedCornerShape(4.dp))
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (stack.count > 1) "${def.name} x${stack.count}" else def.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = if (canTakeOne) ParchmentLight else ParchmentMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = buildString {
+                                    append("${formatOz(stackWeight)} oz")
+                                    if (def.isTool) append(" (Tool Bag)")
+                                    append(
+                                        when {
+                                            canTakeAll -> " • Tap to take"
+                                            canTakeOne -> " • Partial fit"
+                                            else -> " • Too heavy"
+                                        }
+                                    )
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = when {
+                                    canTakeAll -> ParchmentMuted
+                                    canTakeOne -> TorchAmber
+                                    else -> HealthCrimson
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    if (canTakeOne) TorchAmber else StoneBorderDark,
+                                    RoundedCornerShape(6.dp)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = if (canTakeOne) "Take" else "Heavy",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = if (canTakeOne) ObsidianVoid else ParchmentMuted
+                            )
+                        }
+                    }
+                }
             }
         }
-        Button(
-            onClick = { onLootAll(corpse.id) },
-            colors = ButtonDefaults.buttonColors(containerColor = TorchGold, contentColor = ObsidianVoid),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.fillMaxWidth().testTag("loot_all_button")
+
+        // Sticky Footer Bar — always visible even when Fallen Backpack holds 15+ items
+        HorizontalDivider(color = StoneBorderDark, thickness = 1.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(StoneElevated)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(if (corpse.isPlayerCorpse) "RECOVER DROPPED BACKPACK" else "LOOT ALL", style = MaterialTheme.typography.labelLarge)
+            Button(
+                onClick = { onLootAll(corpse.id) },
+                colors = ButtonDefaults.buttonColors(containerColor = TorchGold, contentColor = ObsidianVoid),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("loot_all_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Inventory2,
+                    contentDescription = null,
+                    tint = ObsidianVoid,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = if (corpse.isPlayerCorpse) "LOOT ALL ($totalStacks) — RECOVER BACKPACK" else "LOOT ALL ($totalStacks)",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

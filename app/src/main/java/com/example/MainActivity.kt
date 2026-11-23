@@ -84,6 +84,8 @@ class MainActivity : ComponentActivity() {
                             onDropItem = gameViewModel::dropBackpackItem,
                             onUnequipSlot = gameViewModel::unequipSlot,
                             onLootAll = gameViewModel::lootAllCorpse,
+                            onLootCorpseItem = gameViewModel::lootCorpseItem,
+                            onLootCorpseGold = gameViewModel::lootCorpseGold,
                             onDepositItem = gameViewModel::depositItem,
                             onWithdrawItem = gameViewModel::withdrawItem,
                             onBuyItem = gameViewModel::buyItem,

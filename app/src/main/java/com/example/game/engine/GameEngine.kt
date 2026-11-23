@@ -286,29 +286,37 @@ object GameEngine {
         val floorMap = WorldMaps.getFloor(state.floor)
         if (tx !in 0 until floorMap.width || ty !in 0 until floorMap.height) return state
 
+        // Auto-close any open modal/sheet (Fallen Backpack, Equipment, Backpack, Skills, Crafting, etc.)
+        // immediately on map canvas tap so moving, targeting, or interacting works in a single tap.
+        val dismissedState = if (state.activePanel != ActivePanel.NONE || state.inspectingCorpseId != null) {
+            state.copy(activePanel = ActivePanel.NONE, inspectingCorpseId = null)
+        } else {
+            state
+        }
+
         // 1. Tap Monster -> toggle red target outline + engage melee tap-to-track Auto-Follow
-        val tappedMonster = state.monsters.firstOrNull { it.floor == state.floor && it.x == tx && it.y == ty }
+        val tappedMonster = dismissedState.monsters.firstOrNull { it.floor == dismissedState.floor && it.x == tx && it.y == ty }
         if (tappedMonster != null) {
-            val isUntargeting = state.targetMonsterId == tappedMonster.id
+            val isUntargeting = dismissedState.targetMonsterId == tappedMonster.id
             if (isUntargeting) {
-                return state.copy(
+                return dismissedState.copy(
                     targetMonsterId = null,
                     autoFollowTarget = false,
                     walkPath = emptyList()
                 ).addLogInternal("Target cleared.")
             }
-            val engageMeleeFollow = state.isMeleeCombatSetup()
-            val distToMonster = chebyshev(state.playerX, state.playerY, tappedMonster.x, tappedMonster.y)
+            val engageMeleeFollow = dismissedState.isMeleeCombatSetup()
+            val distToMonster = chebyshev(dismissedState.playerX, dismissedState.playerY, tappedMonster.x, tappedMonster.y)
             val msg = if (engageMeleeFollow && distToMonster > 1) {
                 "Targeting ${tappedMonster.type.displayName} (${tappedMonster.hp}/${tappedMonster.maxHp} HP) — pursuing in melee."
             } else {
                 "Targeting ${tappedMonster.type.displayName} (${tappedMonster.hp}/${tappedMonster.maxHp} HP)."
             }
-            val targeted = state.copy(
+            val targeted = dismissedState.copy(
                 targetMonsterId = tappedMonster.id,
                 autoFollowTarget = engageMeleeFollow,
                 walkPath = emptyList(),
-                playerFacing = directionToward(state.playerX, state.playerY, tappedMonster.x, tappedMonster.y)
+                playerFacing = directionToward(dismissedState.playerX, dismissedState.playerY, tappedMonster.x, tappedMonster.y)
             ).addLogInternal(msg)
             return if (engageMeleeFollow && distToMonster > 1) {
                 stepAutoFollowOrPath(targeted, nowMs, remotePlayersOnFloor)
@@ -318,7 +326,7 @@ object GameEngine {
         }
 
         // Any tap on a non-monster tile cancels melee auto-follow so the player can disengage freely
-        val baseState = if (state.autoFollowTarget) state.copy(autoFollowTarget = false) else state
+        val baseState = if (dismissedState.autoFollowTarget) dismissedState.copy(autoFollowTarget = false) else dismissedState
 
         // 1.5 Tap Remote Player -> Tibia-style Look / Inspect ("You see PlayerName (Level X Vocation).")
         val tappedPlayer = remotePlayersOnFloor.firstOrNull { it.floor == baseState.floor && it.x == tx && it.y == ty }
@@ -330,9 +338,9 @@ object GameEngine {
             ).addLogInternal("You see ${tappedPlayer.name} (Level ${tappedPlayer.level} ${tappedPlayer.vocation.displayName}).")
         }
 
-        val npc = WorldMaps.npcs.firstOrNull { it.floor == state.floor && it.x == tx && it.y == ty }
+        val npc = WorldMaps.npcs.firstOrNull { it.floor == baseState.floor && it.x == tx && it.y == ty }
         val tile = floorMap.tileAt(tx, ty)
-        val dist = chebyshev(state.playerX, state.playerY, tx, ty)
+        val dist = chebyshev(baseState.playerX, baseState.playerY, tx, ty)
 
         // 2. NPC or Shop Counter (Brother Alden, The Oracle, Alaric)
         if (npc != null || tile == TileType.SHOP_COUNTER) {
@@ -622,10 +630,16 @@ object GameEngine {
             ActivePanel.RUNECRAFTING_TABLE -> !CraftingAndMiningEngine.isNearStation(moved, TileType.RUNECRAFTING_TABLE)
             ActivePanel.DEPOT -> !CraftingAndMiningEngine.isNearStation(moved, TileType.DEPOT_CHEST) &&
                 !CraftingAndMiningEngine.isNearStation(moved, TileType.MINI_DEPOT)
+            ActivePanel.LOOT_CORPSE -> {
+                val c = moved.corpses.firstOrNull { it.id == moved.inspectingCorpseId }
+                c == null || c.floor != moved.floor || chebyshev(moved.playerX, moved.playerY, c.x, c.y) > 1
+            }
             ActivePanel.ORACLE -> moved.floor != 0 || chebyshev(moved.playerX, moved.playerY, WorldMaps.ORACLE_X, WorldMaps.ORACLE_Y) > 2
             else -> false
         }
-        return if (shouldCloseStation) moved.copy(activePanel = ActivePanel.NONE) else moved
+        return if (shouldCloseStation) {
+            moved.copy(activePanel = ActivePanel.NONE, inspectingCorpseId = null)
+        } else moved
     }
 
     /**
@@ -2283,15 +2297,108 @@ object GameEngine {
             .addLogInternal("Dropped ${ItemCatalog.get(itemId).name}.")
     }
 
+    /**
+     * Transfers gold coins from a corpse or Fallen Backpack into the player's pouch, up to remaining Cap (0.1 oz/gp).
+     * Automatically removes the corpse and closes the loot panel once completely emptied.
+     */
+    fun lootGoldFromCorpse(state: GameWorldState, corpseId: String, nowMs: Long): GameWorldState {
+        val corpse = state.corpses.firstOrNull { it.id == corpseId } ?: return state
+        if (corpse.gold <= 0) return state
+        val affordableGold = (state.remainingCapOz() / 0.1).toInt().coerceAtMost(corpse.gold)
+        if (affordableGold <= 0) {
+            return state.addLogInternal("Too heavy! Need at least 0.1 oz Cap to loot Gold Coins.")
+        }
+        val remainingGold = corpse.gold - affordableGold
+        val isEmptyNow = remainingGold == 0 && corpse.items.isEmpty()
+        val updatedCorpses = if (isEmptyNow) {
+            state.corpses.filterNot { it.id == corpseId }
+        } else {
+            state.corpses.map { if (it.id == corpseId) it.copy(gold = remainingGold) else it }
+        }
+        val msg = when {
+            isEmptyNow && corpse.isPlayerCorpse -> "Looted $affordableGold gp and recovered your fallen backpack!"
+            isEmptyNow -> "Looted $affordableGold gp from ${corpse.label}."
+            remainingGold > 0 -> "Looted $affordableGold gp, but ran out of Cap (oz) for the rest!"
+            else -> "Looted $affordableGold gp."
+        }
+        return state.copy(
+            gold = state.gold + affordableGold,
+            corpses = updatedCorpses,
+            activePanel = if (isEmptyNow) ActivePanel.NONE else state.activePanel,
+            inspectingCorpseId = if (isEmptyNow) null else state.inspectingCorpseId
+        )
+            .addFloatingInternal(state.floor, corpse.x.toFloat(), corpse.y.toFloat(), "+$affordableGold gp", FloatingTextKind.XP, nowMs)
+            .addLogInternal(msg)
+    }
+
+    /**
+     * Transfers a tapped item stack from a corpse or Fallen Backpack into the player's inventory (or Tool Bag for tools),
+     * moving as many units of the stack as fit within remaining carrying capacity (Cap).
+     * Automatically removes the corpse and closes the loot panel once completely emptied.
+     */
+    fun lootItemFromCorpse(state: GameWorldState, corpseId: String, stackIndex: Int, nowMs: Long): GameWorldState {
+        val corpse = state.corpses.firstOrNull { it.id == corpseId } ?: return state
+        val stack = corpse.items.getOrNull(stackIndex) ?: return state
+        val def = ItemCatalog.get(stack.itemId)
+        val unitWeight = def.carriedWeightOz()
+
+        var s = state
+        var taken = 0
+        for (n in 1..stack.count) {
+            if (s.remainingCapOz() + 1e-6 >= unitWeight) {
+                s = addCarriedItem(s, stack.itemId, 1)
+                taken++
+            } else {
+                break
+            }
+        }
+        if (taken == 0) {
+            return state.addLogInternal(
+                "Too heavy! Need ${String.format(java.util.Locale.US, "%.1f", unitWeight)} oz Cap for ${def.name}."
+            )
+        }
+
+        val updatedItems = corpse.items.toMutableList()
+        if (taken >= stack.count) {
+            updatedItems.removeAt(stackIndex)
+        } else {
+            updatedItems[stackIndex] = stack.copy(count = stack.count - taken)
+        }
+
+        val isEmptyNow = corpse.gold == 0 && updatedItems.isEmpty()
+        val updatedCorpses = if (isEmptyNow) {
+            s.corpses.filterNot { it.id == corpseId }
+        } else {
+            s.corpses.map { if (it.id == corpseId) it.copy(items = updatedItems) else it }
+        }
+
+        val qtyLabel = if (taken > 1) "${taken}x ${def.name}" else def.name
+        val msg = when {
+            isEmptyNow && corpse.isPlayerCorpse -> "Looted $qtyLabel and recovered your fallen backpack!"
+            isEmptyNow -> "Looted $qtyLabel and emptied ${corpse.label}."
+            taken < stack.count -> "Looted $taken/${stack.count} ${def.name} — ran out of Cap (oz)!"
+            else -> "Looted $qtyLabel."
+        }
+        return s.copy(
+            corpses = updatedCorpses,
+            activePanel = if (isEmptyNow) ActivePanel.NONE else s.activePanel,
+            inspectingCorpseId = if (isEmptyNow) null else s.inspectingCorpseId
+        )
+            .addFloatingInternal(s.floor, corpse.x.toFloat(), corpse.y.toFloat(), "+$qtyLabel", FloatingTextKind.INFO, nowMs)
+            .addLogInternal(msg)
+    }
+
     fun lootAllFromCorpse(state: GameWorldState, corpseId: String, nowMs: Long): GameWorldState {
         val corpse = state.corpses.firstOrNull { it.id == corpseId } ?: return state
         var s = state
         var remainingGold = corpse.gold
+        var lootedGold = 0
         if (remainingGold > 0) {
             val affordableGold = (s.remainingCapOz() / 0.1).toInt().coerceAtMost(remainingGold)
             if (affordableGold > 0) {
                 s = s.copy(gold = s.gold + affordableGold)
                 remainingGold -= affordableGold
+                lootedGold = affordableGold
                 s = s.addFloatingInternal(s.floor, corpse.x.toFloat(), corpse.y.toFloat(), "+$affordableGold gp", FloatingTextKind.XP, nowMs)
             }
         }
@@ -2302,7 +2409,7 @@ object GameEngine {
             val neededWeight = def.carriedWeightOz()
             var taken = 0
             for (n in 1..stack.count) {
-                if (s.remainingCapOz() >= neededWeight) {
+                if (s.remainingCapOz() + 1e-6 >= neededWeight) {
                     s = addCarriedItem(s, stack.itemId, 1)
                     taken++; lootedCount++
                 } else break
@@ -2315,7 +2422,7 @@ object GameEngine {
         val msg = when {
             closePanel && corpse.isPlayerCorpse -> "Recovered your fallen backpack!"
             closePanel -> "Looted everything from ${corpse.label}."
-            lootedCount > 0 -> "Looted $lootedCount item(s), but ran out of Cap (oz)!"
+            lootedCount > 0 || lootedGold > 0 -> "Looted $lootedCount item(s), but ran out of Cap (oz) for remaining items!"
             else -> "Too heavy! Smelt ores or store items in your Depot."
         }
         return s.copy(
