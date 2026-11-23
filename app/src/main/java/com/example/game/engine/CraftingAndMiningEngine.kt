@@ -8,6 +8,9 @@ import com.example.game.model.ItemStack
 import com.example.game.model.ProjectileKind
 import com.example.game.model.RecipeCatalog
 import com.example.game.model.SkillType
+import com.example.game.model.TREE_CHOP_COOLDOWN_MS
+import com.example.game.model.TREE_REGROW_TICKS
+import com.example.game.model.TileType
 import com.example.game.world.WorldMaps
 import kotlin.random.Random
 
@@ -112,11 +115,87 @@ object CraftingAndMiningEngine {
         return if (changed) state.copy(oreNodes = updated) else state
     }
 
+    fun chopTree(state: GameWorldState, tx: Int, ty: Int, nowMs: Long): GameWorldState {
+        val floorMap = WorldMaps.getFloor(state.floor)
+        if (floorMap.tileAt(tx, ty) != TileType.TREE) {
+            return state.addLogInternal("There is no choppable tree there.")
+        }
+        val key = Triple(state.floor, tx, ty)
+        val regrowLeft = state.choppedTrees[key]
+        if (regrowLeft != null && regrowLeft > 0) {
+            return state
+                .addFloatingInternal(state.floor, tx.toFloat(), ty.toFloat(), "STUMP (${regrowLeft}s)", FloatingTextKind.INFO, nowMs)
+                .addLogInternal("This tree stump is regrowing (${regrowLeft}s remaining).")
+        }
+
+        if (!state.hasHatchet()) {
+            return state
+                .addFloatingInternal(state.floor, tx.toFloat(), ty.toFloat(), "NEED HATCHET", FloatingTextKind.INFO, nowMs)
+                .addLogInternal("You need a Hatchet to chop trees. Buy one from Alaric's Shop!")
+        }
+
+        if (state.lastTreeChopMs > 0L && nowMs - state.lastTreeChopMs < TREE_CHOP_COOLDOWN_MS) {
+            return state
+        }
+
+        val logDef = ItemCatalog.get("wood_log")
+        if (state.remainingCapOz() < logDef.weightOz) {
+            return state
+                .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "CAP FULL", FloatingTextKind.INFO, nowMs)
+                .addLogInternal("Too heavy to carry a ${logDef.name} (${logDef.weightOz} oz needed)!")
+        }
+
+        val desiredYield = if (Random.nextDouble() < 0.35) 2 else 1
+        val actualYield = if (desiredYield == 2 && state.remainingCapOz() >= logDef.weightOz * 2) 2 else 1
+        val updatedTrees = state.choppedTrees.toMutableMap().apply { put(key, TREE_REGROW_TICKS) }
+
+        return state.copy(
+            playerFacing = GameEngine.directionToward(state.playerX, state.playerY, tx, ty),
+            backpack = GameEngine.addItemPublic(state.backpack, logDef.id, actualYield),
+            choppedTrees = updatedTrees,
+            lastTreeChopMs = nowMs
+        )
+            .addProjectileInternal(
+                state.floor,
+                state.playerX.toFloat(),
+                state.playerY.toFloat(),
+                tx.toFloat(),
+                ty.toFloat(),
+                ProjectileKind.WOOD_CHIP,
+                nowMs,
+                durationMs = 300L
+            )
+            .addFloatingInternal(
+                state.floor,
+                tx.toFloat(),
+                ty.toFloat(),
+                "+$actualYield Wood Log",
+                FloatingTextKind.XP,
+                nowMs
+            )
+            .addLogInternal("Chopped ${actualYield}x ${logDef.name} with your Hatchet. Tree will regrow in ${TREE_REGROW_TICKS}s.")
+    }
+
+    fun regenerateTreesTick(state: GameWorldState): GameWorldState {
+        if (state.choppedTrees.isEmpty()) return state
+        val updated = LinkedHashMap<Triple<Int, Int, Int>, Int>(state.choppedTrees.size)
+        for ((key, ticksLeft) in state.choppedTrees) {
+            if (ticksLeft > 1) {
+                updated[key] = ticksLeft - 1
+            }
+        }
+        return state.copy(choppedTrees = updated)
+    }
+
     fun executeRecipe(state: GameWorldState, recipeId: String, nowMs: Long): GameWorldState {
         val recipe = RecipeCatalog.findById(recipeId) ?: return state
         // Strictly enforce physical station presence — no crafting without matching open station!
         if (state.activePanel != recipe.station) {
-            val stationName = if (recipe.station == ActivePanel.FURNACE) "Smelting Furnace" else "Blacksmith Anvil"
+            val stationName = when (recipe.station) {
+                ActivePanel.FURNACE -> "Smelting Furnace"
+                ActivePanel.FLETCHING_BENCH -> "Fletching Workbench"
+                else -> "Blacksmith Anvil"
+            }
             return state.addLogInternal("You must stand beside a $stationName to craft this.")
         }
 
@@ -143,7 +222,11 @@ object CraftingAndMiningEngine {
         }
         next = GameEngine.addCarriedItem(next, recipe.outputItemId, recipe.outputCount)
 
-        val verb = if (recipe.station == ActivePanel.FURNACE) "Smelted" else "Forged"
+        val verb = when (recipe.station) {
+            ActivePanel.FURNACE -> "Smelted"
+            ActivePanel.FLETCHING_BENCH -> "Fletched"
+            else -> "Forged"
+        }
         val qtyLabel = if (recipe.outputCount > 1) "${recipe.outputCount}x ${outDef.name}" else outDef.name
         val extraNote = when {
             outDef.isTool -> " (packed in Tool Bag!)"

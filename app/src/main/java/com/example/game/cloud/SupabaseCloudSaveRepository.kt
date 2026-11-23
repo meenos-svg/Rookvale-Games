@@ -5,10 +5,12 @@ import android.content.SharedPreferences
 import com.example.game.model.CURRENT_MAP_VERSION
 import com.example.game.model.CorpseEntity
 import com.example.game.model.EquippedGear
+import com.example.game.model.GameWorldState
 import com.example.game.model.ItemStack
 import com.example.game.model.PlayerSaveData
 import com.example.game.model.PlayerSkills
 import com.example.game.model.SkillProgress
+import com.example.game.model.Vocation
 import com.example.game.multiplayer.MultiplayerConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -274,13 +276,17 @@ object CloudSavePayloadCodec {
         val maxHp = json.optInt("maxHp", 150).coerceAtLeast(1)
         val maxMp = json.optInt("maxMp", 55).coerceAtLeast(0)
         val maxSoul = json.optInt("maxSoul", 100).coerceAtLeast(1)
-        val capVal = if (json.has("cap")) json.optDouble("cap", 400.0) else json.optDouble("maxCapOz", 400.0)
+        val parsedLevel = json.optInt("level", 1).coerceIn(1, 999)
+        val parsedVocationName = json.optNullableString("vocationName") ?: "ADVENTURER"
+        val parsedVocation = runCatching { Vocation.valueOf(parsedVocationName) }.getOrDefault(Vocation.ADVENTURER)
+        val rawCapVal = if (json.has("cap")) json.optDouble("cap", 400.0) else json.optDouble("maxCapOz", 400.0)
+        val hydratedMaxCap = maxOf(rawCapVal, GameWorldState.maxCapForLevel(parsedLevel, parsedVocation))
 
         return PlayerSaveData(
             slotId = json.optNullableString("slotId") ?: fallbackPlayerId,
             name = PinHasher.sanitizeName(json.optNullableString("name") ?: fallbackName).ifBlank { fallbackName },
-            vocationName = json.optNullableString("vocationName") ?: "ADVENTURER",
-            level = json.optInt("level", 1).coerceIn(1, 999),
+            vocationName = parsedVocationName,
+            level = parsedLevel,
             xp = json.optLong("xp", 0L).coerceAtLeast(0L),
             hp = json.optInt("hp", maxHp).coerceIn(1, maxHp),
             maxHp = maxHp,
@@ -288,7 +294,7 @@ object CloudSavePayloadCodec {
             maxMp = maxMp,
             soul = json.optInt("soul", maxSoul).coerceIn(0, maxSoul),
             maxSoul = maxSoul,
-            maxCapOz = capVal.coerceAtLeast(100.0),
+            maxCapOz = hydratedMaxCap,
             gold = json.optInt("gold", 0).coerceAtLeast(0),
             floor = json.optInt("floor", 0).coerceIn(-4, 0),
             x = json.optInt("x", 47),

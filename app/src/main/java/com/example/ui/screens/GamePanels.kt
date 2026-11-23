@@ -98,6 +98,7 @@ fun SlideUpGamePanel(
         ActivePanel.SHOP -> stringResource(R.string.panel_shop)
         ActivePanel.FURNACE -> "Smelting Furnace"
         ActivePanel.ANVIL -> "Blacksmith Anvil"
+        ActivePanel.FLETCHING_BENCH -> "Fletching Workbench"
         ActivePanel.LOOT_CORPSE -> state.corpses.firstOrNull { it.id == state.inspectingCorpseId }?.label ?: "Corpse"
         ActivePanel.ORACLE -> "The Oracle"
         ActivePanel.NONE -> ""
@@ -127,7 +128,7 @@ fun SlideUpGamePanel(
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    text = "Cap ${formatOz(state.remainingCapOz())} oz",
+                    text = "Cap ${formatOz(state.remainingCapOz())}/${formatOz(state.maxCapOz)} oz",
                     style = MaterialTheme.typography.labelMedium,
                     color = ParchmentMuted
                 )
@@ -149,6 +150,7 @@ fun SlideUpGamePanel(
                 ActivePanel.SHOP -> ShopPanelContent(state, onBuyItem, onSellItem)
                 ActivePanel.FURNACE -> SmeltingFurnaceContent(state, onCraftRecipe)
                 ActivePanel.ANVIL -> BlacksmithAnvilContent(state, onCraftRecipe)
+                ActivePanel.FLETCHING_BENCH -> FletchingBenchContent(state, onCraftRecipe)
                 ActivePanel.LOOT_CORPSE -> LootCorpseContent(state.corpses.firstOrNull { it.id == state.inspectingCorpseId }, onLootAll)
                 ActivePanel.ORACLE, ActivePanel.NONE -> Unit
             }
@@ -378,7 +380,7 @@ private fun BackpackPanelContent(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = "Strapped Tool Bag • 50% weight (${formatOz(state.toolBagWeightOz())} oz) • Kept safe on death • Auto-used for Rope, Mining & Fishing",
+                    text = "Strapped Tool Bag • 50% weight (${formatOz(state.toolBagWeightOz())} oz) • Kept safe on death • Auto-used for Rope, Mining, Chopping & Fishing",
                     style = MaterialTheme.typography.labelSmall,
                     color = ExpEmerald,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
@@ -740,7 +742,7 @@ fun DeathPenaltyDialog(report: DeathReport, onDismiss: () -> Unit) {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("• Penalty: -10% XP (-${report.xpLost} XP) & -10% skill progress", style = MaterialTheme.typography.labelMedium, color = HealthCrimson)
                         Text("• Dropped Main Bag (${report.droppedItemsCount} items) left at Floor ${report.floorDropped} (${report.corpseX}, ${report.corpseY})", style = MaterialTheme.typography.labelMedium, color = TorchGold)
-                        Text("• Your strapped Tool Bag (Rope, Pickaxes, Rod) remained safe with you so you can retrieve your corpse.", style = MaterialTheme.typography.labelSmall, color = ParchmentMuted)
+                        Text("• Your strapped Tool Bag (Rope, Pickaxes, Hatchet, Rod) remained safe with you so you can retrieve your corpse.", style = MaterialTheme.typography.labelSmall, color = ParchmentMuted)
                     }
                 }
                 Button(

@@ -79,7 +79,7 @@ object WorldMaps {
         LandmarkLabel(0, 47, 42, "TEMPLE"),
         LandmarkLabel(0, 40, 43, "DEPOT"),
         LandmarkLabel(0, 54, 43, "ALARIC'S SHOP"),
-        LandmarkLabel(0, 47, 36, "SMITHY"),
+        LandmarkLabel(0, 47, 36, "SMITHY & FLETCHER"),
         LandmarkLabel(0, 47, 52, "FISHING PIER"),
         LandmarkLabel(0, 56, 38, "SEWER STAIRS"),
         LandmarkLabel(0, 40, 38, "ROPE HOLE"),
@@ -387,12 +387,21 @@ object WorldMaps {
         g[oy + 10][ox + 13] = TileType.TORCH_WALL
         g[oy + 10][ox + 17] = TileType.TORCH_WALL
 
-        // Smithy Courtyard (Just North of Temple: Smelting Furnaces & Blacksmith Anvils!)
+        // Smithy & Fletching Courtyard (Just North of Temple: Smelting Furnaces, Blacksmith Anvils & Fletching Workbench)
         fillRect(g, ox + 12, oy + 4, ox + 18, oy + 8, TileType.COBBLESTONE)
         g[oy + 5][ox + 13] = TileType.SMELTING_FURNACE
         g[oy + 5][ox + 17] = TileType.SMELTING_FURNACE
         g[oy + 7][ox + 13] = TileType.BLACKSMITH_ANVIL
         g[oy + 7][ox + 17] = TileType.BLACKSMITH_ANVIL
+        g[oy + 6][ox + 12] = TileType.FLETCHING_BENCH
+        g[oy + 6][ox + 18] = TileType.FLETCHING_BENCH
+
+        // Accessible overland timber trees right outside West, North & East town gates for Hatchet harvesting
+        listOf(30 to 40, 30 to 49, 43 to 29, 52 to 29, 65 to 41, 65 to 50).forEach { (tx, ty) ->
+            if (g[ty][tx] == TileType.GRASS || g[ty][tx] == TileType.DARK_GRASS || g[ty][tx] == TileType.DIRT_FLOOR) {
+                g[ty][tx] = TileType.TREE
+            }
+        }
 
         // Depot Hall (West)
         strokeRect(g, ox + 6, oy + 11, ox + 10, oy + 17, TileType.CITY_WALL)

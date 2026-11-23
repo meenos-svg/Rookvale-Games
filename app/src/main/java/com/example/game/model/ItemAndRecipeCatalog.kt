@@ -22,6 +22,7 @@ object ItemCatalog {
         // --- Tools & Supplies (Alaric's Shop sells ONLY consumables & starter tools — ZERO weapons) ---
         ItemDefinition("rope", "Rope", ItemCategory.TOOL_ROPE, 18.0, buyPrice = 50, sellPrice = 15, description = "Essential to climb back up underground rope-holes."),
         ItemDefinition("fishing_rod", "Fishing Rod", ItemCategory.TOOL_FISHING_ROD, 8.5, buyPrice = 60, sellPrice = 20, description = "Cast into water at the Rookvale pier to catch fish."),
+        ItemDefinition("hatchet", "Hatchet", ItemCategory.TOOL_HATCHET, 18.0, buyPrice = 65, sellPrice = 22, description = "Sturdy woodcutter's hatchet. Tap adjacent overland trees to chop Wood Logs."),
         ItemDefinition("health_potion", "Health Potion", ItemCategory.POTION_HP, 2.7, buyPrice = 45, sellPrice = 18, restoreAmount = 95, stackable = true, description = "Restores ~95 HP and eases poison."),
         ItemDefinition("mana_potion", "Mana Potion", ItemCategory.POTION_MP, 2.7, buyPrice = 50, sellPrice = 20, restoreAmount = 80, stackable = true, description = "Restores ~80 Mana instantly."),
         ItemDefinition("hmm_rune", "Heavy Magic Missile", ItemCategory.RUNE_ATTACK, 1.2, buyPrice = 40, sellPrice = 12, attack = 42, range = 5, manaCost = 10, stackable = true, description = "Fires an energy bolt at your target. Scales with Magic Level."),
@@ -48,7 +49,9 @@ object ItemCatalog {
         ItemDefinition("quenchsteel_ingot", "Quenchsteel Ingot", ItemCategory.METAL_INGOT, 22.0, sellPrice = 85, stackable = true, description = "Tempered alloy smelted from Bogstone Shards and Cinder Pitch."),
         ItemDefinition("moonforge_ingot", "Moonforge Ingot", ItemCategory.METAL_INGOT, 24.0, sellPrice = 165, stackable = true, description = "Radiant deep-forged bar smelted from Pale Starstone and Cinder Pitch."),
 
-        // --- Original Monster Crafting Materials ---
+        // --- Original Monster & Gathering Crafting Materials ---
+        ItemDefinition("wood_log", "Wood Log", ItemCategory.CRAFT_MATERIAL, 6.0, sellPrice = 8, stackable = true, description = "Fresh timber chopped from overland trees. Fletched into bows & arrows at Rookvale's Fletching Workbench."),
+        ItemDefinition("wild_feather", "Wild Feather", ItemCategory.CRAFT_MATERIAL, 0.3, sellPrice = 6, stackable = true, description = "Light fletching plume dropped by outskirts critters & Goblin Scouts."),
         ItemDefinition("brindle_hide", "Brindle Hide", ItemCategory.CRAFT_MATERIAL, 3.2, sellPrice = 16, stackable = true, description = "Tough grey-striped pelt stripped from Crag Wolves & Trolls."),
         ItemDefinition("jagged_ivory", "Jagged Ivory", ItemCategory.CRAFT_MATERIAL, 1.4, sellPrice = 14, stackable = true, description = "Razor predator fang used for blades and fletching."),
         ItemDefinition("spider_silk", "Gossamer Strand", ItemCategory.CRAFT_MATERIAL, 0.8, sellPrice = 24, stackable = true, description = "Tensile subterranean silk spun by Poison Spiders."),
@@ -73,8 +76,9 @@ object ItemCatalog {
         ItemDefinition("moonforge_rapier", "Moonforge Rapier", ItemCategory.WEAPON_MELEE, 26.0, sellPrice = 490, attack = 37, defense = 22, attackIntervalMs = 800L, requiredSkillType = SkillType.MELEE, requiredSkillLevel = 22, preferredVocation = Vocation.KNIGHT, description = "Feather-light 1H starstone dueling blade. Knight Tier 4 mastery."),
         ItemDefinition("wyrmtooth_claymore", "Wyrmtooth Claymore", ItemCategory.WEAPON_MELEE, 62.0, sellPrice = 620, attack = 52, defense = 25, attackIntervalMs = 1200L, requiredSkillType = SkillType.MELEE, requiredSkillLevel = 24, isTwoHanded = true, preferredVocation = Vocation.KNIGHT, description = "Serrated 2H greatsword edged with Draketalon. Knight Tier 4 mastery."),
 
-        // --- Multi-Tier Forged Weapons: PALADIN (Distance) ---
-        ItemDefinition("ashwood_shortbow", "Ashwood Shortbow", ItemCategory.WEAPON_DISTANCE, 20.0, sellPrice = 60, attack = 16, range = 4, attackIntervalMs = 1000L, requiredSkillType = SkillType.DISTANCE, requiredSkillLevel = 10, requiredAmmoKind = AmmoKind.SHAFTS, isTwoHanded = true, description = "Compact 2H bow firing forged Shafts."),
+        // --- Multi-Tier Forged & Fletched Weapons: PALADIN (Distance) ---
+        ItemDefinition("ashwood_shortbow", "Ashwood Shortbow", ItemCategory.WEAPON_DISTANCE, 20.0, sellPrice = 60, attack = 16, range = 4, attackIntervalMs = 1000L, requiredSkillType = SkillType.DISTANCE, requiredSkillLevel = 10, requiredAmmoKind = AmmoKind.SHAFTS, isTwoHanded = true, description = "Compact 2H bow firing wooden & forged Arrows/Shafts."),
+        ItemDefinition("hunting_bow", "Hunting Bow", ItemCategory.WEAPON_DISTANCE, 22.0, sellPrice = 95, attack = 20, range = 5, attackIntervalMs = 950L, requiredSkillType = SkillType.DISTANCE, requiredSkillLevel = 11, requiredAmmoKind = AmmoKind.SHAFTS, isTwoHanded = true, description = "Seasoned hardwood 2H bow fletched with sinew and hide. Fires Arrows & Shafts."),
         ItemDefinition("ivory_javelin", "Ivory-Tipped Javelin", ItemCategory.WEAPON_DISTANCE, 24.0, sellPrice = 80, attack = 20, range = 4, attackIntervalMs = 1000L, requiredSkillType = SkillType.DISTANCE, requiredSkillLevel = 11, description = "1H throwing spear tipped with Jagged Ivory; pairs with a shield."),
         ItemDefinition("brindle_recurve", "Brindle Recurve", ItemCategory.WEAPON_DISTANCE, 25.0, sellPrice = 165, attack = 24, range = 5, attackIntervalMs = 900L, requiredSkillType = SkillType.DISTANCE, requiredSkillLevel = 14, requiredAmmoKind = AmmoKind.SHAFTS, isTwoHanded = true, description = "Snappy 2H sinew-backed bow firing Shafts at high cadence."),
         ItemDefinition("quenchsteel_arbalest", "Quenchsteel Arbalest", ItemCategory.WEAPON_DISTANCE, 44.0, sellPrice = 290, attack = 39, range = 5, attackIntervalMs = 1300L, requiredSkillType = SkillType.DISTANCE, requiredSkillLevel = 18, requiredAmmoKind = AmmoKind.QUARRELS, isTwoHanded = true, preferredVocation = Vocation.PALADIN, description = "Heavy 2H cranked crossbow loosing Quarrels. Paladin Tier 3 mastery."),
@@ -89,7 +93,8 @@ object ItemCatalog {
         ItemDefinition("cinderheart_rod", "Cinderheart Rod", ItemCategory.WEAPON_WAND, 31.0, sellPrice = 640, attack = 52, range = 5, attackIntervalMs = 1100L, manaCost = 12, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 24, isTwoHanded = true, preferredVocation = Vocation.MAGE, description = "Volcanic 2H staff crowned with an Ember Heart. Mage Tier 4 mastery."),
 
         // --- Craftable Ammunition (Ammo Slot) ---
-        ItemDefinition("ochre_shafts", "Ochre-Fletched Shafts", ItemCategory.AMMO, 0.4, sellPrice = 2, attack = 6, ammoKind = AmmoKind.SHAFTS, stackable = true, description = "Light forged arrows for Shortbows & Recurves."),
+        ItemDefinition("wooden_arrows", "Wooden Arrows", ItemCategory.AMMO, 0.35, sellPrice = 1, attack = 4, ammoKind = AmmoKind.SHAFTS, stackable = true, description = "Hand-fletched hardwood arrows for Shortbows & Hunting Bows."),
+        ItemDefinition("ochre_shafts", "Ochre-Fletched Shafts", ItemCategory.AMMO, 0.4, sellPrice = 2, attack = 6, ammoKind = AmmoKind.SHAFTS, stackable = true, description = "Light forged arrows for Shortbows, Hunting Bows & Recurves."),
         ItemDefinition("venom_shafts", "Venom-Barbed Shafts", ItemCategory.AMMO, 0.5, sellPrice = 5, attack = 12, ammoKind = AmmoKind.SHAFTS, stackable = true, description = "Bile-coated arrows forged for Recurves & Warbows."),
         ItemDefinition("quenchsteel_quarrels", "Quenchsteel Quarrels", ItemCategory.AMMO, 0.7, sellPrice = 6, attack = 15, ammoKind = AmmoKind.QUARRELS, stackable = true, description = "Heavy steel bolts crafted for Arbalests."),
         ItemDefinition("starlight_quarrels", "Starlight Quarrels", ItemCategory.AMMO, 0.6, sellPrice = 12, attack = 24, ammoKind = AmmoKind.QUARRELS, stackable = true, description = "Moonforge-tipped bolts of lethal precision."),
@@ -120,12 +125,13 @@ object ItemCatalog {
         ItemDefinition("life_amulet", "Amulet of Vitality", ItemCategory.AMULET, 4.2, buyPrice = 240, sellPrice = 100, armor = 2, description = "Warm ruby pendant granting extra protection.")
     ).associateBy { it.id }
 
-    // Alaric sells ONLY supplies, tools (Quarry Mattock, Rope, Fishing Rod), potions, runes & basic armor — NO weapons!
+    // Alaric sells ONLY supplies, tools (Quarry Mattock, Hatchet, Rope, Fishing Rod), potions, runes & basic armor — NO weapons!
     val shopInventoryIds: List<String> = listOf(
         "health_potion",
         "mana_potion",
         "hmm_rune",
         "sd_rune",
+        "hatchet",
         "quarry_mattock",
         "rope",
         "fishing_rod",
@@ -207,6 +213,51 @@ object RecipeCatalog {
         CraftingRecipe("forge_wyrmscale_cuirass", "dragon_mail", 1, listOf(ItemStack("moonforge_ingot", 3), ItemStack("wyrmscale_plate", 3)), ActivePanel.ANVIL, CraftingTab.TOOLS)
     )
 
+    val fletchingRecipes: List<CraftingRecipe> = listOf(
+        CraftingRecipe(
+            id = "fletch_wooden_arrows",
+            outputItemId = "wooden_arrows",
+            outputCount = 20,
+            ingredients = listOf(ItemStack("wood_log", 1), ItemStack("wild_feather", 2)),
+            station = ActivePanel.FLETCHING_BENCH,
+            tab = CraftingTab.AMMO
+        ),
+        CraftingRecipe(
+            id = "fletch_ochre_shafts",
+            outputItemId = "ochre_shafts",
+            outputCount = 20,
+            ingredients = listOf(ItemStack("wood_log", 1), ItemStack("jagged_ivory", 2)),
+            station = ActivePanel.FLETCHING_BENCH,
+            tab = CraftingTab.AMMO
+        ),
+        CraftingRecipe(
+            id = "fletch_venom_shafts",
+            outputItemId = "venom_shafts",
+            outputCount = 20,
+            ingredients = listOf(ItemStack("wood_log", 1), ItemStack("bile_gland", 1), ItemStack("wild_feather", 2)),
+            station = ActivePanel.FLETCHING_BENCH,
+            tab = CraftingTab.AMMO
+        ),
+        CraftingRecipe(
+            id = "fletch_ashwood_shortbow",
+            outputItemId = "ashwood_shortbow",
+            outputCount = 1,
+            ingredients = listOf(ItemStack("wood_log", 2), ItemStack("spider_silk", 2)),
+            station = ActivePanel.FLETCHING_BENCH,
+            tab = CraftingTab.PALADIN
+        ),
+        CraftingRecipe(
+            id = "fletch_hunting_bow",
+            outputItemId = "hunting_bow",
+            outputCount = 1,
+            ingredients = listOf(ItemStack("wood_log", 3), ItemStack("spider_silk", 2), ItemStack("brindle_hide", 2)),
+            station = ActivePanel.FLETCHING_BENCH,
+            tab = CraftingTab.PALADIN
+        )
+    )
+
     fun findById(recipeId: String): CraftingRecipe? =
-        smeltingRecipes.firstOrNull { it.id == recipeId } ?: forgingRecipes.firstOrNull { it.id == recipeId }
+        smeltingRecipes.firstOrNull { it.id == recipeId }
+            ?: forgingRecipes.firstOrNull { it.id == recipeId }
+            ?: fletchingRecipes.firstOrNull { it.id == recipeId }
 }

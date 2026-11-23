@@ -107,7 +107,7 @@ object GameEngine {
             maxMp = vocation.baseMp,
             soul = 100,
             maxSoul = 100,
-            maxCapOz = vocation.baseCap,
+            maxCapOz = GameWorldState.maxCapForLevel(1, vocation),
             gold = 120,
             floor = 0,
             playerX = WorldMaps.TEMPLE_SPAWN_X,
@@ -212,7 +212,7 @@ object GameEngine {
             maxMp = save.maxMp,
             soul = save.soul,
             maxSoul = save.maxSoul,
-            maxCapOz = save.maxCapOz,
+            maxCapOz = maxOf(save.maxCapOz, GameWorldState.maxCapForLevel(save.level, voc)),
             gold = save.gold,
             floor = save.floor,
             playerX = targetX,
@@ -278,22 +278,44 @@ object GameEngine {
         val floorMap = WorldMaps.getFloor(state.floor)
         if (tx !in 0 until floorMap.width || ty !in 0 until floorMap.height) return state
 
-        // 1. Tap Monster -> toggle red target outline
+        // 1. Tap Monster -> toggle red target outline + engage melee tap-to-track Auto-Follow
         val tappedMonster = state.monsters.firstOrNull { it.floor == state.floor && it.x == tx && it.y == ty }
         if (tappedMonster != null) {
-            val newTarget = if (state.targetMonsterId == tappedMonster.id) null else tappedMonster.id
-            val msg = if (newTarget != null) {
-                "Targeting ${tappedMonster.type.displayName} (${tappedMonster.hp}/${tappedMonster.maxHp} HP)."
-            } else {
-                "Target cleared."
+            val isUntargeting = state.targetMonsterId == tappedMonster.id
+            if (isUntargeting) {
+                return state.copy(
+                    targetMonsterId = null,
+                    autoFollowTarget = false,
+                    walkPath = emptyList()
+                ).addLogInternal("Target cleared.")
             }
-            return state.copy(targetMonsterId = newTarget).addLogInternal(msg)
+            val engageMeleeFollow = state.isMeleeCombatSetup()
+            val distToMonster = chebyshev(state.playerX, state.playerY, tappedMonster.x, tappedMonster.y)
+            val msg = if (engageMeleeFollow && distToMonster > 1) {
+                "Targeting ${tappedMonster.type.displayName} (${tappedMonster.hp}/${tappedMonster.maxHp} HP) — pursuing in melee."
+            } else {
+                "Targeting ${tappedMonster.type.displayName} (${tappedMonster.hp}/${tappedMonster.maxHp} HP)."
+            }
+            val targeted = state.copy(
+                targetMonsterId = tappedMonster.id,
+                autoFollowTarget = engageMeleeFollow,
+                walkPath = emptyList(),
+                playerFacing = directionToward(state.playerX, state.playerY, tappedMonster.x, tappedMonster.y)
+            ).addLogInternal(msg)
+            return if (engageMeleeFollow && distToMonster > 1) {
+                stepAutoFollowOrPath(targeted, nowMs, remotePlayersOnFloor)
+            } else {
+                targeted
+            }
         }
 
+        // Any tap on a non-monster tile cancels melee auto-follow so the player can disengage freely
+        val baseState = if (state.autoFollowTarget) state.copy(autoFollowTarget = false) else state
+
         // 1.5 Tap Remote Player -> Tibia-style Look / Inspect ("You see PlayerName (Level X Vocation).")
-        val tappedPlayer = remotePlayersOnFloor.firstOrNull { it.floor == state.floor && it.x == tx && it.y == ty }
+        val tappedPlayer = remotePlayersOnFloor.firstOrNull { it.floor == baseState.floor && it.x == tx && it.y == ty }
         if (tappedPlayer != null) {
-            return state.copy(
+            return baseState.copy(
                 inspectedPlayerId = tappedPlayer.playerId,
                 inspectedPlayerUntilMs = nowMs + 2600L,
                 walkPath = emptyList()
@@ -308,60 +330,73 @@ object GameEngine {
         if (npc != null || tile == TileType.SHOP_COUNTER) {
             return if (dist <= 2) {
                 when (npc?.role) {
-                    NpcRole.TEMPLE_PRIEST -> blessAtTemple(state, nowMs)
-                    NpcRole.ORACLE -> state.copy(activePanel = ActivePanel.ORACLE, walkPath = emptyList())
+                    NpcRole.TEMPLE_PRIEST -> blessAtTemple(baseState, nowMs)
+                    NpcRole.ORACLE -> baseState.copy(activePanel = ActivePanel.ORACLE, walkPath = emptyList())
                         .addLogInternal(
                             when {
-                                state.vocation != Vocation.ADVENTURER -> "The Oracle: 'Walk proudly on your chosen path, ${state.vocation.displayName}.'"
-                                state.level < ORACLE_MIN_LEVEL -> "The Oracle: 'You are not yet ready, child of Rookvale. Return at Level $ORACLE_MIN_LEVEL.'"
-                                else -> "The Oracle: 'Level ${state.level} achieved! Are you ready to claim your vocation?'"
+                                baseState.vocation != Vocation.ADVENTURER -> "The Oracle: 'Walk proudly on your chosen path, ${baseState.vocation.displayName}.'"
+                                baseState.level < ORACLE_MIN_LEVEL -> "The Oracle: 'You are not yet ready, child of Rookvale. Return at Level $ORACLE_MIN_LEVEL.'"
+                                else -> "The Oracle: 'Level ${baseState.level} achieved! Are you ready to claim your vocation?'"
                             }
                         )
-                    else -> state.copy(activePanel = ActivePanel.SHOP, walkPath = emptyList())
-                        .addLogInternal("Alaric: 'Potions, runes, and sturdy tools — forge your own steel at the Smithy!'")
+                    else -> baseState.copy(activePanel = ActivePanel.SHOP, walkPath = emptyList())
+                        .addLogInternal("Alaric: 'Potions, runes, Hatchets & sturdy tools — craft your own gear at the Smithy & Fletcher!'")
                 }
-            } else setWalkPathToAdjacent(state, tx, ty, remotePlayersOnFloor)
+            } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
         }
 
         // 3. Temple Altar
         if (tile == TileType.TEMPLE_ALTAR) {
-            return if (dist <= 2) blessAtTemple(state, nowMs) else setWalkPathToAdjacent(state, tx, ty, remotePlayersOnFloor)
+            return if (dist <= 2) blessAtTemple(baseState, nowMs) else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
         }
 
         // 4. Depot Chest & Deep Outpost Mini-Depot
         if (tile == TileType.DEPOT_CHEST || tile == TileType.MINI_DEPOT) {
             return if (dist <= 1) {
                 val label = if (tile == TileType.MINI_DEPOT) "Deep Outpost Mini-Depot" else "Rookvale Depot Chest"
-                state.copy(activePanel = ActivePanel.DEPOT, walkPath = emptyList())
+                baseState.copy(activePanel = ActivePanel.DEPOT, walkPath = emptyList())
                     .addLogInternal("Opened your $label.")
-            } else setWalkPathToAdjacent(state, tx, ty, remotePlayersOnFloor)
+            } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
         }
 
-        // 5. Physical World-Anchored Crafting Stations (Smelting Furnace & Blacksmith Anvil)
+        // 5. Physical World-Anchored Crafting Stations (Smelting Furnace, Blacksmith Anvil & Fletching Workbench)
         if (tile == TileType.SMELTING_FURNACE) {
             return if (dist <= 1) {
-                state.copy(activePanel = ActivePanel.FURNACE, walkPath = emptyList())
+                baseState.copy(activePanel = ActivePanel.FURNACE, walkPath = emptyList())
                     .addLogInternal("Stepped up to the roaring Smelting Furnace.")
-            } else setWalkPathToAdjacent(state, tx, ty, remotePlayersOnFloor)
+            } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
         }
         if (tile == TileType.BLACKSMITH_ANVIL) {
             return if (dist <= 1) {
-                state.copy(activePanel = ActivePanel.ANVIL, walkPath = emptyList())
+                baseState.copy(activePanel = ActivePanel.ANVIL, walkPath = emptyList())
                     .addLogInternal("Readied your hammer at the Blacksmith Anvil.")
-            } else setWalkPathToAdjacent(state, tx, ty, remotePlayersOnFloor)
+            } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
+        }
+        if (tile == TileType.FLETCHING_BENCH) {
+            return if (dist <= 1) {
+                baseState.copy(activePanel = ActivePanel.FLETCHING_BENCH, walkPath = emptyList())
+                    .addLogInternal("Stepped up to the Fletching Workbench.")
+            } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
         }
 
         // 6. Interactive Ore Veins (Ochre, Bogstone, Brimstone, Aetherium)
         if (tile.oreVeinKind() != null) {
             return if (dist <= 1) {
-                CraftingAndMiningEngine.mineOreNode(state.copy(walkPath = emptyList()), tx, ty, nowMs)
-            } else setWalkPathToAdjacent(state, tx, ty, remotePlayersOnFloor)
+                CraftingAndMiningEngine.mineOreNode(baseState.copy(walkPath = emptyList()), tx, ty, nowMs)
+            } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
+        }
+
+        // 6.5 Interactive Overland Trees (Hatchet Tree Chopping)
+        if (tile == TileType.TREE) {
+            return if (dist <= 1) {
+                CraftingAndMiningEngine.chopTree(baseState.copy(walkPath = emptyList()), tx, ty, nowMs)
+            } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
         }
 
         // 7. Lootable Corpse
-        val corpse = state.corpses.firstOrNull { it.floor == state.floor && it.x == tx && it.y == ty }
+        val corpse = baseState.corpses.firstOrNull { it.floor == baseState.floor && it.x == tx && it.y == ty }
         if (corpse != null && dist <= 1) {
-            return state.copy(
+            return baseState.copy(
                 activePanel = ActivePanel.LOOT_CORPSE,
                 inspectingCorpseId = corpse.id,
                 walkPath = emptyList()
@@ -370,23 +405,23 @@ object GameEngine {
 
         // 8. Water -> Fishing
         if (tile == TileType.WATER) {
-            return if (dist <= 2) attemptFishing(state, tx, ty, nowMs)
-            else state.addLogInternal("Walk onto the wooden fishing pier to cast your line.")
+            return if (dist <= 2) attemptFishing(baseState, tx, ty, nowMs)
+            else baseState.addLogInternal("Walk onto the wooden fishing pier to cast your line.")
         }
 
         // 9. Rope Spot Up
         if (tile == TileType.ROPE_SPOT_UP && dist <= 1) {
-            return useRope(state, nowMs)
+            return useRope(baseState, nowMs)
         }
 
         // 10. Walkable tile -> BFS path (respecting Tibia-style non-PZ player blocking)
         if (tile.walkable) {
-            val path = findPath(state, tx, ty, remotePlayersOnFloor)
+            val path = findPath(baseState, tx, ty, remotePlayersOnFloor)
             if (path.isNotEmpty()) {
-                return stepAlongPath(state.copy(walkPath = path), nowMs, remotePlayersOnFloor)
+                return stepAlongPath(baseState.copy(walkPath = path), nowMs, remotePlayersOnFloor)
             }
         }
-        return state
+        return baseState
     }
 
     fun stepDirection(
@@ -397,13 +432,54 @@ object GameEngine {
     ): GameWorldState {
         if (state.deathReport != null) return state
         return attemptMoveTo(
-            state.copy(walkPath = emptyList()),
+            state.copy(walkPath = emptyList(), autoFollowTarget = false),
             state.playerX + dir.dx,
             state.playerY + dir.dy,
             dir,
             nowMs,
             remotePlayersOnFloor
         )
+    }
+
+    /**
+     * Advances either a manual tap-to-walk path or active melee Target Auto-Follow pursuit.
+     * Re-pathfinds dynamically whenever the targeted monster moves out of melee range (> 1 tile).
+     */
+    fun stepAutoFollowOrPath(
+        state: GameWorldState,
+        nowMs: Long,
+        remotePlayersOnFloor: List<RemotePlayerState> = emptyList()
+    ): GameWorldState {
+        if (state.deathReport != null) return state
+        if (state.walkPath.isNotEmpty()) {
+            return stepAlongPath(state, nowMs, remotePlayersOnFloor)
+        }
+        if (!state.autoFollowTarget) return state
+        val targetId = state.targetMonsterId ?: return state.copy(autoFollowTarget = false)
+        if (!state.isMeleeCombatSetup()) return state.copy(autoFollowTarget = false)
+
+        val target = state.monsters.firstOrNull { it.id == targetId && it.floor == state.floor }
+            ?: return state.copy(autoFollowTarget = false)
+
+        val dist = chebyshev(state.playerX, state.playerY, target.x, target.y)
+        if (dist <= 1) {
+            val face = directionToward(state.playerX, state.playerY, target.x, target.y)
+            return if (state.playerFacing != face) state.copy(playerFacing = face) else state
+        }
+
+        val path = findPathToAdjacentOfTarget(state, target.x, target.y, remotePlayersOnFloor)
+        if (path.isEmpty()) return state
+
+        val nextStep = path.first()
+        val dx = nextStep.first - state.playerX
+        val dy = nextStep.second - state.playerY
+        val dir = when {
+            dx > 0 -> Direction.EAST
+            dx < 0 -> Direction.WEST
+            dy > 0 -> Direction.SOUTH
+            else -> Direction.NORTH
+        }
+        return attemptMoveTo(state, nextStep.first, nextStep.second, dir, nowMs, remotePlayersOnFloor)
     }
 
     fun stepAlongPath(
@@ -509,6 +585,7 @@ object GameEngine {
                 playerFacing = dir,
                 walkPath = emptyList(),
                 targetMonsterId = null,
+                autoFollowTarget = false,
                 activePanel = ActivePanel.NONE,
                 floorWarningBanner = banner,
                 questFlags = updatedFlags
@@ -527,6 +604,7 @@ object GameEngine {
         val shouldCloseStation = when (moved.activePanel) {
             ActivePanel.FURNACE -> !CraftingAndMiningEngine.isNearStation(moved, TileType.SMELTING_FURNACE)
             ActivePanel.ANVIL -> !CraftingAndMiningEngine.isNearStation(moved, TileType.BLACKSMITH_ANVIL)
+            ActivePanel.FLETCHING_BENCH -> !CraftingAndMiningEngine.isNearStation(moved, TileType.FLETCHING_BENCH)
             ActivePanel.DEPOT -> !CraftingAndMiningEngine.isNearStation(moved, TileType.DEPOT_CHEST) &&
                 !CraftingAndMiningEngine.isNearStation(moved, TileType.MINI_DEPOT)
             ActivePanel.ORACLE -> moved.floor != 0 || chebyshev(moved.playerX, moved.playerY, WorldMaps.ORACLE_X, WorldMaps.ORACLE_Y) > 2
@@ -537,7 +615,8 @@ object GameEngine {
 
     /**
      * Classic Tibia Level 20 Oracle Vocation Ceremony.
-     * Preserves all earned skill levels and current stats; new vocation growth rates apply from the next level up.
+     * Preserves all earned skill levels and grants a generous immediate weight limit (Cap) surge
+     * plus boosted per-level Cap growth for the chosen vocation.
      */
     fun promoteVocation(state: GameWorldState, chosen: Vocation, nowMs: Long): GameWorldState {
         if (state.vocation != Vocation.ADVENTURER) {
@@ -549,17 +628,24 @@ object GameEngine {
         }
         if (chosen !in Vocation.ceremonyVocations) return state
 
+        val newMaxCap = maxOf(
+            state.maxCapOz + chosen.promotionCapBonus,
+            GameWorldState.maxCapForLevel(state.level, chosen)
+        )
+        val capBonusGained = (newMaxCap - state.maxCapOz).roundToInt()
+
         return state.copy(
             vocation = chosen,
             hp = state.maxHp,
             mp = state.maxMp,
+            maxCapOz = newMaxCap,
             poisonTicks = 0,
             fireTicks = 0,
             activePanel = ActivePanel.NONE,
             questFlags = state.questFlags + ("oracle_vocation_chosen" to true)
         )
-            .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "${chosen.displayName.uppercase()} ASCENDED!", FloatingTextKind.SKILL_UP, nowMs)
-            .addLogInternal("The Oracle has blessed you as a ${chosen.displayName}! All skills preserved; new growth starts next level.")
+            .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "${chosen.displayName.uppercase()}! +$capBonusGained oz CAP", FloatingTextKind.SKILL_UP, nowMs)
+            .addLogInternal("The Oracle has blessed you as a ${chosen.displayName}! Instant +$capBonusGained oz Cap bonus (+${chosen.capPerLevel.toInt()} oz/lvl ahead)!")
     }
 
     /**
@@ -646,11 +732,12 @@ object GameEngine {
             )
         }
 
-        // 5. Monster respawns (host-driven) & Ore Vein regeneration
+        // 5. Monster respawns (host-driven), Ore Vein & Chopped Tree regeneration
         if (isFloorHost) {
             s = processRespawns(s, remotePlayersOnFloor)
         }
         s = CraftingAndMiningEngine.regenerateOreNodesTick(s)
+        s = CraftingAndMiningEngine.regenerateTreesTick(s)
 
         // 6. Death penalty check
         if (s.hp <= 0) {
@@ -830,6 +917,7 @@ object GameEngine {
         s = s.copy(
             monsters = remainingMonsters,
             targetMonsterId = if (s.targetMonsterId == monsterId) null else s.targetMonsterId,
+            autoFollowTarget = if (s.targetMonsterId == monsterId) false else s.autoFollowTarget,
             corpses = (s.corpses + corpse).takeLast(38),
             pendingRespawns = updatedRespawns,
             questFlags = bossFlags
@@ -889,6 +977,7 @@ object GameEngine {
         s = s.copy(
             monsters = remainingMonsters,
             targetMonsterId = if (s.targetMonsterId == m.id) null else s.targetMonsterId,
+            autoFollowTarget = if (s.targetMonsterId == m.id) false else s.autoFollowTarget,
             pendingRespawns = newRespawns
         )
 
@@ -967,7 +1056,8 @@ object GameEngine {
         }
         return s.copy(
             monsters = otherFloorMonsters + syncedOnFloor,
-            targetMonsterId = newTarget
+            targetMonsterId = newTarget,
+            autoFollowTarget = if (newTarget == null) false else s.autoFollowTarget
         )
     }
 
@@ -1104,12 +1194,14 @@ object GameEngine {
             // --- TIER 1: Starter Overland ---
             MonsterType.CAVE_RAT -> {
                 if (Random.nextFloat() < 0.48f) loot += ItemStack("jagged_ivory", 1)
+                if (Random.nextFloat() < 0.35f) loot += ItemStack("wild_feather", 1)
                 if (Random.nextFloat() < 0.45f) loot += ItemStack("cheese", 1)
                 if (Random.nextFloat() < 0.14f) loot += ItemStack("leather_helmet", 1)
                 if (Random.nextFloat() < 0.10f) loot += ItemStack("wooden_club", 1)
             }
             MonsterType.WILD_RABBIT -> {
                 if (Random.nextFloat() < 0.72f) loot += ItemStack("fresh_meat", 1)
+                if (Random.nextFloat() < 0.68f) loot += ItemStack("wild_feather", 2)
                 if (Random.nextFloat() < 0.40f) loot += ItemStack("brindle_hide", 1)
                 if (Random.nextFloat() < 0.12f) loot += ItemStack("leather_boots", 1)
             }
@@ -1141,6 +1233,7 @@ object GameEngine {
             }
             MonsterType.GOBLIN_SCOUT -> {
                 loot += ItemStack("vesper_wing", 1)
+                if (Random.nextFloat() < 0.55f) loot += ItemStack("wild_feather", 2)
                 if (Random.nextFloat() < 0.45f) loot += ItemStack("ochre_shafts", 6)
                 if (Random.nextFloat() < 0.32f) loot += ItemStack("hmm_rune", 1)
                 if (Random.nextFloat() < 0.16f) loot += ItemStack("leather_armor", 1)
@@ -1311,6 +1404,7 @@ object GameEngine {
             lastPlayerMoveMs = nowMs,
             walkPath = emptyList(),
             targetMonsterId = null,
+            autoFollowTarget = false,
             activePanel = ActivePanel.NONE,
             floorWarningBanner = null
         )
@@ -1761,10 +1855,9 @@ object GameEngine {
         val levelsLost = (state.level - newLevel).coerceAtLeast(0)
         val minHpFloor = minOf(state.vocation.baseHp, Vocation.ADVENTURER.baseHp)
         val minMpFloor = minOf(state.vocation.baseMp, Vocation.ADVENTURER.baseMp)
-        val minCapFloor = minOf(state.vocation.baseCap, Vocation.ADVENTURER.baseCap)
         val newMaxHp = (state.maxHp - levelsLost * state.vocation.hpPerLevel).coerceAtLeast(minHpFloor)
         val newMaxMp = (state.maxMp - levelsLost * state.vocation.mpPerLevel).coerceAtLeast(minMpFloor)
-        val newMaxCap = (state.maxCapOz - levelsLost * state.vocation.capPerLevel).coerceAtLeast(minCapFloor)
+        val newMaxCap = GameWorldState.maxCapForLevel(newLevel, state.vocation)
 
         fun penalizeSkill(sp: SkillProgress): SkillProgress {
             if (sp.level <= 10) return sp.copy(points = sp.points * 0.90)
@@ -1821,6 +1914,7 @@ object GameEngine {
             toolBag = keptTools,
             corpses = updatedCorpses,
             targetMonsterId = null,
+            autoFollowTarget = false,
             walkPath = emptyList(),
             activePanel = ActivePanel.NONE,
             deathReport = DeathReport(xpLost, state.floor, state.playerX, state.playerY, droppedCount)
@@ -1837,15 +1931,19 @@ object GameEngine {
         val levelsGained = lvl - s.level
         if (levelsGained > 0) {
             val prevLevel = s.level
-            // Forward-only Classic Tibia delta growth so pre-20 Adventurer stats stay locked in after Oracle Ceremony
+            // Forward-only Classic Tibia delta growth + canonical level-scaling Cap floor
             val newMaxHp = s.maxHp + levelsGained * s.vocation.hpPerLevel
             val newMaxMp = s.maxMp + levelsGained * s.vocation.mpPerLevel
-            val newMaxCap = s.maxCapOz + levelsGained * s.vocation.capPerLevel
+            val newMaxCap = maxOf(
+                s.maxCapOz + levelsGained * s.vocation.capPerLevel,
+                GameWorldState.maxCapForLevel(lvl, s.vocation)
+            )
+            val capGain = (newMaxCap - s.maxCapOz).roundToInt()
             s = s.copy(level = lvl, maxHp = newMaxHp, hp = newMaxHp, maxMp = newMaxMp, mp = newMaxMp, maxCapOz = newMaxCap)
                 .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "LEVEL $lvl!", FloatingTextKind.SKILL_UP, nowMs)
-                .addLogInternal("Advanced to Character Level $lvl! (+${levelsGained * s.vocation.hpPerLevel} HP, +${levelsGained * s.vocation.mpPerLevel} MP, +${(levelsGained * s.vocation.capPerLevel).toInt()} oz)")
+                .addLogInternal("Advanced to Character Level $lvl! (+${levelsGained * s.vocation.hpPerLevel} HP, +${levelsGained * s.vocation.mpPerLevel} MP, +$capGain oz Cap)")
             if (s.vocation == Vocation.ADVENTURER && prevLevel < ORACLE_MIN_LEVEL && lvl >= ORACLE_MIN_LEVEL) {
-                s = s.addLogInternal("You have reached Level $ORACLE_MIN_LEVEL! Speak to The Oracle in Rookvale Temple to choose your vocation!")
+                s = s.addLogInternal("You have reached Level $ORACLE_MIN_LEVEL! Speak to The Oracle in Rookvale Temple for a generous Cap surge and vocation!")
             }
         }
         return s
@@ -1900,6 +1998,18 @@ object GameEngine {
                 if (vein != null) CraftingAndMiningEngine.mineOreNode(state, vein.first, vein.second, nowMs)
                 else state.addLogInternal("Stand beside an Ore Vein and tap it to mine with your ${def.name}.")
             }
+            ItemCategory.TOOL_HATCHET -> {
+                val fl = WorldMaps.getFloor(state.floor)
+                val standingTree = (-1..1).flatMap { dy -> (-1..1).map { dx -> (state.playerX + dx) to (state.playerY + dy) } }
+                    .firstOrNull { (tx, ty) ->
+                        fl.tileAt(tx, ty) == TileType.TREE &&
+                            (state.choppedTrees[Triple(state.floor, tx, ty)] ?: 0) <= 0
+                    }
+                val anyTree = standingTree ?: (-1..1).flatMap { dy -> (-1..1).map { dx -> (state.playerX + dx) to (state.playerY + dy) } }
+                    .firstOrNull { (tx, ty) -> fl.tileAt(tx, ty) == TileType.TREE }
+                if (anyTree != null) CraftingAndMiningEngine.chopTree(state, anyTree.first, anyTree.second, nowMs)
+                else state.addLogInternal("Stand beside an overland Tree and tap it to chop Wood Logs with your ${def.name}.")
+            }
             ItemCategory.TOOL_FISHING_ROD -> {
                 val fl = WorldMaps.getFloor(state.floor)
                 val waterTile = (-2..2).flatMap { dy -> (-2..2).map { dx -> (state.playerX + dx) to (state.playerY + dy) } }
@@ -1921,7 +2031,7 @@ object GameEngine {
                     .addLogInternal("Loaded ${def.name} into your Quiver slot.")
             }
             else -> {
-                val slot = def.equipSlot ?: return state.addLogInternal("${def.name} can be smelted, forged, or sold to Alaric.")
+                val slot = def.equipSlot ?: return state.addLogInternal("${def.name} can be smelted, forged, fletched, or sold to Alaric.")
                 val previousEquipped = state.equipment.getSlot(slot)
                 var bp = removeItemPublic(state.backpack, itemId, 1)
                 if (previousEquipped != null) bp = addItemPublic(bp, previousEquipped, 1)
@@ -1947,7 +2057,12 @@ object GameEngine {
                 if (def.preferredVocation != null && state.vocation != def.preferredVocation) {
                     notes.append(" (${def.preferredVocation.displayName} mastery — -25% off-vocation dmg)")
                 }
-                state.copy(equipment = newEquip, backpack = bp)
+                val keepFollow = if (slot == EquipmentSlot.WEAPON && def.category != ItemCategory.WEAPON_MELEE) {
+                    false
+                } else {
+                    state.autoFollowTarget
+                }
+                state.copy(equipment = newEquip, backpack = bp, autoFollowTarget = keepFollow)
                     .addLogInternal("Equipped ${def.name}.$notes")
             }
         }
@@ -2098,6 +2213,49 @@ object GameEngine {
             .minByOrNull { (x, y) -> abs(x - state.playerX) + abs(y - state.playerY) }
             ?: return state
         return state.copy(walkPath = findPath(state, adj.first, adj.second, remotePlayersOnFloor))
+    }
+
+    /**
+     * Finds the shortest BFS path to any walkable tile within Chebyshev distance 1 of a target monster
+     * (all 8 surrounding melee tiles, prioritizing cardinal tiles when tied), avoiding monsters, NPCs,
+     * and non-PZ remote players.
+     */
+    private fun findPathToAdjacentOfTarget(
+        state: GameWorldState,
+        targetX: Int,
+        targetY: Int,
+        remotePlayersOnFloor: List<RemotePlayerState> = emptyList()
+    ): List<Pair<Int, Int>> {
+        val floorMap = WorldMaps.getFloor(state.floor)
+        val monsterSet = state.monsters.filter { it.floor == state.floor }.map { it.x to it.y }.toSet()
+        val npcSet = WorldMaps.npcs.filter { it.floor == state.floor }.map { it.x to it.y }.toSet()
+
+        val candidates = listOf(
+            targetX to targetY - 1,
+            targetX to targetY + 1,
+            targetX - 1 to targetY,
+            targetX + 1 to targetY,
+            targetX - 1 to targetY - 1,
+            targetX + 1 to targetY - 1,
+            targetX - 1 to targetY + 1,
+            targetX + 1 to targetY + 1
+        ).filter { (cx, cy) ->
+            cx in 0 until floorMap.width &&
+                cy in 0 until floorMap.height &&
+                floorMap.tileAt(cx, cy).walkable &&
+                (cx to cy) !in monsterSet &&
+                (cx to cy) !in npcSet &&
+                !isBlockedByRemotePlayer(floorMap, cx, cy, remotePlayersOnFloor)
+        }.sortedBy { (cx, cy) -> abs(cx - state.playerX) + abs(cy - state.playerY) }
+
+        var bestPath: List<Pair<Int, Int>> = emptyList()
+        for ((cx, cy) in candidates) {
+            val p = findPath(state, cx, cy, remotePlayersOnFloor)
+            if (p.isNotEmpty() && (bestPath.isEmpty() || p.size < bestPath.size)) {
+                bestPath = p
+            }
+        }
+        return bestPath
     }
 
     private fun findPath(

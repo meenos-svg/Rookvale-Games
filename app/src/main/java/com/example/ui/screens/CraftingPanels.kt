@@ -138,6 +138,55 @@ fun BlacksmithAnvilContent(
 }
 
 @Composable
+fun FletchingBenchContent(
+    state: GameWorldState,
+    onCraft: (String) -> Unit
+) {
+    val logCount = state.itemCount("wood_log")
+    val featherCount = state.itemCount("wild_feather")
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(StoneSurface)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Carve Bows & Fletch Arrows from Wood Logs.",
+                style = MaterialTheme.typography.labelSmall,
+                color = ParchmentMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Logs: $logCount • Feathers: $featherCount",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = TorchGold,
+                modifier = Modifier.testTag("fletching_materials_summary")
+            )
+        }
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            items(RecipeCatalog.fletchingRecipes, key = { it.id }) { recipe ->
+                RecipeCraftCard(
+                    state = state,
+                    recipe = recipe,
+                    actionLabel = "Fletch",
+                    accentColor = ExpEmerald,
+                    onCraft = { onCraft(recipe.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun RecipeCraftCard(
     state: GameWorldState,
     recipe: CraftingRecipe,

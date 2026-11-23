@@ -629,7 +629,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Smooth 210ms auto-walk stepping loop
+        // Smooth 210ms auto-walk & melee Target Auto-Follow stepping loop
         walkLoopJob = viewModelScope.launch {
             while (true) {
                 delay(210L)
@@ -639,9 +639,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 var movedTile = false
                 var facingChanged = false
                 _world.update { prev ->
-                    if (prev.walkPath.isEmpty()) prev
+                    if (prev.walkPath.isEmpty() && !prev.autoFollowTarget) prev
                     else {
-                        val next = GameEngine.stepAlongPath(prev, now, remotes)
+                        val next = GameEngine.stepAutoFollowOrPath(prev, now, remotes)
                         if (next.floor != prev.floor) changedFloor = true
                         if (next.playerX != prev.playerX || next.playerY != prev.playerY) movedTile = true
                         if (next.playerFacing != prev.playerFacing) facingChanged = true
@@ -829,12 +829,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var healed = false
         var skillChanged = false
         var skillLevelUp = false
+        var inventoryChanged = false
         _world.update { prev ->
             val next = GameEngine.handleTileTap(prev, tx, ty, now, remotes)
             if (next.floor != prev.floor) floorChanged = true
             if (next.playerX != prev.playerX || next.playerY != prev.playerY) moved = true
             if (next.playerFacing != prev.playerFacing) facingChanged = true
             if (next.hp != prev.hp) healed = true
+            if (next.backpack != prev.backpack) inventoryChanged = true
             if (totalSkillLevels(next.skills) > totalSkillLevels(prev.skills)) skillLevelUp = true
             else if (next.skills != prev.skills) skillChanged = true
             next
@@ -853,7 +855,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 broadcastCurrentState(PlayerActionState.IDLE)
             }
             if (skillLevelUp) persistCurrentState(silent = true)
-            else if (skillChanged) scheduleDebouncedSkillSave()
+            else if (skillChanged || inventoryChanged) scheduleDebouncedSkillSave()
         }
     }
 

@@ -188,7 +188,7 @@ fun GameScreen(
                                 color = TorchGold
                             )
                             Text(
-                                text = "Cap ${formatOz(remainingCap)} oz",
+                                text = "Cap ${formatOz(remainingCap)}/${formatOz(state.maxCapOz)} oz",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = if (remainingCap < 25.0) HealthCrimson else ParchmentLight,
                                 modifier = Modifier.testTag("hud_cap_text")
@@ -296,6 +296,11 @@ fun GameScreen(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
+                        if (state.autoFollowTarget) {
+                            Spacer(Modifier.width(4.dp))
+                            StatusChip("FOLLOW", TargetRed)
+                            Spacer(Modifier.width(6.dp))
+                        }
                         LinearProgressIndicator(
                             progress = { (targetedMonster.hp.toFloat() / targetedMonster.maxHp.toFloat()).coerceIn(0f, 1f) },
                             color = bandAccent,

@@ -612,27 +612,53 @@ object EntitySpriteAtlas {
                 rect(buf, ITEM_S, 5, 2, 8, 3, tierTint)
                 rect(buf, ITEM_S, 11, 4, 3, 5, tierTint)
             }
+            ItemCategory.TOOL_HATCHET -> {
+                for (i in 0..9) {
+                    px(buf, ITEM_S, 3 + i, 12 - i, 0xFF8C5A2B.toInt())
+                    px(buf, ITEM_S, 4 + i, 12 - i, 0xFF6B4226.toInt())
+                }
+                rect(buf, ITEM_S, 8, 2, 5, 5, 0xFFB0BCC9.toInt())
+                rect(buf, ITEM_S, 11, 2, 2, 5, 0xFFE8F0F8.toInt())
+                rect(buf, ITEM_S, 7, 3, 2, 3, 0xFF5D6670.toInt())
+            }
             ItemCategory.AMMO -> {
                 for (i in 0..10) px(buf, ITEM_S, 2 + i, 13 - i, 0xFFA36E39.toInt())
-                rect(buf, ITEM_S, 10, 2, 4, 4, tierTint)
-                rect(buf, ITEM_S, 2, 11, 3, 3, if (itemId.contains("venom")) 0xFF6CD936.toInt() else 0xFFEDE3CE.toInt())
+                rect(buf, ITEM_S, 10, 2, 4, 4, if (itemId == "wooden_arrows") 0xFFBAC7D6.toInt() else tierTint)
+                rect(buf, ITEM_S, 2, 11, 3, 3, if (itemId.contains("venom")) 0xFF6CD936.toInt() else 0xFFF5EFE0.toInt())
             }
             ItemCategory.CRAFT_MATERIAL, ItemCategory.LOOT_VALUABLE -> {
-                val c = when (itemId) {
-                    "brindle_hide" -> 0xFF7B7E85.toInt()
-                    "jagged_ivory", "ancient_bone", "dragon_tooth" -> 0xFFEDE3CE.toInt()
-                    "spider_silk" -> 0xFFDCE6EE.toInt()
-                    "bile_gland" -> 0xFF6CD936.toInt()
-                    "vesper_wing" -> 0xFF5A466B.toInt()
-                    "ghoul_gem" -> 0xFF9B6BFF.toInt()
-                    "colossus_tendon" -> 0xFFB85C42.toInt()
-                    "runic_slate" -> 0xFF63768C.toInt()
-                    "ember_heart" -> 0xFFFF6E24.toInt()
-                    "wyrmscale_plate" -> 0xFF299C4F.toInt()
-                    else -> 0xFFD4C9B0.toInt()
+                when (itemId) {
+                    "wood_log" -> {
+                        rect(buf, ITEM_S, 2, 5, 11, 6, 0xFF7D4E26.toInt())
+                        rect(buf, ITEM_S, 2, 5, 11, 2, 0xFF9C6635.toInt())
+                        rect(buf, ITEM_S, 2, 9, 11, 2, 0xFF593618.toInt())
+                        rect(buf, ITEM_S, 11, 6, 3, 4, 0xFFD9AE73.toInt())
+                        px(buf, ITEM_S, 12, 7, 0xFF9C6B3B.toInt())
+                    }
+                    "wild_feather" -> {
+                        for (i in 0..9) px(buf, ITEM_S, 3 + i, 12 - i, 0xFFD9CFB8.toInt())
+                        rect(buf, ITEM_S, 6, 3, 6, 5, 0xFFF5EFE0.toInt())
+                        rect(buf, ITEM_S, 8, 2, 4, 3, 0xFFFFFFFF.toInt())
+                        px(buf, ITEM_S, 5, 7, 0xFFE8DFC8.toInt())
+                    }
+                    else -> {
+                        val c = when (itemId) {
+                            "brindle_hide" -> 0xFF7B7E85.toInt()
+                            "jagged_ivory", "ancient_bone", "dragon_tooth" -> 0xFFEDE3CE.toInt()
+                            "spider_silk" -> 0xFFDCE6EE.toInt()
+                            "bile_gland" -> 0xFF6CD936.toInt()
+                            "vesper_wing" -> 0xFF5A466B.toInt()
+                            "ghoul_gem" -> 0xFF9B6BFF.toInt()
+                            "colossus_tendon" -> 0xFFB85C42.toInt()
+                            "runic_slate" -> 0xFF63768C.toInt()
+                            "ember_heart" -> 0xFFFF6E24.toInt()
+                            "wyrmscale_plate" -> 0xFF299C4F.toInt()
+                            else -> 0xFFD4C9B0.toInt()
+                        }
+                        rect(buf, ITEM_S, 4, 4, 8, 8, c)
+                        rect(buf, ITEM_S, 6, 5, 3, 3, 0xFFFFFFFF.toInt())
+                    }
                 }
-                rect(buf, ITEM_S, 4, 4, 8, 8, c)
-                rect(buf, ITEM_S, 6, 5, 3, 3, 0xFFFFFFFF.toInt())
             }
             ItemCategory.POTION_HP -> {
                 rect(buf, ITEM_S, 6, 2, 4, 2, 0xFFC7A06B.toInt()); rect(buf, ITEM_S, 4, 5, 8, 9, 0xFFC92424.toInt()); rect(buf, ITEM_S, 5, 6, 3, 6, 0xFFFF5C5C.toInt())
@@ -677,6 +703,14 @@ object EntitySpriteAtlas {
                 if (itemId.contains("arbalest") || itemId.contains("siegebow") || itemId.contains("crossbow")) {
                     rect(buf, ITEM_S, 3, 7, 10, 3, 0xFF7D4E26.toInt())
                     rect(buf, ITEM_S, 7, 3, 3, 10, tierTint)
+                } else if (itemId.contains("bow") || itemId.contains("recurve")) {
+                    val wood = if (itemId == "hunting_bow") 0xFF9C6635.toInt() else 0xFF7D4E26.toInt()
+                    rect(buf, ITEM_S, 4, 2, 3, 2, wood)
+                    rect(buf, ITEM_S, 3, 4, 2, 8, wood)
+                    rect(buf, ITEM_S, 4, 12, 3, 2, wood)
+                    rect(buf, ITEM_S, 7, 3, 1, 10, 0xFFE8DFC8.toInt()) // bowstring
+                    rect(buf, ITEM_S, 5, 7, 8, 1, tierTint) // nocked arrow
+                    px(buf, ITEM_S, 13, 7, 0xFFFFFFFF.toInt())
                 } else {
                     for (i in 0..11) px(buf, ITEM_S, 2 + i, 13 - i, 0xFFA36E39.toInt())
                     rect(buf, ITEM_S, 11, 2, 3, 3, tierTint)

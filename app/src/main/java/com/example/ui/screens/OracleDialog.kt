@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -65,6 +67,7 @@ import com.example.ui.theme.StoneSurface
 import com.example.ui.theme.TorchAmber
 import com.example.ui.theme.TorchGold
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OracleCeremonyDialog(
     state: GameWorldState,
@@ -147,7 +150,7 @@ fun OracleCeremonyDialog(
                                     color = ParchmentLight
                                 )
                                 Text(
-                                    text = "Level ${state.level} ${state.vocation.displayName} • Growth: +${state.vocation.hpPerLevel} HP, +${state.vocation.mpPerLevel} MP, +${state.vocation.capPerLevel.toInt()} oz/lvl",
+                                    text = "Level ${state.level} ${state.vocation.displayName} • Cap ${formatOz(state.maxCapOz)} oz • Growth: +${state.vocation.hpPerLevel} HP, +${state.vocation.mpPerLevel} MP, +${state.vocation.capPerLevel.toInt()} oz/lvl",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = TorchGold
                                 )
@@ -253,14 +256,18 @@ fun OracleCeremonyDialog(
                                     textAlign = TextAlign.Center
                                 )
                                 Text(
-                                    text = "\"Are you certain, ${state.playerName}? This vow is permanent. Your outfit will change to the ${chosen.displayName} vestments, all 6 earned skills will remain intact, and your new per-level stat growth begins on your next level up.\"",
+                                    text = "\"Are you certain, ${state.playerName}? This vow is permanent. Your outfit will change to the ${chosen.displayName} vestments, all 6 earned skills remain intact, you immediately gain +${chosen.promotionCapBonus.toInt()} oz carrying Cap, and your new per-level growth begins on your next level up.\"",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = ParchmentLight,
                                     textAlign = TextAlign.Center
                                 )
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
                                     OracleStatPill("+${chosen.hpPerLevel} HP/lvl", HealthCrimson)
                                     OracleStatPill("+${chosen.mpPerLevel} MP/lvl", ManaSapphire)
+                                    OracleStatPill("+${chosen.promotionCapBonus.toInt()} oz Now", TorchGold)
                                     OracleStatPill("+${chosen.capPerLevel.toInt()} oz/lvl", TorchAmber)
                                 }
                             }
@@ -355,6 +362,7 @@ fun OracleCeremonyDialog(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OracleVocationCard(
     vocation: Vocation,
@@ -408,10 +416,16 @@ private fun OracleVocationCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = ParchmentMuted
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
                     OracleStatPill("+${vocation.hpPerLevel} HP", HealthCrimson)
                     OracleStatPill("+${vocation.mpPerLevel} MP", ManaSapphire)
-                    OracleStatPill("+${vocation.capPerLevel.toInt()} oz", TorchAmber)
+                    if (vocation.promotionCapBonus > 0.0) {
+                        OracleStatPill("+${vocation.promotionCapBonus.toInt()} oz Now", TorchGold)
+                    }
+                    OracleStatPill("+${vocation.capPerLevel.toInt()} oz/lvl", TorchAmber)
                     val specialty = when (vocation) {
                         Vocation.KNIGHT -> "Melee/Shield++"
                         Vocation.PALADIN -> "Distance++"

@@ -63,11 +63,13 @@ object TileSpriteAtlas {
         TileType.CITY_WALL -> drawObliqueWall(0xFF8C8275.toInt(), 0xFF5F564B.toInt(), 0xFF3A342D.toInt(), 0xFF443D35.toInt())
         TileType.MOUNTAIN_ROCK -> drawMountainRock()
         TileType.TREE -> drawTree()
+        TileType.TREE_STUMP -> drawTreeStump()
         TileType.DEPOT_CHEST -> drawDepotChest(false)
         TileType.MINI_DEPOT -> drawDepotChest(true)
         TileType.SHOP_COUNTER -> drawShopCounter()
         TileType.SMELTING_FURNACE -> drawSmeltingFurnace(frame)
         TileType.BLACKSMITH_ANVIL -> drawBlacksmithAnvil()
+        TileType.FLETCHING_BENCH -> drawFletchingBench()
         TileType.ORE_OCHRE -> drawOreVein(0xFFD97D2B.toInt(), 0xFFFFB85C.toInt(), 0xFF695547.toInt())
         TileType.ORE_BOGSTONE -> drawOreVein(0xFF7B8B9E.toInt(), 0xFFBAC7D6.toInt(), 0xFF4D4A47.toInt())
         TileType.ORE_BRIMSTONE -> drawOreVein(0xFFE65319.toInt(), 0xFFFFC43D.toInt(), 0xFF302926.toInt(), frame)
@@ -219,6 +221,22 @@ object TileSpriteAtlas {
         return toImageBitmap(buf)
     }
 
+    private fun drawTreeStump(): ImageBitmap {
+        val buf = newPixels(0xFF2A4F24.toInt())
+        // Ground shadow + scattered wood chips
+        rect(buf, 10, 22, 15, 6, 0xFF183015.toInt())
+        px(buf, 6, 24, 0xFFCFA56B.toInt()); px(buf, 25, 21, 0xFFCFA56B.toInt()); px(buf, 8, 18, 0xFFB0834A.toInt())
+        // Bark trunk stump
+        rect(buf, 10, 16, 12, 10, 0xFF59381E.toInt())
+        rect(buf, 11, 16, 3, 10, 0xFF704828.toInt())
+        rect(buf, 9, 24, 14, 2, 0xFF472B16.toInt())
+        // Freshly cut timber top with growth rings
+        rect(buf, 10, 14, 12, 4, 0xFFD4A86A.toInt())
+        rect(buf, 12, 15, 8, 2, 0xFFB8884B.toInt())
+        rect(buf, 14, 15, 4, 1, 0xFFE6C28A.toInt())
+        return toImageBitmap(buf)
+    }
+
     private fun drawDepotChest(isMini: Boolean): ImageBitmap {
         val buf = newPixels(0xFF5E564E.toInt())
         rect(buf, 5, 25, 24, 5, 0xFF24201C.toInt())
@@ -275,6 +293,30 @@ object TileSpriteAtlas {
         rect(buf, 6, 9, 20, 3, 0xFF9EA8B5.toInt()) // polished steel striking top
         rect(buf, 2, 11, 5, 3, 0xFF7B8591.toInt()) // pointed horn left
         rect(buf, 11, 15, 10, 5, 0xFF424852.toInt()) // waist
+        return toImageBitmap(buf)
+    }
+
+    private fun drawFletchingBench(): ImageBitmap {
+        val buf = newPixels(0xFF5E564E.toInt())
+        // Shadow under woodworking bench
+        rect(buf, 4, 25, 25, 5, 0xFF24201C.toInt())
+        // Sturdy timber workbench legs & oblique wood tabletop
+        rect(buf, 5, 18, 4, 9, 0xFF59381E.toInt())
+        rect(buf, 22, 18, 4, 9, 0xFF472B16.toInt())
+        rect(buf, 3, 7, 25, 9, 0xFF9C6B3B.toInt())
+        rect(buf, 3, 7, 25, 2, 0xFFB8824D.toInt())
+        rect(buf, 3, 16, 25, 4, 0xFF6E4726.toInt())
+        rect(buf, 28, 9, 2, 11, 0xFF3E2613.toInt())
+        // Curved ashwood bow stave resting on tabletop
+        rect(buf, 6, 9, 9, 2, 0xFF593618.toInt())
+        px(buf, 5, 11, 0xFF593618.toInt()); px(buf, 15, 11, 0xFF593618.toInt())
+        rect(buf, 6, 12, 9, 1, 0xFFDCE6EE.toInt()) // bowstring
+        // Bundle of fletched arrows with bright white feathers
+        rect(buf, 18, 9, 7, 1, 0xFFD4A86A.toInt())
+        rect(buf, 18, 12, 7, 1, 0xFFD4A86A.toInt())
+        rect(buf, 24, 8, 2, 3, 0xFFF5EFE0.toInt())
+        rect(buf, 24, 11, 2, 3, 0xFFF5EFE0.toInt())
+        px(buf, 17, 9, 0xFFBAC7D6.toInt()); px(buf, 17, 12, 0xFFBAC7D6.toInt())
         return toImageBitmap(buf)
     }
 

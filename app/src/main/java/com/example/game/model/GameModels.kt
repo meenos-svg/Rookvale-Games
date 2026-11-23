@@ -9,6 +9,10 @@ const val CURRENT_MAP_VERSION = 2
 const val V1_SURFACE_OFFSET = 32
 const val ORACLE_MIN_LEVEL = 20
 const val TOOL_BAG_WEIGHT_MULTIPLIER = 0.5
+const val BASE_MAX_CAP_OZ = 400.0
+const val ADVENTURER_CAP_PER_LEVEL_OZ = 25.0
+const val TREE_REGROW_TICKS = 60
+const val TREE_CHOP_COOLDOWN_MS = 900L
 
 data class SpriteColorSwatch(
     val name: String,
@@ -46,6 +50,7 @@ enum class Vocation(
     val hpPerLevel: Int,
     val mpPerLevel: Int,
     val capPerLevel: Double,
+    val promotionCapBonus: Double,
     val baseHp: Int,
     val baseMp: Int,
     val baseCap: Double,
@@ -58,13 +63,14 @@ enum class Vocation(
     ADVENTURER(
         displayName = "Adventurer",
         subtitle = "Rookvale Novice",
-        description = "Blank-slate explorer free to train any weapon, shield, rune, or gathering skill until Level 20.",
+        description = "Blank-slate explorer free to train any weapon, shield, rune, or gathering skill until Level 20 (+25 oz/lvl Cap).",
         hpPerLevel = 10,
         mpPerLevel = 10,
-        capPerLevel = 15.0,
+        capPerLevel = ADVENTURER_CAP_PER_LEVEL_OZ,
+        promotionCapBonus = 0.0,
         baseHp = 150,
         baseMp = 55,
-        baseCap = 400.0,
+        baseCap = BASE_MAX_CAP_OZ,
         meleeGainRate = 1.0,
         distanceGainRate = 1.0,
         shieldingGainRate = 1.0,
@@ -74,13 +80,14 @@ enum class Vocation(
     KNIGHT(
         displayName = "Knight",
         subtitle = "Vanguard of Steel",
-        description = "Higher HP & Cap growth per level, faster Melee & Shielding progression, and mastery of Tier 3-4 melee gear.",
+        description = "Instant +250 oz Cap surge at promotion, +40 oz/lvl thereafter, high HP growth, and mastery of Tier 3-4 melee gear.",
         hpPerLevel = 15,
         mpPerLevel = 5,
-        capPerLevel = 25.0,
+        capPerLevel = 40.0,
+        promotionCapBonus = 250.0,
         baseHp = 185,
         baseMp = 35,
-        baseCap = 470.0,
+        baseCap = BASE_MAX_CAP_OZ,
         meleeGainRate = 1.65,
         distanceGainRate = 0.75,
         shieldingGainRate = 1.75,
@@ -90,13 +97,14 @@ enum class Vocation(
     PALADIN(
         displayName = "Paladin",
         subtitle = "Sacred Marksman",
-        description = "Balanced HP/MP/Cap growth, rapid Distance Fighting progression, and mastery of advanced bows & arbalests.",
+        description = "Instant +180 oz Cap surge at promotion, +32 oz/lvl thereafter, rapid Distance progression, and mastery of bows & arbalests.",
         hpPerLevel = 10,
         mpPerLevel = 15,
-        capPerLevel = 20.0,
+        capPerLevel = 32.0,
+        promotionCapBonus = 180.0,
         baseHp = 155,
         baseMp = 75,
-        baseCap = 410.0,
+        baseCap = BASE_MAX_CAP_OZ,
         meleeGainRate = 1.0,
         distanceGainRate = 1.70,
         shieldingGainRate = 1.15,
@@ -106,13 +114,14 @@ enum class Vocation(
     MAGE(
         displayName = "Mage",
         subtitle = "Arcane Runecaster",
-        description = "High MP growth per level, fastest Magic Level progression, and mastery of Tier 3-4 staves & devastating runes.",
+        description = "Instant +120 oz Cap surge at promotion, +25 oz/lvl thereafter, massive MP growth, and mastery of Tier 3-4 staves & runes.",
         hpPerLevel = 5,
         mpPerLevel = 30,
-        capPerLevel = 10.0,
+        capPerLevel = 25.0,
+        promotionCapBonus = 120.0,
         baseHp = 135,
         baseMp = 140,
-        baseCap = 340.0,
+        baseCap = BASE_MAX_CAP_OZ,
         meleeGainRate = 0.65,
         distanceGainRate = 0.65,
         shieldingGainRate = 0.70,
@@ -202,6 +211,7 @@ enum class ItemCategory {
     TOOL_ROPE,
     TOOL_FISHING_ROD,
     TOOL_PICKAXE,
+    TOOL_HATCHET,
     FOOD,
     RAW_ORE,
     METAL_INGOT,
@@ -249,7 +259,8 @@ data class ItemDefinition(
     val isTool: Boolean
         get() = category == ItemCategory.TOOL_ROPE ||
             category == ItemCategory.TOOL_FISHING_ROD ||
-            category == ItemCategory.TOOL_PICKAXE
+            category == ItemCategory.TOOL_PICKAXE ||
+            category == ItemCategory.TOOL_HATCHET
 
     fun carriedWeightOz(): Double = if (isTool) weightOz * TOOL_BAG_WEIGHT_MULTIPLIER else weightOz
 
@@ -347,11 +358,13 @@ enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
     CITY_WALL(false, true),
     MOUNTAIN_ROCK(false, true),
     TREE(false, true),
+    TREE_STUMP(false),
     DEPOT_CHEST(false),
     MINI_DEPOT(false),
     SHOP_COUNTER(false),
     SMELTING_FURNACE(false),
     BLACKSMITH_ANVIL(false),
+    FLETCHING_BENCH(false),
     ORE_OCHRE(false),
     ORE_BOGSTONE(false),
     ORE_BRIMSTONE(false),
@@ -630,7 +643,8 @@ enum class ProjectileKind {
     THROWN_STONE,
     NECRO_BOLT,
     SPLASH,
-    MINING_SPARK
+    MINING_SPARK,
+    WOOD_CHIP
 }
 
 data class ProjectileEffect(
@@ -694,6 +708,7 @@ enum class ActivePanel {
     SHOP,
     FURNACE,
     ANVIL,
+    FLETCHING_BENCH,
     LOOT_CORPSE,
     ORACLE
 }
@@ -732,8 +747,10 @@ data class GameWorldState(
     val monsters: List<MonsterEntity> = emptyList(),
     val pendingRespawns: List<PendingRespawn> = emptyList(),
     val oreNodes: Map<Triple<Int, Int, Int>, OreNodeState> = emptyMap(),
+    val choppedTrees: Map<Triple<Int, Int, Int>, Int> = emptyMap(),
     val corpses: List<CorpseEntity> = emptyList(),
     val targetMonsterId: Int? = null,
+    val autoFollowTarget: Boolean = false,
     val floatingTexts: List<FloatingText> = emptyList(),
     val projectiles: List<ProjectileEffect> = emptyList(),
     val statusLog: List<String> = listOf("Welcome to Rookvale! Train freely and visit The Oracle at Level 20."),
@@ -744,6 +761,7 @@ data class GameWorldState(
     val tickCount: Long = 0L,
     val lastCombatTickMs: Long = 0L,
     val lastPlayerAttackMs: Long = 0L,
+    val lastTreeChopMs: Long = 0L,
     val floorWarningBanner: FloorWarningBanner? = null,
     val inspectedPlayerId: String? = null,
     val inspectedPlayerUntilMs: Long = 0L,
@@ -780,6 +798,16 @@ data class GameWorldState(
             .map { ItemCatalog.get(it.itemId) }
             .filter { it.category == ItemCategory.TOOL_PICKAXE }
             .maxByOrNull { it.pickaxeTier }
+    }
+
+    fun hasHatchet(): Boolean {
+        val equippedHatchet = equipment.weaponId?.let { ItemCatalog.get(it).category == ItemCategory.TOOL_HATCHET } == true
+        return equippedHatchet || (toolBag + backpack).any { ItemCatalog.get(it.itemId).category == ItemCategory.TOOL_HATCHET }
+    }
+
+    fun isMeleeCombatSetup(): Boolean {
+        val weapon = equipment.weaponDef()
+        return weapon == null || weapon.category == ItemCategory.WEAPON_MELEE
     }
 
     fun activeAmmoCount(): Int = equipment.ammoId?.let { itemCount(it) } ?: 0
@@ -839,5 +867,26 @@ data class GameWorldState(
         val next = nextLevelXp()
         val span = (next - cur).coerceAtLeast(1L)
         return ((xp - cur).toFloat() / span.toFloat()).coerceIn(0f, 1f)
+    }
+
+    companion object {
+        /**
+         * Canonical Rookvale carrying capacity progression:
+         * - Levels 1..20 (Adventurer): 400.0 oz base + 25.0 oz per level gained (Lvl 20 = 875.0 oz).
+         * - Level 20 Oracle Job Advance: generous instant weight surge (+250 Knight / +180 Paladin / +120 Mage)
+         *   plus boosted post-20 per-level growth (+40 Knight / +32 Paladin / +25 Mage).
+         */
+        fun maxCapForLevel(level: Int, vocation: Vocation = Vocation.ADVENTURER): Double {
+            val safeLevel = level.coerceAtLeast(1)
+            if (vocation == Vocation.ADVENTURER) {
+                return BASE_MAX_CAP_OZ + (safeLevel - 1) * ADVENTURER_CAP_PER_LEVEL_OZ
+            }
+            val prePromotionLevels = (minOf(safeLevel, ORACLE_MIN_LEVEL) - 1).coerceAtLeast(0)
+            val postPromotionLevels = (safeLevel - ORACLE_MIN_LEVEL).coerceAtLeast(0)
+            return BASE_MAX_CAP_OZ +
+                prePromotionLevels * ADVENTURER_CAP_PER_LEVEL_OZ +
+                vocation.promotionCapBonus +
+                postPromotionLevels * vocation.capPerLevel
+        }
     }
 }

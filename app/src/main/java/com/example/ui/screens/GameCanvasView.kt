@@ -164,9 +164,13 @@ fun GameCanvasView(
                 for (tx in minTx..maxTx) {
                     val px = (originX + tx * tilePx).roundToInt()
                     val baseTile = floorMap.tileAt(tx, ty)
-                    val renderTile = if (baseTile.oreVeinKind() != null &&
-                        st.oreNodes[Triple(st.floor, tx, ty)]?.isDepleted == true
-                    ) TileType.DEPLETED_VEIN else baseTile
+                    val renderTile = when {
+                        baseTile.oreVeinKind() != null &&
+                            st.oreNodes[Triple(st.floor, tx, ty)]?.isDepleted == true -> TileType.DEPLETED_VEIN
+                        baseTile == TileType.TREE &&
+                            (st.choppedTrees[Triple(st.floor, tx, ty)] ?: 0) > 0 -> TileType.TREE_STUMP
+                        else -> baseTile
+                    }
                     drawImage(
                         image = TileSpriteAtlas.tileBitmap(renderTile, animFrame),
                         dstOffset = IntOffset(px, py),
@@ -277,7 +281,28 @@ fun GameCanvasView(
                     val sy = (originY + myF * tilePx).roundToInt()
 
                     if (m.id == st.targetMonsterId) {
-                        drawRect(TargetRed, Offset(sx.toFloat() + 1f, sy.toFloat() + 1f), Size(tilePx - 2f, tilePx - 2f), style = Stroke(width = 5f))
+                        val pulseAlpha = if (st.autoFollowTarget && ((now / 220L) % 2L) == 0L) 1.0f else 0.78f
+                        val left = sx.toFloat() + 1f
+                        val top = sy.toFloat() + 1f
+                        val boxSize = tilePx - 2f
+                        drawRect(
+                            color = TargetRed.copy(alpha = pulseAlpha),
+                            topLeft = Offset(left, top),
+                            size = Size(boxSize, boxSize),
+                            style = Stroke(width = if (st.autoFollowTarget) 5.5f else 4.5f)
+                        )
+                        // Crisp L-shaped corner brackets for high-visibility combat lock
+                        val corner = tilePx * 0.24f
+                        val cornerColor = if (st.autoFollowTarget) Color(0xFFFF7A7A) else TargetRed
+                        val strokeW = 4f
+                        drawLine(cornerColor, Offset(left, top), Offset(left + corner, top), strokeWidth = strokeW)
+                        drawLine(cornerColor, Offset(left, top), Offset(left, top + corner), strokeWidth = strokeW)
+                        drawLine(cornerColor, Offset(left + boxSize, top), Offset(left + boxSize - corner, top), strokeWidth = strokeW)
+                        drawLine(cornerColor, Offset(left + boxSize, top), Offset(left + boxSize, top + corner), strokeWidth = strokeW)
+                        drawLine(cornerColor, Offset(left, top + boxSize), Offset(left + corner, top + boxSize), strokeWidth = strokeW)
+                        drawLine(cornerColor, Offset(left, top + boxSize), Offset(left, top + boxSize - corner), strokeWidth = strokeW)
+                        drawLine(cornerColor, Offset(left + boxSize, top + boxSize), Offset(left + boxSize - corner, top + boxSize), strokeWidth = strokeW)
+                        drawLine(cornerColor, Offset(left + boxSize, top + boxSize), Offset(left + boxSize, top + boxSize - corner), strokeWidth = strokeW)
                     }
 
                     val mFrame = (((now + (m.id * 170L)) / 420L) % 2L).toInt()
@@ -552,6 +577,16 @@ fun GameCanvasView(
                         drawRect(Color.White.copy(alpha = 1f - t), Offset(wx + spread, wy - spread * 0.6f), Size(5f, 5f))
                         drawRect(FireOrange.copy(alpha = 1f - t), Offset(wx, wy + spread * 0.7f), Size(6f, 6f))
                     }
+                    ProjectileKind.WOOD_CHIP -> {
+                        val wx = originX + (proj.toX + 0.5f) * tilePx
+                        val wy = originY + (proj.toY + 0.5f) * tilePx
+                        val spread = t * tilePx * 0.38f
+                        val alpha = (1f - t).coerceIn(0f, 1f)
+                        drawRect(Color(0xFFC48A47).copy(alpha = alpha), Offset(wx - spread, wy - spread * 0.8f), Size(7f, 5f))
+                        drawRect(Color(0xFF7D4F24).copy(alpha = alpha), Offset(wx + spread * 0.9f, wy - spread * 0.5f), Size(6f, 6f))
+                        drawRect(Color(0xFFE0B472).copy(alpha = alpha), Offset(wx - spread * 0.3f, wy + spread * 0.7f), Size(6f, 4f))
+                        drawRect(Color(0xFF4F8A3A).copy(alpha = alpha), Offset(wx + spread * 0.4f, wy + spread * 0.4f), Size(5f, 5f))
+                    }
                 }
             }
 
@@ -637,6 +672,8 @@ private fun MinimapOverlay(
                             TileType.LAVA -> Color(0xFFD94A1E)
                             TileType.STAIRS_DOWN, TileType.STAIRS_UP, TileType.ROPE_HOLE_DOWN, TileType.ROPE_SPOT_UP -> TorchGold
                             TileType.SMELTING_FURNACE, TileType.BLACKSMITH_ANVIL -> FireOrange
+                            TileType.FLETCHING_BENCH -> Color(0xFFD4A054)
+                            TileType.TREE_STUMP -> Color(0xFF5A422C)
                             TileType.DEPOT_CHEST, TileType.MINI_DEPOT, TileType.SHOP_COUNTER, TileType.TEMPLE_ALTAR -> Color(0xFF5CE1FF)
                             TileType.ORE_OCHRE, TileType.ORE_BOGSTONE, TileType.ORE_BRIMSTONE, TileType.ORE_AETHERIUM -> Color(0xFFB599FF)
                             else -> Color(0xFF1E1B1A)
