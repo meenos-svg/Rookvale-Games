@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -126,7 +128,8 @@ fun TitleAndCreationScreen(
     var pinVisible by rememberSaveable { mutableStateOf(false) }
     var tunicColorIndex by rememberSaveable { mutableIntStateOf(0) }
     var hairColorIndex by rememberSaveable { mutableIntStateOf(0) }
-    val scrollState = rememberScrollState()
+    val leftScroll = rememberScrollState()
+    val rightScroll = rememberScrollState()
 
     val previewSprite = remember(tunicColorIndex, hairColorIndex) {
         EntitySpriteAtlas.playerBitmap(Vocation.ADVENTURER, 0, tunicColorIndex, hairColorIndex)
@@ -144,81 +147,84 @@ fun TitleAndCreationScreen(
         unfocusedContainerColor = StoneSurface
     )
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxSize()
             .background(ObsidianVoid)
-            .verticalScroll(scrollState)
-            .navigationBarsPadding()
+            .displayCutoutPadding()
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Atmospheric Pixel-Art Hero Banner
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(215.dp)
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.img_rookvale_hero_1795279155504),
-                contentDescription = "Rookvale medieval city and dungeon entrance",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0x880E0C0B),
-                                Color(0x440E0C0B),
-                                ObsidianVoid
-                            )
-                        )
-                    )
-            )
-            Surface(
-                color = BasaltDark.copy(alpha = 0.85f),
-                shape = RoundedCornerShape(6.dp),
-                border = BorderStroke(1.dp, TorchGold.copy(alpha = 0.6f)),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(top = 10.dp, end = 14.dp)
-                    .testTag("app_version_badge")
-            ) {
-                Text(
-                    text = updateState.currentVersionLabel,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = TorchGold,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.Bottom
-            ) {
-                Text(
-                    text = stringResource(R.string.app_name).uppercase(),
-                    style = MaterialTheme.typography.displaySmall,
-                    color = TorchGold
-                )
-                Text(
-                    text = stringResource(R.string.title_tagline),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = ParchmentLight
-                )
-            }
-        }
-
+        // LEFT COLUMN: Atmospheric Hero Banner, Cloud Quick Resume, Updates & Offline Saves
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .weight(0.95f)
+                .fillMaxHeight()
+                .verticalScroll(leftScroll),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(166.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.2.dp, StoneBorderLight, RoundedCornerShape(12.dp))
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.img_rookvale_hero_1795279155504),
+                    contentDescription = "Rookvale medieval city and dungeon entrance",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0x660E0C0B),
+                                    Color(0x440E0C0B),
+                                    ObsidianVoid.copy(alpha = 0.92f)
+                                )
+                            )
+                        )
+                )
+                Surface(
+                    color = BasaltDark.copy(alpha = 0.85f),
+                    shape = RoundedCornerShape(6.dp),
+                    border = BorderStroke(1.dp, TorchGold.copy(alpha = 0.6f)),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 8.dp, end = 8.dp)
+                        .testTag("app_version_badge")
+                ) {
+                    Text(
+                        text = updateState.currentVersionLabel,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = TorchGold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.Bottom
+                ) {
+                    Text(
+                        text = stringResource(R.string.app_name).uppercase(),
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        color = TorchGold
+                    )
+                    Text(
+                        text = stringResource(R.string.title_tagline),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ParchmentLight,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
             // Auto-login progress banner on startup
             AnimatedVisibility(visible = cloudAuthState.isAutoLoggingIn) {
                 Surface(
@@ -408,7 +414,32 @@ fun TitleAndCreationScreen(
                 }
             }
 
-            // Cloud Character Portal: Create New Hero vs Load / Recover Existing Hero (Name + 4-Digit PIN)
+            // Existing Local Device Saves (Quick Offline Fallback Access in Left Column)
+            if (savedSlots.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.saved_characters),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = TorchGold
+                )
+                savedSlots.forEach { slot ->
+                    SavedCharacterCard(
+                        slot = slot,
+                        onLoad = { onLoadCharacter(slot.slotId) },
+                        onDelete = { onDeleteSlot(slot.slotId) }
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+
+        // RIGHT COLUMN: Cloud Character Portal (Create New Hero / Load & Recover)
+        Column(
+            modifier = Modifier
+                .weight(1.15f)
+                .fillMaxHeight()
+                .verticalScroll(rightScroll),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Surface(
                 color = BasaltDark,
                 shape = RoundedCornerShape(10.dp),
@@ -416,8 +447,8 @@ fun TitleAndCreationScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // Segmented Tab Row
                     Row(
@@ -758,24 +789,7 @@ fun TitleAndCreationScreen(
                     }
                 }
             }
-
-            // Existing Local Device Saves (Quick Offline Fallback Access)
-            if (savedSlots.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.saved_characters),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = TorchGold
-                )
-                savedSlots.forEach { slot ->
-                    SavedCharacterCard(
-                        slot = slot,
-                        onLoad = { onLoadCharacter(slot.slotId) },
-                        onDelete = { onDeleteSlot(slot.slotId) }
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(6.dp))
         }
     }
 }

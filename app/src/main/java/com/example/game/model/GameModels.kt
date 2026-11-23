@@ -136,6 +136,10 @@ enum class Vocation(
 
 enum class SkillType(val displayName: String) {
     MELEE("Melee Fighting"),
+    FIST("Fist Fighting"),
+    CLUB("Club Fighting"),
+    SWORD("Sword Fighting"),
+    AXE("Axe Fighting"),
     DISTANCE("Distance Fighting"),
     SHIELDING("Shielding"),
     MAGIC("Magic Level"),
@@ -177,6 +181,10 @@ data class SkillProgress(
 @JsonClass(generateAdapter = true)
 data class PlayerSkills(
     val melee: SkillProgress = SkillProgress(10, 0.0),
+    val fist: SkillProgress = SkillProgress(10, 0.0),
+    val club: SkillProgress = SkillProgress(10, 0.0),
+    val sword: SkillProgress = SkillProgress(10, 0.0),
+    val axe: SkillProgress = SkillProgress(10, 0.0),
     val distance: SkillProgress = SkillProgress(10, 0.0),
     val shielding: SkillProgress = SkillProgress(10, 0.0),
     val magic: SkillProgress = SkillProgress(1, 0.0),
@@ -184,12 +192,41 @@ data class PlayerSkills(
     val mining: SkillProgress = SkillProgress(10, 0.0)
 ) {
     fun levelFor(type: SkillType): Int = when (type) {
-        SkillType.MELEE -> melee.level
+        SkillType.MELEE -> maxOf(melee.level, fist.level, club.level, sword.level, axe.level)
+        SkillType.FIST -> fist.level
+        SkillType.CLUB -> club.level
+        SkillType.SWORD -> sword.level
+        SkillType.AXE -> axe.level
         SkillType.DISTANCE -> distance.level
         SkillType.SHIELDING -> shielding.level
         SkillType.MAGIC -> magic.level
         SkillType.FISHING -> fishing.level
         SkillType.MINING -> mining.level
+    }
+
+    fun progressFor(type: SkillType): SkillProgress = when (type) {
+        SkillType.MELEE -> melee
+        SkillType.FIST -> fist
+        SkillType.CLUB -> club
+        SkillType.SWORD -> sword
+        SkillType.AXE -> axe
+        SkillType.DISTANCE -> distance
+        SkillType.SHIELDING -> shielding
+        SkillType.MAGIC -> magic
+        SkillType.FISHING -> fishing
+        SkillType.MINING -> mining
+    }
+
+    companion object {
+        fun meleeSkillTypeForWeapon(weaponId: String?): SkillType {
+            if (weaponId.isNullOrBlank()) return SkillType.FIST
+            val lower = weaponId.lowercase()
+            return when {
+                lower.contains("club") || lower.contains("mace") || lower.contains("hammer") || lower.contains("cudgel") -> SkillType.CLUB
+                lower.contains("axe") || lower.contains("halberd") || lower.contains("glaive") || lower.contains("hatchet") || lower.contains("cleaver") -> SkillType.AXE
+                else -> SkillType.SWORD
+            }
+        }
     }
 }
 
@@ -722,7 +759,8 @@ data class PlayerSaveData(
     val hairColorIndex: Int = 0,
     val questFlags: Map<String, Boolean> = emptyMap(),
     val boundAttackRuneId: String? = null,
-    val boundHealRuneId: String? = "healing_rune"
+    val boundHealRuneId: String? = "healing_rune",
+    val customHotbarSlots: List<String?> = listOf(null, null)
 )
 
 enum class ActivePanel {
@@ -737,7 +775,8 @@ enum class ActivePanel {
     FLETCHING_BENCH,
     RUNECRAFTING_TABLE,
     LOOT_CORPSE,
-    ORACLE
+    ORACLE,
+    WORLD_MAP
 }
 
 data class GameWorldState(
@@ -797,7 +836,8 @@ data class GameWorldState(
     val outboundPlayerEffects: List<LocalPlayerActionFxEvent> = emptyList(),
     val questFlags: Map<String, Boolean> = emptyMap(),
     val boundAttackRuneId: String? = "magic_dart_rune",
-    val boundHealRuneId: String? = "healing_rune"
+    val boundHealRuneId: String? = "healing_rune",
+    val customHotbarSlots: List<String?> = listOf(null, null)
 ) {
     fun toolBagWeightOz(): Double =
         toolBag.sumOf { ItemCatalog.get(it.itemId).weightOz * TOOL_BAG_WEIGHT_MULTIPLIER * it.count }

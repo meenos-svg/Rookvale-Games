@@ -197,9 +197,17 @@ object CloudSavePayloadCodec {
             put("magicXp", data.skills.magic.points)
             data.boundAttackRuneId?.let { put("boundAttackRuneId", it) }
             data.boundHealRuneId?.let { put("boundHealRuneId", it) }
+            put("customHotbarSlots", JSONArray().apply {
+                val normalized = List(2) { idx -> data.customHotbarSlots.getOrNull(idx) }
+                normalized.forEach { put(it ?: JSONObject.NULL) }
+            })
 
             put("skills", JSONObject().apply {
                 put("melee", encodeSkill(data.skills.melee))
+                put("fist", encodeSkill(data.skills.fist))
+                put("club", encodeSkill(data.skills.club))
+                put("sword", encodeSkill(data.skills.sword))
+                put("axe", encodeSkill(data.skills.axe))
                 put("distance", encodeSkill(data.skills.distance))
                 put("magic", encodeSkill(data.skills.magic))
                 put("shielding", encodeSkill(data.skills.shielding))
@@ -242,8 +250,17 @@ object CloudSavePayloadCodec {
             }
         }
         val skills = if (skillsObj != null) {
+            val decodedMelee = decodeSkill(skillsObj.optJSONObject("melee"))
+            val fistSkill = skillsObj.optJSONObject("fist")?.let { decodeSkill(it) } ?: decodedMelee
+            val clubSkill = skillsObj.optJSONObject("club")?.let { decodeSkill(it) } ?: decodedMelee
+            val swordSkill = skillsObj.optJSONObject("sword")?.let { decodeSkill(it) } ?: decodedMelee
+            val axeSkill = skillsObj.optJSONObject("axe")?.let { decodeSkill(it) } ?: decodedMelee
             PlayerSkills(
-                melee = decodeSkill(skillsObj.optJSONObject("melee")),
+                melee = decodedMelee,
+                fist = fistSkill,
+                club = clubSkill,
+                sword = swordSkill,
+                axe = axeSkill,
                 distance = decodeSkill(skillsObj.optJSONObject("distance")),
                 magic = decodedMagic,
                 shielding = decodeSkill(skillsObj.optJSONObject("shielding")),
@@ -327,7 +344,15 @@ object CloudSavePayloadCodec {
             hairColorIndex = json.optInt("hairColorIndex", 0).coerceAtLeast(0),
             questFlags = questFlags,
             boundAttackRuneId = json.optNullableString("boundAttackRuneId"),
-            boundHealRuneId = json.optNullableString("boundHealRuneId") ?: "healing_rune"
+            boundHealRuneId = json.optNullableString("boundHealRuneId") ?: "healing_rune",
+            customHotbarSlots = run {
+                val arr = json.optJSONArray("customHotbarSlots")
+                List(2) { idx ->
+                    if (arr != null && idx < arr.length() && !arr.isNull(idx)) {
+                        arr.optString(idx, "").trim().takeIf { it.isNotEmpty() }
+                    } else null
+                }
+            }
         )
     }
 
@@ -345,24 +370,30 @@ object CloudSavePayloadCodec {
     }
 
     private fun encodeItemList(items: List<ItemStack>): JSONArray = JSONArray().apply {
-        items.forEach { stack ->
-            put(JSONObject().apply {
-                put("itemId", stack.itemId)
-                put("count", stack.count)
-            })
+        items.toList().forEach { stack ->
+            if (stack.itemId.isNotBlank() && stack.count > 0) {
+                put(JSONObject().apply {
+                    put("itemId", stack.itemId.trim())
+                    put("count", stack.count.coerceIn(1, 999_999))
+                })
+            }
         }
     }
 
     private fun decodeItemList(arr: JSONArray?): List<ItemStack> {
-        if (arr == null) return emptyList()
-        val out = mutableListOf<ItemStack>()
+        if (arr == null || arr.length() <= 0) return emptyList()
+        val out = ArrayList<ItemStack>(arr.length().coerceAtMost(200))
         for (i in 0 until arr.length().coerceAtMost(200)) {
-            val obj = arr.optJSONObject(i) ?: continue
-            val itemId = obj.optNullableString("itemId") ?: continue
-            val count = obj.optInt("count", 1).coerceIn(1, 9999)
-            out += ItemStack(itemId, count)
+            runCatching {
+                val obj = arr.optJSONObject(i) ?: return@runCatching
+                val itemId = obj.optNullableString("itemId")?.trim()?.takeIf { it.isNotEmpty() } ?: return@runCatching
+                val count = obj.optInt("count", 1)
+                if (count > 0) {
+                    out.add(ItemStack(itemId, count.coerceIn(1, 999_999)))
+                }
+            }
         }
-        return out
+        return out.toList()
     }
 
     private fun encodeCorpses(corpses: List<CorpseEntity>): JSONArray = JSONArray().apply {
@@ -477,9 +508,10 @@ class LocalCloudBackupStore(private val store: CloudKeyValueStore) {
         session: CloudSession,
         saveData: PlayerSaveData,
         updatedAtMs: Long,
-        pendingCloudSync: Boolean
+        pendingCloudSync: Boolean,
+        preEncodedJsonString: String? = null
     ) {
-        val encoded = CloudSavePayloadCodec.encode(saveData).toString()
+        val encoded = preEncodedJsonString ?: CloudSavePayloadCodec.encode(saveData).toString()
         val nameKey = PinHasher.normalizeNameKey(session.characterName)
         store.putValues {
             put(backupJsonKey(session.playerId), encoded)
@@ -762,18 +794,31 @@ class SupabaseCloudSaveRepository(
 
     /**
      * Always writes a fast local backup in SharedPreferences first, then upserts to Supabase `public.players`.
+     * Accepts an optional pre-encoded `save_data` JSON snapshot captured synchronously on the main thread
+     * so rapid inventory/depot transfers never race background serialization.
      */
-    suspend fun saveProgress(session: CloudSession, saveData: PlayerSaveData): CloudSaveOutcome =
+    suspend fun saveProgress(
+        session: CloudSession,
+        saveData: PlayerSaveData,
+        preEncodedSaveJson: JSONObject? = null
+    ): CloudSaveOutcome =
         withContext(Dispatchers.IO) {
             val now = nowProvider()
+            val encodedJson = preEncodedSaveJson ?: CloudSavePayloadCodec.encode(saveData)
             localStore.saveCachedSession(session)
-            localStore.saveLocalBackup(session, saveData, now, pendingCloudSync = true)
+            localStore.saveLocalBackup(
+                session = session,
+                saveData = saveData,
+                updatedAtMs = now,
+                pendingCloudSync = true,
+                preEncodedJsonString = encodedJson.toString()
+            )
 
             if (!isCloudConfigured()) {
                 return@withContext CloudSaveOutcome.SAVED_LOCAL_OFFLINE
             }
 
-            val ok = upsertPlayerRow(session, saveData, now)
+            val ok = upsertPlayerRow(session, saveData, now, preEncodedSaveJson = encodedJson)
             if (ok) {
                 localStore.markCloudSynced(session.playerId, now)
                 CloudSaveOutcome.SYNCED_CLOUD
@@ -930,7 +975,8 @@ class SupabaseCloudSaveRepository(
     internal fun upsertPlayerRow(
         session: CloudSession,
         saveData: PlayerSaveData,
-        updatedAtMs: Long
+        updatedAtMs: Long,
+        preEncodedSaveJson: JSONObject? = null
     ): Boolean {
         val base = MultiplayerConfig.restPlayersBaseUrl(urlProvider(), anonKeyProvider()) ?: return false
         val url = base.toHttpUrlOrNull()?.newBuilder()
@@ -942,7 +988,7 @@ class SupabaseCloudSaveRepository(
             put("player_id", session.playerId)
             put("character_name", session.characterName)
             put("pin_hash", session.pinHash)
-            put("save_data", CloudSavePayloadCodec.encode(saveData))
+            put("save_data", preEncodedSaveJson ?: CloudSavePayloadCodec.encode(saveData))
             put("updated_at", IsoTimestampUtil.formatUtc(updatedAtMs))
         }
 

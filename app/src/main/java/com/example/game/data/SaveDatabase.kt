@@ -69,24 +69,35 @@ class GameSaveRepository(private val dao: SaveSlotDao) {
 
     val allSaves: Flow<List<SaveSlotEntity>> = dao.observeAllSaves()
 
-    suspend fun saveGame(data: PlayerSaveData) {
-        val json = adapter.toJson(data)
+    suspend fun saveGame(data: PlayerSaveData) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val safeData = data.copy(
+            backpack = data.backpack.filter { it.itemId.isNotBlank() && it.count > 0 }.toList(),
+            toolBag = data.toolBag.filter { it.itemId.isNotBlank() && it.count > 0 }.toList(),
+            depot = data.depot.filter { it.itemId.isNotBlank() && it.count > 0 }.toList()
+        )
+        val json = adapter.toJson(safeData)
         dao.upsertSave(
             SaveSlotEntity(
-                slotId = data.slotId,
-                characterName = data.name,
-                vocationName = data.vocationName,
-                level = data.level,
-                floor = data.floor,
+                slotId = safeData.slotId,
+                characterName = safeData.name,
+                vocationName = safeData.vocationName,
+                level = safeData.level,
+                floor = safeData.floor,
                 updatedAtMs = System.currentTimeMillis(),
                 payloadJson = json
             )
         )
     }
 
-    suspend fun loadGame(slotId: String): PlayerSaveData? {
-        val entity = dao.getSaveById(slotId) ?: return null
-        return runCatching { adapter.fromJson(entity.payloadJson) }.getOrNull()
+    suspend fun loadGame(slotId: String): PlayerSaveData? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val entity = dao.getSaveById(slotId) ?: return@withContext null
+        runCatching { adapter.fromJson(entity.payloadJson) }.getOrNull()?.let { parsed ->
+            parsed.copy(
+                backpack = parsed.backpack.orEmpty().filter { it.itemId.isNotBlank() && it.count > 0 }.toList(),
+                toolBag = parsed.toolBag.orEmpty().filter { it.itemId.isNotBlank() && it.count > 0 }.toList(),
+                depot = parsed.depot.orEmpty().filter { it.itemId.isNotBlank() && it.count > 0 }.toList()
+            )
+        }
     }
 
     suspend fun deleteSave(slotId: String) {

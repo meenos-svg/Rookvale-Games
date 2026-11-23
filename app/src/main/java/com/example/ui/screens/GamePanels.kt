@@ -64,6 +64,7 @@ import com.example.game.model.ItemStack
 import com.example.game.model.ORACLE_MIN_LEVEL
 import com.example.game.model.SkillProgress
 import com.example.game.model.Vocation
+import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.sprites.EntitySpriteAtlas
 import com.example.ui.theme.BasaltDark
 import com.example.ui.theme.ExpEmerald
@@ -83,6 +84,7 @@ import java.util.Locale
 @Composable
 fun SlideUpGamePanel(
     state: GameWorldState,
+    remotePlayers: List<RemotePlayerState> = emptyList(),
     onClose: () -> Unit,
     onUseItem: (String) -> Unit,
     onDropItem: (String) -> Unit,
@@ -96,6 +98,7 @@ fun SlideUpGamePanel(
     onSellItem: (String) -> Unit,
     onCraftRecipe: (String) -> Unit,
     onBindRune: (String) -> Unit = {},
+    onWalkToTile: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val title = when (state.activePanel) {
@@ -110,16 +113,17 @@ fun SlideUpGamePanel(
         ActivePanel.RUNECRAFTING_TABLE -> stringResource(R.string.panel_runecrafting)
         ActivePanel.LOOT_CORPSE -> state.corpses.firstOrNull { it.id == state.inspectingCorpseId }?.label ?: "Corpse"
         ActivePanel.ORACLE -> "The Oracle"
+        ActivePanel.WORLD_MAP -> "Regional World Map"
         ActivePanel.NONE -> ""
     }
 
     Surface(
-        color = BasaltDark.copy(alpha = 0.97f),
-        shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp),
+        color = BasaltDark.copy(alpha = 0.96f),
+        shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.5.dp, StoneBorderLight),
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 250.dp, max = 400.dp)
+            .heightIn(min = 210.dp, max = 318.dp)
             .pointerInput(Unit) { detectTapGestures { /* Consume taps on panel surface so background map doesn't walk */ } }
             .testTag("slide_up_panel_${state.activePanel.name.lowercase()}")
     ) {
@@ -128,7 +132,7 @@ fun SlideUpGamePanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(StoneElevated)
-                    .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -173,6 +177,7 @@ fun SlideUpGamePanel(
                         onLootGold = onLootCorpseGold,
                         onLootAll = onLootAll
                     )
+                    ActivePanel.WORLD_MAP -> RegionalWorldMapContent(state, remotePlayers, onWalkToTile)
                     ActivePanel.ORACLE, ActivePanel.NONE -> Unit
                 }
             }
@@ -356,13 +361,15 @@ private fun BackpackPanelContent(
         }
 
         if (bagTab == 0) {
-            if (state.backpack.isEmpty()) {
+            val mainBagEntries = remember(state.backpack) { state.backpack.withStableKeys("bag_main") }
+            if (mainBagEntries.isEmpty()) {
                 Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     Text("Your main backpack is empty.", style = MaterialTheme.typography.bodyLarge, color = ParchmentMuted)
                 }
             } else {
                 LazyColumn(contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(state.backpack, key = { "main_${it.itemId}_${it.count}_${state.backpack.indexOf(it)}" }) { stack ->
+                    items(mainBagEntries, key = { it.key }) { entry ->
+                        val stack = entry.stack
                         val def = ItemCatalog.get(stack.itemId)
                         val isCastableRune = def.category == ItemCategory.RUNE_ATTACK || def.category == ItemCategory.RUNE_HEAL
                         val isBound = (def.category == ItemCategory.RUNE_ATTACK && state.boundAttackRuneId == def.id) ||
@@ -404,6 +411,7 @@ private fun BackpackPanelContent(
                 }
             }
         } else {
+            val toolBagEntries = remember(state.toolBag) { state.toolBag.withStableKeys("bag_tool") }
             Surface(
                 color = StoneSurface,
                 shape = RoundedCornerShape(6.dp),
@@ -417,13 +425,14 @@ private fun BackpackPanelContent(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                 )
             }
-            if (state.toolBag.isEmpty()) {
+            if (toolBagEntries.isEmpty()) {
                 Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     Text("No tools in your Tool Bag. Buy a Rope or forge a Pickaxe.", style = MaterialTheme.typography.bodyMedium, color = ParchmentMuted)
                 }
             } else {
                 LazyColumn(contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(state.toolBag, key = { "tool_${it.itemId}_${it.count}_${state.toolBag.indexOf(it)}" }) { stack ->
+                    items(toolBagEntries, key = { it.key }) { entry ->
+                        val stack = entry.stack
                         val def = ItemCatalog.get(stack.itemId)
                         val sub = buildString {
                             append("${formatOz(def.carriedWeightOz() * stack.count)} oz (50% off)")
@@ -488,7 +497,21 @@ private fun SkillsPanelContent(state: GameWorldState) {
                 }
             }
         }
-        item { SkillBarRow("Melee Fighting", state.skills.melee, Color(0xFFE05A47), "Multiplies melee weapon damage (+6% per level above 10)", meleeMult, Color(0xFFE05A47)) }
+        item {
+            SkillBarRow(
+                name = "Magic Level",
+                progress = state.skills.magic,
+                barColor = Color(0xFFB37BFF),
+                hint = "Magic XP: ${state.magicXp.toInt()} / ${state.magicXpToNext().toInt()} (spend MP casting & runecrafting) • Runes: Lv 1 Dart • Lv 4 Heal • Lv 7 HMM • Lv 12 GFB • Lv 15 SD",
+                badgeText = magicMult,
+                badgeColor = Color(0xFFB37BFF),
+                progressFractionOverride = state.skills.magic.magicProgressFraction()
+            )
+        }
+        item { SkillBarRow("Fist Fighting", state.skills.fist, Color(0xFFE8A468), "Unarmed combat mastery (+6% DMG per level above 10)", String.format(Locale.US, "x%.2f DMG", state.attackSkillMultiplier(state.skills.fist.level)), Color(0xFFE8A468)) }
+        item { SkillBarRow("Club Fighting", state.skills.club, Color(0xFFD68C45), "Clubs & cudgels mastery (+6% DMG per level above 10)", String.format(Locale.US, "x%.2f DMG", state.attackSkillMultiplier(state.skills.club.level)), Color(0xFFD68C45)) }
+        item { SkillBarRow("Sword Fighting", state.skills.sword, Color(0xFFE05A47), "Blades, dirks, longswords & claymores (+6% DMG per level above 10)", String.format(Locale.US, "x%.2f DMG", state.attackSkillMultiplier(state.skills.sword.level)), Color(0xFFE05A47)) }
+        item { SkillBarRow("Axe Fighting", state.skills.axe, Color(0xFFEF7B45), "Axes, halberds, glaives & hatchets (+6% DMG per level above 10)", String.format(Locale.US, "x%.2f DMG", state.attackSkillMultiplier(state.skills.axe.level)), Color(0xFFEF7B45)) }
         item { SkillBarRow("Distance Fighting", state.skills.distance, Color(0xFF47B86E), "Multiplies bow, arbalest & javelin damage (+6% per level above 10)", distMult, Color(0xFF47B86E)) }
         item {
             SkillBarRow(
@@ -501,19 +524,8 @@ private fun SkillsPanelContent(state: GameWorldState) {
                 badgeColor = if (twoHanded) TorchAmber else Color(0xFF5CA8FF)
             )
         }
-        item {
-            SkillBarRow(
-                name = "Magic Level",
-                progress = state.skills.magic,
-                barColor = Color(0xFFB37BFF),
-                hint = "Magic XP: ${state.magicXp.toInt()} / ${state.magicXpToNext().toInt()} (spend MP casting & runecrafting) • Runes: Lv 1 Dart • Lv 4 Heal • Lv 7 HMM • Lv 12 GFB • Lv 15 SD",
-                badgeText = magicMult,
-                badgeColor = Color(0xFFB37BFF),
-                progressFractionOverride = state.skills.magic.magicProgressFraction()
-            )
-        }
-        item { SkillBarRow("Mining", state.skills.mining, TorchAmber, "Advances per Ore Vein strike; boosts ore yield") }
         item { SkillBarRow("Fishing", state.skills.fishing, Color(0xFF4AD2D9), "Advances per line cast at the Fishing Pier") }
+        item { SkillBarRow("Mining", state.skills.mining, TorchAmber, "Advances per Ore Vein strike; boosts ore yield") }
     }
 }
 
@@ -576,23 +588,40 @@ private fun DepotPanelContent(
     onWithdraw: (String) -> Unit
 ) {
     var tab by remember { mutableIntStateOf(0) }
-    val carried = state.allCarriedItems()
+    val depotEntries = remember(state.depot) { state.depot.withStableKeys("depot_in") }
+    val carriedEntries = remember(state.toolBag, state.backpack) {
+        state.allCarriedItems().withStableKeys("depot_pack")
+    }
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            PanelTabChip("In Depot (${state.depot.size})", tab == 0, { tab = 0 }, Modifier.weight(1f))
-            PanelTabChip("Deposit Pack (${carried.size})", tab == 1, { tab = 1 }, Modifier.weight(1f))
+            PanelTabChip(
+                text = "In Depot (${depotEntries.size})",
+                selected = tab == 0,
+                onClick = { tab = 0 },
+                modifier = Modifier.weight(1f).testTag("depot_tab_in")
+            )
+            PanelTabChip(
+                text = "Deposit Pack (${carriedEntries.size})",
+                selected = tab == 1,
+                onClick = { tab = 1 },
+                modifier = Modifier.weight(1f).testTag("depot_tab_pack")
+            )
         }
-        val list = if (tab == 0) state.depot else carried
-        if (list.isEmpty()) {
+        val activeEntries = if (tab == 0) depotEntries else carriedEntries
+        if (activeEntries.isEmpty()) {
             Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                 Text(if (tab == 0) "Your Depot Chest is empty." else "No carried items to deposit.", color = ParchmentMuted)
             }
         } else {
-            LazyColumn(contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(list) { stack ->
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(activeEntries, key = { it.key }) { entry ->
+                    val stack = entry.stack
                     val def = ItemCatalog.get(stack.itemId)
                     val sub = if (def.isTool) {
                         "Tool Bag • ${formatOz(def.carriedWeightOz() * stack.count)} oz • ${def.description}"
@@ -642,14 +671,19 @@ private fun ShopPanelContent(
                 }
             }
         } else {
-            val sellable = state.allCarriedItems().filter { ItemCatalog.get(it.itemId).sellPrice > 0 }
-            if (sellable.isEmpty()) {
+            val sellableEntries = remember(state.toolBag, state.backpack) {
+                state.allCarriedItems()
+                    .filter { ItemCatalog.get(it.itemId).sellPrice > 0 }
+                    .withStableKeys("shop_sell")
+            }
+            if (sellableEntries.isEmpty()) {
                 Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     Text("No sellable loot in your packs.", color = ParchmentMuted)
                 }
             } else {
                 LazyColumn(contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(sellable) { stack ->
+                    items(sellableEntries, key = { it.key }) { entry ->
+                        val stack = entry.stack
                         val def = ItemCatalog.get(stack.itemId)
                         val bagTag = if (def.isTool) "Tool Bag • " else ""
                         ItemActionRow(
@@ -993,6 +1027,29 @@ fun DeathPenaltyDialog(report: DeathReport, onDismiss: () -> Unit) {
             }
         }
     }
+}
+
+private data class KeyedItemStack(
+    val key: String,
+    val stack: ItemStack
+)
+
+/**
+ * Produces an immutable list snapshot with deterministic, guaranteed-unique LazyColumn keys
+ * even when duplicate non-stackable items exist or when the last item of a stack is removed.
+ */
+private fun List<ItemStack>.withStableKeys(prefix: String): List<KeyedItemStack> {
+    val snapshot = this.toList()
+    val seenPerId = HashMap<String, Int>(snapshot.size)
+    val result = ArrayList<KeyedItemStack>(snapshot.size)
+    for (stack in snapshot) {
+        if (stack.itemId.isBlank() || stack.count <= 0) continue
+        val occurrence = seenPerId[stack.itemId] ?: 0
+        seenPerId[stack.itemId] = occurrence + 1
+        val defName = ItemCatalog.get(stack.itemId).name
+        result.add(KeyedItemStack(key = "${prefix}_${stack.itemId}_${defName}_$occurrence", stack = stack))
+    }
+    return result.toList()
 }
 
 fun formatOz(value: Double): String = String.format(Locale.US, "%.1f", value)

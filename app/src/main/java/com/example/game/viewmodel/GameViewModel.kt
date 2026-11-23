@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.game.cloud.CloudAuthResult
 import com.example.game.cloud.CloudAuthUiState
 import com.example.game.cloud.CloudSaveOutcome
+import com.example.game.cloud.CloudSavePayloadCodec
 import com.example.game.cloud.CloudSession
 import com.example.game.cloud.SupabaseCloudSaveRepository
 import com.example.game.data.GameSaveRepository
@@ -41,6 +42,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 enum class AppScreen {
@@ -83,6 +86,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val saveBanner: StateFlow<String?> = _saveBanner.asStateFlow()
 
     private var activeCloudSession: CloudSession? = null
+    private val persistMutex = Mutex()
     private var worldTickJob: Job? = null
     private var attackSubTickJob: Job? = null
     private var walkLoopJob: Job? = null
@@ -405,6 +409,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (snapshot.saveId.isBlank() || _screen.value != AppScreen.PLAYING) return
         val now = SystemClock.uptimeMillis()
         val saveData = GameEngine.toSaveData(snapshot)
+        // Snapshot save_data JSON synchronously on the main thread before any background IO
+        val preEncodedJson = runCatching { CloudSavePayloadCodec.encode(saveData) }.getOrNull()
         val session = activeCloudSession
         // Synchronous SharedPreferences write so progress is safe even if OS kills process immediately
         if (session != null) {
@@ -413,16 +419,25 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 session = session,
                 saveData = saveData,
                 updatedAtMs = System.currentTimeMillis(),
-                pendingCloudSync = true
+                pendingCloudSync = true,
+                preEncodedJsonString = preEncodedJson?.toString()
             )
         }
         if (now - lastBackgroundSaveMs < 1500L) return
         lastBackgroundSaveMs = now
         viewModelScope.launch {
             withContext(NonCancellable) {
-                repository.saveGame(saveData)
-                if (session != null) {
-                    cloudRepository.saveProgress(session, saveData)
+                persistMutex.withLock {
+                    runCatching { repository.saveGame(saveData) }
+                    if (session != null) {
+                        runCatching {
+                            cloudRepository.saveProgress(
+                                session = session,
+                                saveData = saveData,
+                                preEncodedSaveJson = preEncodedJson
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -431,14 +446,25 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun persistCurrentState(silent: Boolean = false, logConsoleFeedback: Boolean = false) {
         val snapshot = _world.value
         if (snapshot.saveId.isBlank() || _screen.value != AppScreen.PLAYING) return
+        // Snapshot immutable save data + encoded JSON synchronously on the main thread
+        // before launching the background coroutine to avoid races during rapid depot taps.
         val saveData = GameEngine.toSaveData(snapshot)
+        val preEncodedJson = runCatching { CloudSavePayloadCodec.encode(saveData) }.getOrNull()
         val session = activeCloudSession
         viewModelScope.launch {
-            repository.saveGame(saveData)
-            val outcome = if (session != null) {
-                cloudRepository.saveProgress(session, saveData)
-            } else {
-                CloudSaveOutcome.SAVED_LOCAL_OFFLINE
+            val outcome = persistMutex.withLock {
+                runCatching { repository.saveGame(saveData) }
+                if (session != null) {
+                    runCatching {
+                        cloudRepository.saveProgress(
+                            session = session,
+                            saveData = saveData,
+                            preEncodedSaveJson = preEncodedJson
+                        )
+                    }.getOrDefault(CloudSaveOutcome.SAVED_LOCAL_OFFLINE)
+                } else {
+                    CloudSaveOutcome.SAVED_LOCAL_OFFLINE
+                }
             }
 
             if (logConsoleFeedback) {
@@ -685,7 +711,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun totalSkillLevels(skills: PlayerSkills): Int =
-        skills.melee.level + skills.distance.level + skills.shielding.level +
+        skills.melee.level + skills.fist.level + skills.club.level + skills.sword.level + skills.axe.level +
+            skills.distance.level + skills.shielding.level +
             skills.magic.level + skills.fishing.level + skills.mining.level
 
     private fun flushOutboundMonsterHits() {
@@ -975,6 +1002,73 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun onTargetMonster(monsterId: Int) {
+        _world.update { prev -> GameEngine.targetMonsterById(prev, monsterId) }
+    }
+
+    fun onInspectAlly(playerId: String) {
+        val now = SystemClock.uptimeMillis()
+        val ally = multiplayerState.value.remotePlayers.firstOrNull { it.playerId == playerId } ?: return
+        _world.update { prev ->
+            prev.copy(
+                inspectedPlayerId = ally.playerId,
+                inspectedPlayerUntilMs = now + 4500L,
+                statusLog = (prev.statusLog + "Ally ${ally.name} (Lvl ${ally.level} ${ally.vocation.displayName}) at (${ally.x}, ${ally.y}).").takeLast(6)
+            )
+        }
+    }
+
+    fun onWalkToTile(x: Int, y: Int) {
+        _world.update { prev -> GameEngine.walkToCoordinate(prev, x, y) }
+    }
+
+    fun onBindCustomHotbarSlot(slotIndex: Int, itemId: String?) {
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.bindCustomHotbarSlot(prev, slotIndex, itemId)
+            if (next.customHotbarSlots != prev.customHotbarSlots) changed = true
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
+    }
+
+    fun onUseCustomHotbarSlot(slotIndex: Int) {
+        val now = SystemClock.uptimeMillis()
+        var leveledUp = false
+        var skillLevelUp = false
+        var skillChanged = false
+        var used = false
+        var newLevel = 1
+        var floor = 0
+        var name = ""
+        _world.update { prev ->
+            val next = GameEngine.useCustomHotbarSlot(prev, slotIndex, now)
+            if (next.level > prev.level) {
+                leveledUp = true
+                newLevel = next.level
+                floor = next.floor
+                name = next.playerName
+            }
+            if (totalSkillLevels(next.skills) > totalSkillLevels(prev.skills)) skillLevelUp = true
+            else if (next.skills != prev.skills) skillChanged = true
+            if (next.hp != prev.hp || next.mp != prev.mp || next.backpack != prev.backpack || next.floor != prev.floor) {
+                used = true
+            }
+            next
+        }
+        flushOutboundMonsterHits()
+        flushOutboundPlayerEffects()
+        if (leveledUp) {
+            multiplayerManager.broadcastSystemCallout("$name advanced to Level $newLevel!", floor)
+            broadcastCurrentState(PlayerActionState.CASTING)
+            persistCurrentState(silent = true)
+        } else {
+            if (used) broadcastCurrentState(PlayerActionState.HEALING)
+            if (skillLevelUp) persistCurrentState(silent = true)
+            else if (skillChanged || used) scheduleDebouncedSkillSave()
+        }
+    }
+
     fun onHotkeyRope() {
         val now = SystemClock.uptimeMillis()
         var changed = false
@@ -1112,13 +1206,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun depositItem(itemId: String) {
-        _world.update { GameEngine.depositItem(it, itemId) }
-        persistCurrentState(silent = true)
+        if (itemId.isBlank()) return
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.depositItem(prev, itemId)
+            if (next.depot != prev.depot || next.backpack != prev.backpack || next.toolBag != prev.toolBag) {
+                changed = true
+            }
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
     }
 
     fun withdrawItem(itemId: String) {
-        _world.update { GameEngine.withdrawItem(it, itemId) }
-        persistCurrentState(silent = true)
+        if (itemId.isBlank()) return
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.withdrawItem(prev, itemId)
+            if (next.depot != prev.depot || next.backpack != prev.backpack || next.toolBag != prev.toolBag) {
+                changed = true
+            }
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
     }
 
     fun buyItem(itemId: String) {

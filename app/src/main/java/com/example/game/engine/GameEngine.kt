@@ -236,6 +236,7 @@ object GameEngine {
             questFlags = save.questFlags,
             boundAttackRuneId = save.boundAttackRuneId ?: "magic_dart_rune",
             boundHealRuneId = save.boundHealRuneId ?: "healing_rune",
+            customHotbarSlots = List(2) { idx -> save.customHotbarSlots.getOrNull(idx) },
             statusLog = listOf("Loaded ${save.name} (Lvl ${save.level} ${voc.displayName}).$notes")
         )
     }
@@ -262,16 +263,19 @@ object GameEngine {
             fireTicks = state.fireTicks,
             skills = state.skills,
             equipment = state.equipment,
-            backpack = state.backpack,
-            toolBag = state.toolBag,
-            depot = state.depot,
-            playerCorpses = state.corpses.filter { it.isPlayerCorpse },
+            backpack = state.backpack.filter { it.itemId.isNotBlank() && it.count > 0 }.toList(),
+            toolBag = state.toolBag.filter { it.itemId.isNotBlank() && it.count > 0 }.toList(),
+            depot = state.depot.filter { it.itemId.isNotBlank() && it.count > 0 }.toList(),
+            playerCorpses = state.corpses.filter { it.isPlayerCorpse }.map { corpse ->
+                corpse.copy(items = corpse.items.filter { it.itemId.isNotBlank() && it.count > 0 }.toList())
+            }.toList(),
             mapVersion = CURRENT_MAP_VERSION,
             tunicColorIndex = state.tunicColorIndex,
             hairColorIndex = state.hairColorIndex,
-            questFlags = state.questFlags,
+            questFlags = state.questFlags.toMap(),
             boundAttackRuneId = state.boundAttackRuneId,
-            boundHealRuneId = state.boundHealRuneId
+            boundHealRuneId = state.boundHealRuneId,
+            customHotbarSlots = List(2) { idx -> state.customHotbarSlots.getOrNull(idx) }
         )
     }
 
@@ -817,10 +821,10 @@ object GameEngine {
                     s = s.queuePlayerFx(null, null, PlayerActionState.CASTING)
                     applyDamageToMonster(s, target.id, dmg, nowMs, projectileKind = ProjectileKind.ENERGY_BOLT)
                 } else if (dist <= 1) {
-                    val meleeMult = s.attackSkillMultiplier(s.skills.melee.level)
+                    val meleeMult = s.attackSkillMultiplier(s.skills.fist.level)
                     val rawDmg = (Random.nextInt(4, 8) * meleeMult).roundToInt().coerceAtLeast(3)
                     val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = false)
-                    s = advanceSkillPublic(s, SkillType.MELEE, 1.5, nowMs)
+                    s = advanceSkillPublic(s, SkillType.FIST, 1.5, nowMs)
                     s = s.queuePlayerFx(null, null, PlayerActionState.ATTACKING)
                     applyDamageToMonster(s, target.id, dmg, nowMs)
                 } else {
@@ -872,8 +876,10 @@ object GameEngine {
             }
             else -> {
                 val baseAtk = weapon?.attack ?: 6
-                s = advanceSkillPublic(s, SkillType.MELEE, 3.2, nowMs)
-                val meleeMult = s.attackSkillMultiplier(s.skills.melee.level)
+                val meleeSkillType = PlayerSkills.meleeSkillTypeForWeapon(weapon?.id)
+                s = advanceSkillPublic(s, meleeSkillType, 3.2, nowMs)
+                val activeLevel = s.skills.levelFor(meleeSkillType)
+                val meleeMult = s.attackSkillMultiplier(activeLevel)
                 val basePower = baseAtk + s.level * 0.60
                 val rawDmg = (basePower * meleeMult * Random.nextDouble(0.80, 1.20) * skillPenaltyMult * offVocationMult)
                     .roundToInt().coerceAtLeast(4)
@@ -2073,6 +2079,10 @@ object GameEngine {
         }
         val penalizedSkills = PlayerSkills(
             melee = penalizeSkill(state.skills.melee),
+            fist = penalizeSkill(state.skills.fist),
+            club = penalizeSkill(state.skills.club),
+            sword = penalizeSkill(state.skills.sword),
+            axe = penalizeSkill(state.skills.axe),
             distance = penalizeSkill(state.skills.distance),
             shielding = penalizeSkill(state.skills.shielding),
             magic = penalizeMagicSkill(state.skills.magic),
@@ -2159,7 +2169,7 @@ object GameEngine {
 
     fun advanceSkillPublic(state: GameWorldState, skill: SkillType, rawPoints: Double, nowMs: Long): GameWorldState {
         val rate = when (skill) {
-            SkillType.MELEE -> state.vocation.meleeGainRate
+            SkillType.MELEE, SkillType.FIST, SkillType.CLUB, SkillType.SWORD, SkillType.AXE -> state.vocation.meleeGainRate
             SkillType.DISTANCE -> state.vocation.distanceGainRate
             SkillType.SHIELDING -> state.vocation.shieldingGainRate
             SkillType.MAGIC -> state.vocation.magicGainRate
@@ -2176,8 +2186,18 @@ object GameEngine {
             }
             return cur to up
         }
+        fun syncBestMelee(skills: PlayerSkills, updated: SkillProgress): PlayerSkills {
+            val best = if (updated.level > skills.melee.level ||
+                (updated.level == skills.melee.level && updated.points > skills.melee.points)
+            ) updated else skills.melee
+            return skills.copy(melee = best)
+        }
         val (newSkills, leveled, newLevel) = when (skill) {
             SkillType.MELEE -> bump(state.skills.melee).let { Triple(state.skills.copy(melee = it.first), it.second, it.first.level) }
+            SkillType.FIST -> bump(state.skills.fist).let { Triple(syncBestMelee(state.skills.copy(fist = it.first), it.first), it.second, it.first.level) }
+            SkillType.CLUB -> bump(state.skills.club).let { Triple(syncBestMelee(state.skills.copy(club = it.first), it.first), it.second, it.first.level) }
+            SkillType.SWORD -> bump(state.skills.sword).let { Triple(syncBestMelee(state.skills.copy(sword = it.first), it.first), it.second, it.first.level) }
+            SkillType.AXE -> bump(state.skills.axe).let { Triple(syncBestMelee(state.skills.copy(axe = it.first), it.first), it.second, it.first.level) }
             SkillType.DISTANCE -> bump(state.skills.distance).let { Triple(state.skills.copy(distance = it.first), it.second, it.first.level) }
             SkillType.SHIELDING -> bump(state.skills.shielding).let { Triple(state.skills.copy(shielding = it.first), it.second, it.first.level) }
             SkillType.MAGIC -> bump(state.skills.magic, isMagic = true).let { Triple(state.skills.copy(magic = it.first), it.second, it.first.level) }
@@ -2190,6 +2210,94 @@ object GameEngine {
                 .addLogInternal("Advanced in ${skill.displayName} to level $newLevel!")
         }
         return next
+    }
+
+    /** Direct target-lock triggered from the Top-Right Battle List. */
+    fun targetMonsterById(state: GameWorldState, monsterId: Int): GameWorldState {
+        if (state.deathReport != null) return state
+        val m = state.monsters.firstOrNull { it.id == monsterId && it.floor == state.floor } ?: return state
+        val alreadyTargeting = state.targetMonsterId == m.id
+        if (alreadyTargeting) {
+            return state.copy(
+                targetMonsterId = null,
+                autoFollowTarget = false,
+                walkPath = emptyList()
+            ).addLogInternal("Released target on ${m.type.displayName}.")
+        }
+        val shouldFollow = state.isMeleeCombatSetup()
+        val path = if (shouldFollow && chebyshev(state.playerX, state.playerY, m.x, m.y) > 1) {
+            findPathToAdjacentOfTarget(state, m.x, m.y)
+        } else {
+            emptyList()
+        }
+        return state.copy(
+            targetMonsterId = m.id,
+            autoFollowTarget = shouldFollow,
+            walkPath = path,
+            activePanel = ActivePanel.NONE,
+            inspectingCorpseId = null
+        ).addLogInternal("Targeting ${m.type.displayName} [Lvl ${m.type.threatLevel}].")
+    }
+
+    /** A* auto-walk triggered from the clickable isometric minimap or Regional World Map. */
+    fun walkToCoordinate(state: GameWorldState, tx: Int, ty: Int): GameWorldState {
+        if (state.deathReport != null) return state
+        val floorMap = WorldMaps.getFloor(state.floor)
+        val clampedX = tx.coerceIn(0, floorMap.width - 1)
+        val clampedY = ty.coerceIn(0, floorMap.height - 1)
+        val dismissed = state.copy(
+            activePanel = ActivePanel.NONE,
+            inspectingCorpseId = null,
+            autoFollowTarget = false
+        )
+        if (clampedX == state.playerX && clampedY == state.playerY) return dismissed
+        val path = if (floorMap.tileAt(clampedX, clampedY).walkable) {
+            findPath(dismissed, clampedX, clampedY)
+        } else {
+            findPathToAdjacentOfTarget(dismissed, clampedX, clampedY)
+        }
+        return if (path.isNotEmpty()) {
+            dismissed.copy(walkPath = path)
+                .addLogInternal("Auto-walking to ($clampedX, $clampedY)...")
+        } else {
+            dismissed.addLogInternal("No clear route to ($clampedX, $clampedY).")
+        }
+    }
+
+    fun isCustomHotbarBindable(itemId: String): Boolean {
+        val def = ItemCatalog.all[itemId] ?: return false
+        return def.category == ItemCategory.POTION_HP ||
+            def.category == ItemCategory.POTION_MP ||
+            def.category == ItemCategory.RUNE_HEAL ||
+            def.category == ItemCategory.RUNE_ATTACK ||
+            def.category == ItemCategory.FOOD ||
+            def.category == ItemCategory.TOOL_ROPE
+    }
+
+    fun bindCustomHotbarSlot(state: GameWorldState, slotIndex: Int, itemId: String?): GameWorldState {
+        if (slotIndex !in 0..1) return state
+        val current = List(2) { idx -> state.customHotbarSlots.getOrNull(idx) }.toMutableList()
+        if (itemId == null) {
+            current[slotIndex] = null
+            return state.copy(customHotbarSlots = current.toList())
+                .addLogInternal("Cleared Custom Hotbar Slot ${slotIndex + 1}.")
+        }
+        if (!isCustomHotbarBindable(itemId)) {
+            return state.addLogInternal("Only potions, runes, or food can be bound to quick slots.")
+        }
+        current[slotIndex] = itemId
+        val itemName = ItemCatalog.get(itemId).name
+        return state.copy(customHotbarSlots = current.toList())
+            .addLogInternal("Bound $itemName to Custom Slot ${slotIndex + 1}.")
+    }
+
+    fun useCustomHotbarSlot(state: GameWorldState, slotIndex: Int, nowMs: Long): GameWorldState {
+        val itemId = state.customHotbarSlots.getOrNull(slotIndex) ?: return state
+        if (!state.hasItem(itemId)) {
+            val name = ItemCatalog.all[itemId]?.name ?: itemId
+            return state.addLogInternal("Out of $name!")
+        }
+        return useOrEquipBackpackItem(state, itemId, nowMs)
     }
 
     fun useOrEquipBackpackItem(state: GameWorldState, itemId: String, nowMs: Long): GameWorldState {
@@ -2433,20 +2541,70 @@ object GameEngine {
     }
 
     fun depositItem(state: GameWorldState, itemId: String): GameWorldState {
-        if (!state.hasItem(itemId)) return state
-        return removeCarriedItem(state, itemId, 1)
-            .let { it.copy(depot = addItemPublic(it.depot, itemId, 1)) }
-            .addLogInternal("Stored ${ItemCatalog.get(itemId).name} in Depot.")
+        return try {
+            val cleanId = itemId.trim()
+            if (cleanId.isEmpty() || !state.hasItem(cleanId)) return state
+            val def = ItemCatalog.get(cleanId)
+            val unitWeight = def.carriedWeightOz()
+            if (!unitWeight.isFinite() || unitWeight < 0.0) {
+                return state.addLogInternal("Warning: Could not deposit ${def.name} (invalid item weight).")
+            }
+            val afterRemove = removeCarriedItem(state, cleanId, 1)
+            val updatedDepot = addItemPublic(afterRemove.depot, cleanId, 1)
+            val updated = afterRemove.copy(
+                backpack = afterRemove.backpack.toList(),
+                toolBag = afterRemove.toolBag.toList(),
+                depot = updatedDepot
+            )
+            // Validate Cap recalculation safely before committing
+            val capCheck = updated.remainingCapOz()
+            if (!capCheck.isFinite()) {
+                return state.addLogInternal("Warning: Cap recalculation failed while depositing ${def.name}.")
+            }
+            updated.addLogInternal("Stored ${def.name} in Depot.")
+        } catch (t: Throwable) {
+            state.addLogInternal("Warning: Failed to deposit item (${t.message ?: "unexpected error"}).").copy(
+                backpack = state.backpack.toList(),
+                toolBag = state.toolBag.toList(),
+                depot = state.depot.toList()
+            )
+        }
     }
 
     fun withdrawItem(state: GameWorldState, itemId: String): GameWorldState {
-        if (state.depot.none { it.itemId == itemId && it.count > 0 }) return state
-        val def = ItemCatalog.get(itemId)
-        val neededWeight = def.carriedWeightOz()
-        if (state.remainingCapOz() < neededWeight) return state.addLogInternal("Not enough Cap (${String.format("%.1f", neededWeight)} oz needed).")
-        val destNote = if (def.isTool) " into Tool Bag" else ""
-        return addCarriedItem(state.copy(depot = removeItemPublic(state.depot, itemId, 1)), itemId, 1)
-            .addLogInternal("Withdrew ${def.name}$destNote from Depot.")
+        return try {
+            val cleanId = itemId.trim()
+            if (cleanId.isEmpty() || state.depot.none { it.itemId == cleanId && it.count > 0 }) return state
+            val def = ItemCatalog.get(cleanId)
+            val neededWeight = def.carriedWeightOz()
+            if (!neededWeight.isFinite() || neededWeight < 0.0) {
+                return state.addLogInternal("Warning: Could not withdraw ${def.name} (invalid item weight).")
+            }
+            val currentRemainingCap = state.remainingCapOz()
+            if (!currentRemainingCap.isFinite() || currentRemainingCap + 1e-6 < neededWeight) {
+                return state.addLogInternal(
+                    "Not enough Cap (${String.format(java.util.Locale.US, "%.1f", neededWeight)} oz needed)."
+                )
+            }
+            val destNote = if (def.isTool) " into Tool Bag" else ""
+            val depotAfterRemove = removeItemPublic(state.depot, cleanId, 1)
+            val updated = addCarriedItem(state.copy(depot = depotAfterRemove), cleanId, 1)
+            val safeUpdated = updated.copy(
+                backpack = updated.backpack.toList(),
+                toolBag = updated.toolBag.toList(),
+                depot = updated.depot.toList()
+            )
+            if (!safeUpdated.remainingCapOz().isFinite()) {
+                return state.addLogInternal("Warning: Cap recalculation failed while withdrawing ${def.name}.")
+            }
+            safeUpdated.addLogInternal("Withdrew ${def.name}$destNote from Depot.")
+        } catch (t: Throwable) {
+            state.addLogInternal("Warning: Failed to withdraw item (${t.message ?: "unexpected error"}).").copy(
+                backpack = state.backpack.toList(),
+                toolBag = state.toolBag.toList(),
+                depot = state.depot.toList()
+            )
+        }
     }
 
     fun buyShopItem(state: GameWorldState, itemId: String): GameWorldState {
@@ -2613,36 +2771,46 @@ object GameEngine {
     }
 
     fun addItemPublic(list: List<ItemStack>, itemId: String, amount: Int): List<ItemStack> {
-        val def = ItemCatalog.get(itemId)
-        val out = list.toMutableList()
+        val cleanId = itemId.trim()
+        val sanitized = list.filter { it.itemId.isNotBlank() && it.count > 0 }
+        if (cleanId.isEmpty() || amount <= 0) return sanitized.toList()
+        val def = ItemCatalog.get(cleanId)
+        val out = sanitized.toMutableList()
         if (def.stackable) {
-            val idx = out.indexOfFirst { it.itemId == itemId }
+            val idx = out.indexOfFirst { it.itemId == cleanId }
             if (idx >= 0) {
-                out[idx] = out[idx].copy(count = out[idx].count + amount)
-                return out
+                val mergedCount = (out[idx].count.toLong() + amount.toLong()).coerceIn(1L, 999_999L).toInt()
+                out[idx] = out[idx].copy(count = mergedCount)
+                return out.toList()
             }
-            out.add(ItemStack(itemId, amount))
-            return out
+            out.add(ItemStack(cleanId, amount.coerceIn(1, 999_999)))
+            return out.toList()
         }
-        repeat(amount) { out.add(ItemStack(itemId, 1)) }
-        return out
+        repeat(amount) { out.add(ItemStack(cleanId, 1)) }
+        return out.toList()
     }
 
     fun removeItemPublic(list: List<ItemStack>, itemId: String, amount: Int): List<ItemStack> {
-        val out = list.toMutableList()
+        val cleanId = itemId.trim()
+        val sanitized = list.filter { it.itemId.isNotBlank() && it.count > 0 }
+        if (cleanId.isEmpty() || amount <= 0) return sanitized.toList()
         var rem = amount
-        val iter = out.listIterator()
-        while (iter.hasNext() && rem > 0) {
-            val cur = iter.next()
-            if (cur.itemId == itemId) {
+        val out = ArrayList<ItemStack>(sanitized.size)
+        for (cur in sanitized) {
+            if (rem > 0 && cur.itemId == cleanId) {
                 if (cur.count <= rem) {
-                    rem -= cur.count; iter.remove()
+                    rem -= cur.count
+                    // Depleted stack (count <= 0) is omitted from the new immutable list
                 } else {
-                    iter.set(cur.copy(count = cur.count - rem)); rem = 0
+                    val left = cur.count - rem
+                    rem = 0
+                    if (left > 0) out.add(cur.copy(count = left))
                 }
+            } else {
+                out.add(cur)
             }
         }
-        return out
+        return out.toList()
     }
 
     private fun pruneExpiredEffects(state: GameWorldState, nowMs: Long): GameWorldState {

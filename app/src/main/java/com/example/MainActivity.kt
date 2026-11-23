@@ -10,6 +10,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.game.model.ActivePanel
 import com.example.game.update.GitHubUpdateChecker
@@ -28,6 +31,7 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
+        applyImmersiveFullscreen()
         setContent {
             RookvaleTheme {
                 val screen by gameViewModel.screen.collectAsStateWithLifecycle()
@@ -72,11 +76,16 @@ class MainActivity : ComponentActivity() {
                             multiplayerState = mpState,
                             saveBanner = saveBanner,
                             onTileTapped = gameViewModel::onTileTapped,
+                            onWalkToTile = gameViewModel::onWalkToTile,
+                            onTargetMonster = gameViewModel::onTargetMonster,
+                            onInspectAlly = gameViewModel::onInspectAlly,
                             onHotkeyHp = gameViewModel::onHotkeyHealthPotion,
                             onHotkeyMp = gameViewModel::onHotkeyManaPotion,
                             onHotkeyHealRune = gameViewModel::onHotkeyHealRune,
                             onHotkeyRune = gameViewModel::onHotkeyAttackRune,
                             onHotkeyRope = gameViewModel::onHotkeyRope,
+                            onUseCustomHotbarSlot = gameViewModel::onUseCustomHotbarSlot,
+                            onBindCustomHotbarSlot = gameViewModel::onBindCustomHotbarSlot,
                             onToggleMinimap = gameViewModel::toggleMinimap,
                             onOpenPanel = gameViewModel::openPanel,
                             onClosePanel = gameViewModel::closePanel,
@@ -120,6 +129,20 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         gameViewModel.onAppBackgrounded()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            applyImmersiveFullscreen()
+        }
+    }
+
+    private fun applyImmersiveFullscreen() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
     private fun openReleaseInBrowser(rawUrl: String) {
