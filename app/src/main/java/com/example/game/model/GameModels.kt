@@ -681,7 +681,8 @@ data class PlayerSaveData(
     val playerCorpses: List<CorpseEntity> = emptyList(),
     val mapVersion: Int = 1,
     val tunicColorIndex: Int = 0,
-    val hairColorIndex: Int = 0
+    val hairColorIndex: Int = 0,
+    val questFlags: Map<String, Boolean> = emptyMap()
 )
 
 enum class ActivePanel {
@@ -748,7 +749,8 @@ data class GameWorldState(
     val inspectedPlayerUntilMs: Long = 0L,
     val outboundMonsterHits: List<LocalMonsterHitEvent> = emptyList(),
     val outboundMonsterAttacks: List<LocalMonsterAttackEvent> = emptyList(),
-    val outboundPlayerEffects: List<LocalPlayerActionFxEvent> = emptyList()
+    val outboundPlayerEffects: List<LocalPlayerActionFxEvent> = emptyList(),
+    val questFlags: Map<String, Boolean> = emptyMap()
 ) {
     fun toolBagWeightOz(): Double =
         toolBag.sumOf { ItemCatalog.get(it.itemId).weightOz * TOOL_BAG_WEIGHT_MULTIPLIER * it.count }

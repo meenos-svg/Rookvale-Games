@@ -229,6 +229,7 @@ object GameEngine {
             monsters = WorldMaps.initialMonsters(),
             oreNodes = WorldMaps.initialOreNodes(),
             corpses = migratedCorpses,
+            questFlags = save.questFlags,
             statusLog = listOf("Loaded ${save.name} (Lvl ${save.level} ${voc.displayName}).$notes")
         )
     }
@@ -261,7 +262,8 @@ object GameEngine {
             playerCorpses = state.corpses.filter { it.isPlayerCorpse },
             mapVersion = CURRENT_MAP_VERSION,
             tunicColorIndex = state.tunicColorIndex,
-            hairColorIndex = state.hairColorIndex
+            hairColorIndex = state.hairColorIndex,
+            questFlags = state.questFlags
         )
     }
 
@@ -492,6 +494,11 @@ object GameEngine {
             } else {
                 null
             }
+            val updatedFlags = if (portal.toFloor < 0) {
+                state.questFlags + ("visited_floor_${portal.toFloor}" to true)
+            } else {
+                state.questFlags
+            }
             return state.copy(
                 floor = portal.toFloor,
                 playerX = portal.toX,
@@ -503,7 +510,8 @@ object GameEngine {
                 walkPath = emptyList(),
                 targetMonsterId = null,
                 activePanel = ActivePanel.NONE,
-                floorWarningBanner = banner
+                floorWarningBanner = banner,
+                questFlags = updatedFlags
             ).addLogInternal(msg)
         }
 
@@ -547,7 +555,8 @@ object GameEngine {
             mp = state.maxMp,
             poisonTicks = 0,
             fireTicks = 0,
-            activePanel = ActivePanel.NONE
+            activePanel = ActivePanel.NONE,
+            questFlags = state.questFlags + ("oracle_vocation_chosen" to true)
         )
             .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "${chosen.displayName.uppercase()} ASCENDED!", FloatingTextKind.SKILL_UP, nowMs)
             .addLogInternal("The Oracle has blessed you as a ${chosen.displayName}! All skills preserved; new growth starts next level.")
@@ -813,11 +822,17 @@ object GameEngine {
         } else {
             s.pendingRespawns
         }
+        val bossFlags = if (m.type.isBoss) {
+            s.questFlags + ("slain_${m.type.name.lowercase()}" to true)
+        } else {
+            s.questFlags
+        }
         s = s.copy(
             monsters = remainingMonsters,
             targetMonsterId = if (s.targetMonsterId == monsterId) null else s.targetMonsterId,
             corpses = (s.corpses + corpse).takeLast(38),
-            pendingRespawns = updatedRespawns
+            pendingRespawns = updatedRespawns,
+            questFlags = bossFlags
         )
         s = grantExperience(s, m.type.xpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
         return s.addLogInternal("Slain ${m.type.displayName}! (+${m.type.xpReward} XP) Tap corpse to loot.")

@@ -26,10 +26,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backpack
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MilitaryTech
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
@@ -204,21 +204,43 @@ fun GameScreen(
                         }
                     }
 
+                    Surface(
+                        color = StoneElevated,
+                        shape = RoundedCornerShape(6.dp),
+                        border = BorderStroke(1.dp, TorchGold.copy(alpha = 0.75f)),
+                        modifier = Modifier
+                            .height(34.dp)
+                            .clickable(onClick = onSaveManual)
+                            .testTag("manual_save_button")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudUpload,
+                                contentDescription = "Save Now",
+                                tint = TorchGold,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Save",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = TorchGold,
+                                maxLines = 1
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = onToggleMinimap,
-                        modifier = Modifier.size(38.dp).testTag("toggle_minimap_button")
+                        modifier = Modifier.size(36.dp).testTag("toggle_minimap_button")
                     ) {
                         Icon(Icons.Default.Map, "Toggle Minimap", tint = if (state.showMinimap) TorchGold else ParchmentMuted, modifier = Modifier.size(19.dp))
                     }
                     IconButton(
-                        onClick = onSaveManual,
-                        modifier = Modifier.size(38.dp).testTag("manual_save_button")
-                    ) {
-                        Icon(Icons.Default.Save, stringResource(R.string.action_save), tint = TorchGold, modifier = Modifier.size(19.dp))
-                    }
-                    IconButton(
                         onClick = onReturnTitle,
-                        modifier = Modifier.size(38.dp).testTag("return_title_button")
+                        modifier = Modifier.size(36.dp).testTag("return_title_button")
                     ) {
                         Icon(Icons.Default.Home, "Character Select", tint = ParchmentMuted, modifier = Modifier.size(19.dp))
                     }

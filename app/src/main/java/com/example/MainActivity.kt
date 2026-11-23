@@ -36,17 +36,25 @@ class MainActivity : ComponentActivity() {
                 val mpState by gameViewModel.multiplayerState.collectAsStateWithLifecycle()
                 val saveBanner by gameViewModel.saveBanner.collectAsStateWithLifecycle()
                 val updateState by gameViewModel.updateState.collectAsStateWithLifecycle()
+                val cloudAuthState by gameViewModel.cloudAuthState.collectAsStateWithLifecycle()
 
                 when (screen) {
                     AppScreen.TITLE_AND_CREATE -> {
                         TitleAndCreationScreen(
                             savedSlots = savedSlots,
                             updateState = updateState,
+                            cloudAuthState = cloudAuthState,
                             onDownloadUpdate = { url -> openReleaseInBrowser(url) },
                             onDismissUpdate = gameViewModel::dismissUpdateBanner,
-                            onCreateCharacter = { name, tunicIdx, hairIdx ->
-                                gameViewModel.startNewCharacter(name, tunicIdx, hairIdx)
+                            onCreateCloudCharacter = { name, pin, tunicIdx, hairIdx ->
+                                gameViewModel.createCloudCharacter(name, pin, tunicIdx, hairIdx)
                             },
+                            onLoginCloudCharacter = { name, pin ->
+                                gameViewModel.loginCloudCharacter(name, pin)
+                            },
+                            onResumeCachedSession = gameViewModel::resumeCachedCloudSession,
+                            onSignOutCachedSession = gameViewModel::signOutCachedSession,
+                            onClearCloudError = gameViewModel::clearCloudAuthError,
                             onLoadCharacter = { slotId -> gameViewModel.loadCharacter(slotId) },
                             onDeleteSlot = { slotId -> gameViewModel.deleteSaveSlot(slotId) }
                         )
@@ -85,7 +93,7 @@ class MainActivity : ComponentActivity() {
                             onToggleChat = gameViewModel::toggleChat,
                             onSelectChatChannel = gameViewModel::selectChatChannel,
                             onSendChat = gameViewModel::sendChatMessage,
-                            onSaveManual = { gameViewModel.persistCurrentState(silent = false) },
+                            onSaveManual = gameViewModel::onManualCloudSave,
                             onReturnTitle = gameViewModel::returnToTitle,
                             onDismissDeath = gameViewModel::dismissDeathReport
                         )
@@ -102,7 +110,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        gameViewModel.persistCurrentState(silent = true)
+        gameViewModel.onAppBackgrounded()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        gameViewModel.onAppBackgrounded()
     }
 
     private fun openReleaseInBrowser(rawUrl: String) {

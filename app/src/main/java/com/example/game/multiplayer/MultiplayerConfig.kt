@@ -40,6 +40,15 @@ object MultiplayerConfig {
         return "wss://$host/realtime/v1/websocket?apikey=$encodedKey&vsn=1.0.0"
     }
 
+    fun restPlayersBaseUrl(
+        url: String = SUPABASE_URL,
+        anonKey: String = SUPABASE_ANON_KEY
+    ): String? {
+        if (!isConfigured(url, anonKey)) return null
+        val host = parseValidHttpsHost(url) ?: return null
+        return "https://$host/rest/v1/players"
+    }
+
     private fun isPlaceholder(value: String): Boolean {
         val upper = value.trim().uppercase()
         return upper.startsWith("YOUR_") ||

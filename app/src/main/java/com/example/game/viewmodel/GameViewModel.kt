@@ -4,6 +4,11 @@ import android.app.Application
 import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.game.cloud.CloudAuthResult
+import com.example.game.cloud.CloudAuthUiState
+import com.example.game.cloud.CloudSaveOutcome
+import com.example.game.cloud.CloudSession
+import com.example.game.cloud.SupabaseCloudSaveRepository
 import com.example.game.data.GameSaveRepository
 import com.example.game.data.RookvaleDatabase
 import com.example.game.data.SaveSlotEntity
@@ -13,6 +18,7 @@ import com.example.game.model.ActivePanel
 import com.example.game.model.Direction
 import com.example.game.model.EquipmentSlot
 import com.example.game.model.GameWorldState
+import com.example.game.model.PlayerSkills
 import com.example.game.model.Vocation
 import com.example.game.multiplayer.ChatChannel
 import com.example.game.multiplayer.ConnectionStatus
@@ -26,6 +32,7 @@ import com.example.game.update.GitHubUpdateChecker
 import com.example.game.update.UpdateCheckState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -34,6 +41,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class AppScreen {
     TITLE_AND_CREATE,
@@ -42,6 +50,7 @@ enum class AppScreen {
 
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = GameSaveRepository(RookvaleDatabase.getInstance(application).saveSlotDao())
+    private val cloudRepository = SupabaseCloudSaveRepository(application)
     private val multiplayerManager = RealtimeMultiplayerManager(
         scope = viewModelScope,
         nowProvider = { System.currentTimeMillis() },
@@ -62,13 +71,26 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _updateState = MutableStateFlow(UpdateCheckState())
     val updateState: StateFlow<UpdateCheckState> = _updateState.asStateFlow()
 
+    private val _cloudAuthState = MutableStateFlow(
+        CloudAuthUiState(
+            cachedSession = cloudRepository.getCachedSession(),
+            cloudConfigured = cloudRepository.isCloudConfigured()
+        )
+    )
+    val cloudAuthState: StateFlow<CloudAuthUiState> = _cloudAuthState.asStateFlow()
+
     private val _saveBanner = MutableStateFlow<String?>(null)
     val saveBanner: StateFlow<String?> = _saveBanner.asStateFlow()
 
+    private var activeCloudSession: CloudSession? = null
     private var worldTickJob: Job? = null
     private var attackSubTickJob: Job? = null
     private var walkLoopJob: Job? = null
+    private var cloudAutoSaveJob: Job? = null
+    private var skillDebounceSaveJob: Job? = null
     private var lastStepMs: Long = 0L
+    private var lastBackgroundSaveMs: Long = 0L
+    private var lastKnownConnectionStatus: ConnectionStatus = ConnectionStatus.OFFLINE_SOLO
 
     init {
         viewModelScope.launch(Dispatchers.Default) {
@@ -76,6 +98,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             EntitySpriteAtlas.warmUp()
         }
         checkForGitHubUpdates()
+        attemptStartupAutoLogin()
+
+        // Automatically push any unsynced offline progress to Supabase as soon as connection returns
+        viewModelScope.launch {
+            multiplayerManager.uiState.collect { mp ->
+                val becameOnline = mp.status == ConnectionStatus.ONLINE && lastKnownConnectionStatus != ConnectionStatus.ONLINE
+                lastKnownConnectionStatus = mp.status
+                if (becameOnline && _screen.value == AppScreen.PLAYING) {
+                    syncPendingOfflineBackupIfNeeded()
+                }
+            }
+        }
 
         // Apply incoming host monster sync snapshots on non-host clients
         viewModelScope.launch {
@@ -162,6 +196,133 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun attemptStartupAutoLogin() {
+        val cached = cloudRepository.getCachedSession() ?: return
+        _cloudAuthState.update {
+            it.copy(
+                isAutoLoggingIn = true,
+                isBusy = true,
+                cachedSession = cached,
+                errorMessage = null,
+                infoMessage = "Signing in as ${cached.characterName}..."
+            )
+        }
+        viewModelScope.launch {
+            val result = cloudRepository.autoLoginCachedSession()
+            if (result is CloudAuthResult.Success && _screen.value == AppScreen.TITLE_AND_CREATE) {
+                enterGameWithCloudResult(result)
+            } else {
+                _cloudAuthState.update {
+                    it.copy(
+                        isAutoLoggingIn = false,
+                        isBusy = false,
+                        cachedSession = cloudRepository.getCachedSession(),
+                        infoMessage = null
+                    )
+                }
+            }
+        }
+    }
+
+    fun createCloudCharacter(
+        name: String,
+        pin: String,
+        tunicColorIndex: Int = 0,
+        hairColorIndex: Int = 0
+    ) {
+        if (_cloudAuthState.value.isBusy) return
+        _cloudAuthState.update { it.copy(isBusy = true, errorMessage = null, infoMessage = "Creating hero...") }
+        viewModelScope.launch {
+            val result = cloudRepository.createCharacter(name, pin) { cleanName ->
+                val fresh = GameEngine.createNewWorld(
+                    name = cleanName,
+                    vocation = Vocation.ADVENTURER,
+                    tunicColorIndex = tunicColorIndex,
+                    hairColorIndex = hairColorIndex
+                )
+                GameEngine.toSaveData(fresh)
+            }
+            when (result) {
+                is CloudAuthResult.Success -> enterGameWithCloudResult(result)
+                is CloudAuthResult.Failure -> _cloudAuthState.update {
+                    it.copy(isBusy = false, errorMessage = result.message, infoMessage = null)
+                }
+            }
+        }
+    }
+
+    fun loginCloudCharacter(name: String, pin: String) {
+        if (_cloudAuthState.value.isBusy) return
+        _cloudAuthState.update { it.copy(isBusy = true, errorMessage = null, infoMessage = "Loading hero from cloud...") }
+        viewModelScope.launch {
+            val result = cloudRepository.loginAndRecover(name, pin)
+            when (result) {
+                is CloudAuthResult.Success -> enterGameWithCloudResult(result)
+                is CloudAuthResult.Failure -> _cloudAuthState.update {
+                    it.copy(isBusy = false, errorMessage = result.message, infoMessage = null)
+                }
+            }
+        }
+    }
+
+    fun resumeCachedCloudSession() {
+        if (_cloudAuthState.value.isBusy) return
+        val cached = cloudRepository.getCachedSession() ?: return
+        _cloudAuthState.update {
+            it.copy(isBusy = true, errorMessage = null, infoMessage = "Syncing ${cached.characterName}...")
+        }
+        viewModelScope.launch {
+            val result = cloudRepository.autoLoginCachedSession()
+            if (result is CloudAuthResult.Success) {
+                enterGameWithCloudResult(result)
+            } else {
+                _cloudAuthState.update {
+                    it.copy(
+                        isBusy = false,
+                        cachedSession = cloudRepository.getCachedSession(),
+                        errorMessage = "Could not load cached hero. Use Name + PIN to recover from cloud.",
+                        infoMessage = null
+                    )
+                }
+            }
+        }
+    }
+
+    fun signOutCachedSession() {
+        cloudRepository.clearCachedSession()
+        activeCloudSession = null
+        _cloudAuthState.update {
+            it.copy(cachedSession = null, errorMessage = null, infoMessage = "Cleared cached login on this device.")
+        }
+    }
+
+    fun clearCloudAuthError() {
+        _cloudAuthState.update { it.copy(errorMessage = null) }
+    }
+
+    private suspend fun enterGameWithCloudResult(result: CloudAuthResult.Success) {
+        activeCloudSession = result.session
+        val hydrated = GameEngine.fromSaveData(result.saveData)
+        val withNotice = hydrated.copy(
+            statusLog = (hydrated.statusLog + result.notice).takeLast(6)
+        )
+        // Keep Room local slot list in sync as well
+        repository.saveGame(result.saveData)
+        _world.value = withNotice
+        _screen.value = AppScreen.PLAYING
+        _cloudAuthState.update {
+            it.copy(
+                isBusy = false,
+                isAutoLoggingIn = false,
+                cachedSession = result.session,
+                errorMessage = null,
+                infoMessage = null
+            )
+        }
+        multiplayerManager.connect(withNotice.toPresencePayload())
+        startGameLoops()
+    }
+
     fun startNewCharacter(name: String, tunicColorIndex: Int = 0, hairColorIndex: Int = 0) {
         val fresh = GameEngine.createNewWorld(
             name = name,
@@ -169,6 +330,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             tunicColorIndex = tunicColorIndex,
             hairColorIndex = hairColorIndex
         )
+        activeCloudSession = null
         _world.value = fresh
         _screen.value = AppScreen.PLAYING
         multiplayerManager.connect(fresh.toPresencePayload())
@@ -201,6 +363,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val loaded = repository.loadGame(slotId) ?: return@launch
             val state = GameEngine.fromSaveData(loaded)
+            val backup = cloudRepository.localStore.getLocalBackupByPlayerId(slotId)
+            activeCloudSession = backup?.session
+            if (backup != null) {
+                cloudRepository.localStore.saveCachedSession(backup.session)
+                _cloudAuthState.update { it.copy(cachedSession = backup.session) }
+            }
             _world.value = state
             _screen.value = AppScreen.PLAYING
             multiplayerManager.connect(state.toPresencePayload())
@@ -216,30 +384,114 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         persistCurrentState(silent = true)
         multiplayerManager.disconnect()
         stopGameLoops()
+        _cloudAuthState.update {
+            it.copy(
+                isBusy = false,
+                isAutoLoggingIn = false,
+                cachedSession = cloudRepository.getCachedSession(),
+                errorMessage = null,
+                infoMessage = null
+            )
+        }
         _screen.value = AppScreen.TITLE_AND_CREATE
     }
 
-    fun persistCurrentState(silent: Boolean = false) {
+    fun onManualCloudSave() {
+        persistCurrentState(silent = false, logConsoleFeedback = true)
+    }
+
+    fun onAppBackgrounded() {
         val snapshot = _world.value
         if (snapshot.saveId.isBlank() || _screen.value != AppScreen.PLAYING) return
+        val now = SystemClock.uptimeMillis()
+        val saveData = GameEngine.toSaveData(snapshot)
+        val session = activeCloudSession
+        // Synchronous SharedPreferences write so progress is safe even if OS kills process immediately
+        if (session != null) {
+            cloudRepository.localStore.saveCachedSession(session)
+            cloudRepository.localStore.saveLocalBackup(
+                session = session,
+                saveData = saveData,
+                updatedAtMs = System.currentTimeMillis(),
+                pendingCloudSync = true
+            )
+        }
+        if (now - lastBackgroundSaveMs < 1500L) return
+        lastBackgroundSaveMs = now
         viewModelScope.launch {
-            repository.saveGame(GameEngine.toSaveData(snapshot))
+            withContext(NonCancellable) {
+                repository.saveGame(saveData)
+                if (session != null) {
+                    cloudRepository.saveProgress(session, saveData)
+                }
+            }
+        }
+    }
+
+    fun persistCurrentState(silent: Boolean = false, logConsoleFeedback: Boolean = false) {
+        val snapshot = _world.value
+        if (snapshot.saveId.isBlank() || _screen.value != AppScreen.PLAYING) return
+        val saveData = GameEngine.toSaveData(snapshot)
+        val session = activeCloudSession
+        viewModelScope.launch {
+            repository.saveGame(saveData)
+            val outcome = if (session != null) {
+                cloudRepository.saveProgress(session, saveData)
+            } else {
+                CloudSaveOutcome.SAVED_LOCAL_OFFLINE
+            }
+
+            if (logConsoleFeedback) {
+                val consoleMsg = when (outcome) {
+                    CloudSaveOutcome.SYNCED_CLOUD -> "Character saved to cloud."
+                    CloudSaveOutcome.SAVED_LOCAL_OFFLINE -> if (session != null) {
+                        "Saved locally (offline — will sync to cloud when connected)."
+                    } else {
+                        "Character saved locally."
+                    }
+                }
+                _world.update { st -> st.copy(statusLog = (st.statusLog + consoleMsg).takeLast(6)) }
+            }
+
             if (!silent) {
-                _saveBanner.value = "Saved offline"
-                delay(1600L)
+                _saveBanner.value = if (outcome == CloudSaveOutcome.SYNCED_CLOUD) "Cloud Saved" else "Saved Offline"
+                delay(1800L)
                 _saveBanner.value = null
+            }
+        }
+    }
+
+    private fun scheduleDebouncedSkillSave() {
+        skillDebounceSaveJob?.cancel()
+        skillDebounceSaveJob = viewModelScope.launch {
+            delay(3000L)
+            persistCurrentState(silent = true)
+        }
+    }
+
+    private fun syncPendingOfflineBackupIfNeeded() {
+        val session = activeCloudSession ?: return
+        viewModelScope.launch {
+            val outcome = cloudRepository.syncPendingOfflineBackup(session)
+            if (outcome == CloudSaveOutcome.SYNCED_CLOUD) {
+                _world.update { st ->
+                    st.copy(statusLog = (st.statusLog + "Synced offline progress to cloud.").takeLast(6))
+                }
             }
         }
     }
 
     private fun startGameLoops() {
         stopGameLoops()
+
         // 200ms combat sub-tick so variable weapon speeds (0.8s fast vs 1.0s balanced vs 1.4s heavy) feel snappy
         attackSubTickJob = viewModelScope.launch {
             while (true) {
                 delay(200L)
                 val now = SystemClock.uptimeMillis()
                 var leveledUp = false
+                var skillLevelUp = false
+                var skillPointsGained = false
                 var attackedAction: PlayerActionState? = null
                 var facingChanged = false
                 var newLevel = 1
@@ -255,6 +507,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             floor = next.floor
                             name = next.playerName
                         }
+                        if (totalSkillLevels(next.skills) > totalSkillLevels(prev.skills)) {
+                            skillLevelUp = true
+                        } else if (next.skills != prev.skills) {
+                            skillPointsGained = true
+                        }
                         if (next.playerFacing != prev.playerFacing) facingChanged = true
                         if (next.outboundPlayerEffects.size > prev.outboundPlayerEffects.size) {
                             attackedAction = next.outboundPlayerEffects.lastOrNull()?.actionState
@@ -268,8 +525,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     multiplayerManager.broadcastSystemCallout("$name advanced to Level $newLevel!", floor)
                     broadcastCurrentState(attackedAction ?: PlayerActionState.IDLE)
                     persistCurrentState(silent = true)
-                } else if (attackedAction != null || facingChanged) {
-                    broadcastCurrentState(attackedAction ?: PlayerActionState.IDLE)
+                } else {
+                    if (attackedAction != null || facingChanged) {
+                        broadcastCurrentState(attackedAction ?: PlayerActionState.IDLE)
+                    }
+                    if (skillLevelUp) {
+                        persistCurrentState(silent = true)
+                    } else if (skillPointsGained) {
+                        scheduleDebouncedSkillSave()
+                    }
                 }
             }
         }
@@ -284,6 +548,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
                 var diedOrLeveled = false
                 var leveledUp = false
+                var skillLevelUp = false
+                var skillPointsGained = false
                 var floorChanged = false
                 var vitalsChanged = false
                 var tickAction: PlayerActionState? = null
@@ -305,6 +571,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     if (next.level != prev.level || (next.deathReport != null && prev.deathReport == null)) {
                         diedOrLeveled = true
+                    }
+                    if (totalSkillLevels(next.skills) > totalSkillLevels(prev.skills)) {
+                        skillLevelUp = true
+                    } else if (next.skills != prev.skills) {
+                        skillPointsGained = true
                     }
                     if (next.floor != prev.floor) floorChanged = true
                     if (next.hp != prev.hp ||
@@ -350,7 +621,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
 
-                if (diedOrLeveled) persistCurrentState(silent = true)
+                if (diedOrLeveled || floorChanged || skillLevelUp) {
+                    persistCurrentState(silent = true)
+                } else if (skillPointsGained) {
+                    scheduleDebouncedSkillSave()
+                }
             }
         }
 
@@ -384,16 +659,34 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+
+        // Periodic 60-second cloud autosave while playing
+        cloudAutoSaveJob = viewModelScope.launch {
+            while (true) {
+                delay(60_000L)
+                if (_screen.value == AppScreen.PLAYING) {
+                    persistCurrentState(silent = true)
+                }
+            }
+        }
     }
 
     private fun stopGameLoops() {
         attackSubTickJob?.cancel()
         worldTickJob?.cancel()
         walkLoopJob?.cancel()
+        cloudAutoSaveJob?.cancel()
+        skillDebounceSaveJob?.cancel()
         attackSubTickJob = null
         worldTickJob = null
         walkLoopJob = null
+        cloudAutoSaveJob = null
+        skillDebounceSaveJob = null
     }
+
+    private fun totalSkillLevels(skills: PlayerSkills): Int =
+        skills.melee.level + skills.distance.level + skills.shielding.level +
+            skills.magic.level + skills.fishing.level + skills.mining.level
 
     private fun flushOutboundMonsterHits() {
         val pending = _world.value.outboundMonsterHits
@@ -488,6 +781,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val cur = _world.value
             if (cur.saveId.isNotBlank()) {
                 multiplayerManager.ensureConnectedOrRetry(cur.toPresencePayload())
+                syncPendingOfflineBackupIfNeeded()
             }
         }
     }
@@ -533,12 +827,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var moved = false
         var facingChanged = false
         var healed = false
+        var skillChanged = false
+        var skillLevelUp = false
         _world.update { prev ->
             val next = GameEngine.handleTileTap(prev, tx, ty, now, remotes)
             if (next.floor != prev.floor) floorChanged = true
             if (next.playerX != prev.playerX || next.playerY != prev.playerY) moved = true
             if (next.playerFacing != prev.playerFacing) facingChanged = true
             if (next.hp != prev.hp) healed = true
+            if (totalSkillLevels(next.skills) > totalSkillLevels(prev.skills)) skillLevelUp = true
+            else if (next.skills != prev.skills) skillChanged = true
             next
         }
         flushOutboundPlayerEffects()
@@ -546,12 +844,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val cur = _world.value
             multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
             persistCurrentState(silent = true)
-        } else if (moved) {
-            broadcastCurrentState(PlayerActionState.WALKING)
-        } else if (healed) {
-            broadcastCurrentState(PlayerActionState.HEALING)
-        } else if (facingChanged) {
-            broadcastCurrentState(PlayerActionState.IDLE)
+        } else {
+            if (moved) {
+                broadcastCurrentState(PlayerActionState.WALKING)
+            } else if (healed) {
+                broadcastCurrentState(PlayerActionState.HEALING)
+            } else if (facingChanged) {
+                broadcastCurrentState(PlayerActionState.IDLE)
+            }
+            if (skillLevelUp) persistCurrentState(silent = true)
+            else if (skillChanged) scheduleDebouncedSkillSave()
         }
     }
 
@@ -608,6 +910,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun onHotkeyAttackRune() {
         val now = SystemClock.uptimeMillis()
         var leveledUp = false
+        var skillLevelUp = false
+        var skillChanged = false
         var casted = false
         var newLevel = 1
         var floor = 0
@@ -620,6 +924,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 floor = next.floor
                 name = next.playerName
             }
+            if (totalSkillLevels(next.skills) > totalSkillLevels(prev.skills)) skillLevelUp = true
+            else if (next.skills != prev.skills) skillChanged = true
             if (next.outboundMonsterHits.size > prev.outboundMonsterHits.size) casted = true
             next
         }
@@ -629,8 +935,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             multiplayerManager.broadcastSystemCallout("$name advanced to Level $newLevel!", floor)
             broadcastCurrentState(PlayerActionState.CASTING)
             persistCurrentState(silent = true)
-        } else if (casted) {
-            broadcastCurrentState(PlayerActionState.CASTING)
+        } else {
+            if (casted) broadcastCurrentState(PlayerActionState.CASTING)
+            if (skillLevelUp) persistCurrentState(silent = true)
+            else if (skillChanged) scheduleDebouncedSkillSave()
         }
     }
 
@@ -676,9 +984,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val now = SystemClock.uptimeMillis()
         var action: PlayerActionState? = null
         var hpChanged = false
+        var equipChanged = false
+        var floorChanged = false
         _world.update { prev ->
             val next = GameEngine.useOrEquipBackpackItem(prev, itemId, now)
             if (next.hp != prev.hp) hpChanged = true
+            if (next.equipment != prev.equipment) equipChanged = true
+            if (next.floor != prev.floor) floorChanged = true
             if (next.outboundPlayerEffects.size > prev.outboundPlayerEffects.size) {
                 action = next.outboundPlayerEffects.lastOrNull()?.actionState
             }
@@ -686,15 +998,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
         flushOutboundMonsterHits()
         flushOutboundPlayerEffects()
-        if (hpChanged || action != null) broadcastCurrentState(action ?: PlayerActionState.IDLE)
+        if (floorChanged) {
+            val cur = _world.value
+            multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
+            persistCurrentState(silent = true)
+        } else {
+            if (hpChanged || action != null) broadcastCurrentState(action ?: PlayerActionState.IDLE)
+            if (equipChanged) persistCurrentState(silent = true)
+        }
     }
 
     fun dropBackpackItem(itemId: String) {
         _world.update { GameEngine.dropItem(it, itemId) }
+        persistCurrentState(silent = true)
     }
 
     fun unequipSlot(slot: EquipmentSlot) {
-        _world.update { GameEngine.unequipSlot(it, slot) }
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.unequipSlot(prev, slot)
+            if (next.equipment != prev.equipment) changed = true
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
     }
 
     fun lootAllCorpse(corpseId: String) {
