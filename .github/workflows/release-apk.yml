@@ -26,12 +26,51 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Generate Debug Keystore
+      - name: Restore cached fallback keystore (if needed)
+        uses: actions/cache@v4
+        with:
+          path: debug.keystore
+          key: rookvale-consistent-debug-keystore-v1
+
+      - name: Prepare Consistent Signing Keystore
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          keytool -genkey -v -keystore debug.keystore \
-            -storepass android -alias androiddebugkey \
-            -keypass android -keyalg RSA -keysize 2048 \
-            -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          RESOLVED_STORE_PASS="${KEYSTORE_PASSWORD:-$STORE_PASSWORD}"
+          RESOLVED_KEY_PASS="${KEY_PASSWORD:-$RESOLVED_STORE_PASS}"
+
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$RESOLVED_STORE_PASS" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > app/release.jks
+            if [ -n "$KEY_ALIAS" ] && [ "$KEY_ALIAS" != "upload" ]; then
+              keytool -changealias -keystore app/release.jks \
+                -storepass "$RESOLVED_STORE_PASS" \
+                -alias "$KEY_ALIAS" -destalias upload \
+                -keypass "$RESOLVED_KEY_PASS"
+            fi
+            echo "Decoded release signing keystore to app/release.jks."
+            echo "build_variant=release" >> "$GITHUB_OUTPUT"
+            echo "apk_path=app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_OUTPUT"
+          else
+            if [ -f debug.keystore.base64 ]; then
+              tr -d '[:space:]' < debug.keystore.base64 | base64 -d > debug.keystore
+              echo "Decoded consistent repository debug.keystore from debug.keystore.base64."
+            elif [ ! -f debug.keystore ]; then
+              keytool -genkey -v -keystore debug.keystore \
+                -storepass android -alias androiddebugkey \
+                -keypass android -keyalg RSA -keysize 2048 \
+                -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+              echo "Generated and cached consistent fallback debug.keystore."
+            else
+              echo "Reusing cached fallback debug.keystore."
+            fi
+            echo "build_variant=debug" >> "$GITHUB_OUTPUT"
+            echo "apk_path=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Configure Supabase Secrets (.env)
         env:
@@ -44,23 +83,40 @@ jobs:
               echo "SUPABASE_URL=$RESOLVED_URL"
               echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
             } > .env
-            {
-              echo "SUPABASE_URL=$RESOLVED_URL"
-              echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
-            } >> local.properties
-            echo "Configured .env and local.properties from GitHub Secrets for live co-op builds."
+            echo "Configured .env from GitHub Secrets for live co-op builds."
           else
             echo "SUPABASE_ANON_KEY secret not set; APK will build with Offline Solo fallback."
           fi
 
-      - name: Build Debug APK
+      - name: Build Signed APK
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: gradle assembleDebug
+          KEYSTORE_PATH: ${{ github.workspace }}/app/release.jks
+          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || secrets.KEYSTORE_PASSWORD || secrets.STORE_PASSWORD }}
+        run: |
+          if [ -x ./gradlew ]; then
+            GRADLE_CMD="./gradlew"
+          else
+            GRADLE_CMD="gradle"
+          fi
+
+          VERSION_CODE="${{ github.run_number }}"
+          VERSION_NAME="1.0.${{ github.run_number }}"
+
+          if [ "${{ steps.signing.outputs.build_variant }}" = "release" ]; then
+            $GRADLE_CMD assembleRelease \
+              -PversionCode="${VERSION_CODE}" \
+              -PversionName="${VERSION_NAME}"
+          else
+            $GRADLE_CMD assembleDebug \
+              -PversionCode="${VERSION_CODE}" \
+              -PversionName="${VERSION_NAME}"
+          fi
 
       - name: Rename APK for easy download
-        run: cp app/build/outputs/apk/debug/app-debug.apk Rookvale-latest.apk
+        run: cp "${{ steps.signing.outputs.apk_path }}" Rookvale-latest.apk
 
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v3
@@ -68,10 +124,9 @@ jobs:
           tag_name: latest-build
           name: Rookvale Latest Android Build
           body: |
-            Automated Android APK build from latest main push.
-            Tap **Rookvale-latest.apk** below to download and install on Android.
+            Automated Android APK build (`v1.0.${{ github.run_number }}`, `versionCode ${{ github.run_number }}`, `${{ steps.signing.outputs.build_variant }}` signed) from latest `main` push.
+            Tap **Rookvale-latest.apk** below to download and install as an in-place update on Android.
           files: Rookvale-latest.apk
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          

@@ -18,8 +18,8 @@ android {
     applicationId = "com.aistudio.rookvale.qmxrkp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.2"
+    versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 2
+    versionName = (project.findProperty("versionName") as String?) ?: "1.2.0"
 
     val buildTimeUtc = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString()
     buildConfigField("String", "BUILD_TIME_UTC", "\"$buildTimeUtc\"")
