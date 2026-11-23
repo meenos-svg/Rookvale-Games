@@ -675,6 +675,7 @@ data class MonsterEntity(
     val lastMoveFromX: Int = x,
     val lastMoveFromY: Int = y,
     val lastMoveTimeMs: Long = 0L,
+    val lastAttackTimeMs: Long = 0L,
     val targetPlayerId: String? = null,
     val contributors: Set<String> = emptySet(),
     val isSummon: Boolean = false,

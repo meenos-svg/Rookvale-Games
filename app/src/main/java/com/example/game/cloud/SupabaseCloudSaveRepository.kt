@@ -1076,6 +1076,8 @@ class SupabaseCloudSaveRepository(
                     val name = MultiplayerSanitizer.sanitizeName(
                         rawName.ifBlank { saveObj.optString("name", "") }
                     )
+                    val eqObj = saveObj.optJSONObject("equippedItems")
+                    fun optEq(key: String): String? = eqObj?.optString(key, "")?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
                     out.add(
                         RemotePlayerState(
                             playerId = pid,
@@ -1090,14 +1092,19 @@ class SupabaseCloudSaveRepository(
                             prevY = cy,
                             lastMoveMs = 0L,
                             floor = floor,
-                            regionId = regionId,
                             hp = hp,
                             maxHp = maxHp,
                             joinedAt = updatedAtMs,
-                            lastSeenMs = updatedAtMs,
                             isPoisoned = saveObj.optInt("poisonTicks", 0) > 0,
                             isBurning = saveObj.optInt("fireTicks", 0) > 0,
-                            direction = MultiplayerSanitizer.safeDirection(facingRaw)
+                            direction = MultiplayerSanitizer.safeDirection(facingRaw),
+                            regionId = regionId,
+                            lastSeenMs = updatedAtMs,
+                            weaponId = optEq("weaponId"),
+                            offhandId = optEq("shieldId") ?: optEq("offhandId"),
+                            armorId = optEq("armorId"),
+                            helmetId = optEq("helmetId"),
+                            bootsId = optEq("bootsId")
                         )
                     )
                 }

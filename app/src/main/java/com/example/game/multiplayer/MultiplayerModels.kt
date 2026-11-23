@@ -60,7 +60,12 @@ data class RemotePlayerState(
     val actionState: PlayerActionState = PlayerActionState.IDLE,
     val lastActionMs: Long = 0L,
     val regionId: String = DEFAULT_REGION_ID,
-    val lastSeenMs: Long = joinedAt
+    val lastSeenMs: Long = joinedAt,
+    val weaponId: String? = null,
+    val offhandId: String? = null,
+    val armorId: String? = null,
+    val helmetId: String? = null,
+    val bootsId: String? = null
 )
 
 data class LocalPlayerPresencePayload(
@@ -81,7 +86,12 @@ data class LocalPlayerPresencePayload(
     val direction: Direction = Direction.SOUTH,
     val actionState: PlayerActionState = PlayerActionState.IDLE,
     val regionId: String = DEFAULT_REGION_ID,
-    val lastSeenMs: Long = joinedAt
+    val lastSeenMs: Long = joinedAt,
+    val weaponId: String? = null,
+    val offhandId: String? = null,
+    val armorId: String? = null,
+    val helmetId: String? = null,
+    val bootsId: String? = null
 )
 
 data class SyncedMonsterSnapshot(

@@ -1135,7 +1135,11 @@ object GameEngine {
         nowMs: Long
     ): GameWorldState {
         if (event.floor != state.floor || state.deathReport != null) return state
-        var s = state
+        var s = state.copy(
+            monsters = state.monsters.map { m ->
+                if (m.id == event.monsterId) m.copy(lastAttackTimeMs = nowMs) else m
+            }
+        )
         val proj = event.projectileKindName?.let { runCatching { ProjectileKind.valueOf(it) }.getOrNull() }
         if (proj != null && event.aoeTiles.isEmpty()) {
             s = s.addProjectileInternal(
@@ -1853,6 +1857,18 @@ object GameEngine {
                     s = advanceSkillPublic(s, SkillType.SHIELDING, shieldTrainPts, nowMs)
                 }
 
+                val mDx = s.playerX - curM.x
+                val mDy = s.playerY - curM.y
+                val mFacing = when {
+                    mDx == 0 && mDy == 0 -> curM.facing
+                    abs(mDx) >= abs(mDy) -> if (mDx > 0) Direction.EAST else Direction.WEST
+                    else -> if (mDy > 0) Direction.SOUTH else Direction.NORTH
+                }
+                curM = curM.copy(
+                    lastAttackTimeMs = nowMs,
+                    facing = mFacing
+                )
+                updatedMonsters[i] = curM
                 var statusTag: String? = null
                 val dodgeChance = s.shieldDodgeChance(isRanged)
                 if (Random.nextDouble() < dodgeChance) {
@@ -1902,6 +1918,18 @@ object GameEngine {
                 (curM.type.aiStyle == MonsterAiStyle.RANGED_KITE || Random.nextFloat() < 0.50f)
             ) {
                 val projKind = curM.type.rangedProjectile
+                val rDx = targetX - curM.x
+                val rDy = targetY - curM.y
+                val rFacing = when {
+                    rDx == 0 && rDy == 0 -> curM.facing
+                    abs(rDx) >= abs(rDy) -> if (rDx > 0) Direction.EAST else Direction.WEST
+                    else -> if (rDy > 0) Direction.SOUTH else Direction.NORTH
+                }
+                curM = curM.copy(
+                    lastAttackTimeMs = nowMs,
+                    facing = rFacing
+                )
+                updatedMonsters[i] = curM
                 s = s.addProjectileInternal(s.floor, curM.x.toFloat(), curM.y.toFloat(), targetX.toFloat(), targetY.toFloat(), projKind, nowMs, 300L)
                 s = s.copy(
                     outboundMonsterAttacks = s.outboundMonsterAttacks + LocalMonsterAttackEvent(

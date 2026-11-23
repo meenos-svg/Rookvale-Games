@@ -74,7 +74,6 @@ fun OracleCeremonyDialog(
     onChooseVocation: (Vocation) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val oracleSprite = remember { EntitySpriteAtlas.npcBitmap(NpcRole.ORACLE) }
     var selectedVocation by remember { mutableStateOf<Vocation?>(null) }
     var confirmingChoice by remember { mutableStateOf(false) }
 
@@ -99,15 +98,15 @@ fun OracleCeremonyDialog(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Header with Oracle Statue Sprite
+                // Header with Articulated Oracle Preview
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    PixelSpritePreview(
-                        bitmap = oracleSprite,
+                    ArticulatedNpcPreview(
+                        role = NpcRole.ORACLE,
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(58.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(ObsidianVoid)
                             .border(1.5.dp, TorchGold, RoundedCornerShape(8.dp))
@@ -229,7 +228,9 @@ fun OracleCeremonyDialog(
                     // Case 3: Adventurer Level 20+ -> Vocation Ceremony
                     confirmingChoice && selectedVocation != null -> {
                         val chosen = selectedVocation!!
-                        val sprite = remember(chosen) { EntitySpriteAtlas.playerBitmap(chosen, 0) }
+                        val chosenAppearance = remember(chosen, state.hairColorIndex) {
+                            vocationShowcaseAppearance(chosen, state.hairColorIndex)
+                        }
                         Surface(
                             color = StoneElevated,
                             shape = RoundedCornerShape(10.dp),
@@ -241,10 +242,13 @@ fun OracleCeremonyDialog(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                PixelSpritePreview(
-                                    bitmap = sprite,
+                                LivePaperDollPreview(
+                                    appearance = chosenAppearance,
+                                    interactiveRotate = true,
+                                    animateIdle = true,
+                                    contentDesc = "${chosen.displayName} vocation vestments preview",
                                     modifier = Modifier
-                                        .size(64.dp)
+                                        .size(72.dp)
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(ObsidianVoid)
                                         .border(1.5.dp, TorchGold, RoundedCornerShape(8.dp))
@@ -313,6 +317,7 @@ fun OracleCeremonyDialog(
                         Vocation.ceremonyVocations.forEach { voc ->
                             OracleVocationCard(
                                 vocation = voc,
+                                hairColorIndex = state.hairColorIndex,
                                 selected = selectedVocation == voc,
                                 onClick = { selectedVocation = voc }
                             )
@@ -366,10 +371,13 @@ fun OracleCeremonyDialog(
 @Composable
 private fun OracleVocationCard(
     vocation: Vocation,
+    hairColorIndex: Int,
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val sprite = remember(vocation) { EntitySpriteAtlas.playerBitmap(vocation, 0) }
+    val appearance = remember(vocation, hairColorIndex) {
+        vocationShowcaseAppearance(vocation, hairColorIndex)
+    }
     val borderColor = if (selected) TorchGold else StoneBorderLight
     val bgColor = if (selected) StoneElevated else StoneSurface
 
@@ -388,10 +396,11 @@ private fun OracleVocationCard(
                 .padding(11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PixelSpritePreview(
-                bitmap = sprite,
+            LivePaperDollPreview(
+                appearance = appearance,
+                contentDesc = "${vocation.displayName} vocation portrait",
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(56.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(ObsidianVoid)
                     .border(1.dp, borderColor, RoundedCornerShape(6.dp))
@@ -450,3 +459,47 @@ private fun OracleStatPill(text: String, color: Color) {
         Text(text = text, style = MaterialTheme.typography.labelSmall, color = ParchmentLight)
     }
 }
+
+private fun vocationShowcaseAppearance(vocation: Vocation, hairColorIndex: Int): PaperDollAppearance =
+    when (vocation) {
+        Vocation.KNIGHT -> PaperDollAppearance.fromItemIds(
+            vocation = Vocation.KNIGHT,
+            tunicColorIndex = 0,
+            hairColorIndex = hairColorIndex,
+            weaponId = "rookvale_gladius",
+            offhandId = "steel_shield",
+            armorId = "brass_armor",
+            helmetId = "viking_helmet",
+            bootsId = "plate_boots"
+        )
+        Vocation.PALADIN -> PaperDollAppearance.fromItemIds(
+            vocation = Vocation.PALADIN,
+            tunicColorIndex = 1,
+            hairColorIndex = hairColorIndex,
+            weaponId = "ashwood_shortbow",
+            offhandId = null,
+            armorId = "leather_armor",
+            helmetId = "leather_helmet",
+            bootsId = "leather_boots"
+        )
+        Vocation.MAGE -> PaperDollAppearance.fromItemIds(
+            vocation = Vocation.MAGE,
+            tunicColorIndex = 2,
+            hairColorIndex = hairColorIndex,
+            weaponId = "sunbrass_scepter",
+            offhandId = null,
+            armorId = "mystic_robe",
+            helmetId = null,
+            bootsId = "leather_boots"
+        )
+        Vocation.ADVENTURER -> PaperDollAppearance.fromItemIds(
+            vocation = Vocation.ADVENTURER,
+            tunicColorIndex = 0,
+            hairColorIndex = hairColorIndex,
+            weaponId = "wooden_club",
+            offhandId = "wooden_shield",
+            armorId = null,
+            helmetId = null
+        )
+    }
+

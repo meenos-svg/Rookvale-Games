@@ -571,13 +571,12 @@ private fun CharacterVitalsHudCard(
     saveBanner: String?,
     onMultiplayerStatusTapped: () -> Unit
 ) {
-    val portraitSprite = remember(state.vocation, state.tunicColorIndex, state.hairColorIndex) {
-        EntitySpriteAtlas.playerBitmap(
+    val portraitAppearance = remember(state.vocation, state.tunicColorIndex, state.hairColorIndex, state.equipment) {
+        PaperDollAppearance.fromEquipment(
             vocation = state.vocation,
-            frame = 0,
             tunicColorIndex = state.tunicColorIndex,
             hairColorIndex = state.hairColorIndex,
-            direction = Direction.SOUTH
+            equipment = state.equipment
         )
     }
     val floorInfo = remember(state.floor) { WorldMaps.getFloor(state.floor) }
@@ -598,7 +597,7 @@ private fun CharacterVitalsHudCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Character Portrait Frame
+            // Live Articulated Character Portrait Frame
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -607,9 +606,10 @@ private fun CharacterVitalsHudCard(
                     .border(1.5.dp, TorchGold.copy(alpha = 0.8f), RoundedCornerShape(6.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                PixelSpritePreview(
-                    bitmap = portraitSprite,
-                    modifier = Modifier.size(40.dp)
+                LivePaperDollPreview(
+                    appearance = portraitAppearance,
+                    contentDesc = "${state.playerName} portrait",
+                    modifier = Modifier.size(44.dp)
                 )
                 Box(
                     modifier = Modifier
@@ -1108,7 +1108,6 @@ private fun BattleMonsterRow(
     isTargeted: Boolean,
     onClick: () -> Unit
 ) {
-    val icon = remember(monster.type) { EntitySpriteAtlas.monsterBitmap(monster.type, 0) }
     val hpFrac = (monster.hp.toFloat() / monster.maxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
     val hpColor = when {
         hpFrac > 0.6f -> Color(0xFF39C94A)
@@ -1137,11 +1136,12 @@ private fun BattleMonsterRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            PixelSpritePreview(
-                bitmap = icon,
+            ArticulatedMonsterPreview(
+                type = monster.type,
                 modifier = Modifier
-                    .size(22.dp)
-                    .background(ObsidianVoid, RoundedCornerShape(3.dp))
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(ObsidianVoid)
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(
@@ -1184,8 +1184,11 @@ private fun BattleAllyRow(
     onInspect: () -> Unit,
     onWalkTo: () -> Unit
 ) {
-    val icon = remember(ally.vocation, ally.tunicColorIndex, ally.hairColorIndex) {
-        EntitySpriteAtlas.playerBitmap(ally.vocation, 0, ally.tunicColorIndex, ally.hairColorIndex, Direction.SOUTH)
+    val allyAppearance = remember(
+        ally.vocation, ally.tunicColorIndex, ally.hairColorIndex,
+        ally.weaponId, ally.offhandId, ally.armorId, ally.helmetId, ally.bootsId
+    ) {
+        PaperDollAppearance.fromRemotePlayer(ally)
     }
     val hpFrac = (ally.hp.toFloat() / ally.maxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
     Surface(
@@ -1202,11 +1205,13 @@ private fun BattleAllyRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            PixelSpritePreview(
-                bitmap = icon,
+            LivePaperDollPreview(
+                appearance = allyAppearance,
+                contentDesc = "${ally.name} portrait",
                 modifier = Modifier
-                    .size(22.dp)
-                    .background(ObsidianVoid, RoundedCornerShape(3.dp))
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(ObsidianVoid)
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(

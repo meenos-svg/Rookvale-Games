@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.example.game.model.CorpseEntity
+import com.example.game.model.Direction
 import com.example.game.model.FloatingTextKind
 import com.example.game.model.GameWorldState
 import com.example.game.model.GraphicsQuality
@@ -504,13 +505,26 @@ fun GameCanvasView(
                         )
                     }
                     is DepthSortableItem.NpcItem -> {
-                        drawIsometricNpc(item.npc, camera, hw, hh, spritePx, animFrame, labelPaint, labelShadowPaint, quality)
+                        drawIsometricNpc(
+                            npc = item.npc,
+                            camera = camera,
+                            path = reusablePath,
+                            hw = hw,
+                            hh = hh,
+                            spritePx = spritePx,
+                            now = now,
+                            labelPaint = labelPaint,
+                            labelShadowPaint = labelShadowPaint,
+                            quality = quality
+                        )
                     }
                     is DepthSortableItem.MonsterItem -> {
                         drawIsometricMonster(
                             m = item.monster,
                             fx = item.fx,
                             fy = item.fy,
+                            playerFx = camPlayerX,
+                            playerFy = camPlayerY,
                             state = st,
                             camera = camera,
                             path = reusablePath,
@@ -535,7 +549,6 @@ fun GameCanvasView(
                             hw = hw,
                             hh = hh,
                             spritePx = spritePx,
-                            animFrame = animFrame,
                             now = now,
                             labelPaint = labelPaint,
                             labelShadowPaint = labelShadowPaint,
@@ -549,10 +562,10 @@ fun GameCanvasView(
                             fy = item.fy,
                             moveFrac = item.moveFrac,
                             camera = camera,
+                            path = reusablePath,
                             hw = hw,
                             hh = hh,
                             spritePx = spritePx,
-                            animFrame = animFrame,
                             now = now,
                             labelPaint = labelPaint,
                             labelShadowPaint = labelShadowPaint,
@@ -684,43 +697,43 @@ private fun DrawScope.drawIsometricCorpse(
 private fun DrawScope.drawIsometricNpc(
     npc: NpcSpot,
     camera: IsometricCamera,
+    path: Path,
     hw: Float,
     hh: Float,
     spritePx: Int,
-    animFrame: Int,
+    now: Long,
     labelPaint: Paint,
     labelShadowPaint: Paint,
     quality: GraphicsQuality = GraphicsQuality.DEFAULT
 ) {
     val c = camera.tileCenterToScreen(npc.x.toFloat(), npc.y.toFloat())
+    val feetY = c.y + hh * 0.14f
     if (quality.drawCastShadows) {
-        IsometricLightingEngine.drawAngledCastShadow(this, camera, c.x, c.y + hh * 0.10f, radiusScale = 0.96f, heightTiles = 0.85f, quality = quality)
+        IsometricLightingEngine.drawAngledCastShadow(this, camera, c.x, feetY, radiusScale = 0.96f, heightTiles = 0.85f, quality = quality)
     } else {
-        IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, quality = quality)
+        IsometricTileDrawer.drawContactShadow(this, c.x, feetY, hw, hh, quality = quality)
     }
-    if (npc.role == NpcRole.ORACLE && quality != GraphicsQuality.LOW) {
-        val auraAlpha = if (animFrame == 0) 0.36f else 0.18f
-        drawCircle(
-            color = TorchGold.copy(alpha = auraAlpha),
-            radius = hw * 0.75f,
-            center = Offset(c.x, c.y - spritePx * 0.35f)
-        )
-    }
-    val drawX = (c.x - spritePx * 0.5f).roundToInt()
-    val drawY = (c.y - spritePx * 0.84f).roundToInt()
-    drawImage(
-        image = EntitySpriteAtlas.npcBitmap(npc.role),
-        dstOffset = IntOffset(drawX, drawY),
-        dstSize = IntSize(spritePx, spritePx),
-        filterQuality = FilterQuality.None
+    val heightPx = spritePx * 0.96f
+    val resolvedFacing = ScreenFacingResolver.resolve(Direction.SOUTH, camera.yawDeg)
+    ArticulatedHumanoidRenderer.drawNpc(
+        scope = this,
+        cx = c.x,
+        feetY = feetY,
+        heightPx = heightPx,
+        role = npc.role,
+        facing = resolvedFacing,
+        nowMs = now,
+        quality = quality,
+        path = path
     )
+    val labelY = feetY - heightPx - 6f
     val prevColor = labelPaint.color
     if (npc.role == NpcRole.ORACLE) {
         labelPaint.color = android.graphics.Color.parseColor("#FFD447")
     }
     drawContext.canvas.nativeCanvas.apply {
-        drawText(npc.name, c.x, drawY - 6f, labelShadowPaint)
-        drawText(npc.name, c.x, drawY - 6f, labelPaint)
+        drawText(npc.name, c.x, labelY, labelShadowPaint)
+        drawText(npc.name, c.x, labelY, labelPaint)
     }
     labelPaint.color = prevColor
 }
@@ -729,6 +742,8 @@ private fun DrawScope.drawIsometricMonster(
     m: MonsterEntity,
     fx: Float,
     fy: Float,
+    playerFx: Float,
+    playerFy: Float,
     state: GameWorldState,
     camera: IsometricCamera,
     path: Path,
@@ -741,8 +756,10 @@ private fun DrawScope.drawIsometricMonster(
     quality: GraphicsQuality = GraphicsQuality.DEFAULT
 ) {
     val c = camera.tileCenterToScreen(fx, fy)
+    val feetY = c.y + hh * 0.14f
     val isBoss = m.type.isBoss
-    val drawSize = if (isBoss) (spritePx * 1.28f).roundToInt() else spritePx
+    val heightScale = OrganicMonsterRenderer.heightScaleFor(m.type)
+    val heightPx = spritePx * 0.94f * heightScale
 
     if (m.id == state.targetMonsterId) {
         val pulseAlpha = if (state.autoFollowTarget && ((now / 220L) % 2L) == 0L) 1.0f else 0.78f
@@ -756,29 +773,50 @@ private fun DrawScope.drawIsometricMonster(
 
     if (quality.drawCastShadows) {
         IsometricLightingEngine.drawAngledCastShadow(
-            this, camera, c.x, c.y + hh * 0.10f,
-            radiusScale = if (isBoss) 1.32f else 0.96f,
-            heightTiles = if (isBoss) 1.15f else 0.80f,
+            this, camera, c.x, feetY,
+            radiusScale = (0.94f * heightScale).coerceIn(0.65f, 1.38f),
+            heightTiles = if (isBoss) 1.15f else 0.80f * heightScale,
             quality = quality
         )
     } else {
-        IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, scale = if (isBoss) 1.3f else 0.96f, quality = quality)
+        IsometricTileDrawer.drawContactShadow(this, c.x, feetY, hw, hh, scale = (0.94f * heightScale).coerceIn(0.65f, 1.35f), quality = quality)
     }
 
-    val mFrame = (((now + (m.id * 170L)) / 420L) % 2L).toInt()
-    val drawX = (c.x - drawSize * 0.5f).roundToInt()
-    val drawY = (c.y - drawSize * 0.84f).roundToInt()
-    drawImage(
-        image = EntitySpriteAtlas.monsterBitmap(m.type, mFrame),
-        dstOffset = IntOffset(drawX, drawY),
-        dstSize = IntSize(drawSize, drawSize),
-        filterQuality = FilterQuality.None
+    val moveAge = now - m.lastMoveTimeMs
+    val walkPhase = if (moveAge in 0L..280L) ((now + m.id * 97L) / 70f) else 0f
+    val attackAge = now - m.lastAttackTimeMs
+    val lungeProgress = if (attackAge in 0L..320L) (attackAge.toFloat() / 320f) else 0f
+
+    // Face local player smoothly when aggroed or nearby in combat
+    val dxToHero = playerFx - fx
+    val dyToHero = playerFy - fy
+    val faceTarget = m.id == state.targetMonsterId || (m.targetPlayerId == null && hypot(dxToHero, dyToHero) <= 4.5f)
+    val resolvedFacing = ScreenFacingResolver.resolve(
+        worldFacing = m.facing,
+        cameraYawDeg = camera.yawDeg,
+        targetDeltaX = if (faceTarget) dxToHero else 0f,
+        targetDeltaY = if (faceTarget) dyToHero else 0f
+    )
+
+    OrganicMonsterRenderer.drawMonster(
+        scope = this,
+        cx = c.x,
+        feetY = feetY,
+        heightPx = heightPx,
+        type = m.type,
+        facing = resolvedFacing,
+        walkPhase = walkPhase,
+        lungeProgress = lungeProgress,
+        animSeed = m.id * 37,
+        nowMs = now,
+        quality = quality,
+        path = path
     )
 
     val hpFrac = (m.hp.toFloat() / m.maxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
     val barW = hw * 1.15f
     val barX = c.x - barW * 0.5f
-    val barY = drawY - 10f
+    val barY = feetY - heightPx - 10f
     drawRect(Color.Black, Offset(barX - 1f, barY - 1f), Size(barW + 2f, 8f))
     val hpColor = when {
         hpFrac > 0.6f -> Color(0xFF39C94A)
@@ -826,14 +864,13 @@ private fun DrawScope.drawIsometricRemotePlayer(
     hw: Float,
     hh: Float,
     spritePx: Int,
-    animFrame: Int,
     now: Long,
     labelPaint: Paint,
     labelShadowPaint: Paint,
     quality: GraphicsQuality = GraphicsQuality.DEFAULT
 ) {
     val c = camera.tileCenterToScreen(fx, fy)
-    val rpFrame = if (moveFrac < 1f) ((now / 110L) % 2L).toInt() else animFrame
+    val feetY = c.y + hh * 0.14f
 
     if (rp.playerId == state.inspectedPlayerId && now < state.inspectedPlayerUntilMs) {
         val pulseAlpha = if (((now / 180L) % 2L) == 0L) 0.92f else 0.52f
@@ -846,9 +883,9 @@ private fun DrawScope.drawIsometricRemotePlayer(
     }
 
     if (quality.drawCastShadows) {
-        IsometricLightingEngine.drawAngledCastShadow(this, camera, c.x, c.y + hh * 0.10f, radiusScale = 1.0f, heightTiles = 0.88f, quality = quality)
+        IsometricLightingEngine.drawAngledCastShadow(this, camera, c.x, feetY, radiusScale = 1.0f, heightTiles = 0.88f, quality = quality)
     } else {
-        IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, quality = quality)
+        IsometricTileDrawer.drawContactShadow(this, c.x, feetY, hw, hh, quality = quality)
     }
 
     val haloCenter = Offset(c.x, c.y - spritePx * 0.35f)
@@ -856,29 +893,36 @@ private fun DrawScope.drawIsometricRemotePlayer(
     if (rp.isBurning) drawCircle(FireOrange.copy(alpha = 0.34f), hw * 0.68f, haloCenter)
 
     val actionAge = now - rp.lastActionMs
-    if (actionAge in 0L..420L) {
+    val isAttackAction = rp.actionState == PlayerActionState.ATTACKING || rp.actionState == PlayerActionState.CASTING
+    val attackProgress = if (isAttackAction && actionAge in 0L..360L) (actionAge.toFloat() / 360f) else 0f
+    if (actionAge in 0L..420L && rp.actionState == PlayerActionState.HEALING) {
         val aFrac = 1f - (actionAge.toFloat() / 420f)
-        when (rp.actionState) {
-            PlayerActionState.ATTACKING -> drawCircle(Color(0xFFFFE082).copy(alpha = 0.65f * aFrac), hw * (0.30f + 0.18f * (1f - aFrac)), haloCenter, style = Stroke(3.5f))
-            PlayerActionState.CASTING -> drawCircle(Color(0xFF5CE1FF).copy(alpha = 0.72f * aFrac), hw * (0.45f + 0.22f * (1f - aFrac)), haloCenter, style = Stroke(3.5f))
-            PlayerActionState.HEALING -> drawCircle(Color(0xFF4CE678).copy(alpha = 0.72f * aFrac), hw * (0.42f + 0.24f * (1f - aFrac)), haloCenter, style = Stroke(3.5f))
-            else -> Unit
-        }
+        drawCircle(Color(0xFF4CE678).copy(alpha = 0.72f * aFrac), hw * (0.42f + 0.24f * (1f - aFrac)), haloCenter, style = Stroke(3.5f))
     }
 
-    val drawX = (c.x - spritePx * 0.5f).roundToInt()
-    val drawY = (c.y - spritePx * 0.85f).roundToInt()
-    drawImage(
-        image = EntitySpriteAtlas.playerBitmap(rp.vocation, rpFrame, rp.tunicColorIndex, rp.hairColorIndex, rp.direction),
-        dstOffset = IntOffset(drawX, drawY),
-        dstSize = IntSize(spritePx, spritePx),
-        filterQuality = FilterQuality.None
+    val heightPx = spritePx * 0.96f
+    val walkPhase = if (moveFrac < 0.99f) (now / 62f) else 0f
+    val resolvedFacing = ScreenFacingResolver.resolve(rp.direction, camera.yawDeg)
+    val appearance = PaperDollAppearance.fromRemotePlayer(rp)
+
+    ArticulatedHumanoidRenderer.drawPlayer(
+        scope = this,
+        cx = c.x,
+        feetY = feetY,
+        heightPx = heightPx,
+        appearance = appearance,
+        facing = resolvedFacing,
+        walkPhase = walkPhase,
+        attackProgress = attackProgress,
+        nowMs = now,
+        quality = quality,
+        path = path
     )
 
     val rHpFrac = (rp.hp.toFloat() / rp.maxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
     val rBarW = hw * 1.18f
     val rBarX = c.x - rBarW * 0.5f
-    val rBarY = drawY - 10f
+    val rBarY = feetY - heightPx - 10f
     drawRect(Color.Black, Offset(rBarX - 1f, rBarY - 1f), Size(rBarW + 2f, 8f))
     drawRect(
         when {
@@ -911,47 +955,71 @@ private fun DrawScope.drawIsometricLocalPlayer(
     fy: Float,
     moveFrac: Float,
     camera: IsometricCamera,
+    path: Path,
     hw: Float,
     hh: Float,
     spritePx: Int,
-    animFrame: Int,
     now: Long,
     labelPaint: Paint,
     labelShadowPaint: Paint,
     quality: GraphicsQuality = GraphicsQuality.DEFAULT
 ) {
     val c = camera.tileCenterToScreen(fx, fy)
-    val playerFrame = if (moveFrac < 1f) ((now / 110L) % 2L).toInt() else animFrame
+    val feetY = c.y + hh * 0.14f
 
     if (quality.drawCastShadows) {
-        IsometricLightingEngine.drawAngledCastShadow(this, camera, c.x, c.y + hh * 0.10f, radiusScale = 1.05f, heightTiles = 0.92f, quality = quality)
+        IsometricLightingEngine.drawAngledCastShadow(this, camera, c.x, feetY, radiusScale = 1.05f, heightTiles = 0.92f, quality = quality)
     } else {
-        IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, scale = 1.05f, quality = quality)
+        IsometricTileDrawer.drawContactShadow(this, c.x, feetY, hw, hh, scale = 1.05f, quality = quality)
     }
 
     val auraCenter = Offset(c.x, c.y - spritePx * 0.35f)
     if (state.poisonTicks > 0) drawCircle(PoisonGreen.copy(alpha = 0.28f), hw * 0.68f, auraCenter)
     if (state.fireTicks > 0) drawCircle(FireOrange.copy(alpha = 0.34f), hw * 0.72f, auraCenter)
 
-    val drawX = (c.x - spritePx * 0.5f).roundToInt()
-    val drawY = (c.y - spritePx * 0.86f).roundToInt()
-    drawImage(
-        image = EntitySpriteAtlas.playerBitmap(
-            vocation = state.vocation,
-            frame = playerFrame,
-            tunicColorIndex = state.tunicColorIndex,
-            hairColorIndex = state.hairColorIndex,
-            direction = state.playerFacing
-        ),
-        dstOffset = IntOffset(drawX, drawY),
-        dstSize = IntSize(spritePx, spritePx),
-        filterQuality = FilterQuality.None
+    val targetMonster = state.targetMonsterId?.let { tid ->
+        state.monsters.firstOrNull { it.id == tid && it.floor == state.floor }
+    }
+    val targetDx = if (targetMonster != null) targetMonster.x.toFloat() - fx else 0f
+    val targetDy = if (targetMonster != null) targetMonster.y.toFloat() - fy else 0f
+
+    val resolvedFacing = ScreenFacingResolver.resolve(
+        worldFacing = state.playerFacing,
+        cameraYawDeg = camera.yawDeg,
+        targetDeltaX = targetDx,
+        targetDeltaY = targetDy
+    )
+
+    val walkPhase = if (moveFrac < 0.99f) (now / 62f) else 0f
+    val attackAge = now - state.lastPlayerAttackMs
+    val attackProgress = if (attackAge in 0L..340L) (attackAge.toFloat() / 340f) else 0f
+    val heightPx = spritePx * 0.98f
+
+    val appearance = PaperDollAppearance.fromEquipment(
+        vocation = state.vocation,
+        tunicColorIndex = state.tunicColorIndex,
+        hairColorIndex = state.hairColorIndex,
+        equipment = state.equipment
+    )
+
+    ArticulatedHumanoidRenderer.drawPlayer(
+        scope = this,
+        cx = c.x,
+        feetY = feetY,
+        heightPx = heightPx,
+        appearance = appearance,
+        facing = resolvedFacing,
+        walkPhase = walkPhase,
+        attackProgress = attackProgress,
+        nowMs = now,
+        quality = quality,
+        path = path
     )
 
     val pHpFrac = (state.hp.toFloat() / state.maxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
     val pBarW = hw * 1.22f
     val pBarX = c.x - pBarW * 0.5f
-    val pBarY = drawY - 10f
+    val pBarY = feetY - heightPx - 10f
     drawRect(Color.Black, Offset(pBarX - 1f, pBarY - 1f), Size(pBarW + 2f, 8f))
     drawRect(
         when {

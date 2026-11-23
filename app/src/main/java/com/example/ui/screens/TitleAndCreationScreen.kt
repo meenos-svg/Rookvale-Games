@@ -139,8 +139,16 @@ fun TitleAndCreationScreen(
     val leftScroll = rememberScrollState()
     val rightScroll = rememberScrollState()
 
-    val previewSprite = remember(tunicColorIndex, hairColorIndex) {
-        EntitySpriteAtlas.playerBitmap(Vocation.ADVENTURER, 0, tunicColorIndex, hairColorIndex)
+    val previewAppearance = remember(tunicColorIndex, hairColorIndex) {
+        PaperDollAppearance.fromItemIds(
+            vocation = Vocation.ADVENTURER,
+            tunicColorIndex = tunicColorIndex,
+            hairColorIndex = hairColorIndex,
+            weaponId = "wooden_club",
+            offhandId = "wooden_shield",
+            armorId = null,
+            helmetId = null
+        )
     }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
@@ -586,10 +594,13 @@ fun TitleAndCreationScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                PixelSpritePreview(
-                                    bitmap = previewSprite,
+                                LivePaperDollPreview(
+                                    appearance = previewAppearance,
+                                    interactiveRotate = true,
+                                    animateIdle = true,
+                                    contentDesc = "New Adventurer paper-doll preview",
                                     modifier = Modifier
-                                        .size(72.dp)
+                                        .size(76.dp)
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(ObsidianVoid)
                                         .border(1.5.dp, TorchGold, RoundedCornerShape(8.dp))
@@ -940,8 +951,19 @@ private fun SavedCharacterCard(
     }
     val tunicIdx = remember(slot.payloadJson) { extractJsonInt(slot.payloadJson, "tunicColorIndex") }
     val hairIdx = remember(slot.payloadJson) { extractJsonInt(slot.payloadJson, "hairColorIndex") }
-    val sprite = remember(voc, tunicIdx, hairIdx) {
-        EntitySpriteAtlas.playerBitmap(voc, 0, tunicIdx, hairIdx)
+    val appearance = remember(voc, tunicIdx, hairIdx, slot.payloadJson) {
+        PaperDollAppearance.fromItemIds(
+            vocation = voc,
+            tunicColorIndex = tunicIdx,
+            hairColorIndex = hairIdx,
+            weaponId = extractJsonString(slot.payloadJson, "weaponId"),
+            offhandId = extractJsonString(slot.payloadJson, "shieldId"),
+            armorId = extractJsonString(slot.payloadJson, "armorId"),
+            helmetId = extractJsonString(slot.payloadJson, "helmetId"),
+            legsId = extractJsonString(slot.payloadJson, "legsId"),
+            bootsId = extractJsonString(slot.payloadJson, "bootsId"),
+            amuletId = extractJsonString(slot.payloadJson, "amuletId")
+        )
     }
     val floorLabel = if (slot.floor == 0) "Rookvale City" else "Floor ${slot.floor}"
 
@@ -960,10 +982,11 @@ private fun SavedCharacterCard(
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PixelSpritePreview(
-                bitmap = sprite,
+            LivePaperDollPreview(
+                appearance = appearance,
+                contentDesc = "${slot.characterName} saved hero portrait",
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(48.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(ObsidianVoid)
                     .border(1.dp, StoneBorderDark, RoundedCornerShape(6.dp))
@@ -1006,6 +1029,11 @@ private fun SavedCharacterCard(
 private fun extractJsonInt(json: String, field: String): Int {
     val match = Regex("\"$field\"\\s*:\\s*(\\d+)").find(json) ?: return 0
     return match.groupValues[1].toIntOrNull() ?: 0
+}
+
+private fun extractJsonString(json: String, field: String): String? {
+    val match = Regex("\"$field\"\\s*:\\s*\"([^\"]+)\"").find(json) ?: return null
+    return match.groupValues[1].takeIf { it.isNotBlank() }
 }
 
 @Composable

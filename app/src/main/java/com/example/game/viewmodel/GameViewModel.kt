@@ -852,7 +852,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             isPoisoned = poisonTicks > 0,
             isBurning = fireTicks > 0,
             direction = playerFacing,
-            actionState = actionState
+            actionState = actionState,
+            weaponId = equipment.weaponId,
+            offhandId = equipment.shieldId,
+            armorId = equipment.armorId,
+            helmetId = equipment.helmetId,
+            bootsId = equipment.bootsId
         )
     }
 
@@ -1228,7 +1233,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
             persistCurrentState(silent = true)
         } else {
-            if (hpChanged || action != null) broadcastCurrentState(action ?: PlayerActionState.IDLE)
+            if (hpChanged || equipChanged || action != null) broadcastCurrentState(action ?: PlayerActionState.IDLE)
             if (equipChanged || skillLevelUp) persistCurrentState(silent = true)
             else if (bagChanged) scheduleDebouncedSkillSave()
         }
@@ -1246,7 +1251,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             if (next.equipment != prev.equipment) changed = true
             next
         }
-        if (changed) persistCurrentState(silent = true)
+        if (changed) {
+            broadcastCurrentState(PlayerActionState.IDLE)
+            persistCurrentState(silent = true)
+        }
     }
 
     fun lootCorpseItem(corpseId: String, stackIndex: Int) {

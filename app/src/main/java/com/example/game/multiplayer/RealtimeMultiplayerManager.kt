@@ -292,7 +292,12 @@ class RealtimeMultiplayerManager(
                             maxHp = raw.maxHp,
                             direction = nextDir,
                             actionState = if (moved) PlayerActionState.WALKING else existing.actionState,
-                            lastSeenMs = maxOf(existing.lastSeenMs, effectiveLastSeen)
+                            lastSeenMs = maxOf(existing.lastSeenMs, effectiveLastSeen),
+                            weaponId = raw.weaponId,
+                            offhandId = raw.offhandId,
+                            armorId = raw.armorId,
+                            helmetId = raw.helmetId,
+                            bootsId = raw.bootsId
                         )
                     }
                 }
@@ -1147,12 +1152,25 @@ class RealtimeMultiplayerManager(
         val rawHair = outfitMap?.get("hair").asIntOrNull() ?: meta["hairColorIndex"].asIntOrNull() ?: existing?.hairColorIndex ?: 0
         val rawFacing = (meta["facing"] as? String) ?: (meta["direction"] as? String)
         val parsedDir = rawFacing?.let { MultiplayerSanitizer.safeDirection(it) }
-            ?: if (moved) inferDirection(existing!!.x, existing.y, cx, cy) else (existing?.direction ?: com.example.game.model.Direction.SOUTH)
+            ?: if (moved) inferDirection(existing.x, existing.y, cx, cy) else (existing?.direction ?: com.example.game.model.Direction.SOUTH)
         val parsedAction = (meta["actionState"] as? String)?.let { MultiplayerSanitizer.safeActionState(it) }
             ?: if (moved) PlayerActionState.WALKING else (existing?.actionState ?: PlayerActionState.IDLE)
         val actionTriggered = parsedAction == PlayerActionState.ATTACKING ||
             parsedAction == PlayerActionState.CASTING ||
             parsedAction == PlayerActionState.HEALING
+
+        fun parseGearId(primaryKey: String, altKey: String?, existingVal: String?): String? {
+            val hasKey = meta.containsKey(primaryKey) || (altKey != null && meta.containsKey(altKey))
+            if (!hasKey) return existingVal
+            val raw = (meta[primaryKey] as? String) ?: altKey?.let { meta[it] as? String }
+            return raw?.trim()?.take(40)?.filter { it.isLetterOrDigit() || it == '_' }?.takeIf { it.isNotEmpty() }
+        }
+
+        val parsedWeaponId = parseGearId("weaponId", null, existing?.weaponId)
+        val parsedOffhandId = parseGearId("offhandId", "shieldId", existing?.offhandId)
+        val parsedArmorId = parseGearId("armorId", null, existing?.armorId)
+        val parsedHelmetId = parseGearId("helmetId", null, existing?.helmetId)
+        val parsedBootsId = parseGearId("bootsId", null, existing?.bootsId)
 
         return RemotePlayerState(
             playerId = id,
@@ -1163,20 +1181,25 @@ class RealtimeMultiplayerManager(
             hairColorIndex = MultiplayerSanitizer.clampHairIndex(rawHair),
             x = cx,
             y = cy,
-            prevX = if (moved) existing!!.x else cx,
-            prevY = if (moved) existing!!.y else cy,
+            prevX = if (moved) existing.x else cx,
+            prevY = if (moved) existing.y else cy,
             lastMoveMs = if (moved) animNow else (existing?.lastMoveMs ?: animNow),
             floor = floor,
-            regionId = regionId,
             hp = hp,
             maxHp = maxHp,
             joinedAt = joinedAt,
-            lastSeenMs = lastSeenMs,
             isPoisoned = (meta["psn"] as? Boolean) ?: existing?.isPoisoned ?: false,
             isBurning = (meta["brn"] as? Boolean) ?: existing?.isBurning ?: false,
             direction = parsedDir,
             actionState = parsedAction,
-            lastActionMs = if (actionTriggered) animNow else (existing?.lastActionMs ?: 0L)
+            lastActionMs = if (actionTriggered) animNow else (existing?.lastActionMs ?: 0L),
+            regionId = regionId,
+            lastSeenMs = lastSeenMs,
+            weaponId = parsedWeaponId,
+            offhandId = parsedOffhandId,
+            armorId = parsedArmorId,
+            helmetId = parsedHelmetId,
+            bootsId = parsedBootsId
         )
     }
 
@@ -1219,7 +1242,12 @@ class RealtimeMultiplayerManager(
         "hp" to p.hp,
         "maxHp" to p.maxHp,
         "psn" to p.isPoisoned,
-        "brn" to p.isBurning
+        "brn" to p.isBurning,
+        "weaponId" to (p.weaponId ?: ""),
+        "offhandId" to (p.offhandId ?: ""),
+        "armorId" to (p.armorId ?: ""),
+        "helmetId" to (p.helmetId ?: ""),
+        "bootsId" to (p.bootsId ?: "")
     )
 
     @Suppress("UNCHECKED_CAST")

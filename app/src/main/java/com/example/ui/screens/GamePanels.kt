@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -51,6 +52,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.R
 import com.example.game.model.ActivePanel
@@ -231,6 +233,15 @@ private fun EquipmentPanelContent(
     val dodgePct = (state.shieldDodgeChance(isRanged = false) * 100).toInt()
     val offVocPenalty = state.weaponOffVocationMultiplier(weapon) < 1.0
 
+    val paperDollAppearance = remember(state.vocation, state.tunicColorIndex, state.hairColorIndex, eq) {
+        PaperDollAppearance.fromEquipment(
+            vocation = state.vocation,
+            tunicColorIndex = state.tunicColorIndex,
+            hairColorIndex = state.hairColorIndex,
+            equipment = eq
+        )
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth().padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -253,28 +264,70 @@ private fun EquipmentPanelContent(
             Text("ARM ${eq.totalArmor()}", style = MaterialTheme.typography.labelMedium, color = ExpEmerald)
         }
 
-        // Classic 3-column Tibia Paper Doll layout + Ammo Quiver Slot
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            EquipSlotBox(EquipmentSlot.AMULET, eq.amuletId, null, null, onUnequipSlot, Modifier.weight(1f))
-            EquipSlotBox(EquipmentSlot.HELMET, eq.helmetId, null, null, onUnequipSlot, Modifier.weight(1f))
-            EquipSlotBox(EquipmentSlot.AMMO, eq.ammoId, state.activeAmmoCount(), null, onUnequipSlot, Modifier.weight(1f))
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            EquipSlotBox(EquipmentSlot.WEAPON, eq.weaponId, null, null, onUnequipSlot, Modifier.weight(1f))
-            EquipSlotBox(EquipmentSlot.ARMOR, eq.armorId, null, null, onUnequipSlot, Modifier.weight(1f))
-            EquipSlotBox(
-                slot = EquipmentSlot.SHIELD,
-                itemId = eq.shieldId,
-                ammoCount = null,
-                lockedLabel = if (isTwoHanded) "2H Occupied" else null,
-                onUnequip = onUnequipSlot,
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Spacer(Modifier.weight(1f))
-            EquipSlotBox(EquipmentSlot.LEGS, eq.legsId, null, null, onUnequipSlot, Modifier.weight(1f))
-            EquipSlotBox(EquipmentSlot.BOOTS, eq.bootsId, null, null, onUnequipSlot, Modifier.weight(1f))
+        // Interactive Live Paper-Doll Stage beside Classic 3-column Tibia Equipment Slots
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                color = ObsidianVoid,
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.5.dp, TorchGold.copy(alpha = 0.72f)),
+                modifier = Modifier
+                    .width(108.dp)
+                    .height(186.dp)
+                    .testTag("equipment_paper_doll_stage")
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LivePaperDollPreview(
+                        appearance = paperDollAppearance,
+                        interactiveRotate = true,
+                        animateIdle = true,
+                        contentDesc = "${state.playerName} equipped gear paper-doll",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 6.dp, bottom = 22.dp, start = 4.dp, end = 4.dp)
+                            .testTag("equipment_paper_doll_preview")
+                    )
+                    Text(
+                        text = "Tap to Turn",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.SemiBold),
+                        color = TorchGold.copy(alpha = 0.9f),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 5.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    EquipSlotBox(EquipmentSlot.AMULET, eq.amuletId, null, null, onUnequipSlot, Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.HELMET, eq.helmetId, null, null, onUnequipSlot, Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.AMMO, eq.ammoId, state.activeAmmoCount(), null, onUnequipSlot, Modifier.weight(1f))
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    EquipSlotBox(EquipmentSlot.WEAPON, eq.weaponId, null, null, onUnequipSlot, Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.ARMOR, eq.armorId, null, null, onUnequipSlot, Modifier.weight(1f))
+                    EquipSlotBox(
+                        slot = EquipmentSlot.SHIELD,
+                        itemId = eq.shieldId,
+                        ammoCount = null,
+                        lockedLabel = if (isTwoHanded) "2H Occupied" else null,
+                        onUnequip = onUnequipSlot,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Spacer(Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.LEGS, eq.legsId, null, null, onUnequipSlot, Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.BOOTS, eq.bootsId, null, null, onUnequipSlot, Modifier.weight(1f))
+                }
+            }
         }
         val statusHint = buildString {
             if (isTwoHanded) append("2H weapon active: Shield locked & Shielding Dodge penalized. ")
@@ -282,7 +335,7 @@ private fun EquipmentPanelContent(
                 append("Off-vocation Tier 3-4 weapon (-25% DMG; ${weapon.preferredVocation.displayName} mastery). ")
             }
             if (isEmpty()) {
-                append("Tap any equipped piece to unequip. Load Shafts or Quarrels from Backpack into Ammo.")
+                append("Tap hero to rotate 360°. Tap any equipped piece to unequip.")
             }
         }.trim()
         Text(
