@@ -194,9 +194,23 @@ object CraftingAndMiningEngine {
             val stationName = when (recipe.station) {
                 ActivePanel.FURNACE -> "Smelting Furnace"
                 ActivePanel.FLETCHING_BENCH -> "Fletching Workbench"
+                ActivePanel.RUNECRAFTING_TABLE -> "Runecrafting Table"
                 else -> "Blacksmith Anvil"
             }
             return state.addLogInternal("You must stand beside a $stationName to craft this.")
+        }
+
+        val outDef = ItemCatalog.get(recipe.outputItemId)
+
+        // Validate Magic Level, Mana & Soul requirements for Runecrafting recipes
+        if (recipe.requiredMagicLevel > 0 && state.magicLevel < recipe.requiredMagicLevel) {
+            return state.addLogInternal("You need Magic Level ${recipe.requiredMagicLevel} to inscribe ${outDef.name}.")
+        }
+        if (recipe.manaCost > 0 && state.mp < recipe.manaCost) {
+            return state.addLogInternal("Not enough Mana (${recipe.manaCost} MP required to inscribe ${outDef.name}).")
+        }
+        if (recipe.soulCost > 0 && state.soul < recipe.soulCost) {
+            return state.addLogInternal("Not enough Soul (${recipe.soulCost} Soul required). Rest at the Temple or hunt monsters to recover Soul.")
         }
 
         // Verify all required ingredients are in backpack
@@ -208,7 +222,6 @@ object CraftingAndMiningEngine {
         }
 
         // Check net Cap (oz) delta: smelting ores -> ingot frees Cap; forged tools stow in Tool Bag at 50% oz!
-        val outDef = ItemCatalog.get(recipe.outputItemId)
         val consumedWeight = recipe.ingredients.sumOf { ItemCatalog.get(it.itemId).carriedWeightOz() * it.count }
         val producedWeight = outDef.carriedWeightOz() * recipe.outputCount
         val netDelta = producedWeight - consumedWeight
@@ -220,15 +233,28 @@ object CraftingAndMiningEngine {
         for (req in recipe.ingredients) {
             next = GameEngine.removeCarriedItem(next, req.itemId, req.count)
         }
+        if (recipe.manaCost > 0 || recipe.soulCost > 0) {
+            next = next.copy(
+                mp = (next.mp - recipe.manaCost).coerceAtLeast(0),
+                soul = (next.soul - recipe.soulCost).coerceAtLeast(0)
+            )
+        }
         next = GameEngine.addCarriedItem(next, recipe.outputItemId, recipe.outputCount)
+
+        if (recipe.manaCost > 0) {
+            next = GameEngine.awardMagicXpFromMana(next, recipe.manaCost, nowMs)
+            next = next.queuePlayerFx(null, null, com.example.game.multiplayer.PlayerActionState.CASTING)
+        }
 
         val verb = when (recipe.station) {
             ActivePanel.FURNACE -> "Smelted"
             ActivePanel.FLETCHING_BENCH -> "Fletched"
+            ActivePanel.RUNECRAFTING_TABLE -> "Inscribed"
             else -> "Forged"
         }
         val qtyLabel = if (recipe.outputCount > 1) "${recipe.outputCount}x ${outDef.name}" else outDef.name
         val extraNote = when {
+            recipe.station == ActivePanel.RUNECRAFTING_TABLE -> " (-${recipe.manaCost} MP, -${recipe.soulCost} Soul)"
             outDef.isTool -> " (packed in Tool Bag!)"
             netDelta < -0.5 -> " (saved ${String.format("%.1f", -netDelta)} oz Cap!)"
             else -> ""

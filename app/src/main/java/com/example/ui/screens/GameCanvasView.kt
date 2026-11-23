@@ -542,9 +542,62 @@ fun GameCanvasView(
                         drawCircle(Color(0xFF4DD2FF), 12f, Offset(px, py))
                         drawCircle(Color.White, 5f, Offset(px, py))
                     }
+                    ProjectileKind.ARCANE_DART -> {
+                        drawCircle(Color(0xFF75F0FF), 9f, Offset(px, py))
+                        drawCircle(Color.White, 4f, Offset(px, py))
+                    }
+                    ProjectileKind.FIREBALL_AOE -> {
+                        drawCircle(TargetRed, 14f, Offset(px, py))
+                        drawCircle(FireOrange, 10f, Offset(px, py))
+                        drawCircle(Color(0xFFFFE57F), 5f, Offset(px, py))
+                        if (t > 0.55f) {
+                            val burstFrac = ((t - 0.55f) / 0.45f).coerceIn(0f, 1f)
+                            val txCenter = originX + (proj.toX + 0.5f) * tilePx
+                            val tyCenter = originY + (proj.toY + 0.5f) * tilePx
+                            val ringRadius = tilePx * (0.4f + burstFrac * 1.15f)
+                            drawCircle(
+                                color = FireOrange.copy(alpha = (1f - burstFrac) * 0.65f),
+                                radius = ringRadius,
+                                center = Offset(txCenter, tyCenter),
+                                style = Stroke(width = 6f)
+                            )
+                            drawCircle(
+                                color = Color(0xFFFFD447).copy(alpha = (1f - burstFrac) * 0.32f),
+                                radius = ringRadius * 0.85f,
+                                center = Offset(txCenter, tyCenter)
+                            )
+                        }
+                    }
+                    ProjectileKind.HEAL_RUNE -> {
+                        val txCenter = originX + (proj.toX + 0.5f) * tilePx
+                        val tyCenter = originY + (proj.toY + 0.5f) * tilePx
+                        val alpha = (1f - t).coerceIn(0f, 1f)
+                        drawCircle(
+                            color = Color(0xFF47F08B).copy(alpha = alpha * 0.35f),
+                            radius = tilePx * (0.28f + t * 0.36f),
+                            center = Offset(txCenter, tyCenter)
+                        )
+                        drawCircle(
+                            color = Color(0xFF75FFE0).copy(alpha = alpha * 0.85f),
+                            radius = tilePx * (0.34f + t * 0.42f),
+                            center = Offset(txCenter, tyCenter),
+                            style = Stroke(width = 4.5f)
+                        )
+                    }
                     ProjectileKind.DEATH_RUNE -> {
                         drawCircle(Color(0xFF1A0F14), 15f, Offset(px, py))
                         drawCircle(Color(0xFFFF3355), 9f, Offset(px, py))
+                        if (t > 0.60f) {
+                            val shockFrac = ((t - 0.60f) / 0.40f).coerceIn(0f, 1f)
+                            val txCenter = originX + (proj.toX + 0.5f) * tilePx
+                            val tyCenter = originY + (proj.toY + 0.5f) * tilePx
+                            drawCircle(
+                                color = Color(0xFFFF3355).copy(alpha = (1f - shockFrac) * 0.72f),
+                                radius = tilePx * (0.35f + shockFrac * 1.15f),
+                                center = Offset(txCenter, tyCenter),
+                                style = Stroke(width = 5.5f)
+                            )
+                        }
                     }
                     ProjectileKind.FIRE_BREATH -> {
                         drawCircle(FireOrange, 16f + t * 8f, Offset(px, py))
@@ -673,6 +726,7 @@ private fun MinimapOverlay(
                             TileType.STAIRS_DOWN, TileType.STAIRS_UP, TileType.ROPE_HOLE_DOWN, TileType.ROPE_SPOT_UP -> TorchGold
                             TileType.SMELTING_FURNACE, TileType.BLACKSMITH_ANVIL -> FireOrange
                             TileType.FLETCHING_BENCH -> Color(0xFFD4A054)
+                            TileType.RUNECRAFTING_TABLE -> Color(0xFFA86BFF)
                             TileType.TREE_STUMP -> Color(0xFF5A422C)
                             TileType.DEPOT_CHEST, TileType.MINI_DEPOT, TileType.SHOP_COUNTER, TileType.TEMPLE_ALTAR -> Color(0xFF5CE1FF)
                             TileType.ORE_OCHRE, TileType.ORE_BOGSTONE, TileType.ORE_BRIMSTONE, TileType.ORE_AETHERIUM -> Color(0xFFB599FF)

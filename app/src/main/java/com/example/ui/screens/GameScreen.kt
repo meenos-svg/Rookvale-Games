@@ -90,6 +90,7 @@ fun GameScreen(
     onTileTapped: (Int, Int) -> Unit,
     onHotkeyHp: () -> Unit,
     onHotkeyMp: () -> Unit,
+    onHotkeyHealRune: () -> Unit = {},
     onHotkeyRune: () -> Unit,
     onHotkeyRope: () -> Unit,
     onToggleMinimap: () -> Unit,
@@ -104,6 +105,7 @@ fun GameScreen(
     onBuyItem: (String) -> Unit,
     onSellItem: (String) -> Unit,
     onCraftRecipe: (String) -> Unit,
+    onBindRune: (String) -> Unit = {},
     onChooseVocationAtOracle: (Vocation) -> Unit,
     onMultiplayerStatusTapped: () -> Unit = {},
     onToggleChat: () -> Unit = {},
@@ -388,7 +390,8 @@ fun GameScreen(
                     onWithdrawItem = onWithdrawItem,
                     onBuyItem = onBuyItem,
                     onSellItem = onSellItem,
-                    onCraftRecipe = onCraftRecipe
+                    onCraftRecipe = onCraftRecipe,
+                    onBindRune = onBindRune
                 )
             }
         }
@@ -406,12 +409,21 @@ fun GameScreen(
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                val bestRuneId = state.bestAttackRuneId() ?: "hmm_rune"
-                val totalRunes = state.itemCount("sd_rune") + state.itemCount("hmm_rune")
+                val resolvedHealId = state.resolvedHealRuneId()
+                val healRuneCount = state.itemCount(resolvedHealId)
+                val resolvedAtkId = state.resolvedAttackRuneId() ?: "magic_dart_rune"
+                val atkRuneCount = state.itemCount(resolvedAtkId)
+                val atkRuneShortLabel = when (resolvedAtkId) {
+                    "magic_dart_rune" -> "Dart"
+                    "hmm_rune" -> "HMM"
+                    "fireball_rune" -> "GFB"
+                    "sd_rune" -> "SD"
+                    else -> stringResource(R.string.hotkey_rune)
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     HotkeyStoneButton(
@@ -433,9 +445,18 @@ fun GameScreen(
                         modifier = Modifier.weight(1f)
                     )
                     HotkeyStoneButton(
-                        itemId = bestRuneId,
-                        label = stringResource(R.string.hotkey_rune),
-                        count = totalRunes,
+                        itemId = resolvedHealId,
+                        label = stringResource(R.string.hotkey_heal_rune),
+                        count = healRuneCount,
+                        accent = ExpEmerald,
+                        onClick = onHotkeyHealRune,
+                        testTag = "hotkey_heal_rune",
+                        modifier = Modifier.weight(1f)
+                    )
+                    HotkeyStoneButton(
+                        itemId = resolvedAtkId,
+                        label = atkRuneShortLabel,
+                        count = atkRuneCount,
                         accent = SoulViolet,
                         onClick = onHotkeyRune,
                         testTag = "hotkey_attack_rune",

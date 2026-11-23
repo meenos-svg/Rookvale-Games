@@ -88,6 +88,7 @@ fun SlideUpGamePanel(
     onBuyItem: (String) -> Unit,
     onSellItem: (String) -> Unit,
     onCraftRecipe: (String) -> Unit,
+    onBindRune: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val title = when (state.activePanel) {
@@ -99,6 +100,7 @@ fun SlideUpGamePanel(
         ActivePanel.FURNACE -> "Smelting Furnace"
         ActivePanel.ANVIL -> "Blacksmith Anvil"
         ActivePanel.FLETCHING_BENCH -> "Fletching Workbench"
+        ActivePanel.RUNECRAFTING_TABLE -> stringResource(R.string.panel_runecrafting)
         ActivePanel.LOOT_CORPSE -> state.corpses.firstOrNull { it.id == state.inspectingCorpseId }?.label ?: "Corpse"
         ActivePanel.ORACLE -> "The Oracle"
         ActivePanel.NONE -> ""
@@ -144,13 +146,14 @@ fun SlideUpGamePanel(
 
             when (state.activePanel) {
                 ActivePanel.EQUIPMENT -> EquipmentPanelContent(state, onUnequipSlot)
-                ActivePanel.BACKPACK -> BackpackPanelContent(state, onUseItem, onDropItem)
+                ActivePanel.BACKPACK -> BackpackPanelContent(state, onUseItem, onDropItem, onBindRune)
                 ActivePanel.SKILLS -> SkillsPanelContent(state)
                 ActivePanel.DEPOT -> DepotPanelContent(state, onDepositItem, onWithdrawItem)
                 ActivePanel.SHOP -> ShopPanelContent(state, onBuyItem, onSellItem)
                 ActivePanel.FURNACE -> SmeltingFurnaceContent(state, onCraftRecipe)
                 ActivePanel.ANVIL -> BlacksmithAnvilContent(state, onCraftRecipe)
                 ActivePanel.FLETCHING_BENCH -> FletchingBenchContent(state, onCraftRecipe)
+                ActivePanel.RUNECRAFTING_TABLE -> RunecraftingTableContent(state, onCraftRecipe)
                 ActivePanel.LOOT_CORPSE -> LootCorpseContent(state.corpses.firstOrNull { it.id == state.inspectingCorpseId }, onLootAll)
                 ActivePanel.ORACLE, ActivePanel.NONE -> Unit
             }
@@ -299,7 +302,8 @@ private fun EquipSlotBox(
 private fun BackpackPanelContent(
     state: GameWorldState,
     onUseItem: (String) -> Unit,
-    onDropItem: (String) -> Unit
+    onDropItem: (String) -> Unit,
+    onBindRune: (String) -> Unit
 ) {
     var bagTab by remember { mutableIntStateOf(0) }
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -341,13 +345,21 @@ private fun BackpackPanelContent(
                 LazyColumn(contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(state.backpack, key = { "main_${it.itemId}_${it.count}_${state.backpack.indexOf(it)}" }) { stack ->
                         val def = ItemCatalog.get(stack.itemId)
+                        val isCastableRune = def.category == ItemCategory.RUNE_ATTACK || def.category == ItemCategory.RUNE_HEAL
+                        val isBound = (def.category == ItemCategory.RUNE_ATTACK && state.boundAttackRuneId == def.id) ||
+                            (def.category == ItemCategory.RUNE_HEAL && state.boundHealRuneId == def.id)
                         val actionLabel = when {
+                            isCastableRune -> "Cast"
                             def.category == ItemCategory.AMMO -> "Load"
                             def.equipSlot != null -> "Equip"
                             else -> "Use"
                         }
                         val sub = buildString {
                             append("${formatOz(def.weightOz * stack.count)} oz")
+                            if (isCastableRune) {
+                                append(" • MLv ${def.requiredMagicLevel}")
+                                if (isBound) append(" • BOUND")
+                            }
                             if (def.attack > 0 && def.equipSlot == EquipmentSlot.WEAPON) {
                                 append(" • ATK ${def.attack}")
                                 if (def.isTwoHanded) append(" • 2H")
@@ -366,8 +378,8 @@ private fun BackpackPanelContent(
                             subtitleOverride = sub,
                             primaryLabel = actionLabel,
                             onPrimary = { onUseItem(stack.itemId) },
-                            secondaryLabel = "Drop",
-                            onSecondary = { onDropItem(stack.itemId) }
+                            secondaryLabel = if (isCastableRune) (if (isBound) "Bound" else "Bind") else "Drop",
+                            onSecondary = if (isCastableRune) ({ onBindRune(stack.itemId) }) else ({ onDropItem(stack.itemId) })
                         )
                     }
                 }
@@ -418,7 +430,7 @@ private fun BackpackPanelContent(
 private fun SkillsPanelContent(state: GameWorldState) {
     val meleeMult = String.format(Locale.US, "x%.2f DMG", state.attackSkillMultiplier(state.skills.melee.level))
     val distMult = String.format(Locale.US, "x%.2f DMG", state.attackSkillMultiplier(state.skills.distance.level))
-    val magicMult = String.format(Locale.US, "x%.2f DMG", state.attackSkillMultiplier(state.skills.magic.level))
+    val magicMult = String.format(Locale.US, "x%.2f MAG", state.magicSkillMultiplier())
     val dodgePct = (state.shieldDodgeChance(isRanged = false) * 100).toInt()
     val twoHanded = state.isUsingTwoHandedWeapon()
     val dodgeBadge = if (twoHanded) "$dodgePct% DODGE (2H)" else "$dodgePct% DODGE"
@@ -470,7 +482,17 @@ private fun SkillsPanelContent(state: GameWorldState) {
                 badgeColor = if (twoHanded) TorchAmber else Color(0xFF5CA8FF)
             )
         }
-        item { SkillBarRow("Magic Level", state.skills.magic, Color(0xFFB37BFF), "Multiplies wand, staff & rune damage (+6% per level above 10)", magicMult, Color(0xFFB37BFF)) }
+        item {
+            SkillBarRow(
+                name = "Magic Level",
+                progress = state.skills.magic,
+                barColor = Color(0xFFB37BFF),
+                hint = "Magic XP: ${state.magicXp.toInt()} / ${state.magicXpToNext().toInt()} (spend MP casting & runecrafting) • Runes: Lv 1 Dart • Lv 4 Heal • Lv 7 HMM • Lv 12 GFB • Lv 15 SD",
+                badgeText = magicMult,
+                badgeColor = Color(0xFFB37BFF),
+                progressFractionOverride = state.skills.magic.magicProgressFraction()
+            )
+        }
         item { SkillBarRow("Mining", state.skills.mining, TorchAmber, "Advances per Ore Vein strike; boosts ore yield") }
         item { SkillBarRow("Fishing", state.skills.fishing, Color(0xFF4AD2D9), "Advances per line cast at the Fishing Pier") }
     }
@@ -483,9 +505,11 @@ private fun SkillBarRow(
     barColor: Color,
     hint: String,
     badgeText: String? = null,
-    badgeColor: Color = TorchGold
+    badgeColor: Color = TorchGold,
+    progressFractionOverride: Float? = null
 ) {
-    val pct = (progress.progressFraction() * 100).toInt()
+    val frac = progressFractionOverride ?: progress.progressFraction()
+    val pct = (frac * 100).toInt()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -516,7 +540,7 @@ private fun SkillBarRow(
         }
         Spacer(Modifier.height(4.dp))
         LinearProgressIndicator(
-            progress = { progress.progressFraction() },
+            progress = { frac },
             color = barColor,
             trackColor = ObsidianVoid,
             modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))

@@ -13,8 +13,9 @@
     <string name="hud_soul">Soul</string>
     <string name="hud_cap">Cap</string>
     <string name="hud_gold">Gold</string>
-    <string name="hotkey_hp_potion">Heal</string>
-    <string name="hotkey_mp_potion">Mana</string>
+    <string name="hotkey_hp_potion">HP Pot</string>
+    <string name="hotkey_mp_potion">MP Pot</string>
+    <string name="hotkey_heal_rune">IH Rune</string>
     <string name="hotkey_rune">Rune</string>
     <string name="hotkey_rope">Rope</string>
     <string name="panel_equipment">Equipment</string>
@@ -22,6 +23,7 @@
     <string name="panel_skills">Skills</string>
     <string name="panel_depot">Depot Chest</string>
     <string name="panel_shop">Alchemist Shop</string>
+    <string name="panel_runecrafting">Runecrafting Table</string>
     <string name="action_save">Save</string>
     <string name="action_fish">Cast Line</string>
     <string name="action_close">Close</string>

@@ -193,6 +193,11 @@ object CloudSavePayloadCodec {
             put("tunicColorIndex", data.tunicColorIndex)
             put("hairColorIndex", data.hairColorIndex)
 
+            put("magicLevel", data.skills.magic.level)
+            put("magicXp", data.skills.magic.points)
+            data.boundAttackRuneId?.let { put("boundAttackRuneId", it) }
+            data.boundHealRuneId?.let { put("boundHealRuneId", it) }
+
             put("skills", JSONObject().apply {
                 put("melee", encodeSkill(data.skills.melee))
                 put("distance", encodeSkill(data.skills.distance))
@@ -226,17 +231,27 @@ object CloudSavePayloadCodec {
 
     fun decode(json: JSONObject, fallbackPlayerId: String, fallbackName: String): PlayerSaveData {
         val skillsObj = json.optJSONObject("skills")
+        val decodedMagic = run {
+            val nested = skillsObj?.optJSONObject("magic")
+            val topLvl = if (json.has("magicLevel")) json.optInt("magicLevel", 1).coerceIn(1, 200) else null
+            val topXp = if (json.has("magicXp")) json.optDouble("magicXp", 0.0).coerceAtLeast(0.0) else null
+            when {
+                topLvl != null -> SkillProgress(topLvl, topXp ?: nested?.optDouble("points", 0.0)?.coerceAtLeast(0.0) ?: 0.0)
+                nested != null -> decodeSkill(nested, defaultLevel = 1)
+                else -> SkillProgress(1, 0.0)
+            }
+        }
         val skills = if (skillsObj != null) {
             PlayerSkills(
                 melee = decodeSkill(skillsObj.optJSONObject("melee")),
                 distance = decodeSkill(skillsObj.optJSONObject("distance")),
-                magic = decodeSkill(skillsObj.optJSONObject("magic")),
+                magic = decodedMagic,
                 shielding = decodeSkill(skillsObj.optJSONObject("shielding")),
                 fishing = decodeSkill(skillsObj.optJSONObject("fishing")),
                 mining = decodeSkill(skillsObj.optJSONObject("mining"))
             )
         } else {
-            PlayerSkills()
+            PlayerSkills(magic = decodedMagic)
         }
 
         val eqObj = json.optJSONObject("equippedItems") ?: json.optJSONObject("equipment")
@@ -310,7 +325,9 @@ object CloudSavePayloadCodec {
             mapVersion = json.optInt("mapVersion", CURRENT_MAP_VERSION),
             tunicColorIndex = json.optInt("tunicColorIndex", 0).coerceAtLeast(0),
             hairColorIndex = json.optInt("hairColorIndex", 0).coerceAtLeast(0),
-            questFlags = questFlags
+            questFlags = questFlags,
+            boundAttackRuneId = json.optNullableString("boundAttackRuneId"),
+            boundHealRuneId = json.optNullableString("boundHealRuneId") ?: "healing_rune"
         )
     }
 
@@ -319,10 +336,10 @@ object CloudSavePayloadCodec {
         put("points", sp.points)
     }
 
-    private fun decodeSkill(obj: JSONObject?): SkillProgress {
-        if (obj == null) return SkillProgress()
+    private fun decodeSkill(obj: JSONObject?, defaultLevel: Int = 10): SkillProgress {
+        if (obj == null) return SkillProgress(level = defaultLevel, points = 0.0)
         return SkillProgress(
-            level = obj.optInt("level", 10).coerceIn(1, 200),
+            level = obj.optInt("level", defaultLevel).coerceIn(1, 200),
             points = obj.optDouble("points", 0.0).coerceAtLeast(0.0)
         )
     }

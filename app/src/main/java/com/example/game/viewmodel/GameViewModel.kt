@@ -909,6 +909,37 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (used) broadcastCurrentState(PlayerActionState.HEALING)
     }
 
+    fun onHotkeyHealRune() {
+        val now = SystemClock.uptimeMillis()
+        val remotes = multiplayerState.value.remotePlayers
+        var used = false
+        var skillLevelUp = false
+        var skillChanged = false
+        _world.update { prev ->
+            val next = GameEngine.useHealingRune(prev, now, remotes)
+            if (next.backpack != prev.backpack || next.hp != prev.hp) used = true
+            if (totalSkillLevels(next.skills) > totalSkillLevels(prev.skills)) skillLevelUp = true
+            else if (next.skills != prev.skills) skillChanged = true
+            next
+        }
+        flushOutboundPlayerEffects()
+        if (used) broadcastCurrentState(PlayerActionState.HEALING)
+        if (skillLevelUp) persistCurrentState(silent = true)
+        else if (skillChanged || used) scheduleDebouncedSkillSave()
+    }
+
+    fun bindRuneToHotbar(runeId: String) {
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.bindRuneToHotbar(prev, runeId)
+            if (next.boundAttackRuneId != prev.boundAttackRuneId || next.boundHealRuneId != prev.boundHealRuneId) {
+                changed = true
+            }
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
+    }
+
     fun onHotkeyAttackRune() {
         val now = SystemClock.uptimeMillis()
         var leveledUp = false
@@ -978,8 +1009,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun craftRecipe(recipeId: String) {
         val now = SystemClock.uptimeMillis()
-        _world.update { CraftingAndMiningEngine.executeRecipe(it, recipeId, now) }
-        persistCurrentState(silent = true)
+        var crafted = false
+        _world.update { prev ->
+            val next = CraftingAndMiningEngine.executeRecipe(prev, recipeId, now)
+            if (next.backpack != prev.backpack || next.toolBag != prev.toolBag || next.skills != prev.skills) {
+                crafted = true
+            }
+            next
+        }
+        flushOutboundPlayerEffects()
+        if (crafted) {
+            broadcastCurrentState(PlayerActionState.CASTING)
+            persistCurrentState(silent = true)
+        }
     }
 
     fun useBackpackItem(itemId: String) {
@@ -988,11 +1030,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var hpChanged = false
         var equipChanged = false
         var floorChanged = false
+        var skillLevelUp = false
+        var bagChanged = false
         _world.update { prev ->
             val next = GameEngine.useOrEquipBackpackItem(prev, itemId, now)
             if (next.hp != prev.hp) hpChanged = true
             if (next.equipment != prev.equipment) equipChanged = true
             if (next.floor != prev.floor) floorChanged = true
+            if (next.backpack != prev.backpack) bagChanged = true
+            if (totalSkillLevels(next.skills) > totalSkillLevels(prev.skills)) skillLevelUp = true
             if (next.outboundPlayerEffects.size > prev.outboundPlayerEffects.size) {
                 action = next.outboundPlayerEffects.lastOrNull()?.actionState
             }
@@ -1006,7 +1052,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             persistCurrentState(silent = true)
         } else {
             if (hpChanged || action != null) broadcastCurrentState(action ?: PlayerActionState.IDLE)
-            if (equipChanged) persistCurrentState(silent = true)
+            if (equipChanged || skillLevelUp) persistCurrentState(silent = true)
+            else if (bagChanged) scheduleDebouncedSkillSave()
         }
     }
 

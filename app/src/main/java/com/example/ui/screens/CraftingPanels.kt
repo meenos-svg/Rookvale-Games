@@ -45,9 +45,11 @@ import com.example.game.sprites.EntitySpriteAtlas
 import com.example.ui.theme.ExpEmerald
 import com.example.ui.theme.FireOrange
 import com.example.ui.theme.HealthCrimson
+import com.example.ui.theme.ManaSapphire
 import com.example.ui.theme.ObsidianVoid
 import com.example.ui.theme.ParchmentLight
 import com.example.ui.theme.ParchmentMuted
+import com.example.ui.theme.SoulViolet
 import com.example.ui.theme.StoneBorderDark
 import com.example.ui.theme.StoneBorderLight
 import com.example.ui.theme.StoneSurface
@@ -180,6 +182,174 @@ fun FletchingBenchContent(
                     actionLabel = "Fletch",
                     accentColor = ExpEmerald,
                     onCraft = { onCraft(recipe.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun RunecraftingTableContent(
+    state: GameWorldState,
+    onCraft: (String) -> Unit
+) {
+    val blankCount = state.itemCount("blank_rune")
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(StoneSurface)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "MLv ${state.magicLevel}",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = SoulViolet,
+                modifier = Modifier.testTag("runecraft_magic_level")
+            )
+            Text(
+                text = "MP ${state.mp}/${state.maxMp}",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = ManaSapphire
+            )
+            Text(
+                text = "Soul ${state.soul}/${state.maxSoul}",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = SoulViolet
+            )
+            Text(
+                text = "Blanks: $blankCount",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = TorchGold,
+                modifier = Modifier.testTag("runecraft_blanks_summary")
+            )
+        }
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            items(RecipeCatalog.runecraftingRecipes, key = { it.id }) { recipe ->
+                RunecraftingRecipeCard(
+                    state = state,
+                    recipe = recipe,
+                    onCraft = { onCraft(recipe.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RunecraftingRecipeCard(
+    state: GameWorldState,
+    recipe: CraftingRecipe,
+    onCraft: () -> Unit
+) {
+    val outDef = ItemCatalog.get(recipe.outputItemId)
+    val icon = remember(outDef.id) { EntitySpriteAtlas.itemIcon(outDef.id) }
+    val magicMet = state.magicLevel >= recipe.requiredMagicLevel
+    val manaMet = state.mp >= recipe.manaCost
+    val soulMet = state.soul >= recipe.soulCost
+    val ingredientsMet = recipe.ingredients.all { state.hasItem(it.itemId, it.count) }
+    val canInscribe = magicMet && manaMet && soulMet && ingredientsMet
+
+    Surface(
+        color = StoneSurface,
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(
+            1.dp,
+            when {
+                canInscribe -> SoulViolet.copy(alpha = 0.9f)
+                !magicMet -> HealthCrimson.copy(alpha = 0.55f)
+                else -> StoneBorderLight.copy(alpha = 0.55f)
+            }
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("recipe_${recipe.id}")
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            PixelSpritePreview(
+                bitmap = icon,
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(ObsidianVoid, RoundedCornerShape(4.dp))
+                    .border(1.dp, if (magicMet) SoulViolet.copy(alpha = 0.6f) else StoneBorderDark, RoundedCornerShape(4.dp))
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "${outDef.name} x${recipe.outputCount}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (magicMet) ParchmentLight else ParchmentMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Text(
+                        text = "MLv ${recipe.requiredMagicLevel}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = if (magicMet) ExpEmerald else HealthCrimson,
+                        modifier = Modifier
+                            .background(
+                                (if (magicMet) ExpEmerald else HealthCrimson).copy(alpha = 0.16f),
+                                RoundedCornerShape(4.dp)
+                            )
+                            .border(
+                                1.dp,
+                                (if (magicMet) ExpEmerald else HealthCrimson).copy(alpha = 0.7f),
+                                RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    )
+                }
+                Text(
+                    text = "${recipe.manaCost} MP • ${recipe.soulCost} Soul • ${outDef.description}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (manaMet && soulMet) ManaSapphire else TorchAmber,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val reqText = recipe.ingredients.joinToString(" + ") { req ->
+                    val have = state.itemCount(req.itemId)
+                    "${ItemCatalog.get(req.itemId).name} ($have/${req.count})"
+                }
+                Text(
+                    text = reqText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (ingredientsMet) ExpEmerald else ParchmentMuted,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            // Keep clickable even when missing requirements so tapping logs exact missing MP/Soul/MLv/Reagent feedback
+            Button(
+                onClick = onCraft,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (canInscribe) SoulViolet else StoneBorderDark,
+                    contentColor = if (canInscribe) ObsidianVoid else ParchmentMuted
+                ),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier
+                    .height(48.dp)
+                    .testTag("craft_btn_${recipe.id}")
+            ) {
+                Text(
+                    text = if (magicMet) "Inscribe" else "Locked",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                 )
             }
         }

@@ -666,9 +666,57 @@ object EntitySpriteAtlas {
             ItemCategory.POTION_MP -> {
                 rect(buf, ITEM_S, 6, 2, 4, 2, 0xFFC7A06B.toInt()); rect(buf, ITEM_S, 4, 5, 8, 9, 0xFF245DC9.toInt()); rect(buf, ITEM_S, 5, 6, 3, 6, 0xFF66A6FF.toInt())
             }
+            ItemCategory.RUNE_BLANK -> {
+                // Smooth uninscribed carved slate runestone with subtle bevel highlight
+                rect(buf, ITEM_S, 3, 2, 10, 12, 0xFF4F5763.toInt())
+                rect(buf, ITEM_S, 4, 3, 8, 10, 0xFF8B95A3.toInt())
+                rect(buf, ITEM_S, 4, 3, 8, 2, 0xFFB0BAC7.toInt())
+                rect(buf, ITEM_S, 5, 6, 6, 4, 0xFF77818F.toInt())
+            }
+            ItemCategory.RUNE_HEAL -> {
+                // Luminous emerald-cyan healing cross sigil on pale marble runestone
+                rect(buf, ITEM_S, 3, 2, 10, 12, 0xFF3E615B.toInt())
+                rect(buf, ITEM_S, 4, 3, 8, 10, 0xFF8AA8A0.toInt())
+                rect(buf, ITEM_S, 7, 4, 2, 8, 0xFF47F08B.toInt())
+                rect(buf, ITEM_S, 5, 7, 6, 2, 0xFF47F08B.toInt())
+                rect(buf, ITEM_S, 7, 7, 2, 2, 0xFFFFFFFF.toInt())
+            }
             ItemCategory.RUNE_ATTACK -> {
-                val glow = if (itemId == "sd_rune") 0xFFFF4D6D.toInt() else 0xFF4DD2FF.toInt()
-                rect(buf, ITEM_S, 3, 2, 10, 12, 0xFF6B7380.toInt()); rect(buf, ITEM_S, 4, 3, 8, 10, 0xFF8C96A6.toInt()); rect(buf, ITEM_S, 6, 5, 4, 6, glow)
+                when (itemId) {
+                    "magic_dart_rune" -> {
+                        // Tier 1: Pale sky-cyan arcane dart chevron
+                        rect(buf, ITEM_S, 3, 2, 10, 12, 0xFF485566.toInt())
+                        rect(buf, ITEM_S, 4, 3, 8, 10, 0xFF7B899E.toInt())
+                        rect(buf, ITEM_S, 7, 4, 2, 8, 0xFF66E8FF.toInt())
+                        rect(buf, ITEM_S, 6, 5, 4, 2, 0xFF66E8FF.toInt())
+                        px(buf, ITEM_S, 7, 4, 0xFFFFFFFF.toInt()); px(buf, ITEM_S, 8, 4, 0xFFFFFFFF.toInt())
+                    }
+                    "hmm_rune" -> {
+                        // Tier 2: Electric sapphire lightning zig-zag sigil
+                        rect(buf, ITEM_S, 3, 2, 10, 12, 0xFF364566.toInt())
+                        rect(buf, ITEM_S, 4, 3, 8, 10, 0xFF63769E.toInt())
+                        rect(buf, ITEM_S, 7, 4, 3, 2, 0xFF4DA6FF.toInt())
+                        rect(buf, ITEM_S, 6, 6, 4, 2, 0xFF75D6FF.toInt())
+                        rect(buf, ITEM_S, 7, 8, 3, 2, 0xFF4DA6FF.toInt())
+                        rect(buf, ITEM_S, 6, 10, 3, 2, 0xFFFFFFFF.toInt())
+                    }
+                    "fireball_rune" -> {
+                        // Tier 3: Fiery orange-gold ember orb on volcanic stone
+                        rect(buf, ITEM_S, 3, 2, 10, 12, 0xFF5C2D22.toInt())
+                        rect(buf, ITEM_S, 4, 3, 8, 10, 0xFF8C4C38.toInt())
+                        rect(buf, ITEM_S, 5, 5, 6, 6, 0xFFFF5E1A.toInt())
+                        rect(buf, ITEM_S, 6, 6, 4, 4, 0xFFFFB833.toInt())
+                        rect(buf, ITEM_S, 7, 7, 2, 2, 0xFFFFF4B8.toInt())
+                    }
+                    else -> {
+                        // Tier 4 Sudden Death: Obsidian tablet with crimson skull sigil
+                        rect(buf, ITEM_S, 3, 2, 10, 12, 0xFF211824.toInt())
+                        rect(buf, ITEM_S, 4, 3, 8, 10, 0xFF3B2C40.toInt())
+                        rect(buf, ITEM_S, 5, 4, 6, 5, 0xFFFF3355.toInt())
+                        rect(buf, ITEM_S, 6, 9, 4, 2, 0xFFFF3355.toInt())
+                        px(buf, ITEM_S, 6, 6, 0xFF140D17.toInt()); px(buf, ITEM_S, 9, 6, 0xFF140D17.toInt())
+                    }
+                }
             }
             ItemCategory.TOOL_ROPE -> {
                 rect(buf, ITEM_S, 3, 4, 10, 9, 0xFFB88D4E.toInt()); rect(buf, ITEM_S, 5, 6, 6, 5, 0)

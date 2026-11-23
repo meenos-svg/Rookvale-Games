@@ -79,6 +79,7 @@ object WorldMaps {
         LandmarkLabel(0, 47, 42, "TEMPLE"),
         LandmarkLabel(0, 40, 43, "DEPOT"),
         LandmarkLabel(0, 54, 43, "ALARIC'S SHOP"),
+        LandmarkLabel(0, 53, 49, "RUNE ALTAR"),
         LandmarkLabel(0, 47, 36, "SMITHY & FLETCHER"),
         LandmarkLabel(0, 47, 52, "FISHING PIER"),
         LandmarkLabel(0, 56, 38, "SEWER STAIRS"),
@@ -384,8 +385,13 @@ object WorldMaps {
         g[oy + 13][ox + 12] = TileType.TEMPLE_FLOOR
         g[oy + 13][ox + 18] = TileType.TEMPLE_FLOOR
         g[oy + 12][ox + 15] = TileType.TEMPLE_ALTAR
+        g[oy + 12][ox + 13] = TileType.RUNECRAFTING_TABLE
         g[oy + 10][ox + 13] = TileType.TORCH_WALL
         g[oy + 10][ox + 17] = TileType.TORCH_WALL
+
+        // Arcane Runecrafting Sanctuary Alcove (Just South of Alaric's Shop inside Rookvale Town PZ)
+        fillRect(g, ox + 20, oy + 17, ox + 22, oy + 19, TileType.TEMPLE_FLOOR)
+        g[oy + 18][ox + 21] = TileType.RUNECRAFTING_TABLE
 
         // Smithy & Fletching Courtyard (Just North of Temple: Smelting Furnaces, Blacksmith Anvils & Fletching Workbench)
         fillRect(g, ox + 12, oy + 4, ox + 18, oy + 8, TileType.COBBLESTONE)

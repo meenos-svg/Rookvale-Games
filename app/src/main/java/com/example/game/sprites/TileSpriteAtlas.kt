@@ -70,6 +70,7 @@ object TileSpriteAtlas {
         TileType.SMELTING_FURNACE -> drawSmeltingFurnace(frame)
         TileType.BLACKSMITH_ANVIL -> drawBlacksmithAnvil()
         TileType.FLETCHING_BENCH -> drawFletchingBench()
+        TileType.RUNECRAFTING_TABLE -> drawRunecraftingTable(frame)
         TileType.ORE_OCHRE -> drawOreVein(0xFFD97D2B.toInt(), 0xFFFFB85C.toInt(), 0xFF695547.toInt())
         TileType.ORE_BOGSTONE -> drawOreVein(0xFF7B8B9E.toInt(), 0xFFBAC7D6.toInt(), 0xFF4D4A47.toInt())
         TileType.ORE_BRIMSTONE -> drawOreVein(0xFFE65319.toInt(), 0xFFFFC43D.toInt(), 0xFF302926.toInt(), frame)
@@ -317,6 +318,39 @@ object TileSpriteAtlas {
         rect(buf, 24, 8, 2, 3, 0xFFF5EFE0.toInt())
         rect(buf, 24, 11, 2, 3, 0xFFF5EFE0.toInt())
         px(buf, 17, 9, 0xFFBAC7D6.toInt()); px(buf, 17, 12, 0xFFBAC7D6.toInt())
+        return toImageBitmap(buf)
+    }
+
+    private fun drawRunecraftingTable(frame: Int): ImageBitmap {
+        val buf = newPixels(0xFF9E9484.toInt())
+        // Stone floor shadow beneath arcane altar
+        rect(buf, 4, 25, 25, 5, 0xFF282230.toInt())
+        // Carved obsidian-basalt altar pedestal & beveled tabletop
+        rect(buf, 5, 17, 22, 10, 0xFF2F2A3A.toInt())
+        rect(buf, 3, 6, 25, 11, 0xFF474159.toInt())
+        rect(buf, 3, 6, 25, 2, 0xFF665E7D.toInt())
+        rect(buf, 28, 8, 3, 19, 0xFF1F1B26.toInt())
+        // Gold-inlaid altar trim & mystical purple runner cloth
+        rect(buf, 11, 17, 10, 10, 0xFF54307A.toInt())
+        rect(buf, 12, 17, 8, 10, 0xFF6B3AA6.toInt())
+        rect(buf, 11, 17, 1, 10, 0xFFE6B44C.toInt())
+        rect(buf, 20, 17, 1, 10, 0xFFE6B44C.toInt())
+        // Glowing inscribed arcane circle & pulsing sapphire/violet rune crystal on tabletop
+        val sigilGlow = if (frame == 0) 0xFF66E8FF.toInt() else 0xFFB88CFF.toInt()
+        val coreGlow = if (frame == 0) 0xFFFFFFFF.toInt() else 0xFF99F3FF.toInt()
+        rect(buf, 8, 8, 15, 7, 0xFF2A2438.toInt())
+        rect(buf, 9, 9, 13, 1, sigilGlow)
+        rect(buf, 9, 13, 13, 1, sigilGlow)
+        rect(buf, 9, 9, 1, 5, sigilGlow)
+        rect(buf, 21, 9, 1, 5, sigilGlow)
+        // Floating runestone crystal at altar center
+        rect(buf, 13, 9 - frame, 5, 4, sigilGlow)
+        rect(buf, 14, 10 - frame, 3, 2, coreGlow)
+        // Small side candles flickering on altar corners
+        rect(buf, 5, 8, 2, 4, 0xFFE8DFC8.toInt())
+        rect(buf, 24, 8, 2, 4, 0xFFE8DFC8.toInt())
+        px(buf, 5, 7, if (frame == 0) 0xFFFFE57F.toInt() else 0xFFFF9E3D.toInt())
+        px(buf, 24, 7, if (frame == 1) 0xFFFFE57F.toInt() else 0xFFFF9E3D.toInt())
         return toImageBitmap(buf)
     }
 

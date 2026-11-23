@@ -14,7 +14,10 @@ data class CraftingRecipe(
     val outputCount: Int = 1,
     val ingredients: List<ItemStack>,
     val station: ActivePanel,
-    val tab: CraftingTab = CraftingTab.KNIGHT
+    val tab: CraftingTab = CraftingTab.KNIGHT,
+    val requiredMagicLevel: Int = 0,
+    val manaCost: Int = 0,
+    val soulCost: Int = 0
 )
 
 object ItemCatalog {
@@ -25,8 +28,12 @@ object ItemCatalog {
         ItemDefinition("hatchet", "Hatchet", ItemCategory.TOOL_HATCHET, 18.0, buyPrice = 65, sellPrice = 22, description = "Sturdy woodcutter's hatchet. Tap adjacent overland trees to chop Wood Logs."),
         ItemDefinition("health_potion", "Health Potion", ItemCategory.POTION_HP, 2.7, buyPrice = 45, sellPrice = 18, restoreAmount = 95, stackable = true, description = "Restores ~95 HP and eases poison."),
         ItemDefinition("mana_potion", "Mana Potion", ItemCategory.POTION_MP, 2.7, buyPrice = 50, sellPrice = 20, restoreAmount = 80, stackable = true, description = "Restores ~80 Mana instantly."),
-        ItemDefinition("hmm_rune", "Heavy Magic Missile", ItemCategory.RUNE_ATTACK, 1.2, buyPrice = 40, sellPrice = 12, attack = 42, range = 5, manaCost = 10, stackable = true, description = "Fires an energy bolt at your target. Scales with Magic Level."),
-        ItemDefinition("sd_rune", "Sudden Death Rune", ItemCategory.RUNE_ATTACK, 1.4, buyPrice = 140, sellPrice = 55, attack = 95, range = 5, manaCost = 20, stackable = true, description = "Devastating death magic rune for bosses."),
+        ItemDefinition("blank_rune", "Blank Rune", ItemCategory.RUNE_BLANK, 0.8, buyPrice = 15, sellPrice = 5, stackable = true, description = "Uninscribed runestone. Take to Rookvale's Runecrafting Table to imbue spells."),
+        ItemDefinition("magic_dart_rune", "Arcane Dart Rune", ItemCategory.RUNE_ATTACK, 1.0, sellPrice = 8, attack = 28, range = 5, requiredMagicLevel = 1, runeTier = 1, manaCost = 8, stackable = true, description = "Tier 1 offensive rune (Magic Lv 1). Fires a crisp arcane bolt."),
+        ItemDefinition("healing_rune", "Intense Healing Rune", ItemCategory.RUNE_HEAL, 1.1, sellPrice = 16, restoreAmount = 135, range = 5, requiredMagicLevel = 4, runeTier = 1, manaCost = 14, stackable = true, description = "Healing rune (Magic Lv 4). Restores strong HP on self or a tapped ally & eases poison."),
+        ItemDefinition("hmm_rune", "Heavy Magic Missile", ItemCategory.RUNE_ATTACK, 1.2, sellPrice = 24, attack = 48, range = 5, requiredMagicLevel = 7, runeTier = 2, manaCost = 14, stackable = true, description = "Tier 2 offensive rune (Magic Lv 7). Piercing lightning bolt with arcane shock."),
+        ItemDefinition("fireball_rune", "Great Fireball Rune", ItemCategory.RUNE_ATTACK, 1.3, sellPrice = 42, attack = 68, range = 5, requiredMagicLevel = 12, aoeRadius = 1, runeTier = 3, manaCost = 22, stackable = true, description = "Tier 3 AoE rune (Magic Lv 12). Unleashes a 3x3 fiery splash blast around your target."),
+        ItemDefinition("sd_rune", "Sudden Death Rune", ItemCategory.RUNE_ATTACK, 1.4, sellPrice = 75, attack = 108, range = 5, requiredMagicLevel = 15, aoeRadius = 1, runeTier = 4, manaCost = 35, stackable = true, description = "Tier 4 master rune (Magic Lv 15). Devastating death blast & shockwave for bosses."),
         ItemDefinition("fresh_fish", "Fresh Fish", ItemCategory.FOOD, 5.2, buyPrice = 12, sellPrice = 6, restoreAmount = 35, stackable = true, description = "Caught at Rookvale Pier. Restores 35 HP and 20 MP."),
         ItemDefinition("fresh_meat", "Fresh Meat", ItemCategory.FOOD, 6.0, buyPrice = 0, sellPrice = 5, restoreAmount = 32, stackable = true, description = "Hearty wild game meat dropped by outskirts critters. Restores 32 HP."),
         ItemDefinition("dragon_ham", "Wyrm Haunch", ItemCategory.FOOD, 12.0, buyPrice = 0, sellPrice = 28, restoreAmount = 85, stackable = true, description = "Rich roasted meat. Restores 85 HP and 45 MP."),
@@ -86,11 +93,11 @@ object ItemCatalog {
         ItemDefinition("draketalon_siegebow", "Draketalon Siegebow", ItemCategory.WEAPON_DISTANCE, 56.0, sellPrice = 640, attack = 54, range = 6, attackIntervalMs = 1300L, requiredSkillType = SkillType.DISTANCE, requiredSkillLevel = 24, requiredAmmoKind = AmmoKind.QUARRELS, isTwoHanded = true, preferredVocation = Vocation.PALADIN, description = "Colossal 2H dragon-limbed arbalest. Paladin Tier 4 mastery."),
 
         // --- Multi-Tier Forged Weapons: MAGE (Magic) ---
-        ItemDefinition("sunbrass_scepter", "Sunbrass Scepter", ItemCategory.WEAPON_WAND, 18.0, sellPrice = 65, attack = 17, range = 3, attackIntervalMs = 800L, manaCost = 4, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 10, description = "Quick 1H spark-channeling wand. Pairs with a shield."),
-        ItemDefinition("bilewood_conduit", "Bilewood Conduit", ItemCategory.WEAPON_WAND, 22.0, sellPrice = 155, attack = 25, range = 4, attackIntervalMs = 900L, manaCost = 6, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 14, description = "Venom-infused 1H focus rod firing corrosive bolts."),
-        ItemDefinition("tallowbone_crosier", "Tallowbone Crosier", ItemCategory.WEAPON_WAND, 27.0, sellPrice = 285, attack = 34, range = 4, attackIntervalMs = 1000L, manaCost = 8, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 18, isTwoHanded = true, preferredVocation = Vocation.MAGE, description = "Crypt-carved 2H staff channeling Wraith Tallow. Mage Tier 3 mastery."),
-        ItemDefinition("moonforge_spire", "Moonforge Spire", ItemCategory.WEAPON_WAND, 24.0, sellPrice = 510, attack = 39, range = 5, attackIntervalMs = 800L, manaCost = 9, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 22, preferredVocation = Vocation.MAGE, description = "Rapid 1H starstone wand pulsing with astral lightning. Mage Tier 4 mastery."),
-        ItemDefinition("cinderheart_rod", "Cinderheart Rod", ItemCategory.WEAPON_WAND, 31.0, sellPrice = 640, attack = 52, range = 5, attackIntervalMs = 1100L, manaCost = 12, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 24, isTwoHanded = true, preferredVocation = Vocation.MAGE, description = "Volcanic 2H staff crowned with an Ember Heart. Mage Tier 4 mastery."),
+        ItemDefinition("sunbrass_scepter", "Sunbrass Scepter", ItemCategory.WEAPON_WAND, 18.0, sellPrice = 65, attack = 17, range = 3, attackIntervalMs = 800L, manaCost = 4, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 1, description = "Quick 1H spark-channeling wand. Pairs with a shield."),
+        ItemDefinition("bilewood_conduit", "Bilewood Conduit", ItemCategory.WEAPON_WAND, 22.0, sellPrice = 155, attack = 25, range = 4, attackIntervalMs = 900L, manaCost = 6, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 6, description = "Venom-infused 1H focus rod firing corrosive bolts."),
+        ItemDefinition("tallowbone_crosier", "Tallowbone Crosier", ItemCategory.WEAPON_WAND, 27.0, sellPrice = 285, attack = 34, range = 4, attackIntervalMs = 1000L, manaCost = 8, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 11, isTwoHanded = true, preferredVocation = Vocation.MAGE, description = "Crypt-carved 2H staff channeling Wraith Tallow. Mage Tier 3 mastery."),
+        ItemDefinition("moonforge_spire", "Moonforge Spire", ItemCategory.WEAPON_WAND, 24.0, sellPrice = 510, attack = 39, range = 5, attackIntervalMs = 800L, manaCost = 9, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 14, preferredVocation = Vocation.MAGE, description = "Rapid 1H starstone wand pulsing with astral lightning. Mage Tier 4 mastery."),
+        ItemDefinition("cinderheart_rod", "Cinderheart Rod", ItemCategory.WEAPON_WAND, 31.0, sellPrice = 640, attack = 52, range = 5, attackIntervalMs = 1100L, manaCost = 12, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 16, isTwoHanded = true, preferredVocation = Vocation.MAGE, description = "Volcanic 2H staff crowned with an Ember Heart. Mage Tier 4 mastery."),
 
         // --- Craftable Ammunition (Ammo Slot) ---
         ItemDefinition("wooden_arrows", "Wooden Arrows", ItemCategory.AMMO, 0.35, sellPrice = 1, attack = 4, ammoKind = AmmoKind.SHAFTS, stackable = true, description = "Hand-fletched hardwood arrows for Shortbows & Hunting Bows."),
@@ -106,8 +113,8 @@ object ItemCatalog {
         ItemDefinition("halberd", "Cyclops Halberd", ItemCategory.WEAPON_MELEE, 75.0, sellPrice = 240, attack = 33, defense = 14, attackIntervalMs = 1400L, requiredSkillType = SkillType.MELEE, requiredSkillLevel = 16, isTwoHanded = true, description = "Legacy heavy 2H polearm."),
         ItemDefinition("hunting_spear", "Hunting Spear", ItemCategory.WEAPON_DISTANCE, 20.0, sellPrice = 22, attack = 18, range = 4, attackIntervalMs = 1000L, requiredSkillType = SkillType.DISTANCE, requiredSkillLevel = 10, description = "Starter 1H throwing spear."),
         ItemDefinition("crossbow", "Arbalest Bow", ItemCategory.WEAPON_DISTANCE, 34.0, sellPrice = 120, attack = 31, range = 5, attackIntervalMs = 1300L, requiredSkillType = SkillType.DISTANCE, requiredSkillLevel = 14, requiredAmmoKind = AmmoKind.QUARRELS, isTwoHanded = true, description = "Legacy 2H arbalest crossbow."),
-        ItemDefinition("wand_vortex", "Wand of Vortex", ItemCategory.WEAPON_WAND, 19.0, sellPrice = 25, attack = 17, range = 3, attackIntervalMs = 900L, manaCost = 4, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 10, description = "Starter crackling energy wand."),
-        ItemDefinition("wand_inferno", "Wand of Inferno", ItemCategory.WEAPON_WAND, 26.0, sellPrice = 160, attack = 35, range = 4, attackIntervalMs = 1000L, manaCost = 8, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 16, description = "Legacy flame wand."),
+        ItemDefinition("wand_vortex", "Wand of Vortex", ItemCategory.WEAPON_WAND, 19.0, sellPrice = 25, attack = 17, range = 3, attackIntervalMs = 900L, manaCost = 4, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 1, description = "Starter crackling energy wand."),
+        ItemDefinition("wand_inferno", "Wand of Inferno", ItemCategory.WEAPON_WAND, 26.0, sellPrice = 160, attack = 35, range = 4, attackIntervalMs = 1000L, manaCost = 8, requiredSkillType = SkillType.MAGIC, requiredSkillLevel = 11, description = "Legacy flame wand."),
 
         // --- Shields & Armor ---
         ItemDefinition("wooden_shield", "Wooden Shield", ItemCategory.SHIELD, 32.0, buyPrice = 35, sellPrice = 12, defense = 14, description = "Basic oak buckler."),
@@ -125,12 +132,11 @@ object ItemCatalog {
         ItemDefinition("life_amulet", "Amulet of Vitality", ItemCategory.AMULET, 4.2, buyPrice = 240, sellPrice = 100, armor = 2, description = "Warm ruby pendant granting extra protection.")
     ).associateBy { it.id }
 
-    // Alaric sells ONLY supplies, tools (Quarry Mattock, Hatchet, Rope, Fishing Rod), potions, runes & basic armor — NO weapons!
+    // Alaric sells ONLY supplies, Blank Runes, tools (Quarry Mattock, Hatchet, Rope, Fishing Rod), potions & basic armor — NO finished runes or weapons!
     val shopInventoryIds: List<String> = listOf(
         "health_potion",
         "mana_potion",
-        "hmm_rune",
-        "sd_rune",
+        "blank_rune",
         "hatchet",
         "quarry_mattock",
         "rope",
@@ -256,8 +262,67 @@ object RecipeCatalog {
         )
     )
 
+    val runecraftingRecipes: List<CraftingRecipe> = listOf(
+        CraftingRecipe(
+            id = "rune_magic_dart",
+            outputItemId = "magic_dart_rune",
+            outputCount = 3,
+            ingredients = listOf(ItemStack("blank_rune", 1), ItemStack("ochre_nugget", 1)),
+            station = ActivePanel.RUNECRAFTING_TABLE,
+            tab = CraftingTab.MAGE,
+            requiredMagicLevel = 1,
+            manaCost = 20,
+            soulCost = 2
+        ),
+        CraftingRecipe(
+            id = "rune_healing",
+            outputItemId = "healing_rune",
+            outputCount = 2,
+            ingredients = listOf(ItemStack("blank_rune", 1), ItemStack("wild_feather", 1)),
+            station = ActivePanel.RUNECRAFTING_TABLE,
+            tab = CraftingTab.MAGE,
+            requiredMagicLevel = 4,
+            manaCost = 30,
+            soulCost = 3
+        ),
+        CraftingRecipe(
+            id = "rune_hmm",
+            outputItemId = "hmm_rune",
+            outputCount = 2,
+            ingredients = listOf(ItemStack("blank_rune", 1), ItemStack("bile_gland", 1)),
+            station = ActivePanel.RUNECRAFTING_TABLE,
+            tab = CraftingTab.MAGE,
+            requiredMagicLevel = 7,
+            manaCost = 45,
+            soulCost = 4
+        ),
+        CraftingRecipe(
+            id = "rune_fireball",
+            outputItemId = "fireball_rune",
+            outputCount = 2,
+            ingredients = listOf(ItemStack("blank_rune", 1), ItemStack("ghoul_gem", 1), ItemStack("cinder_pitch", 1)),
+            station = ActivePanel.RUNECRAFTING_TABLE,
+            tab = CraftingTab.MAGE,
+            requiredMagicLevel = 12,
+            manaCost = 70,
+            soulCost = 6
+        ),
+        CraftingRecipe(
+            id = "rune_sd",
+            outputItemId = "sd_rune",
+            outputCount = 2,
+            ingredients = listOf(ItemStack("blank_rune", 1), ItemStack("runic_slate", 1), ItemStack("ember_heart", 1)),
+            station = ActivePanel.RUNECRAFTING_TABLE,
+            tab = CraftingTab.MAGE,
+            requiredMagicLevel = 15,
+            manaCost = 100,
+            soulCost = 10
+        )
+    )
+
     fun findById(recipeId: String): CraftingRecipe? =
         smeltingRecipes.firstOrNull { it.id == recipeId }
             ?: forgingRecipes.firstOrNull { it.id == recipeId }
             ?: fletchingRecipes.firstOrNull { it.id == recipeId }
+            ?: runecraftingRecipes.firstOrNull { it.id == recipeId }
 }

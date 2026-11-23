@@ -157,6 +157,21 @@ data class SkillProgress(
         val req = requiredPointsForNext()
         return (points / req).toFloat().coerceIn(0f, 1f)
     }
+
+    /**
+     * Dedicated Mana-driven Magic Level XP curve starting at Magic Level 1:
+     * 30 * 1.24^(level - 1) so climbing 1 -> 4 (Healing) -> 7 (HMM) -> 12 (GFB) -> 15 (SD)
+     * rewards steady casting and runecrafting.
+     */
+    fun requiredMagicXpForNext(): Double {
+        val exp = (level - 1).coerceAtLeast(0)
+        return 30.0 * Math.pow(1.24, exp.toDouble())
+    }
+
+    fun magicProgressFraction(): Float {
+        val req = requiredMagicXpForNext()
+        return (points / req).toFloat().coerceIn(0f, 1f)
+    }
 }
 
 @JsonClass(generateAdapter = true)
@@ -164,7 +179,7 @@ data class PlayerSkills(
     val melee: SkillProgress = SkillProgress(10, 0.0),
     val distance: SkillProgress = SkillProgress(10, 0.0),
     val shielding: SkillProgress = SkillProgress(10, 0.0),
-    val magic: SkillProgress = SkillProgress(10, 0.0),
+    val magic: SkillProgress = SkillProgress(1, 0.0),
     val fishing: SkillProgress = SkillProgress(10, 0.0),
     val mining: SkillProgress = SkillProgress(10, 0.0)
 ) {
@@ -207,6 +222,8 @@ enum class ItemCategory {
     AMULET,
     POTION_HP,
     POTION_MP,
+    RUNE_BLANK,
+    RUNE_HEAL,
     RUNE_ATTACK,
     TOOL_ROPE,
     TOOL_FISHING_ROD,
@@ -233,6 +250,9 @@ data class ItemDefinition(
     val attackIntervalMs: Long = 1000L,
     val requiredSkillType: SkillType? = null,
     val requiredSkillLevel: Int = 10,
+    val requiredMagicLevel: Int = 0,
+    val aoeRadius: Int = 0,
+    val runeTier: Int = 0,
     val requiredAmmoKind: AmmoKind? = null,
     val ammoKind: AmmoKind? = null,
     val pickaxeTier: Int = 0,
@@ -365,6 +385,7 @@ enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
     SMELTING_FURNACE(false),
     BLACKSMITH_ANVIL(false),
     FLETCHING_BENCH(false),
+    RUNECRAFTING_TABLE(false),
     ORE_OCHRE(false),
     ORE_BOGSTONE(false),
     ORE_BRIMSTONE(false),
@@ -637,6 +658,9 @@ enum class ProjectileKind {
     ARROW,
     BOLT,
     ENERGY_BOLT,
+    ARCANE_DART,
+    FIREBALL_AOE,
+    HEAL_RUNE,
     DEATH_RUNE,
     FIRE_BREATH,
     FIREBALL,
@@ -696,7 +720,9 @@ data class PlayerSaveData(
     val mapVersion: Int = 1,
     val tunicColorIndex: Int = 0,
     val hairColorIndex: Int = 0,
-    val questFlags: Map<String, Boolean> = emptyMap()
+    val questFlags: Map<String, Boolean> = emptyMap(),
+    val boundAttackRuneId: String? = null,
+    val boundHealRuneId: String? = "healing_rune"
 )
 
 enum class ActivePanel {
@@ -709,6 +735,7 @@ enum class ActivePanel {
     FURNACE,
     ANVIL,
     FLETCHING_BENCH,
+    RUNECRAFTING_TABLE,
     LOOT_CORPSE,
     ORACLE
 }
@@ -768,7 +795,9 @@ data class GameWorldState(
     val outboundMonsterHits: List<LocalMonsterHitEvent> = emptyList(),
     val outboundMonsterAttacks: List<LocalMonsterAttackEvent> = emptyList(),
     val outboundPlayerEffects: List<LocalPlayerActionFxEvent> = emptyList(),
-    val questFlags: Map<String, Boolean> = emptyMap()
+    val questFlags: Map<String, Boolean> = emptyMap(),
+    val boundAttackRuneId: String? = "magic_dart_rune",
+    val boundHealRuneId: String? = "healing_rune"
 ) {
     fun toolBagWeightOz(): Double =
         toolBag.sumOf { ItemCatalog.get(it.itemId).weightOz * TOOL_BAG_WEIGHT_MULTIPLIER * it.count }
@@ -812,10 +841,26 @@ data class GameWorldState(
 
     fun activeAmmoCount(): Int = equipment.ammoId?.let { itemCount(it) } ?: 0
 
-    fun bestAttackRuneId(): String? = when {
-        hasItem("sd_rune") -> "sd_rune"
-        hasItem("hmm_rune") -> "hmm_rune"
-        else -> null
+    val magicLevel: Int get() = skills.magic.level
+    val magicXp: Double get() = skills.magic.points
+    fun magicXpToNext(): Double = skills.magic.requiredMagicXpForNext()
+
+    fun resolvedHealRuneId(): String = boundHealRuneId?.takeIf {
+        ItemCatalog.all[it]?.category == ItemCategory.RUNE_HEAL
+    } ?: "healing_rune"
+
+    fun resolvedAttackRuneId(): String? {
+        val bound = boundAttackRuneId?.takeIf { ItemCatalog.all[it]?.category == ItemCategory.RUNE_ATTACK }
+        if (bound != null && hasItem(bound)) return bound
+        return bestAttackRuneId() ?: bound
+    }
+
+    fun bestAttackRuneId(): String? {
+        val ordered = listOf("sd_rune", "fireball_rune", "hmm_rune", "magic_dart_rune")
+        val usable = ordered.firstOrNull { id ->
+            hasItem(id) && magicLevel >= ItemCatalog.get(id).requiredMagicLevel
+        }
+        return usable ?: ordered.firstOrNull { hasItem(it) }
     }
 
     fun isUsingTwoHandedWeapon(): Boolean = equipment.weaponDef()?.isTwoHanded == true
@@ -824,6 +869,9 @@ data class GameWorldState(
 
     fun attackSkillMultiplier(skillLevel: Int): Double =
         1.0 + (skillLevel - 10).coerceAtLeast(0) * 0.06
+
+    fun magicSkillMultiplier(): Double =
+        1.0 + (skills.magic.level - 1).coerceAtLeast(0) * 0.06
 
     fun weaponOffVocationMultiplier(weapon: ItemDefinition?): Double {
         val pref = weapon?.preferredVocation ?: return 1.0

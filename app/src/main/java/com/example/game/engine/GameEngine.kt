@@ -65,26 +65,30 @@ object GameEngine {
             Vocation.ADVENTURER -> listOf(
                 ItemStack("health_potion", 4),
                 ItemStack("mana_potion", 2),
-                ItemStack("hmm_rune", 3),
+                ItemStack("magic_dart_rune", 3),
+                ItemStack("blank_rune", 2),
                 ItemStack("cheese", 3)
             )
             Vocation.KNIGHT -> listOf(
                 ItemStack("health_potion", 4),
                 ItemStack("mana_potion", 1),
-                ItemStack("hmm_rune", 2),
+                ItemStack("magic_dart_rune", 2),
+                ItemStack("blank_rune", 1),
                 ItemStack("cheese", 3)
             )
             Vocation.PALADIN -> listOf(
                 ItemStack("ochre_shafts", 45),
                 ItemStack("health_potion", 3),
                 ItemStack("mana_potion", 2),
-                ItemStack("hmm_rune", 4),
+                ItemStack("magic_dart_rune", 4),
+                ItemStack("blank_rune", 2),
                 ItemStack("cheese", 3)
             )
             Vocation.MAGE -> listOf(
                 ItemStack("health_potion", 2),
                 ItemStack("mana_potion", 5),
-                ItemStack("hmm_rune", 6),
+                ItemStack("magic_dart_rune", 6),
+                ItemStack("blank_rune", 4),
                 ItemStack("cheese", 2)
             )
         }
@@ -230,6 +234,8 @@ object GameEngine {
             oreNodes = WorldMaps.initialOreNodes(),
             corpses = migratedCorpses,
             questFlags = save.questFlags,
+            boundAttackRuneId = save.boundAttackRuneId ?: "magic_dart_rune",
+            boundHealRuneId = save.boundHealRuneId ?: "healing_rune",
             statusLog = listOf("Loaded ${save.name} (Lvl ${save.level} ${voc.displayName}).$notes")
         )
     }
@@ -263,7 +269,9 @@ object GameEngine {
             mapVersion = CURRENT_MAP_VERSION,
             tunicColorIndex = state.tunicColorIndex,
             hairColorIndex = state.hairColorIndex,
-            questFlags = state.questFlags
+            questFlags = state.questFlags,
+            boundAttackRuneId = state.boundAttackRuneId,
+            boundHealRuneId = state.boundHealRuneId
         )
     }
 
@@ -340,7 +348,7 @@ object GameEngine {
                             }
                         )
                     else -> baseState.copy(activePanel = ActivePanel.SHOP, walkPath = emptyList())
-                        .addLogInternal("Alaric: 'Potions, runes, Hatchets & sturdy tools — craft your own gear at the Smithy & Fletcher!'")
+                        .addLogInternal("Alaric: 'Potions, Blank Runes, Hatchets & sturdy tools — inscribe spells at the Rune Altar!'")
                 }
             } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
         }
@@ -376,6 +384,12 @@ object GameEngine {
             return if (dist <= 1) {
                 baseState.copy(activePanel = ActivePanel.FLETCHING_BENCH, walkPath = emptyList())
                     .addLogInternal("Stepped up to the Fletching Workbench.")
+            } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
+        }
+        if (tile == TileType.RUNECRAFTING_TABLE) {
+            return if (dist <= 1) {
+                baseState.copy(activePanel = ActivePanel.RUNECRAFTING_TABLE, walkPath = emptyList())
+                    .addLogInternal("Opened the Arcane Runecrafting Table.")
             } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
         }
 
@@ -605,6 +619,7 @@ object GameEngine {
             ActivePanel.FURNACE -> !CraftingAndMiningEngine.isNearStation(moved, TileType.SMELTING_FURNACE)
             ActivePanel.ANVIL -> !CraftingAndMiningEngine.isNearStation(moved, TileType.BLACKSMITH_ANVIL)
             ActivePanel.FLETCHING_BENCH -> !CraftingAndMiningEngine.isNearStation(moved, TileType.FLETCHING_BENCH)
+            ActivePanel.RUNECRAFTING_TABLE -> !CraftingAndMiningEngine.isNearStation(moved, TileType.RUNECRAFTING_TABLE)
             ActivePanel.DEPOT -> !CraftingAndMiningEngine.isNearStation(moved, TileType.DEPOT_CHEST) &&
                 !CraftingAndMiningEngine.isNearStation(moved, TileType.MINI_DEPOT)
             ActivePanel.ORACLE -> moved.floor != 0 || chebyshev(moved.playerX, moved.playerY, WorldMaps.ORACLE_X, WorldMaps.ORACLE_Y) > 2
@@ -777,13 +792,13 @@ object GameEngine {
         return when (weapon?.category) {
             ItemCategory.WEAPON_WAND -> {
                 if (s.mp >= weapon.manaCost) {
-                    val magicMult = s.attackSkillMultiplier(s.skills.magic.level)
+                    val magicMult = s.magicSkillMultiplier()
                     val basePower = weapon.attack + s.level * 0.65
                     val rawDmg = (basePower * magicMult * Random.nextDouble(0.85, 1.18) * skillPenaltyMult * offVocationMult)
                         .roundToInt().coerceAtLeast(6)
                     val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = true)
                     s = s.copy(mp = s.mp - weapon.manaCost)
-                    s = advanceSkillPublic(s, SkillType.MAGIC, weapon.manaCost.toDouble() * 1.25, nowMs)
+                    s = awardMagicXpFromMana(s, weapon.manaCost, nowMs)
                     s = s.addProjectileInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), target.x.toFloat(), target.y.toFloat(), ProjectileKind.ENERGY_BOLT, nowMs)
                     s = s.queuePlayerFx(null, null, PlayerActionState.CASTING)
                     applyDamageToMonster(s, target.id, dmg, nowMs, projectileKind = ProjectileKind.ENERGY_BOLT)
@@ -1235,13 +1250,14 @@ object GameEngine {
                 loot += ItemStack("vesper_wing", 1)
                 if (Random.nextFloat() < 0.55f) loot += ItemStack("wild_feather", 2)
                 if (Random.nextFloat() < 0.45f) loot += ItemStack("ochre_shafts", 6)
-                if (Random.nextFloat() < 0.32f) loot += ItemStack("hmm_rune", 1)
+                if (Random.nextFloat() < 0.35f) loot += ItemStack("blank_rune", 1)
+                if (Random.nextFloat() < 0.25f) loot += ItemStack("magic_dart_rune", 2)
                 if (Random.nextFloat() < 0.16f) loot += ItemStack("leather_armor", 1)
             }
             MonsterType.POISON_SPIDER -> {
                 if (Random.nextFloat() < 0.75f) loot += ItemStack("spider_silk", 1)
                 if (Random.nextFloat() < 0.65f) loot += ItemStack("bile_gland", 1)
-                if (Random.nextFloat() < 0.28f) loot += ItemStack("hmm_rune", 1)
+                if (Random.nextFloat() < 0.24f) loot += ItemStack("healing_rune", 1)
                 if (Random.nextFloat() < 0.28f) loot += ItemStack("health_potion", 1)
             }
 
@@ -1265,6 +1281,7 @@ object GameEngine {
                 if (Random.nextFloat() < 0.55f) loot += ItemStack("ancient_bone", 1)
                 if (Random.nextFloat() < 0.42f) loot += ItemStack("mana_potion", 1)
                 if (Random.nextFloat() < 0.32f) loot += ItemStack("hmm_rune", 2)
+                if (Random.nextFloat() < 0.22f) loot += ItemStack("healing_rune", 1)
                 if (Random.nextFloat() < 0.10f) loot += ItemStack("life_amulet", 1)
             }
             MonsterType.FIRE_DEVIL -> {
@@ -1272,7 +1289,7 @@ object GameEngine {
                 if (Random.nextFloat() < 0.55f) loot += ItemStack("cinder_pitch", 1)
                 if (Random.nextFloat() < 0.45f) loot += ItemStack("mana_potion", 1)
                 if (Random.nextFloat() < 0.35f) loot += ItemStack("hmm_rune", 2)
-                if (Random.nextFloat() < 0.28f) loot += ItemStack("sd_rune", 1)
+                if (Random.nextFloat() < 0.26f) loot += ItemStack("fireball_rune", 1)
             }
 
             // --- TIER 4: Floor -3 Abyssal Crypt & Bosses ---
@@ -1280,20 +1297,21 @@ object GameEngine {
                 loot += ItemStack("colossus_tendon", 1)
                 if (Random.nextFloat() < 0.45f) loot += ItemStack("runic_slate", 1)
                 if (Random.nextFloat() < 0.50f) loot += ItemStack("dragon_ham", 1)
-                if (Random.nextFloat() < 0.32f) loot += ItemStack("sd_rune", 1)
+                if (Random.nextFloat() < 0.28f) loot += ItemStack("fireball_rune", 1)
                 if (Random.nextFloat() < 0.16f) loot += ItemStack("steel_shield", 1)
             }
             MonsterType.DRAGON_HATCHLING -> {
                 loot += ItemStack("wyrmscale_plate", 1)
                 if (Random.nextFloat() < 0.55f) loot += ItemStack("dragon_ham", 1)
                 if (Random.nextFloat() < 0.48f) loot += ItemStack("ember_heart", 1)
-                if (Random.nextFloat() < 0.30f) loot += ItemStack("sd_rune", 1)
+                if (Random.nextFloat() < 0.32f) loot += ItemStack("fireball_rune", 2)
             }
             MonsterType.NECROMANCER -> {
                 loot += ItemStack("runic_slate", 1)
                 if (Random.nextFloat() < 0.70f) loot += ItemStack("ghoul_gem", 1)
                 if (Random.nextFloat() < 0.50f) loot += ItemStack("mana_potion", 1)
-                if (Random.nextFloat() < 0.40f) loot += ItemStack("sd_rune", 2)
+                if (Random.nextFloat() < 0.35f) loot += ItemStack("fireball_rune", 1)
+                if (Random.nextFloat() < 0.30f) loot += ItemStack("sd_rune", 1)
                 if (Random.nextFloat() < 0.14f) loot += ItemStack("mystic_robe", 1)
             }
             MonsterType.DEMON_LORD -> {
@@ -1301,6 +1319,7 @@ object GameEngine {
                 loot += ItemStack("ember_heart", 2)
                 loot += ItemStack("runic_slate", 1)
                 loot += ItemStack("dragon_ham", 2)
+                loot += ItemStack("fireball_rune", 2)
                 loot += ItemStack("sd_rune", 2)
                 if (Random.nextFloat() < 0.35f) loot += ItemStack("dragon_shield", 1)
             }
@@ -1309,6 +1328,7 @@ object GameEngine {
                 loot += ItemStack("wyrmscale_plate", 2)
                 loot += ItemStack("ember_heart", 1)
                 loot += ItemStack("dragon_ham", 2)
+                loot += ItemStack("fireball_rune", 2)
                 loot += ItemStack("sd_rune", 2)
                 if (Random.nextFloat() < 0.40f) loot += ItemStack("dragon_mail", 1)
             }
@@ -1359,32 +1379,192 @@ object GameEngine {
             .addLogInternal("Drank Mana Potion (+$actual MP).")
     }
 
-    fun useAttackRune(state: GameWorldState, nowMs: Long): GameWorldState {
+    fun bindRuneToHotbar(state: GameWorldState, runeId: String): GameWorldState {
+        val def = ItemCatalog.all[runeId] ?: return state
+        return when (def.category) {
+            ItemCategory.RUNE_ATTACK -> state.copy(boundAttackRuneId = runeId)
+                .addLogInternal("Bound ${def.name} (Magic Lv ${def.requiredMagicLevel}) to your Attack Rune hotbar.")
+            ItemCategory.RUNE_HEAL -> state.copy(boundHealRuneId = runeId)
+                .addLogInternal("Bound ${def.name} (Magic Lv ${def.requiredMagicLevel}) to your Heal Rune hotbar.")
+            else -> state
+        }
+    }
+
+    fun useHealingRune(
+        state: GameWorldState,
+        nowMs: Long,
+        remotePlayersOnFloor: List<RemotePlayerState> = emptyList(),
+        explicitRuneId: String? = null
+    ): GameWorldState {
         if (state.deathReport != null) return state
-        val runeId = state.bestAttackRuneId() ?: return state.addLogInternal("No Attack Runes in backpack!")
-        val target = state.monsters.firstOrNull { it.id == state.targetMonsterId && it.floor == state.floor }
-            ?: return state.addLogInternal("Tap a monster first to aim your Attack Rune!")
+        val runeId = explicitRuneId ?: state.resolvedHealRuneId()
+        if (!state.hasItem(runeId)) {
+            return state.addLogInternal("No Healing Runes in backpack! Inscribe them at the Runecrafting Table.")
+        }
         val runeDef = ItemCatalog.get(runeId)
+        if (state.magicLevel < runeDef.requiredMagicLevel) {
+            return state.addLogInternal("You need Magic Level ${runeDef.requiredMagicLevel} to use this rune.")
+        }
+        if (state.mp < runeDef.manaCost) {
+            return state.addLogInternal("Not enough Mana (${runeDef.manaCost} MP required for ${runeDef.name}).")
+        }
+
+        val healPower = ((runeDef.restoreAmount + state.magicLevel * 7 + state.level * 2) * Random.nextDouble(0.92, 1.12))
+            .roundToInt().coerceAtLeast(40)
+
+        // If player recently tapped/inspected a nearby remote ally in range who needs healing, cast on that ally!
+        val inspectedAlly = if (state.inspectedPlayerId != null && nowMs < state.inspectedPlayerUntilMs) {
+            remotePlayersOnFloor.firstOrNull { rp ->
+                rp.playerId == state.inspectedPlayerId &&
+                    rp.floor == state.floor &&
+                    rp.hp < rp.maxHp &&
+                    chebyshev(state.playerX, state.playerY, rp.x, rp.y) <= runeDef.range
+            }
+        } else {
+            null
+        }
+
+        var next = state.copy(
+            mp = (state.mp - runeDef.manaCost).coerceAtLeast(0),
+            backpack = removeItemPublic(state.backpack, runeId, 1)
+        )
+        next = awardMagicXpFromMana(next, runeDef.manaCost, nowMs)
+
+        return if (inspectedAlly != null) {
+            next
+                .addProjectileInternal(
+                    state.floor,
+                    state.playerX.toFloat(),
+                    state.playerY.toFloat(),
+                    inspectedAlly.x.toFloat(),
+                    inspectedAlly.y.toFloat(),
+                    ProjectileKind.HEAL_RUNE,
+                    nowMs,
+                    durationMs = 340L
+                )
+                .addFloatingInternal(state.floor, inspectedAlly.x.toFloat(), inspectedAlly.y.toFloat(), "+$healPower HP", FloatingTextKind.HEAL, nowMs)
+                .queuePlayerFx("+$healPower HP", FloatingTextKind.HEAL, PlayerActionState.HEALING)
+                .addLogInternal("Cast ${runeDef.name} on ${inspectedAlly.name} (+$healPower HP).")
+        } else {
+            val newHp = (next.hp + healPower).coerceAtMost(next.maxHp)
+            val actual = newHp - next.hp
+            next.copy(
+                hp = newHp,
+                poisonTicks = (next.poisonTicks - 4).coerceAtLeast(0)
+            )
+                .addProjectileInternal(
+                    state.floor,
+                    state.playerX.toFloat(),
+                    state.playerY.toFloat(),
+                    state.playerX.toFloat(),
+                    state.playerY.toFloat(),
+                    ProjectileKind.HEAL_RUNE,
+                    nowMs,
+                    durationMs = 340L
+                )
+                .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "+$actual HP", FloatingTextKind.HEAL, nowMs)
+                .queuePlayerFx("+$actual HP", FloatingTextKind.HEAL, PlayerActionState.HEALING)
+                .addLogInternal("Cast ${runeDef.name} (+$actual HP, eased poison).")
+        }
+    }
+
+    fun useAttackRune(
+        state: GameWorldState,
+        nowMs: Long,
+        explicitRuneId: String? = null
+    ): GameWorldState {
+        if (state.deathReport != null) return state
+        val runeId = explicitRuneId ?: state.resolvedAttackRuneId()
+            ?: return state.addLogInternal("No Attack Runes in backpack! Inscribe them at the Runecrafting Table.")
+        if (!state.hasItem(runeId)) {
+            return state.addLogInternal("Out of ${ItemCatalog.get(runeId).name}! Bind another rune or craft more at the Rune Altar.")
+        }
+        val runeDef = ItemCatalog.get(runeId)
+        if (state.magicLevel < runeDef.requiredMagicLevel) {
+            return state.addLogInternal("You need Magic Level ${runeDef.requiredMagicLevel} to use this rune.")
+        }
+        val target = state.monsters.firstOrNull { it.id == state.targetMonsterId && it.floor == state.floor }
+            ?: return state.addLogInternal("Tap a monster first to aim your ${runeDef.name}!")
         if (chebyshev(state.playerX, state.playerY, target.x, target.y) > runeDef.range) {
             return state.addLogInternal("Target is too far for ${runeDef.name} (range ${runeDef.range}).")
         }
-        if (state.mp < runeDef.manaCost) return state.addLogInternal("Not enough Mana (${runeDef.manaCost} MP required).")
+        if (state.mp < runeDef.manaCost) {
+            return state.addLogInternal("Not enough Mana (${runeDef.manaCost} MP required for ${runeDef.name}).")
+        }
 
-        val magicMult = state.attackSkillMultiplier(state.skills.magic.level)
-        val rawDmg = ((runeDef.attack + state.level * 1.0) * magicMult * Random.nextDouble(0.85, 1.18))
-            .roundToInt().coerceAtLeast(12)
-        val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = true)
+        val magicMult = state.magicSkillMultiplier()
+        val rawDmg = ((runeDef.attack + state.level * 1.15) * magicMult * Random.nextDouble(0.88, 1.16))
+            .roundToInt().coerceAtLeast(10)
+        // Tier 2 HMM pierces extra armor via shock; Tier 4 SD hits hardest
+        val effectiveArmor = if (runeId == "hmm_rune") (target.type.armor * 0.7).roundToInt() else target.type.armor
+        val primaryDmg = mitigateMonsterDamage(rawDmg, effectiveArmor, isMagic = true)
+
         var next = state.copy(
-            mp = state.mp - runeDef.manaCost,
-            soul = (state.soul - 1).coerceAtLeast(0),
+            mp = (state.mp - runeDef.manaCost).coerceAtLeast(0),
             playerFacing = directionToward(state.playerX, state.playerY, target.x, target.y),
             backpack = removeItemPublic(state.backpack, runeId, 1)
         )
-        next = advanceSkillPublic(next, SkillType.MAGIC, runeDef.manaCost.toDouble() * 1.4, nowMs)
-        val projKind = if (runeId == "sd_rune") ProjectileKind.DEATH_RUNE else ProjectileKind.ENERGY_BOLT
-        next = next.addProjectileInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), target.x.toFloat(), target.y.toFloat(), projKind, nowMs)
+        next = awardMagicXpFromMana(next, runeDef.manaCost, nowMs)
+
+        val projKind = when (runeId) {
+            "magic_dart_rune" -> ProjectileKind.ARCANE_DART
+            "fireball_rune" -> ProjectileKind.FIREBALL_AOE
+            "sd_rune" -> ProjectileKind.DEATH_RUNE
+            else -> ProjectileKind.ENERGY_BOLT
+        }
+        next = next.addProjectileInternal(
+            state.floor,
+            state.playerX.toFloat(),
+            state.playerY.toFloat(),
+            target.x.toFloat(),
+            target.y.toFloat(),
+            projKind,
+            nowMs
+        )
         next = next.queuePlayerFx(null, null, PlayerActionState.CASTING)
-        return applyDamageToMonster(next, target.id, dmg, nowMs, "${runeDef.name} struck ${target.type.displayName} for $dmg!", projKind)
+
+        val originX = target.x
+        val originY = target.y
+        val blastSummary = when (runeId) {
+            "hmm_rune" -> "${runeDef.name} shocked ${target.type.displayName} for $primaryDmg!"
+            "fireball_rune" -> "${runeDef.name} engulfed ${target.type.displayName} for $primaryDmg!"
+            "sd_rune" -> "${runeDef.name} obliterated ${target.type.displayName} for $primaryDmg!"
+            else -> "${runeDef.name} struck ${target.type.displayName} for $primaryDmg!"
+        }
+        next = applyDamageToMonster(next, target.id, primaryDmg, nowMs, blastSummary, projKind)
+
+        // Tier 3 (Great Fireball 3x3 splash) & Tier 4 (Sudden Death shockwave) hit nearby monsters in AoE radius
+        if (runeDef.aoeRadius > 0) {
+            val splashFactor = if (runeId == "fireball_rune") 0.75 else 0.45
+            val splashTargets = next.monsters.filter { m ->
+                m.floor == state.floor &&
+                    m.id != target.id &&
+                    chebyshev(originX, originY, m.x, m.y) <= runeDef.aoeRadius
+            }
+            for (splashTarget in splashTargets) {
+                val splashRaw = (rawDmg * splashFactor).roundToInt().coerceAtLeast(8)
+                val splashDmg = mitigateMonsterDamage(splashRaw, splashTarget.type.armor, isMagic = true)
+                next = next.addProjectileInternal(
+                    state.floor,
+                    originX.toFloat(),
+                    originY.toFloat(),
+                    splashTarget.x.toFloat(),
+                    splashTarget.y.toFloat(),
+                    projKind,
+                    nowMs,
+                    durationMs = 240L
+                )
+                next = applyDamageToMonster(
+                    next,
+                    splashTarget.id,
+                    splashDmg,
+                    nowMs,
+                    "${runeDef.name} splash hit ${splashTarget.type.displayName} for $splashDmg!",
+                    projKind
+                )
+            }
+        }
+        return next
     }
 
     fun useRope(state: GameWorldState, nowMs: Long): GameWorldState {
@@ -1868,11 +2048,20 @@ object GameEngine {
                 prev.copy(points = (prev.requiredPointsForNext() - (lostPts - sp.points)).coerceAtLeast(0.0))
             }
         }
+        fun penalizeMagicSkill(sp: SkillProgress): SkillProgress {
+            if (sp.level <= 1) return sp.copy(points = sp.points * 0.90)
+            val lostPts = sp.requiredMagicXpForNext() * 0.10
+            return if (sp.points >= lostPts) sp.copy(points = sp.points - lostPts)
+            else {
+                val prev = SkillProgress((sp.level - 1).coerceAtLeast(1), 0.0)
+                prev.copy(points = (prev.requiredMagicXpForNext() - (lostPts - sp.points)).coerceAtLeast(0.0))
+            }
+        }
         val penalizedSkills = PlayerSkills(
             melee = penalizeSkill(state.skills.melee),
             distance = penalizeSkill(state.skills.distance),
             shielding = penalizeSkill(state.skills.shielding),
-            magic = penalizeSkill(state.skills.magic),
+            magic = penalizeMagicSkill(state.skills.magic),
             fishing = penalizeSkill(state.skills.fishing),
             mining = penalizeSkill(state.skills.mining)
         )
@@ -1949,6 +2138,11 @@ object GameEngine {
         return s
     }
 
+    fun awardMagicXpFromMana(state: GameWorldState, manaSpent: Int, nowMs: Long): GameWorldState {
+        if (manaSpent <= 0) return state
+        return advanceSkillPublic(state, SkillType.MAGIC, manaSpent.toDouble(), nowMs)
+    }
+
     fun advanceSkillPublic(state: GameWorldState, skill: SkillType, rawPoints: Double, nowMs: Long): GameWorldState {
         val rate = when (skill) {
             SkillType.MELEE -> state.vocation.meleeGainRate
@@ -1958,11 +2152,12 @@ object GameEngine {
             SkillType.FISHING -> 1.25
             SkillType.MINING -> 1.30
         }
-        fun bump(sp: SkillProgress): Pair<SkillProgress, Boolean> {
+        fun bump(sp: SkillProgress, isMagic: Boolean = false): Pair<SkillProgress, Boolean> {
             var cur = sp.copy(points = sp.points + rawPoints * rate)
             var up = false
-            while (cur.points >= cur.requiredPointsForNext()) {
-                cur = SkillProgress(cur.level + 1, cur.points - cur.requiredPointsForNext())
+            while (cur.points >= (if (isMagic) cur.requiredMagicXpForNext() else cur.requiredPointsForNext())) {
+                val req = if (isMagic) cur.requiredMagicXpForNext() else cur.requiredPointsForNext()
+                cur = SkillProgress(cur.level + 1, cur.points - req)
                 up = true
             }
             return cur to up
@@ -1971,7 +2166,7 @@ object GameEngine {
             SkillType.MELEE -> bump(state.skills.melee).let { Triple(state.skills.copy(melee = it.first), it.second, it.first.level) }
             SkillType.DISTANCE -> bump(state.skills.distance).let { Triple(state.skills.copy(distance = it.first), it.second, it.first.level) }
             SkillType.SHIELDING -> bump(state.skills.shielding).let { Triple(state.skills.copy(shielding = it.first), it.second, it.first.level) }
-            SkillType.MAGIC -> bump(state.skills.magic).let { Triple(state.skills.copy(magic = it.first), it.second, it.first.level) }
+            SkillType.MAGIC -> bump(state.skills.magic, isMagic = true).let { Triple(state.skills.copy(magic = it.first), it.second, it.first.level) }
             SkillType.FISHING -> bump(state.skills.fishing).let { Triple(state.skills.copy(fishing = it.first), it.second, it.first.level) }
             SkillType.MINING -> bump(state.skills.mining).let { Triple(state.skills.copy(mining = it.first), it.second, it.first.level) }
         }
@@ -1989,7 +2184,9 @@ object GameEngine {
         return when (def.category) {
             ItemCategory.POTION_HP -> useHealthPotion(state, nowMs)
             ItemCategory.POTION_MP -> useManaPotion(state, nowMs)
-            ItemCategory.RUNE_ATTACK -> useAttackRune(state, nowMs)
+            ItemCategory.RUNE_BLANK -> state.addLogInternal("Bring Blank Runes to the Runecrafting Table (Rune Altar) in Rookvale to inscribe spells.")
+            ItemCategory.RUNE_HEAL -> useHealingRune(state, nowMs, explicitRuneId = itemId)
+            ItemCategory.RUNE_ATTACK -> useAttackRune(state, nowMs, explicitRuneId = itemId)
             ItemCategory.TOOL_ROPE -> useRope(state, nowMs)
             ItemCategory.TOOL_PICKAXE -> {
                 val fl = WorldMaps.getFloor(state.floor)
