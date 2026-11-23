@@ -10,6 +10,7 @@ import com.example.game.cloud.CloudSaveOutcome
 import com.example.game.cloud.CloudSavePayloadCodec
 import com.example.game.cloud.CloudSession
 import com.example.game.cloud.SupabaseCloudSaveRepository
+import com.example.game.data.DisplaySettingsStore
 import com.example.game.data.GameSaveRepository
 import com.example.game.data.RookvaleDatabase
 import com.example.game.data.SaveSlotEntity
@@ -17,8 +18,10 @@ import com.example.game.engine.CraftingAndMiningEngine
 import com.example.game.engine.GameEngine
 import com.example.game.model.ActivePanel
 import com.example.game.model.Direction
+import com.example.game.model.DisplaySettings
 import com.example.game.model.EquipmentSlot
 import com.example.game.model.GameWorldState
+import com.example.game.model.GraphicsQuality
 import com.example.game.model.PlayerSkills
 import com.example.game.model.Vocation
 import com.example.game.multiplayer.ChatChannel
@@ -54,6 +57,7 @@ enum class AppScreen {
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = GameSaveRepository(RookvaleDatabase.getInstance(application).saveSlotDao())
     private val cloudRepository = SupabaseCloudSaveRepository(application)
+    private val displaySettingsStore = DisplaySettingsStore(application)
     private val multiplayerManager = RealtimeMultiplayerManager(
         scope = viewModelScope,
         nowProvider = { System.currentTimeMillis() },
@@ -63,10 +67,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val savedSlots: StateFlow<List<SaveSlotEntity>> = repository.allSaves
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val _displaySettings = MutableStateFlow(displaySettingsStore.load())
+    val displaySettings: StateFlow<DisplaySettings> = _displaySettings.asStateFlow()
+
     private val _screen = MutableStateFlow(AppScreen.TITLE_AND_CREATE)
     val screen: StateFlow<AppScreen> = _screen.asStateFlow()
 
-    private val _world = MutableStateFlow(GameWorldState())
+    private val _world = MutableStateFlow(GameWorldState(showMinimap = _displaySettings.value.showMinimap))
     val world: StateFlow<GameWorldState> = _world.asStateFlow()
 
     val multiplayerState: StateFlow<MultiplayerUiState> = multiplayerManager.uiState
@@ -308,6 +315,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         activeCloudSession = result.session
         val hydrated = GameEngine.fromSaveData(result.saveData)
         val withNotice = hydrated.copy(
+            showMinimap = _displaySettings.value.showMinimap,
             statusLog = (hydrated.statusLog + result.notice).takeLast(6)
         )
         // Keep Room local slot list in sync as well
@@ -333,7 +341,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             vocation = Vocation.ADVENTURER,
             tunicColorIndex = tunicColorIndex,
             hairColorIndex = hairColorIndex
-        )
+        ).copy(showMinimap = _displaySettings.value.showMinimap)
         activeCloudSession = null
         _world.value = fresh
         _screen.value = AppScreen.PLAYING
@@ -366,7 +374,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun loadCharacter(slotId: String) {
         viewModelScope.launch {
             val loaded = repository.loadGame(slotId) ?: return@launch
-            val state = GameEngine.fromSaveData(loaded)
+            val state = GameEngine.fromSaveData(loaded).copy(showMinimap = _displaySettings.value.showMinimap)
             val backup = cloudRepository.localStore.getLocalBackupByPlayerId(slotId)
             activeCloudSession = backup?.session
             if (backup != null) {
@@ -1084,8 +1092,25 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setGraphicsQuality(quality: GraphicsQuality) {
+        if (_displaySettings.value.graphicsQuality == quality) return
+        displaySettingsStore.saveGraphicsQuality(quality)
+        _displaySettings.update { it.copy(graphicsQuality = quality) }
+    }
+
+    fun setShowMinimap(show: Boolean) {
+        displaySettingsStore.saveShowMinimap(show)
+        _displaySettings.update { it.copy(showMinimap = show) }
+        _world.update { it.copy(showMinimap = show) }
+    }
+
+    fun setShowFpsCounter(show: Boolean) {
+        displaySettingsStore.saveShowFpsCounter(show)
+        _displaySettings.update { it.copy(showFpsCounter = show) }
+    }
+
     fun toggleMinimap() {
-        _world.update { it.copy(showMinimap = !it.showMinimap) }
+        setShowMinimap(!_world.value.showMinimap)
     }
 
     fun openPanel(panel: ActivePanel) {

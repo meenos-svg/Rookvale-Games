@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.SetMeal
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SportsMma
 import androidx.compose.material.icons.filled.Terminal
@@ -887,7 +888,7 @@ fun TopRightUtilityAndBattleCluster(
     }
 
     Column(
-        modifier = modifier.width(204.dp),
+        modifier = modifier,
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -907,6 +908,7 @@ fun TopRightUtilityAndBattleCluster(
                 UtilityIconChip(Icons.Default.MilitaryTech, "Skills", state.activePanel == ActivePanel.SKILLS, { onOpenPanel(ActivePanel.SKILLS) }, "tab_skills")
                 UtilityIconChip(Icons.Default.CloudUpload, "Save", false, onSaveManual, "manual_save_button", accentTint = TorchGold)
                 UtilityIconChip(Icons.Default.Map, "World Map", state.activePanel == ActivePanel.WORLD_MAP, { onOpenPanel(ActivePanel.WORLD_MAP) }, "utility_world_map_button")
+                UtilityIconChip(Icons.Default.Settings, "Settings", state.activePanel == ActivePanel.SETTINGS, { onOpenPanel(ActivePanel.SETTINGS) }, "utility_settings_button")
                 UtilityIconChip(Icons.Default.Home, "Character Select", false, onReturnTitle, "return_title_button")
             }
         }
@@ -917,7 +919,7 @@ fun TopRightUtilityAndBattleCluster(
             shape = RoundedCornerShape(8.dp),
             border = BorderStroke(1.2.dp, StoneBorderLight),
             modifier = Modifier
-                .fillMaxWidth()
+                .width(204.dp)
                 .testTag("battle_list_panel")
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {

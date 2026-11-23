@@ -56,8 +56,10 @@ import com.example.R
 import com.example.game.model.ActivePanel
 import com.example.game.model.CorpseEntity
 import com.example.game.model.DeathReport
+import com.example.game.model.DisplaySettings
 import com.example.game.model.EquipmentSlot
 import com.example.game.model.GameWorldState
+import com.example.game.model.GraphicsQuality
 import com.example.game.model.ItemCatalog
 import com.example.game.model.ItemCategory
 import com.example.game.model.ItemStack
@@ -85,6 +87,7 @@ import java.util.Locale
 fun SlideUpGamePanel(
     state: GameWorldState,
     remotePlayers: List<RemotePlayerState> = emptyList(),
+    displaySettings: DisplaySettings = DisplaySettings(),
     onClose: () -> Unit,
     onUseItem: (String) -> Unit,
     onDropItem: (String) -> Unit,
@@ -99,6 +102,9 @@ fun SlideUpGamePanel(
     onCraftRecipe: (String) -> Unit,
     onBindRune: (String) -> Unit = {},
     onWalkToTile: (Int, Int) -> Unit = { _, _ -> },
+    onSelectGraphicsQuality: (GraphicsQuality) -> Unit = {},
+    onToggleMinimapSetting: (Boolean) -> Unit = {},
+    onToggleFpsCounter: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val title = when (state.activePanel) {
@@ -114,6 +120,7 @@ fun SlideUpGamePanel(
         ActivePanel.LOOT_CORPSE -> state.corpses.firstOrNull { it.id == state.inspectingCorpseId }?.label ?: "Corpse"
         ActivePanel.ORACLE -> "The Oracle"
         ActivePanel.WORLD_MAP -> "Regional World Map"
+        ActivePanel.SETTINGS -> stringResource(R.string.panel_settings)
         ActivePanel.NONE -> ""
     }
 
@@ -144,11 +151,19 @@ fun SlideUpGamePanel(
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "Cap ${formatOz(state.remainingCapOz())}/${formatOz(state.maxCapOz)} oz",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (state.remainingCapOz() < 20.0) HealthCrimson else ParchmentMuted
-                )
+                if (state.activePanel == ActivePanel.SETTINGS) {
+                    Text(
+                        text = "Tier: ${displaySettings.graphicsQuality.displayName}",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = TorchAmber
+                    )
+                } else {
+                    Text(
+                        text = "Cap ${formatOz(state.remainingCapOz())}/${formatOz(state.maxCapOz)} oz",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (state.remainingCapOz() < 20.0) HealthCrimson else ParchmentMuted
+                    )
+                }
                 Spacer(Modifier.width(2.dp))
                 IconButton(
                     onClick = onClose,
@@ -178,6 +193,12 @@ fun SlideUpGamePanel(
                         onLootAll = onLootAll
                     )
                     ActivePanel.WORLD_MAP -> RegionalWorldMapContent(state, remotePlayers, onWalkToTile)
+                    ActivePanel.SETTINGS -> SettingsPanelContent(
+                        displaySettings = displaySettings,
+                        onSelectGraphicsQuality = onSelectGraphicsQuality,
+                        onToggleMinimap = onToggleMinimapSetting,
+                        onToggleFpsCounter = onToggleFpsCounter
+                    )
                     ActivePanel.ORACLE, ActivePanel.NONE -> Unit
                 }
             }

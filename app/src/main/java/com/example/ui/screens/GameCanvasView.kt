@@ -24,6 +24,7 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
@@ -37,7 +38,9 @@ import androidx.compose.ui.unit.IntSize
 import com.example.game.model.CorpseEntity
 import com.example.game.model.FloatingTextKind
 import com.example.game.model.GameWorldState
+import com.example.game.model.GraphicsQuality
 import com.example.game.model.MonsterEntity
+import com.example.game.model.ParticleDetailLevel
 import com.example.game.model.ProjectileKind
 import com.example.game.model.ThreatBand
 import com.example.game.model.TileType
@@ -77,6 +80,9 @@ private sealed class DepthSortableItem(val depth: Float, val subOrder: Int) {
 fun GameCanvasView(
     state: GameWorldState,
     remotePlayers: List<RemotePlayerState> = emptyList(),
+    graphicsQuality: GraphicsQuality = GraphicsQuality.DEFAULT,
+    measureFps: Boolean = false,
+    onFpsUpdated: (Int) -> Unit = {},
     cameraYawDeg: Float = IsometricCamera.DEFAULT_YAW_DEG,
     rotateDragMode: Boolean = false,
     onCameraYawDelta: (Float) -> Unit = {},
@@ -85,6 +91,9 @@ fun GameCanvasView(
 ) {
     val latestState by rememberUpdatedState(state)
     val latestRemotePlayers by rememberUpdatedState(remotePlayers)
+    val latestGraphicsQuality by rememberUpdatedState(graphicsQuality)
+    val latestMeasureFps by rememberUpdatedState(measureFps)
+    val latestOnFpsUpdated by rememberUpdatedState(onFpsUpdated)
     val latestOnTileTapped by rememberUpdatedState(onTileTapped)
     val latestCameraYaw by rememberUpdatedState(cameraYawDeg)
     val latestRotateDragMode by rememberUpdatedState(rotateDragMode)
@@ -96,9 +105,25 @@ fun GameCanvasView(
     var smoothYaw by remember { mutableFloatStateOf(cameraYawDeg) }
 
     LaunchedEffect(Unit) {
+        var fpsWindowStartMs = SystemClock.uptimeMillis()
+        var fpsFrameCount = 0
         while (true) {
             withFrameMillis {
-                frameUptimeMs = SystemClock.uptimeMillis()
+                val nowMs = SystemClock.uptimeMillis()
+                frameUptimeMs = nowMs
+                if (latestMeasureFps) {
+                    fpsFrameCount++
+                    val elapsed = nowMs - fpsWindowStartMs
+                    if (elapsed >= 500L) {
+                        val measured = ((fpsFrameCount * 1000f) / elapsed.toFloat()).roundToInt().coerceIn(1, 144)
+                        latestOnFpsUpdated(measured)
+                        fpsFrameCount = 0
+                        fpsWindowStartMs = nowMs
+                    }
+                } else {
+                    fpsFrameCount = 0
+                    fpsWindowStartMs = nowMs
+                }
                 val diff = targetZoom - smoothZoom
                 if (abs(diff) > 0.002f) {
                     smoothZoom += diff * 0.22f
@@ -217,6 +242,7 @@ fun GameCanvasView(
                 }
         ) {
             val st = latestState
+            val quality = latestGraphicsQuality
             val now = frameUptimeMs
             val animFrame = ((now / 420L) % 2L).toInt()
             val floorMap = WorldMaps.getFloor(st.floor)
@@ -234,12 +260,12 @@ fun GameCanvasView(
                 cameraYawDeg = smoothYaw
             )
 
-            val bounds = camera.visibleTileBounds(size.width, size.height, floorMap.width, floorMap.height, margin = 4)
+            val bounds = camera.visibleTileBounds(size.width, size.height, floorMap.width, floorMap.height, margin = quality.cullMargin)
             val chunkBounds = floorMap.visibleChunkBounds(bounds.minTx, bounds.maxTx, bounds.minTy, bounds.maxTy)
             val chunkSize = floorMap.chunkedGrid.chunkSize
             val hw = camera.halfW
             val hh = camera.halfH
-            val spritePx = (camera.tileW * 0.78f).roundToInt().coerceIn(36, 150)
+            val spritePx = (camera.tileW * 0.78f * quality.spriteScaleMultiplier).roundToInt().coerceIn(32, 168)
 
             depthQueue.clear()
 
@@ -276,7 +302,8 @@ fun GameCanvasView(
                                 tile = renderTile,
                                 cx = center.x,
                                 cy = center.y,
-                                nowMs = now
+                                nowMs = now,
+                                quality = quality
                             )
 
                             if (IsometricTileDrawer.isTallProp(renderTile)) {
@@ -407,11 +434,12 @@ fun GameCanvasView(
                             tile = item.tile,
                             cx = c.x,
                             cy = c.y,
-                            nowMs = now
+                            nowMs = now,
+                            quality = quality
                         )
                     }
                     is DepthSortableItem.NpcItem -> {
-                        drawIsometricNpc(item.npc, camera, hw, hh, spritePx, animFrame, labelPaint, labelShadowPaint)
+                        drawIsometricNpc(item.npc, camera, hw, hh, spritePx, animFrame, labelPaint, labelShadowPaint, quality)
                     }
                     is DepthSortableItem.MonsterItem -> {
                         drawIsometricMonster(
@@ -426,7 +454,8 @@ fun GameCanvasView(
                             spritePx = spritePx,
                             now = now,
                             labelPaint = labelPaint,
-                            labelShadowPaint = labelShadowPaint
+                            labelShadowPaint = labelShadowPaint,
+                            quality = quality
                         )
                     }
                     is DepthSortableItem.RemotePlayerItem -> {
@@ -444,7 +473,8 @@ fun GameCanvasView(
                             animFrame = animFrame,
                             now = now,
                             labelPaint = labelPaint,
-                            labelShadowPaint = labelShadowPaint
+                            labelShadowPaint = labelShadowPaint,
+                            quality = quality
                         )
                     }
                     is DepthSortableItem.LocalPlayerItem -> {
@@ -460,23 +490,27 @@ fun GameCanvasView(
                             animFrame = animFrame,
                             now = now,
                             labelPaint = labelPaint,
-                            labelShadowPaint = labelShadowPaint
+                            labelShadowPaint = labelShadowPaint,
+                            quality = quality
                         )
                     }
                 }
             }
 
             // PASS 3B: Smart Cutaway Pitched Building Roofs (fade translucent as player nears, vanish indoors!)
-            for (b in floorMap.buildings) {
-                if (b.maxX >= bounds.minTx && b.minX <= bounds.maxTx && b.maxY >= bounds.minTy && b.minY <= bounds.maxTy) {
-                    IsometricTileDrawer.drawBuildingCutawayRoof(
-                        scope = this,
-                        path = reusablePath,
-                        cam = camera,
-                        building = b,
-                        playerFx = camPlayerX,
-                        playerFy = camPlayerY
-                    )
+            if (quality.drawCutawayRoofs) {
+                for (b in floorMap.buildings) {
+                    if (b.maxX >= bounds.minTx && b.minX <= bounds.maxTx && b.maxY >= bounds.minTy && b.minY <= bounds.maxTy) {
+                        IsometricTileDrawer.drawBuildingCutawayRoof(
+                            scope = this,
+                            path = reusablePath,
+                            cam = camera,
+                            building = b,
+                            playerFx = camPlayerX,
+                            playerFy = camPlayerY,
+                            quality = quality
+                        )
+                    }
                 }
             }
 
@@ -498,7 +532,7 @@ fun GameCanvasView(
             }
 
             // PASS 5: Projectiles, Spells, Splashes & Sparks in Isometric Space
-            drawIsometricProjectiles(st, camera, hw, now)
+            drawIsometricProjectiles(st, camera, hw, now, quality)
 
             // PASS 6: Floating Combat & Resource Text
             st.floatingTexts.forEach { ft ->
@@ -529,6 +563,23 @@ fun GameCanvasView(
                     drawText(ft.text, fx, fy, outlinePaint)
                     drawText(ft.text, fx, fy, floatingPaint)
                 }
+            }
+
+            // PASS 7: HD Subtle Atmospheric Edge Vignette
+            if (quality.drawHdVignette && size.width > 0f && size.height > 0f) {
+                val radius = maxOf(size.width, size.height) * 0.72f
+                drawRect(
+                    brush = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0.0f to Color.Transparent,
+                            0.68f to Color.Transparent,
+                            1.0f to Color(0x4A090706)
+                        ),
+                        center = Offset(size.width * 0.5f, size.height * 0.5f),
+                        radius = radius
+                    ),
+                    size = size
+                )
             }
         }
     }
@@ -570,11 +621,12 @@ private fun DrawScope.drawIsometricNpc(
     spritePx: Int,
     animFrame: Int,
     labelPaint: Paint,
-    labelShadowPaint: Paint
+    labelShadowPaint: Paint,
+    quality: GraphicsQuality = GraphicsQuality.DEFAULT
 ) {
     val c = camera.tileCenterToScreen(npc.x.toFloat(), npc.y.toFloat())
-    IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh)
-    if (npc.role == NpcRole.ORACLE) {
+    IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, quality = quality)
+    if (npc.role == NpcRole.ORACLE && quality != GraphicsQuality.LOW) {
         val auraAlpha = if (animFrame == 0) 0.36f else 0.18f
         drawCircle(
             color = TorchGold.copy(alpha = auraAlpha),
@@ -613,7 +665,8 @@ private fun DrawScope.drawIsometricMonster(
     spritePx: Int,
     now: Long,
     labelPaint: Paint,
-    labelShadowPaint: Paint
+    labelShadowPaint: Paint,
+    quality: GraphicsQuality = GraphicsQuality.DEFAULT
 ) {
     val c = camera.tileCenterToScreen(fx, fy)
     val isBoss = m.type.isBoss
@@ -629,7 +682,7 @@ private fun DrawScope.drawIsometricMonster(
         )
     }
 
-    IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, scale = if (isBoss) 1.3f else 0.96f)
+    IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, scale = if (isBoss) 1.3f else 0.96f, quality = quality)
 
     val mFrame = (((now + (m.id * 170L)) / 420L) % 2L).toInt()
     val drawX = (c.x - drawSize * 0.5f).roundToInt()
@@ -695,7 +748,8 @@ private fun DrawScope.drawIsometricRemotePlayer(
     animFrame: Int,
     now: Long,
     labelPaint: Paint,
-    labelShadowPaint: Paint
+    labelShadowPaint: Paint,
+    quality: GraphicsQuality = GraphicsQuality.DEFAULT
 ) {
     val c = camera.tileCenterToScreen(fx, fy)
     val rpFrame = if (moveFrac < 1f) ((now / 110L) % 2L).toInt() else animFrame
@@ -710,7 +764,7 @@ private fun DrawScope.drawIsometricRemotePlayer(
         )
     }
 
-    IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh)
+    IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, quality = quality)
 
     val haloCenter = Offset(c.x, c.y - spritePx * 0.35f)
     if (rp.isPoisoned) drawCircle(PoisonGreen.copy(alpha = 0.28f), hw * 0.65f, haloCenter)
@@ -773,12 +827,13 @@ private fun DrawScope.drawIsometricLocalPlayer(
     animFrame: Int,
     now: Long,
     labelPaint: Paint,
-    labelShadowPaint: Paint
+    labelShadowPaint: Paint,
+    quality: GraphicsQuality = GraphicsQuality.DEFAULT
 ) {
     val c = camera.tileCenterToScreen(fx, fy)
     val playerFrame = if (moveFrac < 1f) ((now / 110L) % 2L).toInt() else animFrame
 
-    IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, scale = 1.05f)
+    IsometricTileDrawer.drawContactShadow(this, c.x, c.y + hh * 0.10f, hw, hh, scale = 1.05f, quality = quality)
 
     val auraCenter = Offset(c.x, c.y - spritePx * 0.35f)
     if (state.poisonTicks > 0) drawCircle(PoisonGreen.copy(alpha = 0.28f), hw * 0.68f, auraCenter)
@@ -823,18 +878,33 @@ private fun DrawScope.drawIsometricProjectiles(
     state: GameWorldState,
     camera: IsometricCamera,
     hw: Float,
-    now: Long
+    now: Long,
+    quality: GraphicsQuality = GraphicsQuality.DEFAULT
 ) {
+    val particleLevel = quality.particleLevel
     state.projectiles.forEach { proj ->
         if (proj.floor != state.floor) return@forEach
         val t = ((now - proj.createdAtMs).toFloat() / proj.durationMs.toFloat()).coerceIn(0f, 1f)
         if (t >= 1f) return@forEach
+
+        // On LOW quality, skip purely decorative ambient gathering particles
+        if (particleLevel == ParticleDetailLevel.MINIMAL &&
+            (proj.kind == ProjectileKind.SPLASH || proj.kind == ProjectileKind.MINING_SPARK || proj.kind == ProjectileKind.WOOD_CHIP)
+        ) {
+            return@forEach
+        }
 
         val start = camera.tileCenterToScreen(proj.fromX, proj.fromY)
         val end = camera.tileCenterToScreen(proj.toX, proj.toY)
         val arcLift = sin(t * Math.PI).toFloat() * hw * 0.45f
         val px = start.x + (end.x - start.x) * t
         val py = start.y + (end.y - start.y) * t - hw * 0.35f - arcLift
+
+        // HD enriched trailing spell wake along flight path
+        val prevT = (t - 0.14f).coerceAtLeast(0f)
+        val prevArc = sin(prevT * Math.PI).toFloat() * hw * 0.45f
+        val trailX = start.x + (end.x - start.x) * prevT
+        val trailY = start.y + (end.y - start.y) * prevT - hw * 0.35f - prevArc
 
         when (proj.kind) {
             ProjectileKind.SPEAR -> {
@@ -850,43 +920,79 @@ private fun DrawScope.drawIsometricProjectiles(
                 drawRect(Color.White, Offset(px - 2f, py - 2f), Size(5f, 5f))
             }
             ProjectileKind.ENERGY_BOLT -> {
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawCircle(Color(0xFF4DD2FF).copy(alpha = 0.28f), 19f, Offset(px, py))
+                    drawCircle(Color(0xFF4DD2FF).copy(alpha = 0.35f), 7f, Offset(trailX, trailY))
+                }
                 drawCircle(Color(0xFF4DD2FF), 11f, Offset(px, py))
                 drawCircle(Color.White, 5f, Offset(px, py))
             }
             ProjectileKind.ARCANE_DART -> {
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawCircle(Color(0xFF75F0FF).copy(alpha = 0.28f), 16f, Offset(px, py))
+                    drawCircle(Color(0xFF75F0FF).copy(alpha = 0.35f), 6f, Offset(trailX, trailY))
+                }
                 drawCircle(Color(0xFF75F0FF), 9f, Offset(px, py))
                 drawCircle(Color.White, 4f, Offset(px, py))
             }
             ProjectileKind.FIREBALL_AOE -> {
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawCircle(FireOrange.copy(alpha = 0.30f), 22f, Offset(px, py))
+                    drawCircle(FireOrange.copy(alpha = 0.42f), 9f, Offset(trailX, trailY))
+                }
                 drawCircle(TargetRed, 13f, Offset(px, py))
                 drawCircle(FireOrange, 9f, Offset(px, py))
                 drawCircle(Color(0xFFFFE57F), 5f, Offset(px, py))
-                if (t > 0.55f) {
+                if (particleLevel != ParticleDetailLevel.MINIMAL && t > 0.55f) {
                     val burstFrac = ((t - 0.55f) / 0.45f).coerceIn(0f, 1f)
                     val ringRadius = hw * (0.55f + burstFrac * 1.45f)
-                    drawCircle(FireOrange.copy(alpha = (1f - burstFrac) * 0.65f), ringRadius, end, style = Stroke(5f))
-                    drawCircle(Color(0xFFFFD447).copy(alpha = (1f - burstFrac) * 0.30f), ringRadius * 0.85f, end)
+                    drawCircle(FireOrange.copy(alpha = (1f - burstFrac) * 0.65f), ringRadius, end, style = Stroke(5f * quality.strokeScale))
+                    if (particleLevel >= ParticleDetailLevel.FULL) {
+                        drawCircle(Color(0xFFFFD447).copy(alpha = (1f - burstFrac) * 0.30f), ringRadius * 0.85f, end)
+                    }
+                    if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                        drawCircle(Color(0xFFFFF0A6).copy(alpha = (1f - burstFrac) * 0.55f), ringRadius * 1.18f, end, style = Stroke(2.4f))
+                    }
                 }
             }
             ProjectileKind.HEAL_RUNE -> {
                 val alpha = (1f - t).coerceIn(0f, 1f)
                 val center = Offset(end.x, end.y - hw * 0.28f)
                 drawCircle(Color(0xFF47F08B).copy(alpha = alpha * 0.35f), hw * (0.35f + t * 0.48f), center)
-                drawCircle(Color(0xFF75FFE0).copy(alpha = alpha * 0.85f), hw * (0.42f + t * 0.56f), center, style = Stroke(4f))
+                if (particleLevel != ParticleDetailLevel.MINIMAL) {
+                    drawCircle(Color(0xFF75FFE0).copy(alpha = alpha * 0.85f), hw * (0.42f + t * 0.56f), center, style = Stroke(4f * quality.strokeScale))
+                }
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawCircle(Color(0xFFD6FFF0).copy(alpha = alpha * 0.55f), hw * (0.26f + t * 0.72f), center, style = Stroke(2.2f))
+                }
             }
             ProjectileKind.DEATH_RUNE -> {
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawCircle(Color(0xFFFF3355).copy(alpha = 0.28f), 22f, Offset(px, py))
+                    drawCircle(Color(0xFF2E1018).copy(alpha = 0.55f), 8f, Offset(trailX, trailY))
+                }
                 drawCircle(Color(0xFF1A0F14), 14f, Offset(px, py))
                 drawCircle(Color(0xFFFF3355), 8.5f, Offset(px, py))
-                if (t > 0.60f) {
+                if (particleLevel != ParticleDetailLevel.MINIMAL && t > 0.60f) {
                     val shockFrac = ((t - 0.60f) / 0.40f).coerceIn(0f, 1f)
-                    drawCircle(Color(0xFFFF3355).copy(alpha = (1f - shockFrac) * 0.72f), hw * (0.45f + shockFrac * 1.4f), end, style = Stroke(5f))
+                    drawCircle(Color(0xFFFF3355).copy(alpha = (1f - shockFrac) * 0.72f), hw * (0.45f + shockFrac * 1.4f), end, style = Stroke(5f * quality.strokeScale))
+                    if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                        drawCircle(Color(0xFFFF9EB0).copy(alpha = (1f - shockFrac) * 0.50f), hw * (0.30f + shockFrac * 1.65f), end, style = Stroke(2.2f))
+                    }
                 }
             }
             ProjectileKind.FIRE_BREATH -> {
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawCircle(FireOrange.copy(alpha = 0.30f), 24f + t * 8f, Offset(px, py))
+                }
                 drawCircle(FireOrange, 15f + t * 7f, Offset(px, py))
                 drawCircle(Color(0xFFFFE57F), 7.5f, Offset(px, py))
             }
             ProjectileKind.FIREBALL -> {
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawCircle(FireOrange.copy(alpha = 0.30f), 20f, Offset(px, py))
+                    drawCircle(FireOrange.copy(alpha = 0.40f), 8f, Offset(trailX, trailY))
+                }
                 drawCircle(TargetRed, 13f, Offset(px, py))
                 drawCircle(FireOrange, 9f, Offset(px, py))
                 drawCircle(Color(0xFFFFE57F), 4.5f, Offset(px, py))
@@ -896,25 +1002,42 @@ private fun DrawScope.drawIsometricProjectiles(
                 drawRect(Color(0xFFA8ADB8), Offset(px - 3f, py - 3f), Size(5f, 5f))
             }
             ProjectileKind.NECRO_BOLT -> {
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawCircle(Color(0xFFB34BFF).copy(alpha = 0.30f), 20f, Offset(px, py))
+                    drawCircle(Color(0xFFB34BFF).copy(alpha = 0.38f), 7f, Offset(trailX, trailY))
+                }
                 drawCircle(Color(0xFF2E1042), 13f, Offset(px, py))
                 drawCircle(Color(0xFFB34BFF), 8.5f, Offset(px, py))
                 drawCircle(Color(0xFFFF66A3), 4f, Offset(px, py))
             }
             ProjectileKind.SPLASH -> {
-                drawCircle(Color(0xFF8CD9FF).copy(alpha = 1f - t), 7f + t * hw * 0.55f, end, style = Stroke(3.5f))
+                drawCircle(Color(0xFF8CD9FF).copy(alpha = 1f - t), 7f + t * hw * 0.55f, end, style = Stroke(3.5f * quality.strokeScale))
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawCircle(Color(0xFFD9F4FF).copy(alpha = (1f - t) * 0.7f), 4f + t * hw * 0.85f, end, style = Stroke(1.8f))
+                }
             }
             ProjectileKind.MINING_SPARK -> {
                 val spread = t * hw * 0.48f
                 drawRect(TorchGold.copy(alpha = 1f - t), Offset(end.x - spread, end.y - hw * 0.3f - spread), Size(5.5f, 5.5f))
                 drawRect(Color.White.copy(alpha = 1f - t), Offset(end.x + spread, end.y - hw * 0.3f - spread * 0.6f), Size(4.5f, 4.5f))
-                drawRect(FireOrange.copy(alpha = 1f - t), Offset(end.x, end.y - hw * 0.3f + spread * 0.7f), Size(5.5f, 5.5f))
+                if (particleLevel >= ParticleDetailLevel.FULL) {
+                    drawRect(FireOrange.copy(alpha = 1f - t), Offset(end.x, end.y - hw * 0.3f + spread * 0.7f), Size(5.5f, 5.5f))
+                }
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawRect(Color(0xFFFFF3B0).copy(alpha = 1f - t), Offset(end.x - spread * 0.4f, end.y - hw * 0.3f + spread), Size(4.5f, 4.5f))
+                }
             }
             ProjectileKind.WOOD_CHIP -> {
                 val spread = t * hw * 0.52f
                 val alpha = (1f - t).coerceIn(0f, 1f)
                 drawRect(Color(0xFFC48A47).copy(alpha = alpha), Offset(end.x - spread, end.y - hw * 0.4f - spread * 0.7f), Size(6.5f, 4.5f))
                 drawRect(Color(0xFF7D4F24).copy(alpha = alpha), Offset(end.x + spread * 0.85f, end.y - hw * 0.4f - spread * 0.5f), Size(5.5f, 5.5f))
-                drawRect(Color(0xFF4F8A3A).copy(alpha = alpha), Offset(end.x + spread * 0.35f, end.y - hw * 0.4f + spread * 0.4f), Size(5f, 5f))
+                if (particleLevel >= ParticleDetailLevel.FULL) {
+                    drawRect(Color(0xFF4F8A3A).copy(alpha = alpha), Offset(end.x + spread * 0.35f, end.y - hw * 0.4f + spread * 0.4f), Size(5f, 5f))
+                }
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawRect(Color(0xFF7BC45A).copy(alpha = alpha), Offset(end.x - spread * 0.6f, end.y - hw * 0.4f + spread * 0.5f), Size(4.5f, 4.5f))
+                }
             }
         }
     }

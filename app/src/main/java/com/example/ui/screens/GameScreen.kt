@@ -28,7 +28,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -38,9 +40,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.game.model.ActivePanel
+import com.example.game.model.DisplaySettings
 import com.example.game.model.EquipmentSlot
 import com.example.game.model.FloorWarningBanner
 import com.example.game.model.GameWorldState
+import com.example.game.model.GraphicsQuality
 import com.example.game.model.Vocation
 import com.example.game.multiplayer.ChatChannel
 import com.example.game.multiplayer.MultiplayerUiState
@@ -60,6 +64,7 @@ import com.example.ui.theme.TorchGold
 fun GameScreen(
     state: GameWorldState,
     multiplayerState: MultiplayerUiState = MultiplayerUiState(),
+    displaySettings: DisplaySettings = DisplaySettings(),
     saveBanner: String?,
     onTileTapped: (Int, Int) -> Unit,
     onWalkToTile: (Int, Int) -> Unit = onTileTapped,
@@ -73,6 +78,9 @@ fun GameScreen(
     onUseCustomHotbarSlot: (Int) -> Unit = {},
     onBindCustomHotbarSlot: (Int, String?) -> Unit = { _, _ -> },
     onToggleMinimap: () -> Unit,
+    onSelectGraphicsQuality: (GraphicsQuality) -> Unit = {},
+    onToggleMinimapSetting: (Boolean) -> Unit = {},
+    onToggleFpsCounter: (Boolean) -> Unit = {},
     onOpenPanel: (ActivePanel) -> Unit,
     onClosePanel: () -> Unit,
     onUseItem: (String) -> Unit,
@@ -98,6 +106,7 @@ fun GameScreen(
 ) {
     var cameraYawDeg by rememberSaveable { mutableFloatStateOf(IsometricCamera.DEFAULT_YAW_DEG) }
     var rotateDragMode by rememberSaveable { mutableStateOf(false) }
+    var liveFps by remember { mutableIntStateOf(60) }
 
     Box(
         modifier = Modifier
@@ -108,6 +117,9 @@ fun GameScreen(
         GameCanvasView(
             state = state,
             remotePlayers = multiplayerState.remotePlayers,
+            graphicsQuality = displaySettings.graphicsQuality,
+            measureFps = displaySettings.showFpsCounter,
+            onFpsUpdated = { liveFps = it },
             cameraYawDeg = cameraYawDeg,
             rotateDragMode = rotateDragMode,
             onCameraYawDelta = { delta ->
@@ -148,17 +160,28 @@ fun GameScreen(
                     .padding(top = 108.dp, bottom = 52.dp)
             )
 
-            // TOP-CENTER FLOOR DESCENT DANGER BANNER
-            AnimatedVisibility(
-                visible = state.floorWarningBanner != null && state.activePanel == ActivePanel.NONE,
-                enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
-                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+            // TOP-CENTER LIVE FPS PILL & FLOOR DESCENT DANGER BANNER
+            Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 2.dp)
+                    .padding(top = 2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                state.floorWarningBanner?.let { banner ->
-                    FloorDescentWarningBanner(banner = banner)
+                if (displaySettings.showFpsCounter) {
+                    LiveFpsHudBadge(
+                        fps = liveFps,
+                        quality = displaySettings.graphicsQuality
+                    )
+                }
+                AnimatedVisibility(
+                    visible = state.floorWarningBanner != null && state.activePanel == ActivePanel.NONE,
+                    enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+                    exit = fadeOut() + slideOutVertically(targetOffsetY = { -it })
+                ) {
+                    state.floorWarningBanner?.let { banner ->
+                        FloorDescentWarningBanner(banner = banner)
+                    }
                 }
             }
 
@@ -213,6 +236,7 @@ fun GameScreen(
                 SlideUpGamePanel(
                     state = state,
                     remotePlayers = multiplayerState.remotePlayers,
+                    displaySettings = displaySettings,
                     onClose = onClosePanel,
                     onUseItem = onUseItem,
                     onDropItem = onDropItem,
@@ -226,7 +250,10 @@ fun GameScreen(
                     onSellItem = onSellItem,
                     onCraftRecipe = onCraftRecipe,
                     onBindRune = onBindRune,
-                    onWalkToTile = onWalkToTile
+                    onWalkToTile = onWalkToTile,
+                    onSelectGraphicsQuality = onSelectGraphicsQuality,
+                    onToggleMinimapSetting = onToggleMinimapSetting,
+                    onToggleFpsCounter = onToggleFpsCounter
                 )
             }
         }

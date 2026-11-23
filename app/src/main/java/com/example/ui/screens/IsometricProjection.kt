@@ -7,6 +7,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import com.example.game.model.GraphicsQuality
+import com.example.game.model.LightingDetailMode
 import com.example.game.model.TileType
 import com.example.game.world.BuildingFootprint
 import com.example.game.world.WorldFloor
@@ -252,15 +254,30 @@ object IsometricTileDrawer {
         cy: Float,
         hw: Float,
         hh: Float,
-        scale: Float = 1f
+        scale: Float = 1f,
+        quality: GraphicsQuality = GraphicsQuality.DEFAULT
     ) {
+        if (!quality.drawContactShadows) return
         val w = hw * 0.88f * scale
         val h = hh * 0.62f * scale
-        scope.drawOval(
-            color = Color(0x52000000),
-            topLeft = Offset(cx - w * 0.5f, cy - h * 0.5f),
-            size = Size(w, h)
-        )
+        if (quality.drawHdStonePolish) {
+            scope.drawOval(
+                color = Color(0x28000000),
+                topLeft = Offset(cx - w * 0.62f, cy - h * 0.62f),
+                size = Size(w * 1.24f, h * 1.24f)
+            )
+            scope.drawOval(
+                color = Color(0x5E000000),
+                topLeft = Offset(cx - w * 0.48f, cy - h * 0.48f),
+                size = Size(w * 0.96f, h * 0.96f)
+            )
+        } else {
+            scope.drawOval(
+                color = Color(0x52000000),
+                topLeft = Offset(cx - w * 0.5f, cy - h * 0.5f),
+                size = Size(w, h)
+            )
+        }
     }
 
     fun drawRotatedQuad(
@@ -373,10 +390,11 @@ object IsometricTileDrawer {
         tile: TileType,
         cx: Float,
         cy: Float,
-        nowMs: Long
+        nowMs: Long,
+        quality: GraphicsQuality = GraphicsQuality.DEFAULT
     ) {
         val h = tileHash(tx, ty, 3) and 15
-        val shimmer = sin(nowMs * 0.0038 + tx * 0.9 + ty * 0.7).toFloat()
+        val shimmer = if (quality == GraphicsQuality.LOW) 0f else sin(nowMs * 0.0038 + tx * 0.9 + ty * 0.7).toFloat()
 
         // Ground base underneath props/walls matches local setting cleanly
         val baseTile = when (tile) {
@@ -425,91 +443,139 @@ object IsometricTileDrawer {
             else -> Color(0xFF544E46)
         }
 
-        val strokeCol = when (baseTile) {
-            TileType.COBBLESTONE -> Color(0x362C2722)
-            TileType.TEMPLE_FLOOR -> Color(0x45B09658)
-            TileType.WOOD_PLANK_FLOOR, TileType.WOOD_PIER, TileType.WOOD_BRIDGE -> Color(0x422A1B0E)
-            TileType.ARCANE_FLOOR -> Color(0x3C8A6BFF)
-            TileType.WATER, TileType.LAVA -> null
-            else -> Color(0x18000000)
+        val strokeCol = if (quality == GraphicsQuality.LOW) {
+            null
+        } else {
+            when (baseTile) {
+                TileType.COBBLESTONE -> Color(0x362C2722)
+                TileType.TEMPLE_FLOOR -> Color(0x45B09658)
+                TileType.WOOD_PLANK_FLOOR, TileType.WOOD_PIER, TileType.WOOD_BRIDGE -> Color(0x422A1B0E)
+                TileType.ARCANE_FLOOR -> Color(0x3C8A6BFF)
+                TileType.WATER, TileType.LAVA -> null
+                else -> Color(0x18000000)
+            }
         }
 
         // Slightly overdraw ground diamonds (1.03f) to eliminate any hairline subpixel seams at arbitrary yaw angles
-        drawRotatedQuad(scope, path, cam, cx, cy, fracU = 1.03f, fracV = 1.03f, fillColor = groundColor, strokeColor = strokeCol, strokeWidth = 0.85f)
+        drawRotatedQuad(
+            scope, path, cam, cx, cy,
+            fracU = 1.03f, fracV = 1.03f,
+            fillColor = groundColor,
+            strokeColor = strokeCol,
+            strokeWidth = 0.85f * quality.strokeScale
+        )
 
-        // Detailed ground surface overlays
+        // Detailed ground surface overlays scaled by GraphicsQuality tier
         when (baseTile) {
             TileType.GRASS -> {
-                if (h == 1 || h == 9) {
-                    val blade = Color(0xFF68A34D)
-                    scope.drawLine(blade, Offset(cx - 2f, cy + 1f), Offset(cx - 4f, cy - 4f), 1.3f)
-                    scope.drawLine(blade, Offset(cx + 1f, cy + 2f), Offset(cx + 3f, cy - 3f), 1.2f)
-                } else if (h == 14) {
-                    // Subtle pebble
-                    scope.drawOval(Color(0x668C857A), Offset(cx - 3f, cy - 1f), Size(5f, 3f))
+                if (quality.drawGroundClutter) {
+                    if (h == 1 || h == 9) {
+                        val blade = Color(0xFF68A34D)
+                        scope.drawLine(blade, Offset(cx - 2f, cy + 1f), Offset(cx - 4f, cy - 4f), 1.3f * quality.strokeScale)
+                        scope.drawLine(blade, Offset(cx + 1f, cy + 2f), Offset(cx + 3f, cy - 3f), 1.2f * quality.strokeScale)
+                        if (quality.drawHdStonePolish) {
+                            scope.drawLine(Color(0xFF84C466), Offset(cx, cy + 1f), Offset(cx - 1f, cy - 5f), 1.1f)
+                        }
+                    } else if (h == 14) {
+                        // Subtle pebble
+                        scope.drawOval(Color(0x668C857A), Offset(cx - 3f, cy - 1f), Size(5f, 3f))
+                    }
                 }
             }
             TileType.FLOWER_GRASS -> {
-                val blossomColors = arrayOf(Color(0xFFF6D660), Color(0xFFE87EA1), Color(0xFFB39DFF), Color(0xFFF7F4E8))
-                val c1 = blossomColors[h and 3]
-                val c2 = blossomColors[(h + 2) and 3]
-                val r = (cam.tileW * 0.035f).coerceIn(2f, 4f)
-                scope.drawCircle(Color(0xFF6BA64E), r * 1.1f, Offset(cx - cam.tileW * 0.12f, cy + cam.tileH * 0.04f))
-                scope.drawCircle(c1, r, Offset(cx - cam.tileW * 0.12f, cy))
-                scope.drawCircle(c2, r * 0.9f, Offset(cx + cam.tileW * 0.11f, cy - cam.tileH * 0.06f))
-                scope.drawCircle(Color(0xFFF7E58B), r * 0.75f, Offset(cx + cam.tileW * 0.02f, cy + cam.tileH * 0.12f))
+                if (quality.drawWildflowers) {
+                    val blossomColors = arrayOf(Color(0xFFF6D660), Color(0xFFE87EA1), Color(0xFFB39DFF), Color(0xFFF7F4E8))
+                    val c1 = blossomColors[h and 3]
+                    val c2 = blossomColors[(h + 2) and 3]
+                    val r = (cam.tileW * 0.035f).coerceIn(2f, 4f)
+                    scope.drawCircle(Color(0xFF6BA64E), r * 1.1f, Offset(cx - cam.tileW * 0.12f, cy + cam.tileH * 0.04f))
+                    scope.drawCircle(c1, r, Offset(cx - cam.tileW * 0.12f, cy))
+                    scope.drawCircle(c2, r * 0.9f, Offset(cx + cam.tileW * 0.11f, cy - cam.tileH * 0.06f))
+                    scope.drawCircle(Color(0xFFF7E58B), r * 0.75f, Offset(cx + cam.tileW * 0.02f, cy + cam.tileH * 0.12f))
+                    if (quality.drawHdStonePolish) {
+                        scope.drawCircle(Color.White.copy(alpha = 0.75f), r * 0.35f, Offset(cx - cam.tileW * 0.12f, cy - 0.5f))
+                    }
+                }
             }
             TileType.COBBLESTONE -> {
-                // Subtle stone paving divider + soft curb edge where cobble meets grass
-                if (h < 10) {
-                    scope.drawLine(
-                        Color(0x28302A24),
-                        Offset(cx - cam.ux * 0.25f, cy - cam.uy * 0.25f),
-                        Offset(cx + cam.ux * 0.25f, cy + cam.uy * 0.25f),
-                        0.9f
-                    )
-                }
-                val edgeColor = Color(0x55B8AE9E)
-                val nGrass = floorMap.tileAt(tx, ty - 1).let { it == TileType.GRASS || it == TileType.FLOWER_GRASS }
-                val sGrass = floorMap.tileAt(tx, ty + 1).let { it == TileType.GRASS || it == TileType.FLOWER_GRASS }
-                if (nGrass) {
-                    drawRotatedQuad(scope, path, cam, cx, cy, fracU = 1.0f, fracV = 0.12f, offsetV = -0.44f, fillColor = edgeColor)
-                }
-                if (sGrass) {
-                    drawRotatedQuad(scope, path, cam, cx, cy, fracU = 1.0f, fracV = 0.12f, offsetV = 0.44f, fillColor = edgeColor)
+                if (quality.drawGroundClutter) {
+                    // Subtle stone paving divider + soft curb edge where cobble meets grass
+                    if (h < 10) {
+                        scope.drawLine(
+                            Color(0x28302A24),
+                            Offset(cx - cam.ux * 0.25f, cy - cam.uy * 0.25f),
+                            Offset(cx + cam.ux * 0.25f, cy + cam.uy * 0.25f),
+                            0.9f * quality.strokeScale
+                        )
+                        if (quality.drawHdStonePolish) {
+                            scope.drawLine(
+                                Color(0x2EECE3D2),
+                                Offset(cx - cam.ux * 0.22f, cy - cam.uy * 0.22f - 1.2f),
+                                Offset(cx + cam.ux * 0.22f, cy + cam.uy * 0.22f - 1.2f),
+                                0.85f
+                            )
+                        }
+                    }
+                    val edgeColor = Color(0x55B8AE9E)
+                    val nGrass = floorMap.tileAt(tx, ty - 1).let { it == TileType.GRASS || it == TileType.FLOWER_GRASS }
+                    val sGrass = floorMap.tileAt(tx, ty + 1).let { it == TileType.GRASS || it == TileType.FLOWER_GRASS }
+                    if (nGrass) {
+                        drawRotatedQuad(scope, path, cam, cx, cy, fracU = 1.0f, fracV = 0.12f, offsetV = -0.44f, fillColor = edgeColor)
+                    }
+                    if (sGrass) {
+                        drawRotatedQuad(scope, path, cam, cx, cy, fracU = 1.0f, fracV = 0.12f, offsetV = 0.44f, fillColor = edgeColor)
+                    }
                 }
             }
             TileType.TEMPLE_FLOOR -> {
                 // Gold-bordered marble diamond mosaic inlay
-                if ((tx + ty) % 2 == 0) {
+                if (quality != GraphicsQuality.LOW && (tx + ty) % 2 == 0) {
                     drawRotatedQuad(
                         scope, path, cam, cx, cy, fracU = 0.56f, fracV = 0.56f,
-                        fillColor = Color(0x2AE6C775), strokeColor = Color(0x66C7A34E), strokeWidth = 1f
+                        fillColor = Color(0x2AE6C775), strokeColor = Color(0x66C7A34E), strokeWidth = 1f * quality.strokeScale
                     )
+                    if (quality.drawHdStonePolish) {
+                        drawRotatedQuad(
+                            scope, path, cam, cx, cy, fracU = 0.26f, fracV = 0.26f,
+                            fillColor = Color(0x38FFF1C1)
+                        )
+                    }
                 }
             }
             TileType.ARCANE_FLOOR -> {
                 // Glowing violet arcane rune circle inlaid in Runecrafting Academy floor
-                if (tx in 221..229 && ty in 177..183) {
+                if (quality != GraphicsQuality.LOW && tx in 221..229 && ty in 177..183) {
                     val pulse = 0.35f + 0.18f * sin(nowMs * 0.0045 + tx + ty).toFloat()
                     scope.drawOval(
                         color = Color(0xFFB388FF).copy(alpha = pulse),
                         topLeft = Offset(cx - cam.tileW * 0.26f, cy - cam.tileH * 0.26f),
                         size = Size(cam.tileW * 0.52f, cam.tileH * 0.52f),
-                        style = Stroke(width = 1.4f)
+                        style = Stroke(width = 1.4f * quality.strokeScale)
                     )
+                    if (quality.drawHdStonePolish) {
+                        scope.drawOval(
+                            color = Color(0xFFE5D1FF).copy(alpha = pulse * 0.75f),
+                            topLeft = Offset(cx - cam.tileW * 0.14f, cy - cam.tileH * 0.14f),
+                            size = Size(cam.tileW * 0.28f, cam.tileH * 0.28f),
+                            style = Stroke(width = 1.0f)
+                        )
+                    }
                 }
             }
             TileType.WOOD_PLANK_FLOOR -> {
-                // Warm timber plank grain lines
-                val grain = Color(0x383A2210)
-                scope.drawLine(grain, Offset(cx - cam.ux * 0.42f, cy - cam.uy * 0.42f), Offset(cx + cam.ux * 0.42f, cy + cam.uy * 0.42f), 1f)
+                if (quality != GraphicsQuality.LOW) {
+                    // Warm timber plank grain lines
+                    val grain = Color(0x383A2210)
+                    scope.drawLine(grain, Offset(cx - cam.ux * 0.42f, cy - cam.uy * 0.42f), Offset(cx + cam.ux * 0.42f, cy + cam.uy * 0.42f), 1f * quality.strokeScale)
+                }
             }
             TileType.WOOD_PIER, TileType.WOOD_BRIDGE -> {
                 // Plank lines + bridge/pier railings along water edges
                 val railColor = Color(0xFF5C3E24)
                 val postColor = Color(0xFF422A16)
-                scope.drawLine(Color(0x443B2310), Offset(cx - cam.ux * 0.44f, cy - cam.uy * 0.44f), Offset(cx + cam.ux * 0.44f, cy + cam.uy * 0.44f), 1.1f)
+                if (quality != GraphicsQuality.LOW) {
+                    scope.drawLine(Color(0x443B2310), Offset(cx - cam.ux * 0.44f, cy - cam.uy * 0.44f), Offset(cx + cam.ux * 0.44f, cy + cam.uy * 0.44f), 1.1f * quality.strokeScale)
+                }
                 val westWater = floorMap.tileAt(tx - 1, ty) == TileType.WATER || floorMap.tileAt(tx - 1, ty) == TileType.MOORED_BOAT
                 val eastWater = floorMap.tileAt(tx + 1, ty) == TileType.WATER || floorMap.tileAt(tx + 1, ty) == TileType.MOORED_BOAT
                 val railH = cam.tileH * 0.38f
@@ -529,53 +595,77 @@ object IsometricTileDrawer {
                 }
             }
             TileType.WATER -> {
-                // Animated water ripples
-                val rippleOffset = shimmer * cam.tileW * 0.08f
-                scope.drawLine(
-                    color = Color(0x6CE0F7FF),
-                    start = Offset(cx - cam.tileW * 0.16f + rippleOffset, cy - cam.tileH * 0.08f),
-                    end = Offset(cx + cam.tileW * 0.12f + rippleOffset, cy - cam.tileH * 0.08f),
-                    strokeWidth = 1.6f
-                )
-                scope.drawLine(
-                    color = Color(0x45B0E4FF),
-                    start = Offset(cx - cam.tileW * 0.06f - rippleOffset, cy + cam.tileH * 0.14f),
-                    end = Offset(cx + cam.tileW * 0.18f - rippleOffset, cy + cam.tileH * 0.14f),
-                    strokeWidth = 1.2f
-                )
-                // Softened natural shoreline: curved rocks, swaying reeds & floating lily pads near land!
-                val nearLand = listOf(tx - 1 to ty, tx + 1 to ty, tx to ty - 1, tx to ty + 1).any { (nx, ny) ->
-                    val nt = floorMap.tileAt(nx, ny)
-                    nt != TileType.WATER && nt != TileType.MOORED_BOAT && nt != TileType.WOOD_PIER && nt != TileType.WOOD_BRIDGE
-                }
-                if (nearLand) {
-                    if (h < 6) {
-                        // Curved smooth shoreline stones
-                        scope.drawOval(
-                            Color(0xFF7D786F),
-                            Offset(cx - cam.tileW * 0.22f, cy - cam.tileH * 0.14f),
-                            Size(cam.tileW * 0.22f, cam.tileH * 0.22f)
+                if (quality != GraphicsQuality.LOW) {
+                    // Animated water ripples
+                    val rippleOffset = shimmer * cam.tileW * 0.08f
+                    scope.drawLine(
+                        color = Color(0x6CE0F7FF),
+                        start = Offset(cx - cam.tileW * 0.16f + rippleOffset, cy - cam.tileH * 0.08f),
+                        end = Offset(cx + cam.tileW * 0.12f + rippleOffset, cy - cam.tileH * 0.08f),
+                        strokeWidth = 1.6f * quality.strokeScale
+                    )
+                    if (quality.drawShorelineDetails || quality.drawEnhancedWater) {
+                        scope.drawLine(
+                            color = Color(0x45B0E4FF),
+                            start = Offset(cx - cam.tileW * 0.06f - rippleOffset, cy + cam.tileH * 0.14f),
+                            end = Offset(cx + cam.tileW * 0.18f - rippleOffset, cy + cam.tileH * 0.14f),
+                            strokeWidth = 1.2f * quality.strokeScale
                         )
-                        scope.drawOval(
-                            Color(0xFF9E988C),
-                            Offset(cx - cam.tileW * 0.19f, cy - cam.tileH * 0.13f),
-                            Size(cam.tileW * 0.14f, cam.tileH * 0.12f)
+                    }
+                    if (quality.drawEnhancedWater) {
+                        // HD shimmering specular water glint
+                        val glintAlpha = (0.30f + 0.35f * abs(shimmer)).coerceIn(0f, 0.7f)
+                        scope.drawCircle(
+                            color = Color(0xFFFFFFFF).copy(alpha = glintAlpha),
+                            radius = (cam.tileW * 0.026f).coerceIn(1.5f, 3.2f),
+                            center = Offset(cx + rippleOffset * 0.6f, cy - cam.tileH * 0.02f)
                         )
-                    } else if (h < 11) {
-                        // Swaying shoreline reeds
-                        val sway = shimmer * 2.2f
-                        val reedCol = Color(0xFF3A7A3A)
-                        scope.drawLine(reedCol, Offset(cx + 2f, cy + 2f), Offset(cx + 2f + sway, cy - cam.tileH * 0.42f), 1.8f)
-                        scope.drawLine(Color(0xFF559C4B), Offset(cx + 6f, cy + 4f), Offset(cx + 7f + sway * 0.8f, cy - cam.tileH * 0.34f), 1.6f)
-                        scope.drawCircle(Color(0xFF6B4423), 2f, Offset(cx + 2f + sway, cy - cam.tileH * 0.42f))
-                    } else {
-                        // Floating lily pad with soft pink blossom
-                        val padW = cam.tileW * 0.24f
-                        val padH = cam.tileH * 0.24f
-                        scope.drawOval(Color(0xFF2F7D3E), Offset(cx - padW * 0.5f, cy - padH * 0.5f), Size(padW, padH))
-                        scope.drawOval(Color(0xFF4BA356), Offset(cx - padW * 0.38f, cy - padH * 0.4f), Size(padW * 0.72f, padH * 0.7f))
-                        if (h == 14 || h == 15) {
-                            scope.drawCircle(Color(0xFFFFB7D5), 2.4f, Offset(cx, cy - 1f))
+                    }
+                    // Softened natural shoreline: curved rocks, swaying reeds & floating lily pads near land!
+                    if (quality.drawShorelineDetails) {
+                        val nearLand = listOf(tx - 1 to ty, tx + 1 to ty, tx to ty - 1, tx to ty + 1).any { (nx, ny) ->
+                            val nt = floorMap.tileAt(nx, ny)
+                            nt != TileType.WATER && nt != TileType.MOORED_BOAT && nt != TileType.WOOD_PIER && nt != TileType.WOOD_BRIDGE
+                        }
+                        if (nearLand) {
+                            if (quality.drawEnhancedWater) {
+                                // Subtle shoreline whitewater foam ring
+                                scope.drawOval(
+                                    color = Color(0x42E8FAFF),
+                                    topLeft = Offset(cx - cam.tileW * 0.30f, cy - cam.tileH * 0.22f),
+                                    size = Size(cam.tileW * 0.60f, cam.tileH * 0.44f),
+                                    style = Stroke(width = 1.5f)
+                                )
+                            }
+                            if (h < 6) {
+                                // Curved smooth shoreline stones
+                                scope.drawOval(
+                                    Color(0xFF7D786F),
+                                    Offset(cx - cam.tileW * 0.22f, cy - cam.tileH * 0.14f),
+                                    Size(cam.tileW * 0.22f, cam.tileH * 0.22f)
+                                )
+                                scope.drawOval(
+                                    Color(0xFF9E988C),
+                                    Offset(cx - cam.tileW * 0.19f, cy - cam.tileH * 0.13f),
+                                    Size(cam.tileW * 0.14f, cam.tileH * 0.12f)
+                                )
+                            } else if (h < 11) {
+                                // Swaying shoreline reeds
+                                val sway = shimmer * 2.2f
+                                val reedCol = Color(0xFF3A7A3A)
+                                scope.drawLine(reedCol, Offset(cx + 2f, cy + 2f), Offset(cx + 2f + sway, cy - cam.tileH * 0.42f), 1.8f)
+                                scope.drawLine(Color(0xFF559C4B), Offset(cx + 6f, cy + 4f), Offset(cx + 7f + sway * 0.8f, cy - cam.tileH * 0.34f), 1.6f)
+                                scope.drawCircle(Color(0xFF6B4423), 2f, Offset(cx + 2f + sway, cy - cam.tileH * 0.42f))
+                            } else {
+                                // Floating lily pad with soft pink blossom
+                                val padW = cam.tileW * 0.24f
+                                val padH = cam.tileH * 0.24f
+                                scope.drawOval(Color(0xFF2F7D3E), Offset(cx - padW * 0.5f, cy - padH * 0.5f), Size(padW, padH))
+                                scope.drawOval(Color(0xFF4BA356), Offset(cx - padW * 0.38f, cy - padH * 0.4f), Size(padW * 0.72f, padH * 0.7f))
+                                if (h == 14 || h == 15) {
+                                    scope.drawCircle(Color(0xFFFFB7D5), 2.4f, Offset(cx, cy - 1f))
+                                }
+                            }
                         }
                     }
                 }
@@ -626,15 +716,16 @@ object IsometricTileDrawer {
         tile: TileType,
         cx: Float,
         cy: Float,
-        nowMs: Long
+        nowMs: Long,
+        quality: GraphicsQuality = GraphicsQuality.DEFAULT
     ) {
         val unitH = cam.tileH
         when (tile) {
             TileType.TIMBER_WALL, TileType.TIMBER_WINDOW_WALL -> {
-                drawDetailedTimberWall(scope, path, cam, floorMap, tx, ty, cx, cy, hasWindow = tile == TileType.TIMBER_WINDOW_WALL, nowMs = nowMs)
+                drawDetailedTimberWall(scope, path, cam, floorMap, tx, ty, cx, cy, hasWindow = tile == TileType.TIMBER_WINDOW_WALL, nowMs = nowMs, quality = quality)
             }
             TileType.TEMPLE_WALL -> {
-                drawDetailedTempleWall(scope, path, cam, floorMap, tx, ty, cx, cy, nowMs)
+                drawDetailedTempleWall(scope, path, cam, floorMap, tx, ty, cx, cy, nowMs, quality)
             }
             TileType.GATE_PILLAR -> {
                 // Grand dressed stone gatehouse pillar + golden brazier lantern on top
@@ -646,7 +737,7 @@ object IsometricTileDrawer {
                     scope, path, cam, cx, cy, fracU = 0.46f, fracV = 0.46f, heightPx = unitH * 1.15f, baseZ = unitH * 0.25f,
                     topColor = Color(0xFFB3AA9C), faceXColor = Color(0xFF7A7267), faceYColor = Color(0xFF91887B)
                 )
-                drawWarmFlickerGlow(scope, cx, cy - unitH * 1.52f, unitH * 0.85f, nowMs, tx, ty)
+                drawWarmFlickerGlow(scope, cx, cy - unitH * 1.52f, unitH * 0.85f, nowMs, tx, ty, quality)
             }
             TileType.STONE_WALL, TileType.CITY_WALL, TileType.TORCH_WALL -> {
                 // Slimmed dressed dungeon/stone wall (not a bulky slab!)
@@ -660,7 +751,7 @@ object IsometricTileDrawer {
                     topColor = Color(0xFF8C8478), faceXColor = Color(0xFF5D564D), faceYColor = Color(0xFF70685E)
                 )
                 if (tile == TileType.TORCH_WALL) {
-                    drawWarmFlickerGlow(scope, cx, cy - hPx * 0.92f, unitH * 1.15f, nowMs, tx, ty)
+                    drawWarmFlickerGlow(scope, cx, cy - hPx * 0.92f, unitH * 1.15f, nowMs, tx, ty, quality)
                 }
             }
             TileType.CAVE_WALL, TileType.MOUNTAIN_ROCK -> {
@@ -679,24 +770,26 @@ object IsometricTileDrawer {
                     faceYColor = if (isCave) Color(0xFF46424A) else Color(0xFF787066)
                 )
             }
-            TileType.TREE -> drawTreeProp(scope, path, cam, cx, cy, tx, ty, nowMs)
+            TileType.TREE -> drawTreeProp(scope, path, cam, cx, cy, tx, ty, nowMs, quality)
             TileType.TREE_STUMP -> {
                 drawRotatedPrism(
                     scope, path, cam, cx, cy, fracU = 0.36f, fracV = 0.36f, heightPx = unitH * 0.32f,
                     topColor = Color(0xFFB58958), faceXColor = Color(0xFF5C3D22), faceYColor = Color(0xFF734E2C)
                 )
             }
-            TileType.FOUNTAIN -> drawStoneFountain(scope, path, cam, cx, cy, nowMs)
+            TileType.FOUNTAIN -> drawStoneFountain(scope, path, cam, cx, cy, nowMs, quality)
             TileType.HEDGE -> {
                 drawRotatedPrism(
                     scope, path, cam, cx, cy, fracU = 0.72f, fracV = 0.72f, heightPx = unitH * 0.46f,
                     topColor = Color(0xFF3E7A38), faceXColor = Color(0xFF214A1E), faceYColor = Color(0xFF2D5F28)
                 )
-                scope.drawCircle(Color(0xFF63A854), cam.tileW * 0.08f, Offset(cx - cam.tileW * 0.1f, cy - unitH * 0.42f))
-                scope.drawCircle(Color(0xFFF5D36C), 2.2f, Offset(cx + cam.tileW * 0.08f, cy - unitH * 0.46f))
+                if (quality != GraphicsQuality.LOW) {
+                    scope.drawCircle(Color(0xFF63A854), cam.tileW * 0.08f, Offset(cx - cam.tileW * 0.1f, cy - unitH * 0.42f))
+                    scope.drawCircle(Color(0xFFF5D36C), 2.2f, Offset(cx + cam.tileW * 0.08f, cy - unitH * 0.46f))
+                }
             }
             TileType.WOOD_FENCE -> drawWoodenFence(scope, path, cam, floorMap, tx, ty, cx, cy)
-            TileType.LANTERN_POST -> drawLanternPost(scope, path, cam, cx, cy, nowMs, tx, ty)
+            TileType.LANTERN_POST -> drawLanternPost(scope, path, cam, cx, cy, nowMs, tx, ty, quality)
             TileType.DEPOT_CHEST, TileType.MINI_DEPOT -> {
                 val isMini = tile == TileType.MINI_DEPOT
                 drawRotatedPrism(
@@ -726,8 +819,8 @@ object IsometricTileDrawer {
                 )
                 // Crimson-and-gold altar runner + twin flickering altar candles
                 drawRotatedQuad(scope, path, cam, cx, cy, fracU = 0.36f, fracV = 0.62f, zPx = unitH * 0.59f, fillColor = Color(0xFFA82C2C), strokeColor = TorchGold, strokeWidth = 1.2f)
-                drawWarmFlickerGlow(scope, cx - cam.tileW * 0.14f, cy - unitH * 0.72f, unitH * 0.45f, nowMs, tx, ty)
-                drawWarmFlickerGlow(scope, cx + cam.tileW * 0.14f, cy - unitH * 0.72f, unitH * 0.45f, nowMs, tx + 3, ty)
+                drawWarmFlickerGlow(scope, cx - cam.tileW * 0.14f, cy - unitH * 0.72f, unitH * 0.45f, nowMs, tx, ty, quality)
+                drawWarmFlickerGlow(scope, cx + cam.tileW * 0.14f, cy - unitH * 0.72f, unitH * 0.45f, nowMs, tx + 3, ty, quality)
             }
             TileType.TEMPLE_PEW -> {
                 drawRotatedPrism(
@@ -744,7 +837,7 @@ object IsometricTileDrawer {
                     scope, path, cam, cx, cy, fracU = 0.74f, fracV = 0.70f, heightPx = unitH * 0.88f,
                     topColor = Color(0xFF6B5951), faceXColor = Color(0xFF42342F), faceYColor = Color(0xFF57443E)
                 )
-                drawWarmFlickerGlow(scope, cx, cy - unitH * 0.36f, unitH * 0.72f, nowMs, tx, ty)
+                drawWarmFlickerGlow(scope, cx, cy - unitH * 0.36f, unitH * 0.72f, nowMs, tx, ty, quality)
             }
             TileType.BLACKSMITH_ANVIL -> {
                 drawRotatedPrism(
@@ -779,18 +872,48 @@ object IsometricTileDrawer {
                     scope, path, cam, cx, cy, fracU = 0.76f, fracV = 0.64f, heightPx = unitH * 0.56f,
                     topColor = Color(0xFF564B78), faceXColor = Color(0xFF332C4A), faceYColor = Color(0xFF443B61)
                 )
-                val pulse = 0.7f + 0.3f * sin(nowMs * 0.006).toFloat()
-                val bob = sin(nowMs * 0.005).toFloat() * 3f
-                scope.drawCircle(
-                    brush = Brush.radialGradient(
-                        listOf(Color(0xFFD7B8FF).copy(alpha = 0.85f * pulse), Color(0xFF7C4DFF).copy(alpha = 0.28f), Color.Transparent),
-                        center = Offset(cx, cy - unitH * 0.84f + bob),
-                        radius = unitH * 0.62f
-                    ),
-                    radius = unitH * 0.62f,
-                    center = Offset(cx, cy - unitH * 0.84f + bob)
-                )
-                scope.drawCircle(Color(0xFFEAD9FF), 4.5f, Offset(cx, cy - unitH * 0.84f + bob))
+                val bob = if (quality == GraphicsQuality.LOW) 0f else sin(nowMs * 0.005).toFloat() * 3f
+                val orbCenter = Offset(cx, cy - unitH * 0.84f + bob)
+                when (quality.lightingMode) {
+                    LightingDetailMode.OFF -> Unit
+                    LightingDetailMode.STATIC_HALO -> {
+                        scope.drawCircle(Color(0x389B6BFF), unitH * 0.46f, orbCenter)
+                    }
+                    LightingDetailMode.DYNAMIC_FLICKER -> {
+                        val pulse = 0.7f + 0.3f * sin(nowMs * 0.006).toFloat()
+                        scope.drawCircle(
+                            brush = Brush.radialGradient(
+                                listOf(Color(0xFFD7B8FF).copy(alpha = 0.85f * pulse), Color(0xFF7C4DFF).copy(alpha = 0.28f), Color.Transparent),
+                                center = orbCenter,
+                                radius = unitH * 0.62f
+                            ),
+                            radius = unitH * 0.62f,
+                            center = orbCenter
+                        )
+                    }
+                    LightingDetailMode.HD_MULTI_LAYER -> {
+                        val pulse = 0.72f + 0.28f * sin(nowMs * 0.006).toFloat()
+                        scope.drawCircle(
+                            brush = Brush.radialGradient(
+                                listOf(Color(0xFF9C6BFF).copy(alpha = 0.34f * pulse), Color.Transparent),
+                                center = orbCenter,
+                                radius = unitH * 0.96f
+                            ),
+                            radius = unitH * 0.96f,
+                            center = orbCenter
+                        )
+                        scope.drawCircle(
+                            brush = Brush.radialGradient(
+                                listOf(Color(0xFFEAD9FF).copy(alpha = 0.92f * pulse), Color(0xFF7C4DFF).copy(alpha = 0.34f), Color.Transparent),
+                                center = orbCenter,
+                                radius = unitH * 0.62f
+                            ),
+                            radius = unitH * 0.62f,
+                            center = orbCenter
+                        )
+                    }
+                }
+                scope.drawCircle(Color(0xFFEAD9FF), 4.5f, orbCenter)
             }
             TileType.BOOKSHELF -> {
                 drawRotatedPrism(
@@ -798,10 +921,12 @@ object IsometricTileDrawer {
                     topColor = Color(0xFF6E4726), faceXColor = Color(0xFF422914), faceYColor = Color(0xFF57361C)
                 )
                 // Colorful tome bands across shelves
-                val shelfColors = arrayOf(Color(0xFFC94444), Color(0xFF4788C7), Color(0xFF4DA663), Color(0xFFE0B24C))
-                for (i in 0..3) {
-                    scope.drawCircle(shelfColors[i], 2.2f, Offset(cx + (i - 1.5f) * 4.5f, cy - unitH * 0.52f))
-                    scope.drawCircle(shelfColors[(i + 2) and 3], 2.2f, Offset(cx + (i - 1.5f) * 4.5f, cy - unitH * 0.76f))
+                if (quality != GraphicsQuality.LOW) {
+                    val shelfColors = arrayOf(Color(0xFFC94444), Color(0xFF4788C7), Color(0xFF4DA663), Color(0xFFE0B24C))
+                    for (i in 0..3) {
+                        scope.drawCircle(shelfColors[i], 2.2f, Offset(cx + (i - 1.5f) * 4.5f, cy - unitH * 0.52f))
+                        scope.drawCircle(shelfColors[(i + 2) and 3], 2.2f, Offset(cx + (i - 1.5f) * 4.5f, cy - unitH * 0.76f))
+                    }
                 }
             }
             TileType.CRYSTAL_PILLAR -> {
@@ -809,22 +934,52 @@ object IsometricTileDrawer {
                     scope, path, cam, cx, cy, fracU = 0.44f, fracV = 0.44f, heightPx = unitH * 0.45f,
                     topColor = Color(0xFF6B677A), faceXColor = Color(0xFF413E4D), faceYColor = Color(0xFF524E61)
                 )
-                val pulse = 0.72f + 0.28f * sin(nowMs * 0.005 + tx).toFloat()
                 drawRotatedPrism(
                     scope, path, cam, cx, cy, fracU = 0.24f, fracV = 0.24f, heightPx = unitH * 0.76f, baseZ = unitH * 0.45f,
                     topColor = Color(0xFFE8D5FF), faceXColor = Color(0xFF7C4DFF), faceYColor = Color(0xFFB388FF)
                 )
-                scope.drawCircle(
-                    brush = Brush.radialGradient(
-                        listOf(Color(0xFFC79BFF).copy(alpha = 0.65f * pulse), Color.Transparent),
-                        center = Offset(cx, cy - unitH * 0.95f),
-                        radius = unitH * 0.72f
-                    ),
-                    radius = unitH * 0.72f,
-                    center = Offset(cx, cy - unitH * 0.95f)
-                )
+                val glowCenter = Offset(cx, cy - unitH * 0.95f)
+                when (quality.lightingMode) {
+                    LightingDetailMode.OFF -> Unit
+                    LightingDetailMode.STATIC_HALO -> {
+                        scope.drawCircle(Color(0x30C79BFF), unitH * 0.52f, glowCenter)
+                    }
+                    LightingDetailMode.DYNAMIC_FLICKER -> {
+                        val pulse = 0.72f + 0.28f * sin(nowMs * 0.005 + tx).toFloat()
+                        scope.drawCircle(
+                            brush = Brush.radialGradient(
+                                listOf(Color(0xFFC79BFF).copy(alpha = 0.65f * pulse), Color.Transparent),
+                                center = glowCenter,
+                                radius = unitH * 0.72f
+                            ),
+                            radius = unitH * 0.72f,
+                            center = glowCenter
+                        )
+                    }
+                    LightingDetailMode.HD_MULTI_LAYER -> {
+                        val pulse = 0.74f + 0.26f * sin(nowMs * 0.005 + tx).toFloat()
+                        scope.drawCircle(
+                            brush = Brush.radialGradient(
+                                listOf(Color(0xFFB388FF).copy(alpha = 0.34f * pulse), Color.Transparent),
+                                center = glowCenter,
+                                radius = unitH * 1.05f
+                            ),
+                            radius = unitH * 1.05f,
+                            center = glowCenter
+                        )
+                        scope.drawCircle(
+                            brush = Brush.radialGradient(
+                                listOf(Color(0xFFEBD9FF).copy(alpha = 0.76f * pulse), Color.Transparent),
+                                center = glowCenter,
+                                radius = unitH * 0.62f
+                            ),
+                            radius = unitH * 0.62f,
+                            center = glowCenter
+                        )
+                    }
+                }
             }
-            TileType.MOORED_BOAT -> drawMooredRowboat(scope, path, cam, cx, cy, nowMs, tx, ty)
+            TileType.MOORED_BOAT -> drawMooredRowboat(scope, path, cam, cx, cy, nowMs, tx, ty, quality)
             TileType.ORE_OCHRE, TileType.ORE_BOGSTONE, TileType.ORE_BRIMSTONE, TileType.ORE_AETHERIUM, TileType.DEPLETED_VEIN -> {
                 val veinColor = when (tile) {
                     TileType.ORE_OCHRE -> Color(0xFFE38C3B)
@@ -860,7 +1015,8 @@ object IsometricTileDrawer {
         cx: Float,
         cy: Float,
         hasWindow: Boolean,
-        nowMs: Long
+        nowMs: Long,
+        quality: GraphicsQuality = GraphicsQuality.DEFAULT
     ) {
         val h = cam.tileH
         val hasN = isBuildingWall(floorMap.tileAt(tx, ty - 1))
@@ -905,14 +1061,19 @@ object IsometricTileDrawer {
 
         // Warm glowing mullioned window
         if (hasWindow) {
-            val flicker = 0.85f + 0.15f * sin(nowMs * 0.005 + tx * 2.1).toFloat()
+            val flicker = if (quality == GraphicsQuality.LOW) 0.9f else 0.85f + 0.15f * sin(nowMs * 0.005 + tx * 2.1).toFloat()
             val winY = cy - foundationH - plasterH * 0.52f
             val winW = cam.tileW * 0.15f
             val winH = h * 0.34f
+            if (quality.drawHdStonePolish) {
+                scope.drawCircle(TorchGold.copy(alpha = 0.24f * flicker), winW * 1.15f, Offset(cx, winY))
+            }
             scope.drawRect(Color(0xFF4A311D), Offset(cx - winW * 0.6f, winY - winH * 0.55f), Size(winW * 1.2f, winH * 1.1f))
             scope.drawRect(Color(0xFFFFD87A).copy(alpha = flicker), Offset(cx - winW * 0.45f, winY - winH * 0.42f), Size(winW * 0.9f, winH * 0.84f))
-            scope.drawLine(Color(0xFF4A311D), Offset(cx, winY - winH * 0.42f), Offset(cx, winY + winH * 0.42f), 1.2f)
-            scope.drawLine(Color(0xFF4A311D), Offset(cx - winW * 0.45f, winY), Offset(cx + winW * 0.45f, winY), 1.2f)
+            if (quality != GraphicsQuality.LOW) {
+                scope.drawLine(Color(0xFF4A311D), Offset(cx, winY - winH * 0.42f), Offset(cx, winY + winH * 0.42f), 1.2f * quality.strokeScale)
+                scope.drawLine(Color(0xFF4A311D), Offset(cx - winW * 0.45f, winY), Offset(cx + winW * 0.45f, winY), 1.2f * quality.strokeScale)
+            }
         }
     }
 
@@ -928,7 +1089,8 @@ object IsometricTileDrawer {
         ty: Int,
         cx: Float,
         cy: Float,
-        nowMs: Long
+        nowMs: Long,
+        quality: GraphicsQuality = GraphicsQuality.DEFAULT
     ) {
         val h = cam.tileH
         val hasN = isBuildingWall(floorMap.tileAt(tx, ty - 1))
@@ -961,11 +1123,14 @@ object IsometricTileDrawer {
         if (hasN) drawSeg(beamThickness, 0.50f, 0f, -0.25f)
 
         // Glowing stained-glass lancet accent on every other temple wall bay
-        if ((tx + ty) % 3 == 0) {
+        if (quality != GraphicsQuality.LOW && (tx + ty) % 3 == 0) {
             val shimmer = 0.8f + 0.2f * sin(nowMs * 0.004 + tx).toFloat()
             val gy = cy - h * 0.85f
+            if (quality.drawHdStonePolish) {
+                scope.drawCircle(Color(0xFF63B8FF).copy(alpha = 0.24f * shimmer), 11f, Offset(cx, gy))
+            }
             scope.drawOval(Color(0xFF63B8FF).copy(alpha = shimmer), Offset(cx - 4f, gy - 8f), Size(8f, 14f))
-            scope.drawOval(TorchGold, Offset(cx - 4f, gy - 8f), Size(8f, 14f), style = Stroke(1.2f))
+            scope.drawOval(TorchGold, Offset(cx - 4f, gy - 8f), Size(8f, 14f), style = Stroke(1.2f * quality.strokeScale))
         }
     }
 
@@ -979,8 +1144,10 @@ object IsometricTileDrawer {
         cam: IsometricCamera,
         building: BuildingFootprint,
         playerFx: Float,
-        playerFy: Float
+        playerFy: Float,
+        quality: GraphicsQuality = GraphicsQuality.DEFAULT
     ) {
+        if (!quality.drawCutawayRoofs) return
         val dist = building.distanceToPoint(playerFx, playerFy)
         val alpha = when {
             building.containsPoint(playerFx, playerFy, margin = 0.9f) -> 0f
@@ -1013,13 +1180,13 @@ object IsometricTileDrawer {
         path.reset()
         path.moveTo(nw.x, nw.y); path.lineTo(ne.x, ne.y); path.lineTo(ridgeE.x, ridgeE.y); path.lineTo(ridgeW.x, ridgeW.y); path.close()
         scope.drawPath(path, color = mainCol)
-        scope.drawPath(path, color = trimCol, style = Stroke(width = 1.6f))
+        scope.drawPath(path, color = trimCol, style = Stroke(width = 1.6f * quality.strokeScale))
 
         // South roof slope
         path.reset()
         path.moveTo(sw.x, sw.y); path.lineTo(se.x, se.y); path.lineTo(ridgeE.x, ridgeE.y); path.lineTo(ridgeW.x, ridgeW.y); path.close()
         scope.drawPath(path, color = hiCol)
-        scope.drawPath(path, color = trimCol, style = Stroke(width = 1.6f))
+        scope.drawPath(path, color = trimCol, style = Stroke(width = 1.6f * quality.strokeScale))
 
         // West & East gables
         path.reset()
@@ -1030,11 +1197,27 @@ object IsometricTileDrawer {
         path.moveTo(ne.x, ne.y); path.lineTo(se.x, se.y); path.lineTo(ridgeE.x, ridgeE.y); path.close()
         scope.drawPath(path, color = mainCol)
 
+        // HD pitched shingle highlight courses
+        if (quality.drawHdStonePolish) {
+            val courseCol = Color.White.copy(alpha = alpha * 0.16f)
+            val m1a = Offset((sw.x + ridgeW.x) * 0.5f, (sw.y + ridgeW.y) * 0.5f)
+            val m1b = Offset((se.x + ridgeE.x) * 0.5f, (se.y + ridgeE.y) * 0.5f)
+            scope.drawLine(courseCol, m1a, m1b, strokeWidth = 1.4f)
+        }
+
         // Ridge beam highlight
-        scope.drawLine(trimCol, ridgeW, ridgeE, strokeWidth = 2.6f)
+        scope.drawLine(trimCol, ridgeW, ridgeE, strokeWidth = 2.6f * quality.strokeScale)
     }
 
-    private fun drawStoneFountain(scope: DrawScope, path: Path, cam: IsometricCamera, cx: Float, cy: Float, nowMs: Long) {
+    private fun drawStoneFountain(
+        scope: DrawScope,
+        path: Path,
+        cam: IsometricCamera,
+        cx: Float,
+        cy: Float,
+        nowMs: Long,
+        quality: GraphicsQuality = GraphicsQuality.DEFAULT
+    ) {
         val h = cam.tileH
         // Wide octagonal stone fountain basin
         drawRotatedPrism(
@@ -1048,11 +1231,16 @@ object IsometricTileDrawer {
             scope, path, cam, cx, cy, fracU = 0.24f, fracV = 0.24f, heightPx = h * 0.52f, baseZ = h * 0.34f,
             topColor = Color(0xFFD1C9BC), faceXColor = Color(0xFF8C857A), faceYColor = Color(0xFFA8A094)
         )
-        val spray = sin(nowMs * 0.008).toFloat() * 3f
+        val spray = if (quality == GraphicsQuality.LOW) 0f else sin(nowMs * 0.008).toFloat() * 3f
         val topY = cy - h * 0.96f + spray
         scope.drawCircle(Color(0xBFE0F7FF), cam.tileW * 0.08f, Offset(cx, topY))
-        scope.drawLine(Color(0xAA88D8FF), Offset(cx, topY), Offset(cx - cam.tileW * 0.16f, cy - h * 0.36f), 2f)
-        scope.drawLine(Color(0xAA88D8FF), Offset(cx, topY), Offset(cx + cam.tileW * 0.16f, cy - h * 0.36f), 2f)
+        if (quality != GraphicsQuality.LOW) {
+            scope.drawLine(Color(0xAA88D8FF), Offset(cx, topY), Offset(cx - cam.tileW * 0.16f, cy - h * 0.36f), 2f * quality.strokeScale)
+            scope.drawLine(Color(0xAA88D8FF), Offset(cx, topY), Offset(cx + cam.tileW * 0.16f, cy - h * 0.36f), 2f * quality.strokeScale)
+        }
+        if (quality.drawEnhancedWater) {
+            scope.drawCircle(Color(0x88FFFFFF), cam.tileW * 0.04f, Offset(cx, topY - 2f))
+        }
     }
 
     private fun drawWoodenFence(
@@ -1093,7 +1281,8 @@ object IsometricTileDrawer {
         cy: Float,
         nowMs: Long,
         tx: Int,
-        ty: Int
+        ty: Int,
+        quality: GraphicsQuality = GraphicsQuality.DEFAULT
     ) {
         val h = cam.tileH
         // Stone base + slim wrought-iron pole
@@ -1104,7 +1293,7 @@ object IsometricTileDrawer {
         scope.drawLine(Color(0xFF2B2C30), Offset(cx, cy - h * 0.14f), Offset(cx, cy - h * 1.28f), 2.8f)
         scope.drawLine(Color(0xFF2B2C30), Offset(cx, cy - h * 1.24f), Offset(cx + 6f, cy - h * 1.24f), 2.2f)
         // Warm lantern glow
-        drawWarmFlickerGlow(scope, cx + 5f, cy - h * 1.18f, h * 0.92f, nowMs, tx, ty)
+        drawWarmFlickerGlow(scope, cx + 5f, cy - h * 1.18f, h * 0.92f, nowMs, tx, ty, quality)
     }
 
     private fun drawMarketAwningStall(scope: DrawScope, path: Path, cam: IsometricCamera, cx: Float, cy: Float) {
@@ -1142,16 +1331,28 @@ object IsometricTileDrawer {
         )
     }
 
-    private fun drawMooredRowboat(scope: DrawScope, path: Path, cam: IsometricCamera, cx: Float, cy: Float, nowMs: Long, tx: Int, ty: Int) {
-        val bob = sin(nowMs * 0.0035 + tx + ty).toFloat() * 2.2f
+    private fun drawMooredRowboat(
+        scope: DrawScope,
+        path: Path,
+        cam: IsometricCamera,
+        cx: Float,
+        cy: Float,
+        nowMs: Long,
+        tx: Int,
+        ty: Int,
+        quality: GraphicsQuality = GraphicsQuality.DEFAULT
+    ) {
+        val bob = if (quality == GraphicsQuality.LOW) 0f else sin(nowMs * 0.0035 + tx + ty).toFloat() * 2.2f
         val h = cam.tileH
         // Gentle water wake around hull
-        scope.drawOval(
-            Color(0x48D6F5FF),
-            Offset(cx - cam.tileW * 0.36f, cy - h * 0.20f + bob),
-            Size(cam.tileW * 0.72f, h * 0.44f),
-            style = Stroke(1.4f)
-        )
+        if (quality != GraphicsQuality.LOW) {
+            scope.drawOval(
+                Color(0x48D6F5FF),
+                Offset(cx - cam.tileW * 0.36f, cy - h * 0.20f + bob),
+                Size(cam.tileW * 0.72f, h * 0.44f),
+                style = Stroke(1.4f * quality.strokeScale)
+            )
+        }
         // Timber rowboat hull & bench plank
         drawRotatedPrism(
             scope, path, cam, cx, cy + bob, fracU = 0.78f, fracV = 0.38f, heightPx = h * 0.22f,
@@ -1160,13 +1361,29 @@ object IsometricTileDrawer {
         drawRotatedQuad(scope, path, cam, cx, cy + bob, fracU = 0.18f, fracV = 0.34f, zPx = h * 0.23f, fillColor = Color(0xFFA87B4C))
     }
 
-    private fun drawTreeProp(scope: DrawScope, path: Path, cam: IsometricCamera, cx: Float, cy: Float, tx: Int, ty: Int, nowMs: Long) {
+    private fun drawTreeProp(
+        scope: DrawScope,
+        path: Path,
+        cam: IsometricCamera,
+        cx: Float,
+        cy: Float,
+        tx: Int,
+        ty: Int,
+        nowMs: Long,
+        quality: GraphicsQuality = GraphicsQuality.DEFAULT
+    ) {
         val h = cam.tileH
         val w = cam.tileW
-        val sway = sin(nowMs * 0.002 + tx * 0.7 + ty * 0.5).toFloat() * 1.8f
+        val sway = if (quality.treeDetailLayers >= 3) {
+            sin(nowMs * 0.002 + tx * 0.7 + ty * 0.5).toFloat() * 1.8f
+        } else {
+            0f
+        }
 
         // Ground contact shadow
-        scope.drawOval(Color(0x45000000), Offset(cx - w * 0.30f, cy - h * 0.14f), Size(w * 0.60f, h * 0.36f))
+        if (quality.drawContactShadows) {
+            scope.drawOval(Color(0x45000000), Offset(cx - w * 0.30f, cy - h * 0.14f), Size(w * 0.60f, h * 0.36f))
+        }
 
         // Bark trunk
         drawRotatedPrism(
@@ -1174,27 +1391,83 @@ object IsometricTileDrawer {
             topColor = Color(0xFF5C3A20), faceXColor = Color(0xFF3E2614), faceYColor = Color(0xFF4F321B)
         )
 
-        // Multi-tiered lush foliage canopy
+        // Tier-scaled lush foliage canopy
         val darkLeaf = if (tx >= 272) Color(0xFF16361D) else Color(0xFF1F4F24)
         val midLeaf = if (tx >= 272) Color(0xFF214D29) else Color(0xFF2E6E32)
         val hiLeaf = if (tx >= 272) Color(0xFF346E3C) else Color(0xFF4B9144)
 
         scope.drawOval(darkLeaf, Offset(cx - w * 0.38f + sway * 0.5f, cy - h * 1.48f), Size(w * 0.76f, h * 0.94f))
-        scope.drawOval(midLeaf, Offset(cx - w * 0.32f + sway * 0.8f, cy - h * 1.78f), Size(w * 0.64f, h * 0.82f))
-        scope.drawOval(hiLeaf, Offset(cx - w * 0.20f + sway, cy - h * 2.02f), Size(w * 0.42f, h * 0.52f))
+        if (quality.treeDetailLayers >= 2) {
+            scope.drawOval(midLeaf, Offset(cx - w * 0.32f + sway * 0.8f, cy - h * 1.78f), Size(w * 0.64f, h * 0.82f))
+        }
+        if (quality.treeDetailLayers >= 3) {
+            scope.drawOval(hiLeaf, Offset(cx - w * 0.20f + sway, cy - h * 2.02f), Size(w * 0.42f, h * 0.52f))
+        }
+        if (quality.drawHdStonePolish) {
+            // Sunlit HD canopy crown highlight
+            scope.drawOval(
+                Color(0x38C6F598),
+                Offset(cx - w * 0.11f + sway, cy - h * 1.98f),
+                Size(w * 0.22f, h * 0.22f)
+            )
+        }
     }
 
-    private fun drawWarmFlickerGlow(scope: DrawScope, x: Float, y: Float, radius: Float, nowMs: Long, tx: Int, ty: Int) {
-        val flicker = 0.86f + 0.14f * sin(nowMs * 0.011 + tx * 1.7 + ty * 2.3).toFloat()
-        scope.drawCircle(
-            brush = Brush.radialGradient(
-                listOf(TorchGold.copy(alpha = 0.80f * flicker), TorchAmber.copy(alpha = 0.26f * flicker), Color.Transparent),
-                center = Offset(x, y),
-                radius = radius * flicker
-            ),
-            radius = radius * flicker,
-            center = Offset(x, y)
-        )
-        scope.drawCircle(Color(0xFFFFF2B2), 2.8f, Offset(x, y))
+    private fun drawWarmFlickerGlow(
+        scope: DrawScope,
+        x: Float,
+        y: Float,
+        radius: Float,
+        nowMs: Long,
+        tx: Int,
+        ty: Int,
+        quality: GraphicsQuality = GraphicsQuality.DEFAULT
+    ) {
+        when (quality.lightingMode) {
+            LightingDetailMode.OFF -> {
+                scope.drawCircle(Color(0xFFFFE594), 2.5f, Offset(x, y))
+            }
+            LightingDetailMode.STATIC_HALO -> {
+                scope.drawCircle(TorchGold.copy(alpha = 0.22f), radius * 0.72f, Offset(x, y))
+                scope.drawCircle(Color(0xFFFFF2B2), 2.8f, Offset(x, y))
+            }
+            LightingDetailMode.DYNAMIC_FLICKER -> {
+                val flicker = 0.86f + 0.14f * sin(nowMs * 0.011 + tx * 1.7 + ty * 2.3).toFloat()
+                scope.drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(TorchGold.copy(alpha = 0.80f * flicker), TorchAmber.copy(alpha = 0.26f * flicker), Color.Transparent),
+                        center = Offset(x, y),
+                        radius = radius * flicker
+                    ),
+                    radius = radius * flicker,
+                    center = Offset(x, y)
+                )
+                scope.drawCircle(Color(0xFFFFF2B2), 2.8f, Offset(x, y))
+            }
+            LightingDetailMode.HD_MULTI_LAYER -> {
+                val flicker = 0.88f + 0.12f * sin(nowMs * 0.011 + tx * 1.7 + ty * 2.3).toFloat()
+                // Wide warm atmospheric light pool
+                scope.drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(TorchAmber.copy(alpha = 0.30f * flicker), Color.Transparent),
+                        center = Offset(x, y),
+                        radius = radius * 1.48f * flicker
+                    ),
+                    radius = radius * 1.48f * flicker,
+                    center = Offset(x, y)
+                )
+                // Bright inner flame bloom
+                scope.drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(Color(0xFFFFF4C2).copy(alpha = 0.88f * flicker), TorchGold.copy(alpha = 0.36f * flicker), Color.Transparent),
+                        center = Offset(x, y),
+                        radius = radius * 0.92f * flicker
+                    ),
+                    radius = radius * 0.92f * flicker,
+                    center = Offset(x, y)
+                )
+                scope.drawCircle(Color(0xFFFFFAE0), 3.1f, Offset(x, y))
+            }
+        }
     }
 }

@@ -788,6 +788,137 @@ data class PlayerSaveData(
     val regionId: String = DEFAULT_REGION_ID
 )
 
+enum class LightingDetailMode {
+    OFF,
+    STATIC_HALO,
+    DYNAMIC_FLICKER,
+    HD_MULTI_LAYER
+}
+
+enum class ParticleDetailLevel {
+    MINIMAL,
+    MODERATE,
+    FULL,
+    HD_ENHANCED
+}
+
+enum class GraphicsQuality(
+    val displayName: String,
+    val shortBadge: String,
+    val summaryNote: String,
+    val capabilityTags: List<String>,
+    val drawGroundClutter: Boolean,
+    val drawWildflowers: Boolean,
+    val drawShorelineDetails: Boolean,
+    val drawContactShadows: Boolean,
+    val lightingMode: LightingDetailMode,
+    val drawCutawayRoofs: Boolean,
+    val drawEnhancedWater: Boolean,
+    val drawHdStonePolish: Boolean,
+    val drawHdVignette: Boolean,
+    val particleLevel: ParticleDetailLevel,
+    val treeDetailLayers: Int,
+    val cullMargin: Int,
+    val spriteScaleMultiplier: Float,
+    val strokeScale: Float
+) {
+    LOW(
+        displayName = "Low",
+        shortBadge = "LOW",
+        summaryNote = "Max FPS & battery",
+        capabilityTags = listOf("Simplified terrain", "Shadows off", "Minimal FX"),
+        drawGroundClutter = false,
+        drawWildflowers = false,
+        drawShorelineDetails = false,
+        drawContactShadows = false,
+        lightingMode = LightingDetailMode.OFF,
+        drawCutawayRoofs = false,
+        drawEnhancedWater = false,
+        drawHdStonePolish = false,
+        drawHdVignette = false,
+        particleLevel = ParticleDetailLevel.MINIMAL,
+        treeDetailLayers = 1,
+        cullMargin = 2,
+        spriteScaleMultiplier = 0.90f,
+        strokeScale = 0.85f
+    ),
+    MEDIUM(
+        displayName = "Medium",
+        shortBadge = "MED",
+        summaryNote = "Balanced detail & battery",
+        capabilityTags = listOf("Standard props", "Basic shadows", "Balanced lighting"),
+        drawGroundClutter = false,
+        drawWildflowers = true,
+        drawShorelineDetails = false,
+        drawContactShadows = true,
+        lightingMode = LightingDetailMode.STATIC_HALO,
+        drawCutawayRoofs = true,
+        drawEnhancedWater = false,
+        drawHdStonePolish = false,
+        drawHdVignette = false,
+        particleLevel = ParticleDetailLevel.MODERATE,
+        treeDetailLayers = 2,
+        cullMargin = 3,
+        spriteScaleMultiplier = 1.0f,
+        strokeScale = 1.0f
+    ),
+    HIGH(
+        displayName = "High",
+        shortBadge = "HIGH",
+        summaryNote = "Full details & dynamic lighting",
+        capabilityTags = listOf("Full foliage", "Flickering glows", "Full particles"),
+        drawGroundClutter = true,
+        drawWildflowers = true,
+        drawShorelineDetails = true,
+        drawContactShadows = true,
+        lightingMode = LightingDetailMode.DYNAMIC_FLICKER,
+        drawCutawayRoofs = true,
+        drawEnhancedWater = false,
+        drawHdStonePolish = false,
+        drawHdVignette = false,
+        particleLevel = ParticleDetailLevel.FULL,
+        treeDetailLayers = 3,
+        cullMargin = 4,
+        spriteScaleMultiplier = 1.0f,
+        strokeScale = 1.0f
+    ),
+    HD(
+        displayName = "HD",
+        shortBadge = "HD",
+        summaryNote = "Maximum visual fidelity",
+        capabilityTags = listOf("HD trim & polish", "Enhanced water", "Rich lighting & FX"),
+        drawGroundClutter = true,
+        drawWildflowers = true,
+        drawShorelineDetails = true,
+        drawContactShadows = true,
+        lightingMode = LightingDetailMode.HD_MULTI_LAYER,
+        drawCutawayRoofs = true,
+        drawEnhancedWater = true,
+        drawHdStonePolish = true,
+        drawHdVignette = true,
+        particleLevel = ParticleDetailLevel.HD_ENHANCED,
+        treeDetailLayers = 3,
+        cullMargin = 4,
+        spriteScaleMultiplier = 1.06f,
+        strokeScale = 1.15f
+    );
+
+    companion object {
+        val DEFAULT: GraphicsQuality = MEDIUM
+
+        fun fromStorageName(raw: String?): GraphicsQuality {
+            if (raw.isNullOrBlank()) return DEFAULT
+            return entries.firstOrNull { it.name.equals(raw.trim(), ignoreCase = true) } ?: DEFAULT
+        }
+    }
+}
+
+data class DisplaySettings(
+    val graphicsQuality: GraphicsQuality = GraphicsQuality.DEFAULT,
+    val showMinimap: Boolean = true,
+    val showFpsCounter: Boolean = false
+)
+
 enum class ActivePanel {
     NONE,
     EQUIPMENT,
@@ -801,7 +932,8 @@ enum class ActivePanel {
     RUNECRAFTING_TABLE,
     LOOT_CORPSE,
     ORACLE,
-    WORLD_MAP
+    WORLD_MAP,
+    SETTINGS
 }
 
 data class GameWorldState(

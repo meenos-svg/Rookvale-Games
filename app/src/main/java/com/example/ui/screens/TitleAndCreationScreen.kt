@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -83,6 +84,8 @@ import com.example.R
 import com.example.game.cloud.CloudAuthUiState
 import com.example.game.data.SaveSlotEntity
 import com.example.game.model.AdventurerPalette
+import com.example.game.model.DisplaySettings
+import com.example.game.model.GraphicsQuality
 import com.example.game.model.ORACLE_MIN_LEVEL
 import com.example.game.model.SpriteColorSwatch
 import com.example.game.model.Vocation
@@ -110,6 +113,10 @@ fun TitleAndCreationScreen(
     savedSlots: List<SaveSlotEntity>,
     updateState: UpdateCheckState = UpdateCheckState(),
     cloudAuthState: CloudAuthUiState = CloudAuthUiState(),
+    displaySettings: DisplaySettings = DisplaySettings(),
+    onSelectGraphicsQuality: (GraphicsQuality) -> Unit = {},
+    onToggleMinimapSetting: (Boolean) -> Unit = {},
+    onToggleFpsCounter: (Boolean) -> Unit = {},
     onDownloadUpdate: (String) -> Unit = {},
     onDismissUpdate: () -> Unit = {},
     onCreateCloudCharacter: (name: String, pin: String, tunicColorIndex: Int, hairColorIndex: Int) -> Unit,
@@ -128,6 +135,7 @@ fun TitleAndCreationScreen(
     var pinVisible by rememberSaveable { mutableStateOf(false) }
     var tunicColorIndex by rememberSaveable { mutableIntStateOf(0) }
     var hairColorIndex by rememberSaveable { mutableIntStateOf(0) }
+    var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
     val leftScroll = rememberScrollState()
     val rightScroll = rememberScrollState()
 
@@ -189,21 +197,45 @@ fun TitleAndCreationScreen(
                             )
                         )
                 )
-                Surface(
-                    color = BasaltDark.copy(alpha = 0.85f),
-                    shape = RoundedCornerShape(6.dp),
-                    border = BorderStroke(1.dp, TorchGold.copy(alpha = 0.6f)),
+                Row(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 8.dp, end = 8.dp)
-                        .testTag("app_version_badge")
+                        .padding(top = 8.dp, end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = updateState.currentVersionLabel,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = TorchGold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
+                    Surface(
+                        color = BasaltDark.copy(alpha = 0.85f),
+                        shape = RoundedCornerShape(6.dp),
+                        border = BorderStroke(1.dp, TorchGold.copy(alpha = 0.6f)),
+                        modifier = Modifier.testTag("app_version_badge")
+                    ) {
+                        Text(
+                            text = "${updateState.currentVersionLabel} • ${displaySettings.graphicsQuality.shortBadge}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = TorchGold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    Surface(
+                        color = BasaltDark.copy(alpha = 0.90f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.2.dp, TorchGold.copy(alpha = 0.8f)),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showSettingsDialog = true }
+                            .testTag("title_settings_button")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = stringResource(R.string.panel_settings),
+                                tint = TorchGold,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
                 }
                 Column(
                     modifier = Modifier
@@ -791,6 +823,16 @@ fun TitleAndCreationScreen(
             }
             Spacer(Modifier.height(6.dp))
         }
+    }
+
+    if (showSettingsDialog) {
+        TitleSettingsDialog(
+            displaySettings = displaySettings,
+            onSelectGraphicsQuality = onSelectGraphicsQuality,
+            onToggleMinimap = onToggleMinimapSetting,
+            onToggleFpsCounter = onToggleFpsCounter,
+            onDismiss = { showSettingsDialog = false }
+        )
     }
 }
 

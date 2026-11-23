@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
                 val saveBanner by gameViewModel.saveBanner.collectAsStateWithLifecycle()
                 val updateState by gameViewModel.updateState.collectAsStateWithLifecycle()
                 val cloudAuthState by gameViewModel.cloudAuthState.collectAsStateWithLifecycle()
+                val displaySettings by gameViewModel.displaySettings.collectAsStateWithLifecycle()
 
                 when (screen) {
                     AppScreen.TITLE_AND_CREATE -> {
@@ -48,6 +49,10 @@ class MainActivity : ComponentActivity() {
                             savedSlots = savedSlots,
                             updateState = updateState,
                             cloudAuthState = cloudAuthState,
+                            displaySettings = displaySettings,
+                            onSelectGraphicsQuality = gameViewModel::setGraphicsQuality,
+                            onToggleMinimapSetting = gameViewModel::setShowMinimap,
+                            onToggleFpsCounter = gameViewModel::setShowFpsCounter,
                             onDownloadUpdate = { url -> openReleaseInBrowser(url) },
                             onDismissUpdate = gameViewModel::dismissUpdateBanner,
                             onCreateCloudCharacter = { name, pin, tunicIdx, hairIdx ->
@@ -74,6 +79,7 @@ class MainActivity : ComponentActivity() {
                         GameScreen(
                             state = world,
                             multiplayerState = mpState,
+                            displaySettings = displaySettings,
                             saveBanner = saveBanner,
                             onTileTapped = gameViewModel::onTileTapped,
                             onWalkToTile = gameViewModel::onWalkToTile,
@@ -87,6 +93,9 @@ class MainActivity : ComponentActivity() {
                             onUseCustomHotbarSlot = gameViewModel::onUseCustomHotbarSlot,
                             onBindCustomHotbarSlot = gameViewModel::onBindCustomHotbarSlot,
                             onToggleMinimap = gameViewModel::toggleMinimap,
+                            onSelectGraphicsQuality = gameViewModel::setGraphicsQuality,
+                            onToggleMinimapSetting = gameViewModel::setShowMinimap,
+                            onToggleFpsCounter = gameViewModel::setShowFpsCounter,
                             onOpenPanel = gameViewModel::openPanel,
                             onClosePanel = gameViewModel::closePanel,
                             onUseItem = gameViewModel::useBackpackItem,
