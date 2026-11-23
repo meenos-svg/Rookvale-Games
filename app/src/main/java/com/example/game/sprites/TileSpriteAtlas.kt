@@ -86,6 +86,23 @@ object TileSpriteAtlas {
         TileType.ROPE_HOLE_DOWN -> drawRopeHoleDown()
         TileType.ROPE_SPOT_UP -> drawRopeSpotUp()
         TileType.TORCH_WALL -> drawTorchWall(frame)
+        TileType.TIMBER_WALL, TileType.TIMBER_WINDOW_WALL -> drawObliqueWall(0xFFD8CBB5.toInt(), 0xFF8C7B65.toInt(), 0xFF4A3728.toInt(), 0xFF5D4634.toInt())
+        TileType.TEMPLE_WALL -> drawObliqueWall(0xFFDDD5C5.toInt(), 0xFFB0A694.toInt(), 0xFF70685A.toInt(), 0xFF887E6E.toInt())
+        TileType.GATE_PILLAR -> drawObliqueWall(0xFF9C9385.toInt(), 0xFF6B6358.toInt(), 0xFF474139.toInt(), 0xFF575046.toInt())
+        TileType.WOOD_PLANK_FLOOR, TileType.WOOD_BRIDGE -> drawWoodPier()
+        TileType.ARCANE_FLOOR -> drawObsidianFloor()
+        TileType.FOUNTAIN -> drawWater(frame)
+        TileType.FLOWER_GRASS -> drawGrass()
+        TileType.HEDGE -> drawDarkGrass()
+        TileType.WOOD_FENCE -> drawWoodPier()
+        TileType.LANTERN_POST -> drawTorchWall(frame)
+        TileType.MARKET_AWNING -> drawShopCounter()
+        TileType.CRATE_BARREL -> drawDepotChest(false)
+        TileType.BOOKSHELF -> drawFletchingBench()
+        TileType.CRYSTAL_PILLAR -> drawOreVein(0xFF9B7BFF.toInt(), 0xFFE3D4FF.toInt(), 0xFF3E355C.toInt(), frame)
+        TileType.TEMPLE_PEW -> drawWoodPier()
+        TileType.WEAPON_RACK -> drawBlacksmithAnvil()
+        TileType.MOORED_BOAT -> drawWater(frame)
     }
 
     private fun drawGrass(): ImageBitmap {

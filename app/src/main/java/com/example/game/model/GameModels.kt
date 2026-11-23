@@ -5,8 +5,13 @@ import com.example.game.multiplayer.LocalMonsterHitEvent
 import com.example.game.multiplayer.LocalPlayerActionFxEvent
 import com.squareup.moshi.JsonClass
 
-const val CURRENT_MAP_VERSION = 2
+const val CURRENT_MAP_VERSION = 3
 const val V1_SURFACE_OFFSET = 32
+const val V2_TO_V3_OFFSET_X = 149
+const val V2_TO_V3_OFFSET_Y = 146
+const val DEFAULT_REGION_ID = "rookvale_valley"
+const val WORLD_CHUNK_SIZE = 32
+const val OVERLAND_REGION_SIZE = 400
 const val ORACLE_MIN_LEVEL = 20
 const val TOOL_BAG_WEIGHT_MULTIPLIER = 0.5
 const val BASE_MAX_CAP_OZ = 400.0
@@ -437,7 +442,26 @@ enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
     STAIRS_UP(true),
     ROPE_HOLE_DOWN(true),
     ROPE_SPOT_UP(true),
-    TORCH_WALL(false, true);
+    TORCH_WALL(false, true),
+    TIMBER_WALL(false, true),
+    TIMBER_WINDOW_WALL(false, true),
+    TEMPLE_WALL(false, true),
+    GATE_PILLAR(false, true),
+    WOOD_PLANK_FLOOR(true),
+    ARCANE_FLOOR(true),
+    FOUNTAIN(false),
+    FLOWER_GRASS(true),
+    HEDGE(false),
+    WOOD_FENCE(false),
+    LANTERN_POST(false),
+    WOOD_BRIDGE(true),
+    MARKET_AWNING(false),
+    CRATE_BARREL(false),
+    BOOKSHELF(false),
+    CRYSTAL_PILLAR(false),
+    TEMPLE_PEW(false),
+    WEAPON_RACK(false),
+    MOORED_BOAT(false);
 
     fun oreVeinKind(): OreVeinKind? = when (this) {
         ORE_OCHRE -> OreVeinKind.OCHRE
@@ -760,7 +784,8 @@ data class PlayerSaveData(
     val questFlags: Map<String, Boolean> = emptyMap(),
     val boundAttackRuneId: String? = null,
     val boundHealRuneId: String? = "healing_rune",
-    val customHotbarSlots: List<String?> = listOf(null, null)
+    val customHotbarSlots: List<String?> = listOf(null, null),
+    val regionId: String = DEFAULT_REGION_ID
 )
 
 enum class ActivePanel {
@@ -795,11 +820,12 @@ data class GameWorldState(
     val maxSoul: Int = 100,
     val maxCapOz: Double = 400.0,
     val gold: Int = 120,
+    val regionId: String = DEFAULT_REGION_ID,
     val floor: Int = 0,
-    val playerX: Int = 47,
-    val playerY: Int = 46,
-    val prevPlayerX: Int = 47,
-    val prevPlayerY: Int = 46,
+    val playerX: Int = 196,
+    val playerY: Int = 192,
+    val prevPlayerX: Int = 196,
+    val prevPlayerY: Int = 192,
     val lastPlayerMoveMs: Long = 0L,
     val playerFacing: Direction = Direction.SOUTH,
     val walkPath: List<Pair<Int, Int>> = emptyList(),

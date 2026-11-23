@@ -14,6 +14,7 @@ import com.example.game.world.NpcRole
 import com.example.game.world.WorldFloor
 import com.example.game.world.WorldMaps
 import java.util.ArrayDeque
+import java.util.PriorityQueue
 import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.max
@@ -141,32 +142,53 @@ object GameEngine {
      */
     fun fromSaveData(save: PlayerSaveData): GameWorldState {
         val voc = runCatching { Vocation.valueOf(save.vocationName) }.getOrDefault(Vocation.ADVENTURER)
-        val isLegacyV1 = save.mapVersion < CURRENT_MAP_VERSION
+        val isLegacyV1 = save.mapVersion < 2
+        val isLegacyV2 = save.mapVersion == 2
         val floorMap = WorldMaps.getFloor(save.floor)
+        val resolvedRegionId = save.regionId.ifBlank { DEFAULT_REGION_ID }
 
         var targetX = save.x
         var targetY = save.y
-        if (isLegacyV1 && save.floor == 0) {
-            targetX += V1_SURFACE_OFFSET
-            targetY += V1_SURFACE_OFFSET
+        if (save.floor == 0) {
+            if (isLegacyV1) {
+                targetX += V1_SURFACE_OFFSET + V2_TO_V3_OFFSET_X
+                targetY += V1_SURFACE_OFFSET + V2_TO_V3_OFFSET_Y
+            } else if (isLegacyV2) {
+                targetX += V2_TO_V3_OFFSET_X
+                targetY += V2_TO_V3_OFFSET_Y
+            }
         }
-        if (targetX !in 0 until floorMap.width || targetY !in 0 until floorMap.height || !floorMap.tileAt(targetX, targetY).walkable) {
-            val (fx, fy) = WorldMaps.fallbackLandingForFloor(save.floor)
+        val npcCoordsOnFloor = WorldMaps.npcs.filter { it.floor == save.floor }.map { it.x to it.y }.toSet()
+        val isBlockedOrOut = targetX !in 0 until floorMap.width ||
+            targetY !in 0 until floorMap.height ||
+            !floorMap.tileAt(targetX, targetY).walkable ||
+            (targetX to targetY) in npcCoordsOnFloor
+        if (isBlockedOrOut) {
+            val nudged = WorldMaps.findNearestWalkableTile(save.floor, targetX, targetY, maxRadius = 8)
+            val (fx, fy) = nudged ?: WorldMaps.fallbackLandingForFloor(save.floor)
             targetX = fx
             targetY = fy
         }
 
         val migratedCorpses = save.playerCorpses.map { corpse ->
-            if (isLegacyV1 && corpse.floor == 0) {
-                corpse.copy(x = corpse.x + V1_SURFACE_OFFSET, y = corpse.y + V1_SURFACE_OFFSET)
-            } else {
-                val cMap = WorldMaps.getFloor(corpse.floor)
-                if (corpse.x in 0 until cMap.width && corpse.y in 0 until cMap.height && cMap.tileAt(corpse.x, corpse.y).walkable) {
-                    corpse
-                } else {
-                    val (fx, fy) = WorldMaps.fallbackLandingForFloor(corpse.floor)
-                    corpse.copy(x = fx, y = fy)
+            var cx = corpse.x
+            var cy = corpse.y
+            if (corpse.floor == 0) {
+                if (isLegacyV1) {
+                    cx += V1_SURFACE_OFFSET + V2_TO_V3_OFFSET_X
+                    cy += V1_SURFACE_OFFSET + V2_TO_V3_OFFSET_Y
+                } else if (isLegacyV2) {
+                    cx += V2_TO_V3_OFFSET_X
+                    cy += V2_TO_V3_OFFSET_Y
                 }
+            }
+            val cMap = WorldMaps.getFloor(corpse.floor)
+            if (cx in 0 until cMap.width && cy in 0 until cMap.height && cMap.tileAt(cx, cy).walkable) {
+                corpse.copy(x = cx, y = cy)
+            } else {
+                val (fx, fy) = WorldMaps.findNearestWalkableTile(corpse.floor, cx, cy, maxRadius = 8)
+                    ?: WorldMaps.fallbackLandingForFloor(corpse.floor)
+                corpse.copy(x = fx, y = fy)
             }
         }
 
@@ -218,6 +240,7 @@ object GameEngine {
             maxSoul = save.maxSoul,
             maxCapOz = maxOf(save.maxCapOz, GameWorldState.maxCapForLevel(save.level, voc)),
             gold = save.gold,
+            regionId = resolvedRegionId,
             floor = save.floor,
             playerX = targetX,
             playerY = targetY,
@@ -275,7 +298,8 @@ object GameEngine {
             questFlags = state.questFlags.toMap(),
             boundAttackRuneId = state.boundAttackRuneId,
             boundHealRuneId = state.boundHealRuneId,
-            customHotbarSlots = List(2) { idx -> state.customHotbarSlots.getOrNull(idx) }
+            customHotbarSlots = List(2) { idx -> state.customHotbarSlots.getOrNull(idx) },
+            regionId = state.regionId.ifBlank { DEFAULT_REGION_ID }
         )
     }
 
@@ -2728,46 +2752,82 @@ object GameEngine {
     ): List<Pair<Int, Int>> {
         if (state.playerX == goalX && state.playerY == goalY) return emptyList()
         val floorMap = WorldMaps.getFloor(state.floor)
-        val visited = HashSet<Int>(256)
-        val parent = HashMap<Pair<Int, Int>, Pair<Int, Int>>()
-        val queue = ArrayDeque<Pair<Int, Int>>()
-        val start = state.playerX to state.playerY
-        queue.add(start)
-        visited.add(start.second * floorMap.width + start.first)
+        val width = floorMap.width
+        val height = floorMap.height
+        if (goalX !in 0 until width || goalY !in 0 until height) return emptyList()
 
         val monsterSet = state.monsters.filter { it.floor == state.floor }.map { it.x to it.y }.toSet()
         val npcSet = WorldMaps.npcs.filter { it.floor == state.floor }.map { it.x to it.y }.toSet()
 
+        // True A* search with Manhattan heuristic + closest-tile waypoint fallback for 400x400 overland
+        val startKey = state.playerY * width + state.playerX
+        val goalKey = goalY * width + goalX
+        val gScore = HashMap<Int, Int>(512)
+        val parent = HashMap<Int, Int>(512)
+        val closed = HashSet<Int>(512)
+        // Encode (fScore, key) as LongArray-free lightweight Node
+        val open = PriorityQueue<Pair<Int, Int>>(256, compareBy<Pair<Int, Int>> { it.first })
+
+        val initialH = abs(goalX - state.playerX) + abs(goalY - state.playerY)
+        gScore[startKey] = 0
+        open.add(initialH to startKey)
+
+        var bestKey = startKey
+        var bestDist = initialH
         var found = false
         var explored = 0
-        while (queue.isNotEmpty() && explored < 420) {
+        val maxExpansions = if (width >= 200) 4500 else 1200
+
+        while (open.isNotEmpty() && explored < maxExpansions) {
+            val (_, curKey) = open.poll() ?: break
+            if (!closed.add(curKey)) continue
             explored++
-            val cur = queue.removeFirst()
-            if (cur.first == goalX && cur.second == goalY) {
-                found = true; break
+
+            if (curKey == goalKey) {
+                found = true
+                bestKey = curKey
+                break
             }
+
+            val cx = curKey % width
+            val cy = curKey / width
+            val curDist = abs(goalX - cx) + abs(goalY - cy)
+            if (curDist < bestDist) {
+                bestDist = curDist
+                bestKey = curKey
+            }
+
+            val nextG = (gScore[curKey] ?: 0) + 1
             for (dir in Direction.entries) {
-                val nx = cur.first + dir.dx
-                val ny = cur.second + dir.dy
-                if (nx !in 0 until floorMap.width || ny !in 0 until floorMap.height) continue
-                val key = ny * floorMap.width + nx
-                if (key in visited) continue
+                val nx = cx + dir.dx
+                val ny = cy + dir.dy
+                if (nx !in 0 until width || ny !in 0 until height) continue
+                val nKey = ny * width + nx
+                if (nKey in closed) continue
                 if (!floorMap.tileAt(nx, ny).walkable) continue
                 val coord = nx to ny
                 if (coord in monsterSet || coord in npcSet) continue
                 if (isBlockedByRemotePlayer(floorMap, nx, ny, remotePlayersOnFloor)) continue
-                visited.add(key)
-                parent[coord] = cur
-                queue.add(coord)
+
+                val prevG = gScore[nKey]
+                if (prevG == null || nextG < prevG) {
+                    gScore[nKey] = nextG
+                    parent[nKey] = curKey
+                    val h = abs(goalX - nx) + abs(goalY - ny)
+                    open.add((nextG + h) to nKey)
+                }
             }
         }
-        if (!found) return emptyList()
-        val path = mutableListOf<Pair<Int, Int>>()
-        var curr: Pair<Int, Int>? = goalX to goalY
-        while (curr != null && curr != start) {
-            path.add(curr); curr = parent[curr]
+
+        val targetKey = if (found) goalKey else if (bestKey != startKey) bestKey else return emptyList()
+        val path = ArrayList<Pair<Int, Int>>(64)
+        var curr: Int? = targetKey
+        while (curr != null && curr != startKey) {
+            path.add((curr % width) to (curr / width))
+            curr = parent[curr]
         }
-        return path.reversed()
+        path.reverse()
+        return path
     }
 
     fun addItemPublic(list: List<ItemStack>, itemId: String, amount: Int): List<ItemStack> {

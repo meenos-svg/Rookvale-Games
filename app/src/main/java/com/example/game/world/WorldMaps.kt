@@ -1,10 +1,15 @@
 package com.example.game.world
 
+import com.example.game.model.DEFAULT_REGION_ID
 import com.example.game.model.MonsterEntity
 import com.example.game.model.MonsterType
+import com.example.game.model.OVERLAND_REGION_SIZE
 import com.example.game.model.OreNodeState
 import com.example.game.model.TileType
-import com.example.game.model.V1_SURFACE_OFFSET
+import com.example.game.model.WORLD_CHUNK_SIZE
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 data class FloorPortal(
     val fromFloor: Int,
@@ -50,62 +55,79 @@ data class WorldFloor(
     val subtitle: String,
     val width: Int,
     val height: Int,
-    val tiles: Array<Array<TileType>>,
+    val chunkedGrid: ChunkedTileGrid,
+    val regionId: String = DEFAULT_REGION_ID,
+    val buildings: List<BuildingFootprint> = emptyList(),
     val isProtectionZone: (Int, Int) -> Boolean = { _, _ -> false },
     val dangerLevel: String = "Low",
     val recommendedLevel: String = "Lvl 1-3",
     val dangerSeverity: Int = 0
 ) {
-    fun tileAt(x: Int, y: Int): TileType {
-        if (x !in 0 until width || y !in 0 until height) return TileType.STONE_WALL
-        return tiles[y][x]
-    }
+    fun tileAt(x: Int, y: Int): TileType = chunkedGrid.get(x, y)
+
+    fun visibleChunkBounds(minTx: Int, maxTx: Int, minTy: Int, maxTy: Int): ChunkBounds =
+        chunkedGrid.visibleChunkBounds(minTx, maxTx, minTy, maxTy)
 }
 
 object WorldMaps {
-    // Anchored at V1 (15, 14) + (32, 32) so V1 saves migrate seamlessly onto the exact Temple tile
-    const val TEMPLE_SPAWN_X = 15 + V1_SURFACE_OFFSET // 47
-    const val TEMPLE_SPAWN_Y = 14 + V1_SURFACE_OFFSET // 46
-    const val ORACLE_X = 17 + V1_SURFACE_OFFSET // 49
-    const val ORACLE_Y = 11 + V1_SURFACE_OFFSET // 43
+    // Central Rookvale Sanctuary Plaza spawn in the 400x400 rookvale_valley region
+    const val TEMPLE_SPAWN_X = 196
+    const val TEMPLE_SPAWN_Y = 192
+    const val ORACLE_X = 199
+    const val ORACLE_Y = 179
+
+    val regions: Map<String, WorldRegionMeta> = mapOf(
+        DEFAULT_REGION_ID to WorldRegionMeta.ROOKVALE_VALLEY
+    )
 
     val npcs: List<NpcSpot> = listOf(
-        NpcSpot(0, 22 + V1_SURFACE_OFFSET, 13 + V1_SURFACE_OFFSET, "Alaric", NpcRole.SHOP_ALCHEMIST),
-        NpcSpot(0, 15 + V1_SURFACE_OFFSET, 11 + V1_SURFACE_OFFSET, "Brother Alden", NpcRole.TEMPLE_PRIEST),
+        NpcSpot(0, 162, 204, "Alaric", NpcRole.SHOP_ALCHEMIST),
+        NpcSpot(0, 193, 179, "Brother Alden", NpcRole.TEMPLE_PRIEST),
         NpcSpot(0, ORACLE_X, ORACLE_Y, "The Oracle", NpcRole.ORACLE)
     )
 
     val landmarks: List<LandmarkLabel> = listOf(
-        LandmarkLabel(0, 47, 42, "TEMPLE"),
-        LandmarkLabel(0, 40, 43, "DEPOT"),
-        LandmarkLabel(0, 54, 43, "ALARIC'S SHOP"),
-        LandmarkLabel(0, 53, 49, "RUNE ALTAR"),
-        LandmarkLabel(0, 47, 36, "SMITHY & FLETCHER"),
-        LandmarkLabel(0, 47, 52, "FISHING PIER"),
-        LandmarkLabel(0, 56, 38, "SEWER STAIRS"),
-        LandmarkLabel(0, 40, 38, "ROPE HOLE"),
-        LandmarkLabel(0, 18, 16, "QUARRY & FOOTHILLS"),
-        LandmarkLabel(0, 76, 12, "MOUNTAIN CAVERN"),
-        LandmarkLabel(0, 78, 46, "DARK FOREST"),
+        LandmarkLabel(0, 196, 192, "TEMPLE & SANCTUARY PLAZA"),
+        LandmarkLabel(0, 196, 197, "TOWN SQUARE FOUNTAIN"),
+        LandmarkLabel(0, 164, 185, "TOWN DEPOT HALL"),
+        LandmarkLabel(0, 163, 205, "ALARIC'S MARKET QUARTER"),
+        LandmarkLabel(0, 225, 182, "RUNECRAFTING ACADEMY"),
+        LandmarkLabel(0, 224, 204, "CRAFT & FLETCHING WARD"),
+        LandmarkLabel(0, 245, 204, "LOGGING ORCHARD"),
+        LandmarkLabel(0, 183, 231, "WEST HARBOR FISHING PIER"),
+        LandmarkLabel(0, 211, 231, "EAST HARBOR FISHING PIER"),
+        LandmarkLabel(0, 242, 180, "CITY SEWERS (FLOOR -1)"),
+        LandmarkLabel(0, 152, 173, "CELLAR ROPE HOLE (FLOOR -1)"),
+        LandmarkLabel(0, 196, 134, "NORTH STARTER MEADOWS"),
+        LandmarkLabel(0, 92, 97, "NW OCHRE QUARRY (FLOOR -1)"),
+        LandmarkLabel(0, 264, 85, "MOUNTAIN CAVERN (FLOOR -1)"),
+        LandmarkLabel(0, 308, 67, "DEEP ABYSSAL CAVERN (FLOOR -2)"),
+        LandmarkLabel(0, 312, 207, "DARK FOREST SINKHOLE (FLOOR -1)"),
+        LandmarkLabel(0, 196, 8, "NORTH BORDER HIGHWAY"),
+        LandmarkLabel(0, 8, 192, "WEST BORDER HIGHWAY"),
+        LandmarkLabel(0, 391, 192, "EAST BORDER HIGHWAY"),
         LandmarkLabel(-3, 24, 18, "DEEP FORGE OUTPOST")
     )
 
     val portals: List<FloorPortal> = listOf(
-        // Floor 0 Rookvale NE Gate <-> Floor -1
-        FloorPortal(0, 56, 39, -1, 28, 11, requiresRope = false),
-        FloorPortal(-1, 28, 10, 0, 56, 40, requiresRope = false),
-        // Floor 0 Rookvale NW Rope-Hole <-> Floor -1
-        FloorPortal(0, 40, 39, -1, 10, 11, requiresRope = false),
-        FloorPortal(-1, 10, 10, 0, 40, 40, requiresRope = true),
-        // Floor 0 Quarry Rope-Hole <-> Floor -1
-        FloorPortal(0, 18, 22, -1, 14, 15, requiresRope = false),
-        FloorPortal(-1, 14, 14, 0, 18, 23, requiresRope = true),
+        // Floor 0 City Sewers Stairs <-> Floor -1
+        FloorPortal(0, 242, 179, -1, 28, 11, requiresRope = false),
+        FloorPortal(-1, 28, 10, 0, 242, 180, requiresRope = false),
+        // Floor 0 Western Town Cellar Rope-Hole <-> Floor -1
+        FloorPortal(0, 152, 172, -1, 10, 11, requiresRope = false),
+        FloorPortal(-1, 10, 10, 0, 152, 173, requiresRope = true),
+        // Floor 0 NW Quarry Rope-Hole <-> Floor -1
+        FloorPortal(0, 92, 96, -1, 14, 15, requiresRope = false),
+        FloorPortal(-1, 14, 14, 0, 92, 97, requiresRope = true),
         // Floor 0 Mountain Cavern Stairs <-> Floor -1
-        FloorPortal(0, 76, 14, -1, 38, 11, requiresRope = false),
-        FloorPortal(-1, 38, 10, 0, 76, 15, requiresRope = false),
-        // Floor 0 Dark Forest Rope-Hole <-> Floor -1
-        FloorPortal(0, 79, 52, -1, 38, 29, requiresRope = false),
-        FloorPortal(-1, 38, 28, 0, 79, 53, requiresRope = true),
+        FloorPortal(0, 264, 84, -1, 38, 11, requiresRope = false),
+        FloorPortal(-1, 38, 10, 0, 264, 85, requiresRope = false),
+        // Floor 0 Dark Forest Sinkhole Rope-Hole <-> Floor -1
+        FloorPortal(0, 312, 206, -1, 38, 29, requiresRope = false),
+        FloorPortal(-1, 38, 28, 0, 312, 207, requiresRope = true),
+        // Floor 0 NE Crag Hills Deep Cavern <-> Direct Floor -2 Deep Caverns
+        FloorPortal(0, 308, 66, -2, 11, 24, requiresRope = false),
+        FloorPortal(-2, 10, 24, 0, 308, 67, requiresRope = false),
 
         // Floor -1 <-> Floor -2 (Rope-Hole Down / Rope-Spot Up)
         FloorPortal(-1, 24, 38, -2, 24, 37, requiresRope = false),
@@ -125,39 +147,48 @@ object WorldMaps {
     )
 
     val monsterSpawns: List<MonsterSpawn> = listOf(
-        // --- Floor 0 Town Outskirts (TIER 1 — Levels 1-3, safely outside Rookvale City PZ) ---
-        // West Gate Outskirts
-        MonsterSpawn(0, 29, 45, MonsterType.WILD_RABBIT),
-        MonsterSpawn(0, 27, 42, MonsterType.CAVE_RAT),
-        MonsterSpawn(0, 25, 48, MonsterType.YOUNG_SNAKE),
-        MonsterSpawn(0, 22, 42, MonsterType.CAVE_RAT),
-        MonsterSpawn(0, 19, 39, MonsterType.CRAG_WOLF),
-        // North Gate Outskirts
-        MonsterSpawn(0, 47, 29, MonsterType.WILD_RABBIT),
-        MonsterSpawn(0, 50, 27, MonsterType.YOUNG_SNAKE),
-        MonsterSpawn(0, 48, 24, MonsterType.CRAG_WOLF),
-        // East Gate Outskirts
-        MonsterSpawn(0, 66, 46, MonsterType.WILD_RABBIT),
-        MonsterSpawn(0, 68, 43, MonsterType.YOUNG_SNAKE),
-        MonsterSpawn(0, 71, 46, MonsterType.CRAG_WOLF),
+        // --- Floor 0 Starter Meadows & Farms (TIER 1 — Levels 1-3, outside Rookvale City PZ) ---
+        // North Gate Starter Meadows
+        MonsterSpawn(0, 188, 136, MonsterType.WILD_RABBIT),
+        MonsterSpawn(0, 204, 134, MonsterType.WILD_RABBIT),
+        MonsterSpawn(0, 190, 126, MonsterType.CAVE_RAT),
+        MonsterSpawn(0, 208, 124, MonsterType.YOUNG_SNAKE),
+        MonsterSpawn(0, 196, 114, MonsterType.CRAG_WOLF),
+        // West Gate Glades & Farms
+        MonsterSpawn(0, 134, 186, MonsterType.WILD_RABBIT),
+        MonsterSpawn(0, 128, 198, MonsterType.CAVE_RAT),
+        MonsterSpawn(0, 120, 184, MonsterType.YOUNG_SNAKE),
+        MonsterSpawn(0, 114, 196, MonsterType.CAVE_RAT),
+        MonsterSpawn(0, 106, 180, MonsterType.CRAG_WOLF),
+        // East Gate Meadow & Whispering Edge
+        MonsterSpawn(0, 266, 186, MonsterType.WILD_RABBIT),
+        MonsterSpawn(0, 272, 198, MonsterType.YOUNG_SNAKE),
+        MonsterSpawn(0, 280, 184, MonsterType.CRAG_WOLF),
+        // South Valley Meadows (across river bridges)
+        MonsterSpawn(0, 184, 260, MonsterType.WILD_RABBIT),
+        MonsterSpawn(0, 210, 262, MonsterType.YOUNG_SNAKE),
+        MonsterSpawn(0, 196, 278, MonsterType.CRAG_WOLF),
 
-        // --- Floor 0 Outer Wilds (TIER 2 — Levels 3-6, far Quarry, Deep Dark Forest & Mountain Pass) ---
-        // Far NW Quarry & Foothills
-        MonsterSpawn(0, 14, 28, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(0, 23, 24, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(0, 12, 16, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(0, 25, 14, MonsterType.SKELETON),
-        // Deep East Dark Forest
-        MonsterSpawn(0, 78, 46, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(0, 74, 54, MonsterType.POISON_SPIDER),
-        MonsterSpawn(0, 84, 56, MonsterType.POISON_SPIDER),
-        MonsterSpawn(0, 70, 66, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(0, 82, 70, MonsterType.POISON_SPIDER),
-        // NE Mountain Cavern Pass
-        MonsterSpawn(0, 66, 22, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(0, 72, 19, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(0, 82, 18, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(0, 68, 12, MonsterType.SKELETON),
+        // --- Floor 0 Outer Wilds (TIER 2 — Levels 3-6, Quarry, Dark Woods & Crag Hills) ---
+        // NW Ochre Quarry & Foothills
+        MonsterSpawn(0, 110, 114, MonsterType.GOBLIN_SCOUT),
+        MonsterSpawn(0, 98, 106, MonsterType.SWAMP_TROLL),
+        MonsterSpawn(0, 84, 96, MonsterType.GOBLIN_SCOUT),
+        MonsterSpawn(0, 94, 82, MonsterType.SKELETON),
+        MonsterSpawn(0, 76, 104, MonsterType.SWAMP_TROLL),
+        // East Deep Dark Woods
+        MonsterSpawn(0, 294, 196, MonsterType.GOBLIN_SCOUT),
+        MonsterSpawn(0, 304, 212, MonsterType.POISON_SPIDER),
+        MonsterSpawn(0, 322, 202, MonsterType.POISON_SPIDER),
+        MonsterSpawn(0, 316, 220, MonsterType.SWAMP_TROLL),
+        MonsterSpawn(0, 336, 194, MonsterType.POISON_SPIDER),
+        // NE Crag Hills & Deep Cavern Approach
+        MonsterSpawn(0, 242, 98, MonsterType.CRAG_WOLF),
+        MonsterSpawn(0, 256, 90, MonsterType.GOBLIN_SCOUT),
+        MonsterSpawn(0, 274, 82, MonsterType.SWAMP_TROLL),
+        MonsterSpawn(0, 288, 76, MonsterType.SKELETON),
+        MonsterSpawn(0, 300, 72, MonsterType.SWAMP_TROLL),
+        MonsterSpawn(0, 316, 68, MonsterType.SKELETON),
 
         // --- Floor -1: Mossy Sewers & Caves (TIER 2 — Levels 3-6) ---
         MonsterSpawn(-1, 24, 14, MonsterType.CAVE_RAT),
@@ -223,6 +254,37 @@ object WorldMaps {
         else -> TEMPLE_SPAWN_X to TEMPLE_SPAWN_Y
     }
 
+    /**
+     * Finds the closest walkable, NPC-free tile within [maxRadius] using BFS so migrated saves
+     * near redesigned props/walls nudge smoothly onto adjacent open ground without teleporting players away.
+     */
+    fun findNearestWalkableTile(floorId: Int, startX: Int, startY: Int, maxRadius: Int = 8): Pair<Int, Int>? {
+        val floorMap = getFloor(floorId)
+        if (startX !in 0 until floorMap.width || startY !in 0 until floorMap.height) return null
+        val npcCoords = npcs.filter { it.floor == floorId }.map { it.x to it.y }.toSet()
+
+        fun isValid(x: Int, y: Int): Boolean {
+            return x in 0 until floorMap.width &&
+                y in 0 until floorMap.height &&
+                floorMap.tileAt(x, y).walkable &&
+                (x to y) !in npcCoords
+        }
+
+        if (isValid(startX, startY)) return startX to startY
+
+        for (r in 1..maxRadius) {
+            for (dy in -r..r) {
+                for (dx in -r..r) {
+                    if (maxOf(abs(dx), abs(dy)) != r) continue
+                    val nx = startX + dx
+                    val ny = startY + dy
+                    if (isValid(nx, ny)) return nx to ny
+                }
+            }
+        }
+        return null
+    }
+
     fun initialMonsters(): List<MonsterEntity> {
         return monsterSpawns.mapIndexed { idx, spawn ->
             MonsterEntity(
@@ -245,7 +307,7 @@ object WorldMaps {
         floors.values.forEach { fl ->
             for (y in 0 until fl.height) {
                 for (x in 0 until fl.width) {
-                    val kind = fl.tiles[y][x].oreVeinKind()
+                    val kind = fl.tileAt(x, y).oreVeinKind()
                     if (kind != null) {
                         map[Triple(fl.floorId, x, y)] = OreNodeState(
                             floor = fl.floorId,
@@ -265,187 +327,491 @@ object WorldMaps {
         Array(h) { Array(w) { fill } }
 
     private fun fillRect(g: Array<Array<TileType>>, x1: Int, y1: Int, x2: Int, y2: Int, tile: TileType) {
-        val h = g.size
-        val w = g[0].size
-        for (y in y1.coerceAtLeast(0)..y2.coerceAtMost(h - 1)) {
-            for (x in x1.coerceAtLeast(0)..x2.coerceAtMost(w - 1)) {
+        for (y in y1.coerceAtLeast(0)..y2.coerceAtMost(g.lastIndex)) {
+            for (x in x1.coerceAtLeast(0)..x2.coerceAtMost(g[0].lastIndex)) {
                 g[y][x] = tile
             }
         }
     }
 
-    private fun strokeRect(g: Array<Array<TileType>>, x1: Int, y1: Int, x2: Int, y2: Int, tile: TileType) {
-        val h = g.size
-        val w = g[0].size
-        val cx1 = x1.coerceIn(0, w - 1)
-        val cx2 = x2.coerceIn(0, w - 1)
-        val cy1 = y1.coerceIn(0, h - 1)
-        val cy2 = y2.coerceIn(0, h - 1)
-        for (x in cx1..cx2) {
-            g[cy1][x] = tile
-            g[cy2][x] = tile
-        }
-        for (y in cy1..cy2) {
-            g[y][cx1] = tile
-            g[y][cx2] = tile
-        }
+    private fun deterministicHash(x: Int, y: Int, seed: Int): Int {
+        var h = x * 374761393 + y * 668265263 + seed * 1442695041
+        h = (h xor (h ushr 13)) * 1274126177
+        return h xor (h ushr 16)
     }
 
+    private fun riverCenterY(x: Int): Int {
+        val wave = sin(x * 0.028) * 5.0 + cos(x * 0.013) * 3.0
+        // Gentle harbor bay dip directly south of Rookvale City
+        val harborDip = if (x in 165..235) {
+            val t = (x - 200) / 35.0
+            (1.0 - t * t) * 4.0
+        } else 0.0
+        return (235.0 + wave + harborDip).toInt()
+    }
+
+    /**
+     * FLOOR 0: 400x400 Chunked Rookvale City & Valley (`rookvale_valley`)
+     * Partitioned into 32x32 spatial chunks (~169 chunks) for 60 FPS rotated viewport culling.
+     */
     private fun buildOverlandSurface(): WorldFloor {
-        val w = 96
-        val h = 96
-        val g = createBlank(w, h, TileType.GRASS)
+        val s = OVERLAND_REGION_SIZE // 400
+        val grid = ChunkedTileGrid(s, s, WORLD_CHUNK_SIZE, TileType.GRASS)
 
-        // Outer impenetrable mountain border
-        strokeRect(g, 0, 0, w - 1, h - 1, TileType.MOUNTAIN_ROCK)
-        strokeRect(g, 1, 1, w - 2, h - 2, TileType.MOUNTAIN_ROCK)
-
-        // --- 1. SOUTHERN RIVER & LAKE ---
-        fillRect(g, 2, 54, 62, 62, TileType.WATER)
-        fillRect(g, 2, 62, 62, 93, TileType.GRASS)
-        // Southern woodland riverbank trees
-        for (x in 6..58 step 5) {
-            g[66][x] = TileType.TREE
-            g[74][(x + 2) % 56 + 4] = TileType.TREE
-            g[84][x] = TileType.TREE
+        // 1. Natural valley meadows, wildflower patches & dark forest biomes across 400x400
+        for (y in 0 until s) {
+            for (x in 0 until s) {
+                val h = deterministicHash(x, y, 7) and 255
+                val inEastWoods = x >= 272 && y in 135..345
+                val inFarWestWoods = x <= 90 && y in 250..365
+                val tile = when {
+                    inEastWoods -> if (h < 185) TileType.DARK_GRASS else TileType.GRASS
+                    inFarWestWoods -> if (h < 150) TileType.DARK_GRASS else TileType.GRASS
+                    h < 34 -> TileType.FLOWER_GRASS
+                    else -> TileType.GRASS
+                }
+                grid.set(x, y, tile)
+            }
         }
 
-        // --- 2. NW QUARRY & FOOTHILLS (x=3..31, y=4..52) ---
-        fillRect(g, 4, 5, 31, 51, TileType.DIRT_FLOOR)
-        // Rocky quarry terraces & switchbacks
-        fillRect(g, 5, 5, 30, 8, TileType.MOUNTAIN_ROCK)
-        fillRect(g, 4, 19, 10, 21, TileType.MOUNTAIN_ROCK)
-        fillRect(g, 22, 18, 28, 20, TileType.MOUNTAIN_ROCK)
-        fillRect(g, 8, 34, 15, 36, TileType.MOUNTAIN_ROCK)
-        // Ochre Veins (Tier 1) & Bogstone Veins (Tier 2) in the Quarry
-        val quarryOchre = listOf(8 to 11, 11 to 10, 15 to 12, 22 to 11, 9 to 25, 13 to 30, 25 to 30, 20 to 44, 12 to 46)
-        quarryOchre.forEach { (ox, oy) -> g[oy][ox] = TileType.ORE_OCHRE }
-        val quarryBogstone = listOf(7 to 14, 16 to 17, 26 to 16, 7 to 29)
-        quarryBogstone.forEach { (bx, by) -> g[by][bx] = TileType.ORE_BOGSTONE }
-        // Quarry Rope-Hole shortcut to Floor -1
-        g[22][18] = TileType.ROPE_HOLE_DOWN
+        // 2. Soft regional border rim (leaving wide open highways at North, East, West & South!)
+        for (i in 0 until s) {
+            if (i !in 191..201) {
+                grid.set(i, 0, TileType.MOUNTAIN_ROCK)
+                grid.set(i, 1, TileType.TREE)
+                grid.set(i, s - 1, TileType.MOUNTAIN_ROCK)
+                grid.set(i, s - 2, TileType.TREE)
+            }
+            if (i !in 187..197 && i !in 226..248) {
+                grid.set(0, i, TileType.MOUNTAIN_ROCK)
+                grid.set(1, i, TileType.TREE)
+                grid.set(s - 1, i, TileType.MOUNTAIN_ROCK)
+                grid.set(s - 2, i, TileType.TREE)
+            }
+        }
 
-        // --- 3. NE MOUNTAIN CAVERN ENTRANCE (x=54..92, y=4..31) ---
-        fillRect(g, 54, 4, 92, 31, TileType.MOUNTAIN_ROCK)
-        // Carve mountain pass from Rookvale North Gate -> Cavern Gatehouse
-        fillRect(g, 45, 22, 56, 33, TileType.DIRT_FLOOR)
-        fillRect(g, 56, 16, 86, 25, TileType.DIRT_FLOOR)
-        fillRect(g, 64, 9, 86, 17, TileType.DIRT_FLOOR)
-        // Mountain Bogstone & Brimstone Seams
-        val mountainBog = listOf(60 to 17, 65 to 24, 83 to 22)
-        mountainBog.forEach { (mx, my) -> g[my][mx] = TileType.ORE_BOGSTONE }
-        val mountainBrim = listOf(66 to 10, 72 to 10, 82 to 11, 85 to 16)
-        mountainBrim.forEach { (bx, by) -> g[by][bx] = TileType.ORE_BRIMSTONE }
-        // Grand Mountain Cavern Stairway -> Floor -1
-        g[13][76] = TileType.TORCH_WALL
-        g[14][76] = TileType.STAIRS_DOWN
+        // 3. Organic outer wilderness forests, rocky hills & clearings (avoiding central city & highways)
+        for (y in 8 until s - 8 step 3) {
+            for (x in 8 until s - 8 step 3) {
+                // Keep central city core + immediate starter clearings + highway corridors clear
+                if (x in 138..264 && y in 136..254) continue
+                if (x in 188..204 || y in 184..200) continue
+                if (x in 62..132 && y in 62..132) continue // NW Quarry
+                if (x in 230..332 && y in 48..116) continue // NE Crag Hills
 
-        // --- 4. EAST DARK FOREST (x=64..93, y=32..91) ---
-        fillRect(g, 64, 32, 93, 91, TileType.DARK_GRASS)
-        // Winding dirt forest paths
-        fillRect(g, 63, 45, 86, 48, TileType.DIRT_FLOOR)
-        fillRect(g, 76, 46, 81, 76, TileType.DIRT_FLOOR)
-        fillRect(g, 68, 62, 86, 66, TileType.DIRT_FLOOR)
-        // Dense oblique pine canopy clusters
-        for (y in 34..88 step 4) {
-            for (x in 66..91 step 5) {
-                val tx = x + ((y / 4) % 2) * 2
-                if (tx in 65..92 && g[y][tx] == TileType.DARK_GRASS) {
-                    g[y][tx] = TileType.TREE
+                val h = deterministicHash(x, y, 19) and 255
+                val inEastForest = x >= 278 && y in 140..340
+                val inNorthRidge = y <= 88 && x !in 175..220
+                val inSouthWilds = y >= 264
+
+                when {
+                    inEastForest && h < 92 -> {
+                        grid.set(x, y, TileType.TREE)
+                        if ((h and 3) == 0) grid.set(x + 1, y + 1, TileType.TREE)
+                    }
+                    inNorthRidge && h < 58 -> {
+                        grid.set(x, y, if (h < 32) TileType.MOUNTAIN_ROCK else TileType.TREE)
+                    }
+                    inSouthWilds && h < 42 -> {
+                        grid.set(x, y, TileType.TREE)
+                    }
+                    h < 28 -> {
+                        grid.set(x, y, TileType.TREE)
+                    }
                 }
             }
         }
-        // Hidden Dark Forest Rope-Hole -> Floor -1
-        fillRect(g, 77, 50, 81, 54, TileType.DIRT_FLOOR)
-        g[52][79] = TileType.ROPE_HOLE_DOWN
 
-        // --- 5. ROOKVALE CITY CORE (anchored at offset +32, +32 -> x=32..63, y=32..63) ---
-        val ox = V1_SURFACE_OFFSET
-        val oy = V1_SURFACE_OFFSET
-        strokeRect(g, ox, oy, ox + 31, oy + 31, TileType.CITY_WALL)
-        strokeRect(g, ox + 1, oy + 1, ox + 30, oy + 30, TileType.CITY_WALL)
-        fillRect(g, ox + 2, oy + 2, ox + 29, oy + 29, TileType.GRASS)
-        fillRect(g, ox + 6, oy + 6, ox + 26, oy + 20, TileType.COBBLESTONE)
+        // 4. Wide Regional Border Highways (connecting to future 400x400 neighboring cities!)
+        // North Border Highway (x=194..198, y=0..150)
+        grid.fillRect(194, 0, 198, 150, TileType.COBBLESTONE)
+        // West Border Highway (x=0..148, y=190..194)
+        grid.fillRect(0, 190, 148, 194, TileType.COBBLESTONE)
+        // East Border Highway (x=254..399, y=190..194)
+        grid.fillRect(254, 190, 399, 194, TileType.COBBLESTONE)
+        // South Frontier Road (x=194..198, y=244..399)
+        grid.fillRect(194, 244, 198, 399, TileType.DIRT_FLOOR)
+        grid.fillRect(195, 244, 197, 305, TileType.COBBLESTONE)
 
-        // Open City Gates connecting seamlessly to Quarry (West), Mountains (North), Dark Forest (East)
-        fillRect(g, ox, oy + 13, ox + 6, oy + 15, TileType.COBBLESTONE) // West Gate -> Quarry
-        fillRect(g, 28, oy + 13, ox, oy + 15, TileType.DIRT_FLOOR)
-        fillRect(g, ox + 14, oy, ox + 16, oy + 6, TileType.COBBLESTONE) // North Gate -> Mountains
-        fillRect(g, ox + 26, oy + 13, ox + 31, oy + 15, TileType.COBBLESTONE) // East Gate -> Dark Forest
+        // Roadside lanterns along highway approaches near the city
+        listOf(
+            193 to 132, 199 to 132, 193 to 112, 199 to 112,
+            130 to 189, 130 to 195, 112 to 189, 112 to 195,
+            270 to 189, 270 to 195, 290 to 189, 290 to 195
+        ).forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
 
-        // River & Fishing Pier inside southern Rookvale
-        fillRect(g, ox + 2, oy + 22, ox + 29, oy + 29, TileType.WATER)
-        fillRect(g, ox + 14, oy + 20, ox + 17, oy + 26, TileType.WOOD_PIER)
-        fillRect(g, ox + 12, oy + 24, ox + 19, oy + 25, TileType.WOOD_PIER)
+        // 5. Northwest Ochre Quarry (x=64..128, y=64..128) & Winding Quarry Road
+        grid.fillEllipse(94, 96, 30, 26, TileType.DIRT_FLOOR)
+        // Natural crescent quarry cliff walls (leaving wide east/south entrances)
+        for (x in 64..122) {
+            if (x < 108) grid.set(x, 70, TileType.MOUNTAIN_ROCK)
+            if (x < 98) grid.set(x, 71, TileType.MOUNTAIN_ROCK)
+        }
+        for (y in 70..118) {
+            grid.set(65, y, TileType.MOUNTAIN_ROCK)
+            if (y < 104) grid.set(66, y, TileType.MOUNTAIN_ROCK)
+        }
+        // Ochre Veins around quarry ledges
+        listOf(
+            70 to 78, 72 to 86, 70 to 98, 74 to 110,
+            82 to 74, 96 to 74, 108 to 78, 116 to 88,
+            80 to 114, 104 to 112
+        ).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_OCHRE) }
+        // Winding trail from North Highway (194, 120) & West Highway (118, 190) into Quarry
+        grid.drawRoadSegment(194, 120, 120, 112, 1, TileType.DIRT_FLOOR)
+        grid.drawRoadSegment(120, 112, 92, 98, 1, TileType.DIRT_FLOOR)
+        grid.drawRoadSegment(118, 190, 112, 116, 1, TileType.DIRT_FLOOR)
+        grid.set(92, 96, TileType.ROPE_HOLE_DOWN)
+        grid.set(92, 97, TileType.DIRT_FLOOR)
 
-        // Temple Sanctuary (Center)
-        strokeRect(g, ox + 12, oy + 10, ox + 18, oy + 16, TileType.CITY_WALL)
-        fillRect(g, ox + 13, oy + 11, ox + 17, oy + 15, TileType.TEMPLE_FLOOR)
-        g[oy + 16][ox + 15] = TileType.TEMPLE_FLOOR
-        g[oy + 13][ox + 12] = TileType.TEMPLE_FLOOR
-        g[oy + 13][ox + 18] = TileType.TEMPLE_FLOOR
-        g[oy + 12][ox + 15] = TileType.TEMPLE_ALTAR
-        g[oy + 12][ox + 13] = TileType.RUNECRAFTING_TABLE
-        g[oy + 10][ox + 13] = TileType.TORCH_WALL
-        g[oy + 10][ox + 17] = TileType.TORCH_WALL
+        // 6. Northern Crag Hills (Floor -1 Mountain Cavern + Direct Floor -2 Deep Abyssal Cavern)
+        grid.fillEllipse(266, 84, 24, 18, TileType.DIRT_FLOOR)
+        grid.fillEllipse(308, 68, 22, 16, TileType.DIRT_FLOOR)
+        // Rocky ridge crest behind the caverns
+        for (x in 244..332) {
+            val ridgeY = 56 + ((sin(x * 0.14) * 3.0).toInt())
+            grid.set(x, ridgeY, TileType.MOUNTAIN_ROCK)
+            grid.set(x, ridgeY + 1, TileType.MOUNTAIN_ROCK)
+        }
+        // Ochre & Bogstone outcrops in Crag Hills
+        listOf(254 to 76, 276 to 74, 296 to 62, 320 to 62).forEach { (vx, vy) ->
+            grid.set(vx, vy, TileType.ORE_OCHRE)
+        }
+        // Winding mountain trails from North Highway to both caverns
+        grid.drawRoadSegment(198, 112, 248, 96, 1, TileType.DIRT_FLOOR)
+        grid.drawRoadSegment(248, 96, 264, 86, 1, TileType.DIRT_FLOOR)
+        grid.drawRoadSegment(264, 86, 294, 74, 1, TileType.DIRT_FLOOR)
+        grid.drawRoadSegment(294, 74, 308, 68, 1, TileType.DIRT_FLOOR)
+        // Floor -1 Mountain Cavern Stairs
+        grid.set(264, 84, TileType.STAIRS_DOWN)
+        grid.set(264, 85, TileType.DIRT_FLOOR)
+        grid.set(262, 83, TileType.LANTERN_POST)
+        grid.set(266, 83, TileType.LANTERN_POST)
+        // Floor -2 Deep Abyssal Cavern Stairs (direct overland entry to Floor -2!)
+        grid.set(308, 66, TileType.STAIRS_DOWN)
+        grid.set(308, 67, TileType.DIRT_FLOOR)
+        grid.set(306, 65, TileType.TORCH_WALL)
+        grid.set(310, 65, TileType.TORCH_WALL)
 
-        // Arcane Runecrafting Sanctuary Alcove (Just South of Alaric's Shop inside Rookvale Town PZ)
-        fillRect(g, ox + 20, oy + 17, ox + 22, oy + 19, TileType.TEMPLE_FLOOR)
-        g[oy + 18][ox + 21] = TileType.RUNECRAFTING_TABLE
+        // 7. East Deep Dark Woods Trail & Sinkhole (Floor -1)
+        grid.fillEllipse(312, 206, 10, 8, TileType.DARK_GRASS)
+        grid.drawRoadSegment(284, 192, 312, 206, 1, TileType.DIRT_FLOOR)
+        grid.set(312, 206, TileType.ROPE_HOLE_DOWN)
+        grid.set(312, 207, TileType.DIRT_FLOOR)
 
-        // Smithy & Fletching Courtyard (Just North of Temple: Smelting Furnaces, Blacksmith Anvils & Fletching Workbench)
-        fillRect(g, ox + 12, oy + 4, ox + 18, oy + 8, TileType.COBBLESTONE)
-        g[oy + 5][ox + 13] = TileType.SMELTING_FURNACE
-        g[oy + 5][ox + 17] = TileType.SMELTING_FURNACE
-        g[oy + 7][ox + 13] = TileType.BLACKSMITH_ANVIL
-        g[oy + 7][ox + 17] = TileType.BLACKSMITH_ANVIL
-        g[oy + 6][ox + 12] = TileType.FLETCHING_BENCH
-        g[oy + 6][ox + 18] = TileType.FLETCHING_BENCH
+        // 8. Starter Meadows & Rustic Farms outside North & West Gates
+        // North farmstead garden plot (fenced patch with open gate)
+        grid.fillRect(172, 126, 184, 138, TileType.FLOWER_GRASS)
+        for (x in 172..184) {
+            if (x !in 177..179) {
+                grid.set(x, 126, TileType.WOOD_FENCE)
+                grid.set(x, 138, TileType.WOOD_FENCE)
+            }
+        }
+        // West farmstead wildflower clearing
+        grid.fillEllipse(124, 174, 10, 8, TileType.FLOWER_GRASS)
 
-        // Accessible overland timber trees right outside West, North & East town gates for Hatchet harvesting
-        listOf(30 to 40, 30 to 49, 43 to 29, 52 to 29, 65 to 41, 65 to 50).forEach { (tx, ty) ->
-            if (g[ty][tx] == TileType.GRASS || g[ty][tx] == TileType.DARK_GRASS || g[ty][tx] == TileType.DIRT_FLOOR) {
-                g[ty][tx] = TileType.TREE
+        // 9. WIDE WINDING ROOKVALE RIVER & SOUTHERN HARBOR BASIN (full x = 0..399)
+        for (x in 0 until s) {
+            val cy = riverCenterY(x)
+            val halfW = if (x in 172..224) 7 else 5
+            for (y in (cy - halfW)..(cy + halfW)) {
+                grid.set(x, y, TileType.WATER)
             }
         }
 
-        // Depot Hall (West)
-        strokeRect(g, ox + 6, oy + 11, ox + 10, oy + 17, TileType.CITY_WALL)
-        fillRect(g, ox + 7, oy + 12, ox + 9, oy + 16, TileType.COBBLESTONE)
-        g[oy + 14][ox + 10] = TileType.COBBLESTONE
-        g[oy + 12][ox + 7] = TileType.DEPOT_CHEST
-        g[oy + 16][ox + 7] = TileType.DEPOT_CHEST
-        g[oy + 11][ox + 8] = TileType.TORCH_WALL
+        // 10. FULL-SCALE ROOKVALE CITY CORE (x = 146..256, y = 148..228)
+        // Lush green base lawn inside city with wildflowers
+        for (y in 148..228) {
+            for (x in 146..256) {
+                if (grid.get(x, y) != TileType.WATER) {
+                    val h = deterministicHash(x, y, 41) and 31
+                    grid.set(x, y, if (h < 5) TileType.FLOWER_GRASS else TileType.GRASS)
+                }
+            }
+        }
 
-        // Alaric's Supplies Shop (East)
-        strokeRect(g, ox + 20, oy + 11, ox + 25, oy + 16, TileType.CITY_WALL)
-        fillRect(g, ox + 21, oy + 12, ox + 24, oy + 15, TileType.COBBLESTONE)
-        g[oy + 14][ox + 20] = TileType.COBBLESTONE
-        g[oy + 13][ox + 23] = TileType.SHOP_COUNTER
-        g[oy + 12][ox + 23] = TileType.SHOP_COUNTER
-        g[oy + 11][ox + 22] = TileType.TORCH_WALL
+        // City Grand Boulevards & Connecting Cobblestone Lanes
+        grid.fillRect(194, 148, 198, 228, TileType.COBBLESTONE) // Central North-South Boulevard
+        grid.fillRect(146, 190, 256, 194, TileType.COBBLESTONE) // Central West-East Boulevard
+        grid.fillRect(150, 222, 248, 227, TileType.COBBLESTONE) // South Riverfront Promenade
+        grid.fillRect(159, 170, 162, 228, TileType.COBBLESTONE) // West Market & Depot Avenue
+        grid.fillRect(234, 170, 237, 228, TileType.COBBLESTONE) // East Academy & Craft Avenue
+        grid.fillRect(154, 168, 244, 170, TileType.COBBLESTONE) // North Garden Ring Lane
+        grid.fillRect(154, 212, 240, 214, TileType.COBBLESTONE) // South Market Ring Lane
 
-        // City NE Dungeon Gatehouse Stairs
-        strokeRect(g, ox + 22, oy + 5, ox + 26, oy + 9, TileType.STONE_WALL)
-        fillRect(g, ox + 23, oy + 6, ox + 25, oy + 8, TileType.DIRT_FLOOR)
-        g[oy + 9][ox + 24] = TileType.COBBLESTONE
-        g[oy + 5][ox + 24] = TileType.TORCH_WALL
-        g[oy + 7][ox + 24] = TileType.STAIRS_DOWN
+        // Open City Perimeter: Trimmed Hedges, Wooden Fences & Stone Gateposts (no cramped curtain walls!)
+        for (x in 146..256) {
+            if (x !in 193..199) {
+                val borderTile = when {
+                    x % 14 == 0 -> TileType.LANTERN_POST
+                    (x / 5) % 2 == 0 -> TileType.HEDGE
+                    else -> TileType.WOOD_FENCE
+                }
+                grid.set(x, 148, borderTile)
+            }
+        }
+        for (y in 149..226) {
+            if (y !in 189..195) {
+                val borderTile = when {
+                    y % 12 == 0 -> TileType.LANTERN_POST
+                    (y / 5) % 2 == 0 -> TileType.HEDGE
+                    else -> TileType.WOOD_FENCE
+                }
+                if (grid.get(146, y) != TileType.WATER) grid.set(146, y, borderTile)
+                if (grid.get(256, y) != TileType.WATER) grid.set(256, y, borderTile)
+            }
+        }
+        // Grand Stone Gateposts framing North, West, and East Highways
+        listOf(
+            193 to 148, 199 to 148, // North Gate
+            146 to 189, 146 to 195, // West Gate
+            256 to 189, 256 to 195  // East Gate
+        ).forEach { (gx, gy) -> grid.set(gx, gy, TileType.GATE_PILLAR) }
 
-        // City NW Cave Rope-Hole
-        fillRect(g, ox + 6, oy + 5, ox + 10, oy + 9, TileType.DIRT_FLOOR)
-        g[oy + 7][ox + 8] = TileType.ROPE_HOLE_DOWN
+        // --- DISTRICT 1: TEMPLE & SANCTUARY PLAZA (x = 182..210, y = 172..208) ---
+        grid.fillRect(182, 188, 210, 208, TileType.COBBLESTONE)
+        // Corner garden beds in Town Square
+        grid.fillRect(183, 204, 187, 207, TileType.FLOWER_GRASS)
+        grid.fillRect(205, 204, 209, 207, TileType.FLOWER_GRASS)
+        grid.set(183, 204, TileType.HEDGE); grid.set(187, 207, TileType.HEDGE)
+        grid.set(209, 204, TileType.HEDGE); grid.set(205, 207, TileType.HEDGE)
+        // Bubbling Stone Fountain in the heart of Town Square + 4 Lantern Posts
+        grid.set(196, 198, TileType.FOUNTAIN)
+        listOf(191 to 194, 201 to 194, 191 to 202, 201 to 202).forEach { (lx, ly) ->
+            grid.set(lx, ly, TileType.LANTERN_POST)
+        }
+
+        // Temple Sanctuary Building (188..204, 174..187)
+        grid.fillRect(188, 174, 204, 187, TileType.TEMPLE_FLOOR)
+        grid.drawWallBorder(188, 174, 204, 187, TileType.TEMPLE_WALL)
+        // Grand 5-tile open South Portico opening onto Sanctuary Plaza
+        grid.fillRect(194, 187, 198, 188, TileType.TEMPLE_FLOOR)
+        grid.set(193, 187, TileType.GATE_PILLAR)
+        grid.set(199, 187, TileType.GATE_PILLAR)
+        grid.set(192, 189, TileType.LANTERN_POST)
+        grid.set(200, 189, TileType.LANTERN_POST)
+        // Temple Altar, Sanctuary Pews & Open Walkways around Brother Alden (193,179) & The Oracle (199,179)
+        grid.set(196, 177, TileType.TEMPLE_ALTAR)
+        listOf(191 to 182, 191 to 184, 201 to 182, 201 to 184).forEach { (px, py) ->
+            grid.set(px, py, TileType.TEMPLE_PEW)
+        }
+        // Keep spawn tile (196, 192) crystal clear cobblestone in Sanctuary Plaza
+        grid.set(TEMPLE_SPAWN_X, TEMPLE_SPAWN_Y, TileType.COBBLESTONE)
+
+        // --- DISTRICT 2: GRAND MARKET & DEPOT QUARTER (x = 152..180, y = 174..212) ---
+        // Town Depot Hall (156..172, 176..188)
+        grid.fillRect(156, 176, 172, 188, TileType.WOOD_PLANK_FLOOR)
+        grid.drawWallBorder(156, 176, 172, 188, TileType.TIMBER_WALL)
+        // Warm glowing windows along Depot north & south walls
+        listOf(160 to 176, 164 to 176, 168 to 176, 159 to 188, 169 to 188).forEach { (wx, wy) ->
+            grid.set(wx, wy, TileType.TIMBER_WINDOW_WALL)
+        }
+        // Wide South & East Archways
+        grid.fillRect(163, 188, 165, 189, TileType.WOOD_PLANK_FLOOR)
+        grid.fillRect(172, 181, 173, 183, TileType.WOOD_PLANK_FLOOR)
+        // Iron-bound Depot Chests & Supply Crates/Barrels
+        grid.set(158, 179, TileType.DEPOT_CHEST)
+        grid.set(158, 182, TileType.DEPOT_CHEST)
+        grid.set(158, 185, TileType.DEPOT_CHEST)
+        listOf(161 to 178, 169 to 178, 169 to 186).forEach { (cx, cy) ->
+            grid.set(cx, cy, TileType.CRATE_BARREL)
+        }
+
+        // Alaric's Shop Building (156..170, 198..210)
+        grid.fillRect(156, 198, 170, 210, TileType.WOOD_PLANK_FLOOR)
+        grid.drawWallBorder(156, 198, 170, 210, TileType.TIMBER_WALL)
+        listOf(159 to 198, 167 to 198, 160 to 210, 166 to 210).forEach { (wx, wy) ->
+            grid.set(wx, wy, TileType.TIMBER_WINDOW_WALL)
+        }
+        // Wide North & East Archways
+        grid.fillRect(162, 197, 164, 198, TileType.WOOD_PLANK_FLOOR)
+        grid.fillRect(170, 203, 171, 205, TileType.WOOD_PLANK_FLOOR)
+        // Shop Counters, Weapon Rack, Crates & Alaric at (162, 204)
+        grid.set(161, 201, TileType.SHOP_COUNTER)
+        grid.set(163, 201, TileType.SHOP_COUNTER)
+        grid.set(158, 201, TileType.WEAPON_RACK)
+        grid.set(167, 200, TileType.CRATE_BARREL)
+        grid.set(162, 204, TileType.WOOD_PLANK_FLOOR)
+
+        // Open-Air Market Plaza & Colorful Awning Stalls (172..181, 196..210)
+        grid.fillRect(171, 195, 181, 211, TileType.COBBLESTONE)
+        listOf(175 to 199, 175 to 204, 175 to 209).forEach { (mx, my) ->
+            grid.set(mx, my, TileType.MARKET_AWNING)
+        }
+        grid.set(178, 199, TileType.CRATE_BARREL)
+        grid.set(178, 209, TileType.LANTERN_POST)
+
+        // Western Town Cellar Rope-Hole (Floor -1) in cozy garden courtyard (152, 172)
+        grid.fillRect(150, 170, 155, 175, TileType.COBBLESTONE)
+        grid.set(152, 172, TileType.ROPE_HOLE_DOWN)
+        grid.set(154, 171, TileType.LANTERN_POST)
+
+        // --- DISTRICT 3: ARCANE & RUNECRAFTING QUARTER (x = 214..246, y = 172..188) ---
+        grid.fillRect(216, 174, 234, 187, TileType.ARCANE_FLOOR)
+        grid.drawWallBorder(216, 174, 234, 187, TileType.TIMBER_WALL)
+        listOf(220 to 174, 230 to 174, 220 to 187, 230 to 187).forEach { (wx, wy) ->
+            grid.set(wx, wy, TileType.TIMBER_WINDOW_WALL)
+        }
+        // Wide South & West Archways
+        grid.fillRect(224, 187, 226, 189, TileType.ARCANE_FLOOR)
+        grid.fillRect(215, 180, 216, 182, TileType.ARCANE_FLOOR)
+        // Runecrafting Altar, Crystal Pillars & Scholar Bookshelves
+        grid.set(225, 179, TileType.RUNECRAFTING_TABLE)
+        listOf(219 to 177, 231 to 177, 219 to 184, 231 to 184).forEach { (cx, cy) ->
+            grid.set(cx, cy, TileType.CRYSTAL_PILLAR)
+        }
+        listOf(222 to 175, 223 to 175, 227 to 175, 228 to 175).forEach { (bx, by) ->
+            grid.set(bx, by, TileType.BOOKSHELF)
+        }
+        // City Sewers Entrance (Floor -1) neatly beside Academy courtyard
+        grid.fillRect(239, 176, 245, 183, TileType.COBBLESTONE)
+        grid.set(242, 179, TileType.STAIRS_DOWN)
+        grid.set(240, 177, TileType.LANTERN_POST)
+        grid.set(244, 177, TileType.LANTERN_POST)
+
+        // --- DISTRICT 4: CRAFT & FLETCHING WARD + LOGGING ORCHARD (x = 214..254, y = 196..218) ---
+        grid.fillRect(216, 198, 234, 211, TileType.COBBLESTONE)
+        grid.fillRect(218, 200, 232, 209, TileType.WOOD_PLANK_FLOOR)
+        // Back wall + open fenced courtyard sides
+        for (x in 216..234) grid.set(x, 198, if (x in 220..222 || x in 228..230) TileType.TIMBER_WINDOW_WALL else TileType.TIMBER_WALL)
+        for (y in 199..211) {
+            if (y !in 203..206) {
+                grid.set(216, y, TileType.WOOD_FENCE)
+                grid.set(234, y, TileType.WOOD_FENCE)
+            }
+        }
+        for (x in 217..233) {
+            if (x !in 222..228) grid.set(x, 211, TileType.WOOD_FENCE)
+        }
+        // Glowing Forge, Anvil, Fletching Benches, Weapon Racks & Stacked Logs/Crates
+        grid.set(219, 201, TileType.SMELTING_FURNACE)
+        grid.set(223, 201, TileType.BLACKSMITH_ANVIL)
+        grid.set(228, 201, TileType.FLETCHING_BENCH)
+        grid.set(231, 201, TileType.FLETCHING_BENCH)
+        grid.set(219, 207, TileType.WEAPON_RACK)
+        grid.set(231, 207, TileType.CRATE_BARREL)
+        grid.set(215, 202, TileType.LANTERN_POST)
+        grid.set(235, 202, TileType.LANTERN_POST)
+
+        // Rookvale Logging Orchard (spaced choppable trees right beside Fletching Ward!)
+        for (y in 196..218) {
+            for (x in 238..254) {
+                grid.set(x, y, if ((x + y) % 3 == 0) TileType.FLOWER_GRASS else TileType.GRASS)
+            }
+        }
+        listOf(
+            241 to 199, 246 to 198, 251 to 200,
+            240 to 204, 245 to 204, 250 to 205,
+            242 to 209, 247 to 210, 252 to 210,
+            241 to 215, 246 to 216, 251 to 215
+        ).forEach { (tx, ty) -> grid.set(tx, ty, TileType.TREE) }
+
+        // --- DISTRICT 5: SOUTH RIVERFRONT, BRIDGES & HARBOR DOCKS ---
+        // Three Grand Bridges across the winding Rookvale River
+        fun buildBridge(xStart: Int, xEnd: Int) {
+            val midX = (xStart + xEnd) / 2
+            val cy = riverCenterY(midX)
+            for (y in (cy - 10)..(cy + 10)) {
+                for (x in xStart..xEnd) {
+                    if (grid.get(x, y) == TileType.WATER || y in (cy - 8)..(cy + 8)) {
+                        grid.set(x, y, TileType.WOOD_BRIDGE)
+                    }
+                }
+            }
+            grid.set(xStart - 1, cy - 8, TileType.LANTERN_POST)
+            grid.set(xEnd + 1, cy - 8, TileType.LANTERN_POST)
+        }
+        buildBridge(194, 198) // Grand Central River Bridge
+        buildBridge(159, 162) // West Market Bridge
+        buildBridge(234, 237) // East Craft Bridge
+
+        // Harbor Fishing Piers extending from the Riverfront Promenade into the Harbor Basin
+        grid.fillRect(180, 227, 185, 235, TileType.WOOD_PIER)
+        grid.fillRect(209, 227, 214, 235, TileType.WOOD_PIER)
+        // Moored Harbor Boats bobbing beside the piers
+        listOf(179 to 232, 186 to 234, 208 to 234, 215 to 232).forEach { (bx, by) ->
+            grid.set(bx, by, TileType.MOORED_BOAT)
+        }
+        // Waterfront lanterns & cargo crates along the Promenade
+        listOf(176 to 224, 188 to 224, 204 to 224, 218 to 224).forEach { (lx, ly) ->
+            grid.set(lx, ly, TileType.LANTERN_POST)
+        }
+        listOf(174 to 225, 220 to 225).forEach { (cx, cy) ->
+            grid.set(cx, cy, TileType.CRATE_BARREL)
+        }
+
+        // Guarantee every Floor 0 monster spawn & portal landing is walkable ground
+        for (spawn in monsterSpawns) {
+            if (spawn.floor == 0 && !grid.get(spawn.x, spawn.y).walkable) {
+                grid.set(spawn.x, spawn.y, TileType.GRASS)
+            }
+        }
+        for (portal in portals) {
+            if (portal.toFloor == 0 && !grid.get(portal.toX, portal.toY).walkable) {
+                grid.set(portal.toX, portal.toY, TileType.DIRT_FLOOR)
+            }
+        }
+
+        val cityBuildings = listOf(
+            BuildingFootprint(
+                id = "temple_sanctuary",
+                name = "Temple Sanctuary",
+                minX = 188, minY = 174, maxX = 204, maxY = 187,
+                roofColorArgb = 0xFF7B6C58.toInt(),
+                roofHighlightArgb = 0xFF9E8D74.toInt(),
+                roofTrimArgb = 0xFFD9B462.toInt(),
+                ridgeAlongX = true
+            ),
+            BuildingFootprint(
+                id = "town_depot",
+                name = "Town Depot Hall",
+                minX = 156, minY = 176, maxX = 172, maxY = 188,
+                roofColorArgb = 0xFF6B4631.toInt(),
+                roofHighlightArgb = 0xFF8C5D43.toInt(),
+                roofTrimArgb = 0xFF3E291D.toInt(),
+                ridgeAlongX = true
+            ),
+            BuildingFootprint(
+                id = "alaric_shop",
+                name = "Alaric's Market Hall",
+                minX = 156, minY = 198, maxX = 170, maxY = 210,
+                roofColorArgb = 0xFF7E332E.toInt(),
+                roofHighlightArgb = 0xFFA3453E.toInt(),
+                roofTrimArgb = 0xFFD4A44C.toInt(),
+                ridgeAlongX = true
+            ),
+            BuildingFootprint(
+                id = "runecrafting_academy",
+                name = "Runecrafting Academy",
+                minX = 216, minY = 174, maxX = 234, maxY = 187,
+                roofColorArgb = 0xFF3E3563.toInt(),
+                roofHighlightArgb = 0xFF5A4E8C.toInt(),
+                roofTrimArgb = 0xFF9F84E8.toInt(),
+                ridgeAlongX = true
+            ),
+            BuildingFootprint(
+                id = "craft_fletching_ward",
+                name = "Craft & Fletching Ward",
+                minX = 216, minY = 198, maxX = 234, maxY = 205,
+                roofColorArgb = 0xFF5E4A39.toInt(),
+                roofHighlightArgb = 0xFF7D634E.toInt(),
+                roofTrimArgb = 0xFF3A2D23.toInt(),
+                ridgeAlongX = true
+            )
+        )
 
         return WorldFloor(
             floorId = 0,
-            name = "Rookvale Overland",
-            subtitle = "Surface • Safe Town PZ",
-            width = w,
-            height = h,
-            tiles = g,
-            // Temple & entire walled Rookvale City perimeter remain a safe Protection Zone
-            isProtectionZone = { x, y -> x in (ox + 2)..(ox + 29) && y in (oy + 2)..(oy + 29) },
-            dangerLevel = "Low (Outskirts)",
+            name = "Rookvale City & Valley",
+            subtitle = "Overland Region • 400×400",
+            width = s,
+            height = s,
+            chunkedGrid = grid,
+            regionId = DEFAULT_REGION_ID,
+            buildings = cityBuildings,
+            isProtectionZone = { x, y -> x in 147..255 && y in 149..227 },
+            dangerLevel = "Low",
             recommendedLevel = "Lvl 1-6",
             dangerSeverity = 0
         )
@@ -455,18 +821,21 @@ object WorldMaps {
         val s = 48
         val g = createBlank(s, s, TileType.CAVE_WALL)
 
-        // Connected sewer & mine shaft chambers
-        fillRect(g, 8, 8, 41, 16, TileType.DIRT_FLOOR)
-        fillRect(g, 10, 16, 22, 34, TileType.DIRT_FLOOR)
-        fillRect(g, 26, 16, 41, 32, TileType.DIRT_FLOOR)
-        fillRect(g, 16, 22, 32, 27, TileType.DIRT_FLOOR)
-        fillRect(g, 18, 32, 30, 41, TileType.DIRT_FLOOR)
+        // Northern sewer arrival galleries (matching City Sewers, Cellar, Quarry & Mountain Cave)
+        fillRect(g, 8, 9, 41, 17, TileType.DIRT_FLOOR)
+        fillRect(g, 11, 14, 19, 25, TileType.DIRT_FLOOR)
+        // Central subterranean cistern & water channel
+        fillRect(g, 16, 18, 35, 34, TileType.DIRT_FLOOR)
+        fillRect(g, 22, 22, 27, 25, TileType.WATER)
+        // East dark-forest cavern tunnel
+        fillRect(g, 33, 25, 41, 33, TileType.DIRT_FLOOR)
+        // Southern descent chamber toward Floor -2
+        fillRect(g, 17, 33, 31, 41, TileType.DIRT_FLOOR)
+        // Side stone pillars
+        listOf(18 to 13, 31 to 13, 19 to 29, 32 to 29).forEach { (px, py) -> g[py][px] = TileType.CAVE_WALL }
 
-        // Pillars for kiting
-        listOf(16 to 12, 32 to 12, 16 to 26, 32 to 24, 24 to 34).forEach { (px, py) -> g[py][px] = TileType.CAVE_WALL }
-
-        // Underground Ochre & Bogstone Veins
-        listOf(11 to 19, 13 to 29, 36 to 18, 40 to 22).forEach { (x, y) -> g[y][x] = TileType.ORE_OCHRE }
+        // Ochre & Bogstone Veins
+        listOf(9 to 12, 13 to 22, 39 to 14).forEach { (x, y) -> g[y][x] = TileType.ORE_OCHRE }
         listOf(12 to 32, 30 to 36, 39 to 31, 20 to 40).forEach { (x, y) -> g[y][x] = TileType.ORE_BOGSTONE }
 
         // Torches
@@ -488,7 +857,7 @@ object WorldMaps {
             subtitle = "Dungeon Floor -1",
             width = s,
             height = s,
-            tiles = g,
+            chunkedGrid = ChunkedTileGrid.fromArray(g),
             dangerLevel = "Moderate",
             recommendedLevel = "Lvl 3-6",
             dangerSeverity = 1
@@ -522,6 +891,7 @@ object WorldMaps {
 
         // Portals
         g[38][24] = TileType.ROPE_SPOT_UP
+        g[24][10] = TileType.STAIRS_UP // Direct return stairway up to NE Crag Hills on Floor 0!
         g[8][24] = TileType.STAIRS_DOWN
         g[24][40] = TileType.ROPE_HOLE_DOWN
 
@@ -531,7 +901,7 @@ object WorldMaps {
             subtitle = "Dungeon Floor -2",
             width = s,
             height = s,
-            tiles = g,
+            chunkedGrid = ChunkedTileGrid.fromArray(g),
             dangerLevel = "High",
             recommendedLevel = "Lvl 6-10",
             dangerSeverity = 2
@@ -550,8 +920,8 @@ object WorldMaps {
 
         // Central Unprotected Deep Forge Outpost (NO Protection Zone — tense risk/reward!)
         fillRect(g, 19, 17, 29, 27, TileType.COBBLESTONE)
-        fillRect(g, 17, 21, 31, 23, TileType.COBBLESTONE) // East/West entryways
-        fillRect(g, 23, 15, 25, 30, TileType.COBBLESTONE) // North/South entryways
+        fillRect(g, 17, 21, 31, 23, TileType.COBBLESTONE)
+        fillRect(g, 23, 15, 25, 30, TileType.COBBLESTONE)
         g[20][22] = TileType.SMELTING_FURNACE
         g[20][26] = TileType.BLACKSMITH_ANVIL
         g[23][24] = TileType.MINI_DEPOT
@@ -574,7 +944,7 @@ object WorldMaps {
             subtitle = "Dungeon Floor -3 • Deep Outpost",
             width = s,
             height = s,
-            tiles = g,
+            chunkedGrid = ChunkedTileGrid.fromArray(g),
             dangerLevel = "Extreme",
             recommendedLevel = "Lvl 10-18",
             dangerSeverity = 3
@@ -614,7 +984,7 @@ object WorldMaps {
             subtitle = "Dungeon Floor -4 • Endgame Boss Lair",
             width = s,
             height = s,
-            tiles = g,
+            chunkedGrid = ChunkedTileGrid.fromArray(g),
             dangerLevel = "Deadly",
             recommendedLevel = "Lvl 16-20+",
             dangerSeverity = 4

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.example.game.model.CURRENT_MAP_VERSION
 import com.example.game.model.CorpseEntity
+import com.example.game.model.DEFAULT_REGION_ID
 import com.example.game.model.EquippedGear
 import com.example.game.model.GameWorldState
 import com.example.game.model.ItemStack
@@ -12,6 +13,7 @@ import com.example.game.model.PlayerSkills
 import com.example.game.model.SkillProgress
 import com.example.game.model.Vocation
 import com.example.game.multiplayer.MultiplayerConfig
+import com.example.game.world.WorldMaps
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -184,6 +186,7 @@ object CloudSavePayloadCodec {
             put("cap", data.maxCapOz)
             put("maxCapOz", data.maxCapOz)
             put("gold", data.gold)
+            put("regionId", data.regionId.ifBlank { DEFAULT_REGION_ID })
             put("floor", data.floor)
             put("x", data.x)
             put("y", data.y)
@@ -329,8 +332,8 @@ object CloudSavePayloadCodec {
             maxCapOz = hydratedMaxCap,
             gold = json.optInt("gold", 0).coerceAtLeast(0),
             floor = json.optInt("floor", 0).coerceIn(-4, 0),
-            x = json.optInt("x", 47),
-            y = json.optInt("y", 46),
+            x = json.optInt("x", WorldMaps.TEMPLE_SPAWN_X),
+            y = json.optInt("y", WorldMaps.TEMPLE_SPAWN_Y),
             poisonTicks = json.optInt("poisonTicks", 0).coerceAtLeast(0),
             fireTicks = json.optInt("fireTicks", 0).coerceAtLeast(0),
             skills = skills,
@@ -352,7 +355,8 @@ object CloudSavePayloadCodec {
                         arr.optString(idx, "").trim().takeIf { it.isNotEmpty() }
                     } else null
                 }
-            }
+            },
+            regionId = json.optNullableString("regionId")?.takeIf { it.isNotBlank() } ?: DEFAULT_REGION_ID
         )
     }
 

@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroidSize
+import androidx.compose.foundation.gestures.calculateRotation
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -76,16 +77,23 @@ private sealed class DepthSortableItem(val depth: Float, val subOrder: Int) {
 fun GameCanvasView(
     state: GameWorldState,
     remotePlayers: List<RemotePlayerState> = emptyList(),
+    cameraYawDeg: Float = IsometricCamera.DEFAULT_YAW_DEG,
+    rotateDragMode: Boolean = false,
+    onCameraYawDelta: (Float) -> Unit = {},
     onTileTapped: (Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val latestState by rememberUpdatedState(state)
     val latestRemotePlayers by rememberUpdatedState(remotePlayers)
     val latestOnTileTapped by rememberUpdatedState(onTileTapped)
+    val latestCameraYaw by rememberUpdatedState(cameraYawDeg)
+    val latestRotateDragMode by rememberUpdatedState(rotateDragMode)
+    val latestOnCameraYawDelta by rememberUpdatedState(onCameraYawDelta)
 
     var frameUptimeMs by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
     var targetZoom by remember { mutableFloatStateOf(1.0f) }
     var smoothZoom by remember { mutableFloatStateOf(1.0f) }
+    var smoothYaw by remember { mutableFloatStateOf(cameraYawDeg) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -96,6 +104,12 @@ fun GameCanvasView(
                     smoothZoom += diff * 0.22f
                 } else {
                     smoothZoom = targetZoom
+                }
+                val yawDiff = IsometricCamera.shortestAngleDeltaDeg(smoothYaw, latestCameraYaw)
+                if (abs(yawDiff) > 0.08f) {
+                    smoothYaw = IsometricCamera.normalizeYawDeg(smoothYaw + yawDiff * 0.22f)
+                } else {
+                    smoothYaw = IsometricCamera.normalizeYawDeg(latestCameraYaw)
                 }
             }
         }
@@ -137,7 +151,7 @@ fun GameCanvasView(
 
     val camera = remember { IsometricCamera() }
     val reusablePath = remember { Path() }
-    val depthQueue = remember { ArrayList<DepthSortableItem>(128) }
+    val depthQueue = remember { ArrayList<DepthSortableItem>(256) }
 
     Box(modifier = modifier.fillMaxSize()) {
         Canvas(
@@ -146,7 +160,10 @@ fun GameCanvasView(
                 .background(ObsidianVoid)
                 .testTag("game_world_canvas")
                 .pointerInput(Unit) {
-                    // Unified gesture handler: two-finger pinch-to-zoom vs crisp single-tap isometric picking
+                    // Unified gesture handler:
+                    // - Two-finger twist rotates cameraYaw 360° + pinch zooms 0.6x..1.8x
+                    // - Single-finger horizontal drag rotates camera when Rotate-Drag Mode is toggled ON
+                    // - Crisp single tap converts inverse-rotated screen coords to exact (x, y) world tile
                     awaitEachGesture {
                         val firstDown = awaitFirstDown(requireUnconsumed = false)
                         val downPos = firstDown.position
@@ -159,10 +176,9 @@ fun GameCanvasView(
                             val event = awaitPointerEvent()
                             val activePointers = event.changes.filter { it.pressed }
                             if (activePointers.isEmpty()) {
-                                // All fingers lifted
                                 if (!wasMultiTouch && !movedTooFar) {
                                     val floorMap = WorldMaps.getFloor(latestState.floor)
-                                    val (tx, ty) = camera.screenToTile(lastPos.x, lastPos.y)
+                                    val (tx, ty) = camera.screenToWorldTile(lastPos.x, lastPos.y)
                                     if (tx in 0 until floorMap.width && ty in 0 until floorMap.height) {
                                         latestOnTileTapped(tx, ty)
                                     }
@@ -173,17 +189,27 @@ fun GameCanvasView(
                             if (activePointers.size >= 2) {
                                 wasMultiTouch = true
                                 val zoomChange = event.calculateZoom()
+                                val rotationChange = event.calculateRotation()
                                 val centroidSize = event.calculateCentroidSize(useCurrent = false)
                                 if (centroidSize > 0f && zoomChange != 1f) {
                                     targetZoom = (targetZoom * zoomChange)
                                         .coerceIn(IsometricCamera.MIN_ZOOM, IsometricCamera.MAX_ZOOM)
                                     event.changes.forEach { it.consume() }
                                 }
+                                if (abs(rotationChange) > 0.05f) {
+                                    latestOnCameraYawDelta(rotationChange)
+                                    event.changes.forEach { it.consume() }
+                                }
                             } else {
                                 val change = activePointers.first()
+                                val deltaX = change.position.x - lastPos.x
                                 lastPos = change.position
                                 if (hypot(lastPos.x - downPos.x, lastPos.y - downPos.y) > touchSlopPx) {
                                     movedTooFar = true
+                                }
+                                if (latestRotateDragMode && movedTooFar && abs(deltaX) > 0.5f) {
+                                    latestOnCameraYawDelta(deltaX * 0.35f)
+                                    change.consume()
                                 }
                             }
                         }
@@ -204,63 +230,80 @@ fun GameCanvasView(
                 viewportH = size.height,
                 camTileX = camPlayerX,
                 camTileY = camPlayerY,
-                zoomFactor = smoothZoom
+                zoomFactor = smoothZoom,
+                cameraYawDeg = smoothYaw
             )
 
-            val bounds = camera.visibleTileBounds(size.width, size.height, floorMap.width, floorMap.height, margin = 3)
+            val bounds = camera.visibleTileBounds(size.width, size.height, floorMap.width, floorMap.height, margin = 4)
+            val chunkBounds = floorMap.visibleChunkBounds(bounds.minTx, bounds.maxTx, bounds.minTy, bounds.maxTy)
+            val chunkSize = floorMap.chunkedGrid.chunkSize
             val hw = camera.halfW
             val hh = camera.halfH
             val spritePx = (camera.tileW * 0.78f).roundToInt().coerceIn(36, 150)
 
             depthQueue.clear()
 
-            // PASS 1: Viewport-Culled 2:1 Isometric Terrain Diamonds
-            for (ty in bounds.minTy..bounds.maxTy) {
-                for (tx in bounds.minTx..bounds.maxTx) {
-                    val center = camera.tileCenterToScreen(tx.toFloat(), ty.toFloat())
-                    if (center.x + hw * 2f < 0f || center.x - hw * 2f > size.width ||
-                        center.y + hh * 4f < 0f || center.y - hh * 4f > size.height
-                    ) continue
+            // PASS 1: Chunk-Culled & Rotated-Viewport-Culled 2.5D Terrain Quads
+            for (cy in chunkBounds.minChunkY..chunkBounds.maxChunkY) {
+                val yStart = maxOf(bounds.minTy, cy * chunkSize)
+                val yEnd = minOf(bounds.maxTy, (cy + 1) * chunkSize - 1)
+                for (cxChunk in chunkBounds.minChunkX..chunkBounds.maxChunkX) {
+                    val xStart = maxOf(bounds.minTx, cxChunk * chunkSize)
+                    val xEnd = minOf(bounds.maxTx, (cxChunk + 1) * chunkSize - 1)
+                    for (ty in yStart..yEnd) {
+                        for (tx in xStart..xEnd) {
+                            val center = camera.tileCenterToScreen(tx.toFloat(), ty.toFloat())
+                            if (center.x + hw * 2.4f < 0f || center.x - hw * 2.4f > size.width ||
+                                center.y + hh * 4.5f < 0f || center.y - hh * 4.5f > size.height
+                            ) continue
 
-                    val baseTile = floorMap.tileAt(tx, ty)
-                    val renderTile = when {
-                        baseTile.oreVeinKind() != null &&
-                            st.oreNodes[Triple(st.floor, tx, ty)]?.isDepleted == true -> TileType.DEPLETED_VEIN
-                        baseTile == TileType.TREE &&
-                            (st.choppedTrees[Triple(st.floor, tx, ty)] ?: 0) > 0 -> TileType.TREE_STUMP
-                        else -> baseTile
-                    }
+                            val baseTile = floorMap.tileAt(tx, ty)
+                            val renderTile = when {
+                                baseTile.oreVeinKind() != null &&
+                                    st.oreNodes[Triple(st.floor, tx, ty)]?.isDepleted == true -> TileType.DEPLETED_VEIN
+                                baseTile == TileType.TREE &&
+                                    (st.choppedTrees[Triple(st.floor, tx, ty)] ?: 0) > 0 -> TileType.TREE_STUMP
+                                else -> baseTile
+                            }
 
-                    IsometricTileDrawer.drawGroundTile(
-                        scope = this,
-                        path = reusablePath,
-                        tile = renderTile,
-                        floorMap = floorMap,
-                        tx = tx,
-                        ty = ty,
-                        cx = center.x,
-                        cy = center.y,
-                        hw = hw,
-                        hh = hh,
-                        nowMs = now
-                    )
+                            IsometricTileDrawer.drawGroundTile(
+                                scope = this,
+                                path = reusablePath,
+                                cam = camera,
+                                floorMap = floorMap,
+                                tx = tx,
+                                ty = ty,
+                                tile = renderTile,
+                                cx = center.x,
+                                cy = center.y,
+                                nowMs = now
+                            )
 
-                    if (IsometricTileDrawer.isTallProp(renderTile)) {
-                        depthQueue.add(DepthSortableItem.TallTile((tx + ty).toFloat(), tx, ty, renderTile))
+                            if (IsometricTileDrawer.isTallProp(renderTile)) {
+                                depthQueue.add(
+                                    DepthSortableItem.TallTile(
+                                        depth = camera.depthOf(tx.toFloat(), ty.toFloat()),
+                                        tx = tx,
+                                        ty = ty,
+                                        tile = renderTile
+                                    )
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // PASS 2: Ground Decals (Walk Path Diamonds, Boss AoE Telegraphs, Corpses)
+            // PASS 2: Rotated Ground Decals (Walk Path Quads, Boss AoE Telegraphs, Corpses)
             if (st.walkPath.isNotEmpty()) {
                 st.walkPath.forEach { (wx, wy) ->
                     if (wx in bounds.minTx..bounds.maxTx && wy in bounds.minTy..bounds.maxTy) {
                         val c = camera.tileCenterToScreen(wx.toFloat(), wy.toFloat())
-                        IsometricTileDrawer.drawDiamond(
-                            this, reusablePath, c.x, c.y, hw * 0.34f, hh * 0.34f,
-                            fillColor = TorchGold.copy(alpha = 0.30f),
-                            strokeColor = TorchGold.copy(alpha = 0.65f),
-                            strokeWidth = 1.5f
+                        IsometricTileDrawer.drawRotatedQuad(
+                            this, reusablePath, camera, c.x, c.y, fracU = 0.36f, fracV = 0.36f,
+                            fillColor = TorchGold.copy(alpha = 0.32f),
+                            strokeColor = TorchGold.copy(alpha = 0.72f),
+                            strokeWidth = 1.6f
                         )
                     }
                 }
@@ -272,14 +315,14 @@ fun GameCanvasView(
                     m.pendingAoeTiles.forEach { (ax, ay) ->
                         if (ax in bounds.minTx..bounds.maxTx && ay in bounds.minTy..bounds.maxTy) {
                             val c = camera.tileCenterToScreen(ax.toFloat(), ay.toFloat())
-                            IsometricTileDrawer.drawDiamond(
-                                this, reusablePath, c.x, c.y, hw * 0.90f, hh * 0.90f,
+                            IsometricTileDrawer.drawRotatedQuad(
+                                this, reusablePath, camera, c.x, c.y, fracU = 0.90f, fracV = 0.90f,
                                 fillColor = FireOrange.copy(alpha = aoePulse),
                                 strokeColor = TargetRed.copy(alpha = 0.92f),
                                 strokeWidth = 3f
                             )
-                            IsometricTileDrawer.drawDiamond(
-                                this, reusablePath, c.x, c.y, hw * 0.36f, hh * 0.36f,
+                            IsometricTileDrawer.drawRotatedQuad(
+                                this, reusablePath, camera, c.x, c.y, fracU = 0.38f, fracV = 0.38f,
                                 fillColor = Color(0xFFFFE066).copy(alpha = aoePulse + 0.25f)
                             )
                         }
@@ -293,10 +336,15 @@ fun GameCanvasView(
                 }
             }
 
-            // Enqueue visible NPCs, Monsters, Remote Players, and Local Player into Depth Queue
+            // Enqueue visible NPCs, Monsters, Remote Players, and Local Player into Dynamic Rotated Depth Queue
             WorldMaps.npcs.forEach { npc ->
                 if (npc.floor == st.floor && npc.x in bounds.minTx..bounds.maxTx && npc.y in bounds.minTy..bounds.maxTy) {
-                    depthQueue.add(DepthSortableItem.NpcItem((npc.x + npc.y).toFloat(), npc))
+                    depthQueue.add(
+                        DepthSortableItem.NpcItem(
+                            depth = camera.depthOf(npc.x.toFloat(), npc.y.toFloat()),
+                            npc = npc
+                        )
+                    )
                 }
             }
 
@@ -305,7 +353,14 @@ fun GameCanvasView(
                     val mFrac = ((now - m.lastMoveTimeMs).toFloat() / 220f).coerceIn(0f, 1f)
                     val mxF = m.lastMoveFromX + (m.x - m.lastMoveFromX) * mFrac
                     val myF = m.lastMoveFromY + (m.y - m.lastMoveFromY) * mFrac
-                    depthQueue.add(DepthSortableItem.MonsterItem(mxF + myF, m, mxF, myF))
+                    depthQueue.add(
+                        DepthSortableItem.MonsterItem(
+                            depth = camera.depthOf(mxF, myF),
+                            monster = m,
+                            fx = mxF,
+                            fy = myF
+                        )
+                    )
                 }
             }
 
@@ -314,30 +369,44 @@ fun GameCanvasView(
                     val rpMoveFrac = ((now - rp.lastMoveMs).toFloat() / 190f).coerceIn(0f, 1f)
                     val rpX = rp.prevX + (rp.x - rp.prevX) * rpMoveFrac
                     val rpY = rp.prevY + (rp.y - rp.prevY) * rpMoveFrac
-                    depthQueue.add(DepthSortableItem.RemotePlayerItem(rpX + rpY, rp, rpX, rpY, rpMoveFrac))
+                    depthQueue.add(
+                        DepthSortableItem.RemotePlayerItem(
+                            depth = camera.depthOf(rpX, rpY),
+                            player = rp,
+                            fx = rpX,
+                            fy = rpY,
+                            moveFrac = rpMoveFrac
+                        )
+                    )
                 }
             }
 
-            depthQueue.add(DepthSortableItem.LocalPlayerItem(camPlayerX + camPlayerY, camPlayerX, camPlayerY, moveFrac))
+            depthQueue.add(
+                DepthSortableItem.LocalPlayerItem(
+                    depth = camera.depthOf(camPlayerX, camPlayerY),
+                    fx = camPlayerX,
+                    fy = camPlayerY,
+                    moveFrac = moveFrac
+                )
+            )
 
-            // PASS 3: Painter's Algorithm Depth-Sorted Draw (back-to-front by isometric depth x + y)
+            // PASS 3: Dynamic 360-Degree Rotated Painter's Algorithm Depth Sort
             depthQueue.sortWith(compareBy<DepthSortableItem> { it.depth }.thenBy { it.subOrder })
 
             for (item in depthQueue) {
                 when (item) {
                     is DepthSortableItem.TallTile -> {
                         val c = camera.tileCenterToScreen(item.tx.toFloat(), item.ty.toFloat())
-                        IsometricTileDrawer.drawTallProp(
+                        IsometricTileDrawer.drawTallTileProp(
                             scope = this,
                             path = reusablePath,
-                            tile = item.tile,
+                            cam = camera,
                             floorMap = floorMap,
                             tx = item.tx,
                             ty = item.ty,
+                            tile = item.tile,
                             cx = c.x,
                             cy = c.y,
-                            hw = hw,
-                            hh = hh,
                             nowMs = now
                         )
                     }
@@ -394,6 +463,20 @@ fun GameCanvasView(
                             labelShadowPaint = labelShadowPaint
                         )
                     }
+                }
+            }
+
+            // PASS 3B: Smart Cutaway Pitched Building Roofs (fade translucent as player nears, vanish indoors!)
+            for (b in floorMap.buildings) {
+                if (b.maxX >= bounds.minTx && b.minX <= bounds.maxTx && b.maxY >= bounds.minTy && b.minY <= bounds.maxTy) {
+                    IsometricTileDrawer.drawBuildingCutawayRoof(
+                        scope = this,
+                        path = reusablePath,
+                        cam = camera,
+                        building = b,
+                        playerFx = camPlayerX,
+                        playerFy = camPlayerY
+                    )
                 }
             }
 
@@ -463,8 +546,8 @@ private fun DrawScope.drawIsometricCorpse(
     val c = camera.tileCenterToScreen(corpse.x.toFloat(), corpse.y.toFloat())
     if (corpse.isPlayerCorpse) {
         val pulse = if (animFrame == 0) 0.65f else 0.30f
-        IsometricTileDrawer.drawDiamond(
-            this, path, c.x, c.y, hw * 0.88f, hh * 0.88f,
+        IsometricTileDrawer.drawRotatedQuad(
+            this, path, camera, c.x, c.y, fracU = 0.88f, fracV = 0.88f,
             fillColor = TorchGold.copy(alpha = pulse * 0.22f),
             strokeColor = TorchGold.copy(alpha = pulse),
             strokeWidth = 3.2f
@@ -538,8 +621,8 @@ private fun DrawScope.drawIsometricMonster(
 
     if (m.id == state.targetMonsterId) {
         val pulseAlpha = if (state.autoFollowTarget && ((now / 220L) % 2L) == 0L) 1.0f else 0.78f
-        IsometricTileDrawer.drawDiamond(
-            this, path, c.x, c.y, hw * 0.96f, hh * 0.96f,
+        IsometricTileDrawer.drawRotatedQuad(
+            this, path, camera, c.x, c.y, fracU = 0.96f, fracV = 0.96f,
             fillColor = TargetRed.copy(alpha = 0.18f),
             strokeColor = TargetRed.copy(alpha = pulseAlpha),
             strokeWidth = if (state.autoFollowTarget) 4.8f else 3.8f
@@ -619,8 +702,8 @@ private fun DrawScope.drawIsometricRemotePlayer(
 
     if (rp.playerId == state.inspectedPlayerId && now < state.inspectedPlayerUntilMs) {
         val pulseAlpha = if (((now / 180L) % 2L) == 0L) 0.92f else 0.52f
-        IsometricTileDrawer.drawDiamond(
-            this, path, c.x, c.y, hw * 0.92f, hh * 0.92f,
+        IsometricTileDrawer.drawRotatedQuad(
+            this, path, camera, c.x, c.y, fracU = 0.92f, fracV = 0.92f,
             fillColor = Color(0xFF47D7FF).copy(alpha = 0.16f),
             strokeColor = Color(0xFF47D7FF).copy(alpha = pulseAlpha),
             strokeWidth = 4f

@@ -26,6 +26,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -91,15 +96,23 @@ fun GameScreen(
     onReturnTitle: () -> Unit,
     onDismissDeath: () -> Unit
 ) {
+    var cameraYawDeg by rememberSaveable { mutableFloatStateOf(IsometricCamera.DEFAULT_YAW_DEG) }
+    var rotateDragMode by rememberSaveable { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(ObsidianVoid)
     ) {
-        // 1. FULLSCREEN 2.5D ISOMETRIC WORLD VIEWPORT
+        // 1. FULLSCREEN 360-DEGREE ROTATABLE 2.5D ISOMETRIC WORLD VIEWPORT
         GameCanvasView(
             state = state,
             remotePlayers = multiplayerState.remotePlayers,
+            cameraYawDeg = cameraYawDeg,
+            rotateDragMode = rotateDragMode,
+            onCameraYawDelta = { delta ->
+                cameraYawDeg = IsometricCamera.normalizeYawDeg(cameraYawDeg + delta)
+            },
             onTileTapped = onTileTapped,
             modifier = Modifier.fillMaxSize()
         )
@@ -111,11 +124,15 @@ fun GameScreen(
                 .displayCutoutPadding()
                 .padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
-            // TOP-LEFT CLUSTER: Clickable Isometric Minimap + Portrait/Name/EXP/HP/MP/Cap/Online
+            // TOP-LEFT CLUSTER: Clickable 360-Degree Minimap + Portrait/Name/EXP/HP/MP/Cap/Online
             TopLeftHudCluster(
                 state = state,
                 multiplayerState = multiplayerState,
                 saveBanner = saveBanner,
+                cameraYawDeg = cameraYawDeg,
+                rotateDragMode = rotateDragMode,
+                onResetNorth = { cameraYawDeg = IsometricCamera.DEFAULT_YAW_DEG },
+                onToggleRotateDragMode = { rotateDragMode = !rotateDragMode },
                 onWalkToTile = onWalkToTile,
                 onExpandWorldMap = { onOpenPanel(ActivePanel.WORLD_MAP) },
                 onMultiplayerStatusTapped = onMultiplayerStatusTapped,

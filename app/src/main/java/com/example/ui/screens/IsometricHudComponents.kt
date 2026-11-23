@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -51,6 +52,7 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.SetMeal
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SportsMma
@@ -75,7 +77,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -88,6 +95,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -127,12 +136,15 @@ import com.example.ui.theme.StoneSurface
 import com.example.ui.theme.TargetRed
 import com.example.ui.theme.TorchAmber
 import com.example.ui.theme.TorchGold
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
- * Pure minimap tap-to-tile helper matching the 45-degree isometric diamond orientation.
+ * Pure minimap tap-to-tile helper synced dynamically with the 360-degree cameraYaw orientation.
  */
 object MinimapCoordinateMapper {
     fun screenTapToWorldTile(
@@ -144,7 +156,8 @@ object MinimapCoordinateMapper {
         playerY: Int,
         radius: Int,
         floorWidth: Int,
-        floorHeight: Int
+        floorHeight: Int,
+        cameraYawDeg: Float = IsometricCamera.DEFAULT_YAW_DEG
     ): Pair<Int, Int> {
         if (canvasW <= 1f || canvasH <= 1f) return playerX to playerY
         val cx = canvasW * 0.5f
@@ -152,10 +165,12 @@ object MinimapCoordinateMapper {
         val scale = (minOf(canvasW, canvasH) * 0.46f) / radius.coerceAtLeast(1).toFloat()
         val u = (tapX - cx) / scale
         val v = (tapY - cy) / scale
-        // Inverse of iso minimap: screenX = cx + (dx - dy) * 0.707 * scale, screenY = cy + (dx + dy) * 0.707 * scale
-        val invFactor = 0.70710677f
-        val dx = ((u + v) * invFactor).roundToInt()
-        val dy = ((v - u) * invFactor).roundToInt()
+        val rad = IsometricCamera.normalizeYawDeg(cameraYawDeg) * (PI / 180.0)
+        val c = cos(rad).toFloat()
+        val s = sin(rad).toFloat()
+        // Exact inverse of: u = dx*c - dy*s, v = dx*s + dy*c
+        val dx = (u * c + v * s).roundToInt()
+        val dy = (-u * s + v * c).roundToInt()
         val wx = (playerX + dx).coerceIn(0, (floorWidth - 1).coerceAtLeast(0))
         val wy = (playerY + dy).coerceIn(0, (floorHeight - 1).coerceAtLeast(0))
         return wx to wy
@@ -164,26 +179,43 @@ object MinimapCoordinateMapper {
 
 private fun minimapTileColor(tile: TileType): Color = when (tile) {
     TileType.GRASS -> Color(0xFF3E6E33)
+    TileType.FLOWER_GRASS -> Color(0xFF538A3E)
     TileType.DARK_GRASS -> Color(0xFF1F4023)
-    TileType.COBBLESTONE, TileType.TEMPLE_FLOOR -> Color(0xFF8C8275)
-    TileType.DIRT_FLOOR, TileType.WOOD_PIER -> Color(0xFF6E533B)
+    TileType.COBBLESTONE -> Color(0xFF948A7C)
+    TileType.TEMPLE_FLOOR -> Color(0xFFD8CEB8)
+    TileType.WOOD_PLANK_FLOOR -> Color(0xFF8C6541)
+    TileType.ARCANE_FLOOR -> Color(0xFF4C3F73)
+    TileType.DIRT_FLOOR -> Color(0xFF73573E)
+    TileType.WOOD_PIER, TileType.WOOD_BRIDGE -> Color(0xFFA87E52)
     TileType.CRYPT_FLOOR -> Color(0xFF4F545E)
     TileType.OBSIDIAN_FLOOR -> Color(0xFF3A3142)
     TileType.WATER -> Color(0xFF23669E)
+    TileType.FOUNTAIN -> Color(0xFF4FC3F7)
+    TileType.MOORED_BOAT -> Color(0xFF8D5E34)
     TileType.LAVA -> Color(0xFFD94A1E)
     TileType.STAIRS_DOWN, TileType.STAIRS_UP, TileType.ROPE_HOLE_DOWN, TileType.ROPE_SPOT_UP -> TorchGold
     TileType.SMELTING_FURNACE, TileType.BLACKSMITH_ANVIL -> FireOrange
-    TileType.FLETCHING_BENCH -> Color(0xFFD4A054)
-    TileType.RUNECRAFTING_TABLE -> Color(0xFFA86BFF)
+    TileType.FLETCHING_BENCH, TileType.WEAPON_RACK -> Color(0xFFD4A054)
+    TileType.RUNECRAFTING_TABLE, TileType.CRYSTAL_PILLAR -> Color(0xFFA86BFF)
+    TileType.BOOKSHELF -> Color(0xFF7A4B2A)
     TileType.TREE -> Color(0xFF1A3A1D)
+    TileType.HEDGE -> Color(0xFF2B6127)
+    TileType.WOOD_FENCE -> Color(0xFF735030)
+    TileType.LANTERN_POST -> Color(0xFFFFD86B)
+    TileType.MARKET_AWNING -> Color(0xFFC9443C)
+    TileType.CRATE_BARREL, TileType.TEMPLE_PEW -> Color(0xFF946B3C)
     TileType.TREE_STUMP -> Color(0xFF5A422C)
     TileType.DEPOT_CHEST, TileType.MINI_DEPOT, TileType.SHOP_COUNTER, TileType.TEMPLE_ALTAR -> Color(0xFF5CE1FF)
     TileType.ORE_OCHRE, TileType.ORE_BOGSTONE, TileType.ORE_BRIMSTONE, TileType.ORE_AETHERIUM -> Color(0xFFB599FF)
+    TileType.TIMBER_WALL, TileType.TIMBER_WINDOW_WALL -> Color(0xFFCBBCA4)
+    TileType.TEMPLE_WALL -> Color(0xFFE0D6C3)
+    TileType.GATE_PILLAR -> Color(0xFFAAA091)
     else -> Color(0xFF242120)
 }
 
 /**
- * TOP-LEFT CLUSTER: Clickable Square Isometric Minimap (N compass, +/- zoom, expand Regional Map)
+ * TOP-LEFT CLUSTER: Clickable Square 360-Degree Rotatable Minimap (tap N compass to snap North,
+ * live camera-view cone, Rotate-Drag toggle, +/- zoom, expand Regional World Map)
  * paired directly beside the Character Portrait, Name, EXP/HP/MP bars, and Gold/Cap/Online status.
  */
 @Composable
@@ -191,12 +223,16 @@ fun TopLeftHudCluster(
     state: GameWorldState,
     multiplayerState: MultiplayerUiState,
     saveBanner: String?,
+    cameraYawDeg: Float = IsometricCamera.DEFAULT_YAW_DEG,
+    rotateDragMode: Boolean = false,
+    onResetNorth: () -> Unit = {},
+    onToggleRotateDragMode: () -> Unit = {},
     onWalkToTile: (Int, Int) -> Unit,
     onExpandWorldMap: () -> Unit,
     onMultiplayerStatusTapped: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val zoomRadii = remember { listOf(12, 18, 26) }
+    val zoomRadii = remember { listOf(14, 22, 34) }
     var zoomIndex by rememberSaveable { mutableIntStateOf(1) }
     val currentRadius = zoomRadii[zoomIndex.coerceIn(0, zoomRadii.lastIndex)]
 
@@ -210,10 +246,14 @@ fun TopLeftHudCluster(
                 state = state,
                 remotePlayers = multiplayerState.remotePlayers,
                 radius = currentRadius,
+                cameraYawDeg = cameraYawDeg,
+                rotateDragMode = rotateDragMode,
                 canZoomIn = zoomIndex > 0,
                 canZoomOut = zoomIndex < zoomRadii.lastIndex,
                 onZoomIn = { if (zoomIndex > 0) zoomIndex-- },
                 onZoomOut = { if (zoomIndex < zoomRadii.lastIndex) zoomIndex++ },
+                onResetNorth = onResetNorth,
+                onToggleRotateDragMode = onToggleRotateDragMode,
                 onTapWalk = onWalkToTile,
                 onExpandWorldMap = onExpandWorldMap
             )
@@ -233,21 +273,27 @@ private fun IsometricMinimapCard(
     state: GameWorldState,
     remotePlayers: List<RemotePlayerState>,
     radius: Int,
+    cameraYawDeg: Float,
+    rotateDragMode: Boolean,
     canZoomIn: Boolean,
     canZoomOut: Boolean,
     onZoomIn: () -> Unit,
     onZoomOut: () -> Unit,
+    onResetNorth: () -> Unit,
+    onToggleRotateDragMode: () -> Unit,
     onTapWalk: (Int, Int) -> Unit,
     onExpandWorldMap: () -> Unit
 ) {
     val floorMap = remember(state.floor) { WorldMaps.getFloor(state.floor) }
+    val isRotatedAwayFromNorth = abs(IsometricCamera.shortestAngleDeltaDeg(cameraYawDeg, IsometricCamera.DEFAULT_YAW_DEG)) > 2f
+    val conePath = remember { Path() }
 
     Surface(
         color = BasaltDark.copy(alpha = 0.90f),
         shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.4.dp, StoneBorderLight),
+        border = BorderStroke(1.4.dp, if (rotateDragMode) TorchGold else StoneBorderLight),
         modifier = Modifier
-            .size(104.dp)
+            .size(108.dp)
             .testTag("minimap_overlay")
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -255,7 +301,7 @@ private fun IsometricMinimapCard(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(3.dp)
-                    .pointerInput(state.floor, state.playerX, state.playerY, radius) {
+                    .pointerInput(state.floor, state.playerX, state.playerY, radius, cameraYawDeg) {
                         detectTapGestures { tap ->
                             val (wx, wy) = MinimapCoordinateMapper.screenTapToWorldTile(
                                 tapX = tap.x,
@@ -266,7 +312,8 @@ private fun IsometricMinimapCard(
                                 playerY = state.playerY,
                                 radius = radius,
                                 floorWidth = floorMap.width,
-                                floorHeight = floorMap.height
+                                floorHeight = floorMap.height,
+                                cameraYawDeg = cameraYawDeg
                             )
                             onTapWalk(wx, wy)
                         }
@@ -275,32 +322,44 @@ private fun IsometricMinimapCard(
                 val cx = size.width * 0.5f
                 val cy = size.height * 0.5f
                 val scale = (minOf(size.width, size.height) * 0.46f) / radius.toFloat()
-                val stepFactor = 0.70710677f * scale
-                val dotSize = (scale * 1.15f).coerceAtLeast(2.2f)
+                val rad = IsometricCamera.normalizeYawDeg(cameraYawDeg) * (PI / 180.0)
+                val cosY = cos(rad).toFloat() * scale
+                val sinY = sin(rad).toFloat() * scale
+                val dotSize = (scale * 1.32f).coerceAtLeast(2.2f)
 
-                // Isometric rotated terrain pips
+                // Rotated terrain pips synchronized live with cameraYaw
                 for (dy in -radius..radius) {
                     val wy = state.playerY + dy
                     if (wy !in 0 until floorMap.height) continue
                     for (dx in -radius..radius) {
                         val wx = state.playerX + dx
                         if (wx !in 0 until floorMap.width) continue
-                        val sx = cx + (dx - dy) * stepFactor
-                        val sy = cy + (dx + dy) * stepFactor
+                        val sx = cx + dx * cosY - dy * sinY
+                        val sy = cy + dx * sinY + dy * cosY
                         if (sx < -dotSize || sx > size.width + dotSize || sy < -dotSize || sy > size.height + dotSize) continue
                         val col = minimapTileColor(floorMap.tileAt(wx, wy))
                         drawRect(col, Offset(sx - dotSize * 0.5f, sy - dotSize * 0.5f), Size(dotSize, dotSize))
                     }
                 }
 
-                // Walk path breadcrumbs on minimap
+                // Live camera forward-view direction cone (always points toward top of viewport)
+                val coneLen = minOf(size.width, size.height) * 0.34f
+                val coneHalfW = coneLen * 0.48f
+                conePath.reset()
+                conePath.moveTo(cx, cy)
+                conePath.lineTo(cx - coneHalfW, cy - coneLen)
+                conePath.lineTo(cx + coneHalfW, cy - coneLen)
+                conePath.close()
+                drawPath(conePath, color = TorchGold.copy(alpha = 0.22f))
+
+                // Walk path breadcrumbs on rotated minimap
                 state.walkPath.forEach { (wx, wy) ->
                     val dx = wx - state.playerX
                     val dy = wy - state.playerY
                     if (abs(dx) <= radius && abs(dy) <= radius) {
-                        val sx = cx + (dx - dy) * stepFactor
-                        val sy = cy + (dx + dy) * stepFactor
-                        drawCircle(TorchGold.copy(alpha = 0.85f), radius = 1.8f, center = Offset(sx, sy))
+                        val sx = cx + dx * cosY - dy * sinY
+                        val sy = cy + dx * sinY + dy * cosY
+                        drawCircle(TorchGold.copy(alpha = 0.88f), radius = 1.8f, center = Offset(sx, sy))
                     }
                 }
 
@@ -310,8 +369,8 @@ private fun IsometricMinimapCard(
                         val dx = m.x - state.playerX
                         val dy = m.y - state.playerY
                         if (abs(dx) <= radius && abs(dy) <= radius) {
-                            val sx = cx + (dx - dy) * stepFactor
-                            val sy = cy + (dx + dy) * stepFactor
+                            val sx = cx + dx * cosY - dy * sinY
+                            val sy = cy + dx * sinY + dy * cosY
                             drawCircle(TargetRed, radius = if (m.id == state.targetMonsterId) 3.4f else 2.2f, center = Offset(sx, sy))
                         }
                     }
@@ -323,8 +382,8 @@ private fun IsometricMinimapCard(
                         val dx = rp.x - state.playerX
                         val dy = rp.y - state.playerY
                         if (abs(dx) <= radius && abs(dy) <= radius) {
-                            val sx = cx + (dx - dy) * stepFactor
-                            val sy = cy + (dx + dy) * stepFactor
+                            val sx = cx + dx * cosY - dy * sinY
+                            val sy = cy + dx * sinY + dy * cosY
                             drawCircle(Color.Black, radius = 3.2f, center = Offset(sx, sy))
                             drawCircle(Color(0xFF47D7FF), radius = 2.2f, center = Offset(sx, sy))
                         }
@@ -336,18 +395,21 @@ private fun IsometricMinimapCard(
                 drawCircle(Color.White, radius = 2.6f, center = Offset(cx, cy))
             }
 
-            // North compass badge (top-left of minimap; isometric North points top-right/up-left so badge anchors top-left)
+            // Clickable North compass badge: tap to smoothly snap cameraYaw back to North (45°)
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(4.dp)
-                    .background(ObsidianVoid.copy(alpha = 0.82f), RoundedCornerShape(4.dp))
-                    .border(1.dp, TorchGold.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                    .padding(3.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (isRotatedAwayFromNorth) TorchGold.copy(alpha = 0.25f) else ObsidianVoid.copy(alpha = 0.84f))
+                    .border(1.dp, if (isRotatedAwayFromNorth) TorchGold else TorchGold.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
+                    .clickable(onClick = onResetNorth)
+                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                    .testTag("minimap_compass_north")
             ) {
                 Text(
                     text = "N",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.ExtraBold),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold),
                     color = TorchGold
                 )
             }
@@ -359,7 +421,7 @@ private fun IsometricMinimapCard(
                     .padding(3.dp)
                     .size(22.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(ObsidianVoid.copy(alpha = 0.82f))
+                    .background(ObsidianVoid.copy(alpha = 0.84f))
                     .border(1.dp, StoneBorderLight, RoundedCornerShape(4.dp))
                     .clickable(onClick = onExpandWorldMap)
                     .testTag("minimap_expand_button"),
@@ -368,13 +430,30 @@ private fun IsometricMinimapCard(
                 Icon(Icons.Default.OpenInFull, "Open Regional World Map", tint = TorchGold, modifier = Modifier.size(13.dp))
             }
 
-            // + / - Zoom controls (bottom-right of minimap)
+            // Rotate-Drag Mode + / - Zoom controls (bottom-right of minimap)
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (rotateDragMode) TorchGold.copy(alpha = 0.28f) else ObsidianVoid.copy(alpha = 0.84f))
+                        .border(1.dp, if (rotateDragMode) TorchGold else StoneBorderLight, RoundedCornerShape(4.dp))
+                        .clickable(onClick = onToggleRotateDragMode)
+                        .testTag("minimap_rotate_toggle"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ScreenRotation,
+                        contentDescription = "Toggle 360 Camera Drag Rotate",
+                        tint = if (rotateDragMode) TorchGold else ParchmentLight,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
                 MinimapTinyButton(
                     icon = Icons.Default.Add,
                     contentDesc = "Zoom In Minimap",
@@ -396,7 +475,7 @@ private fun IsometricMinimapCard(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(3.dp)
-                    .background(ObsidianVoid.copy(alpha = 0.82f), RoundedCornerShape(3.dp))
+                    .background(ObsidianVoid.copy(alpha = 0.84f), RoundedCornerShape(3.dp))
                     .padding(horizontal = 4.dp, vertical = 1.dp)
             ) {
                 Text(
@@ -1627,6 +1706,21 @@ fun RegionalWorldMapContent(
 ) {
     val floorMap = remember(state.floor) { WorldMaps.getFloor(state.floor) }
     val floorLandmarks = remember(state.floor) { WorldMaps.landmarks.filter { it.floor == state.floor } }
+    // Cache entire 400x400 floor overview into a single ImageBitmap once per floor for locked 60 FPS!
+    val cachedMapBitmap: ImageBitmap = remember(state.floor, floorMap.regionId) {
+        val w = floorMap.width
+        val h = floorMap.height
+        val pixels = IntArray(w * h)
+        for (ty in 0 until h) {
+            val rowOff = ty * w
+            for (tx in 0 until w) {
+                pixels[rowOff + tx] = minimapTileColor(floorMap.tileAt(tx, ty)).toArgb()
+            }
+        }
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        bmp.setPixels(pixels, 0, w, 0, 0, w, h)
+        bmp.asImageBitmap()
+    }
 
     Row(
         modifier = Modifier
@@ -1635,7 +1729,7 @@ fun RegionalWorldMapContent(
             .padding(10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Interactive full-floor map canvas
+        // Interactive full-region 400x400 map canvas
         Surface(
             color = ObsidianVoid,
             shape = RoundedCornerShape(8.dp),
@@ -1661,12 +1755,12 @@ fun RegionalWorldMapContent(
             ) {
                 val cellW = size.width / floorMap.width.toFloat()
                 val cellH = size.height / floorMap.height.toFloat()
-                for (ty in 0 until floorMap.height) {
-                    for (tx in 0 until floorMap.width) {
-                        val col = minimapTileColor(floorMap.tileAt(tx, ty))
-                        drawRect(col, Offset(tx * cellW, ty * cellH), Size(cellW + 0.6f, cellH + 0.6f))
-                    }
-                }
+                drawImage(
+                    image = cachedMapBitmap,
+                    dstOffset = IntOffset.Zero,
+                    dstSize = IntSize(size.width.roundToInt().coerceAtLeast(1), size.height.roundToInt().coerceAtLeast(1)),
+                    filterQuality = FilterQuality.None
+                )
                 // Walk path line
                 state.walkPath.forEach { (wx, wy) ->
                     drawRect(TorchGold, Offset(wx * cellW, wy * cellH), Size(max(cellW, 2.5f), max(cellH, 2.5f)))
@@ -1674,13 +1768,13 @@ fun RegionalWorldMapContent(
                 // Monsters
                 state.monsters.forEach { m ->
                     if (m.floor == state.floor) {
-                        drawCircle(TargetRed, radius = max(cellW * 0.8f, 2.4f), center = Offset((m.x + 0.5f) * cellW, (m.y + 0.5f) * cellH))
+                        drawCircle(TargetRed, radius = max(cellW * 1.4f, 2.2f), center = Offset((m.x + 0.5f) * cellW, (m.y + 0.5f) * cellH))
                     }
                 }
                 // Allies
                 remotePlayers.forEach { rp ->
                     if (rp.floor == state.floor) {
-                        drawCircle(Color(0xFF47D7FF), radius = max(cellW * 1.1f, 3.2f), center = Offset((rp.x + 0.5f) * cellW, (rp.y + 0.5f) * cellH))
+                        drawCircle(Color(0xFF47D7FF), radius = max(cellW * 1.8f, 3.0f), center = Offset((rp.x + 0.5f) * cellW, (rp.y + 0.5f) * cellH))
                     }
                 }
                 // Player bright marker
