@@ -241,7 +241,7 @@ object GameEngine {
             hairColorIndex = save.hairColorIndex.coerceIn(0, AdventurerPalette.hairColors.lastIndex),
             level = save.level,
             xp = save.xp,
-            hp = save.hp.coerceIn(1, save.maxHp),
+            hp = save.hp.coerceIn(1, save.maxHp + save.equipment.totalBonusMaxHp()),
             maxHp = save.maxHp,
             mp = save.mp.coerceIn(0, save.maxMp),
             maxMp = save.maxMp,
@@ -706,7 +706,7 @@ object GameEngine {
 
         return state.copy(
             vocation = chosen,
-            hp = state.maxHp,
+            hp = state.effectiveMaxHp(),
             mp = state.maxMp,
             maxCapOz = newMaxCap,
             poisonTicks = 0,
@@ -756,7 +756,7 @@ object GameEngine {
 
         // 1. Temple Protection Zone passive healing & status cure
         if (inPz) {
-            val healedHp = (s.hp + 15).coerceAtMost(s.maxHp)
+            val healedHp = (s.hp + 15).coerceAtMost(s.effectiveMaxHp())
             val healedMp = (s.mp + 15).coerceAtMost(s.maxMp)
             val cured = s.poisonTicks > 0 || s.fireTicks > 0
             s = s.copy(hp = healedHp, mp = healedMp, poisonTicks = 0, fireTicks = 0)
@@ -766,7 +766,7 @@ object GameEngine {
             }
         } else if (s.tickCount % 3L == 0L && s.poisonTicks == 0 && s.fireTicks == 0) {
             s = s.copy(
-                hp = (s.hp + 2).coerceAtMost(s.maxHp),
+                hp = (s.hp + 2).coerceAtMost(s.effectiveMaxHp()),
                 mp = (s.mp + 3).coerceAtMost(s.maxMp),
                 soul = (s.soul + 1).coerceAtMost(s.maxSoul)
             )
@@ -839,28 +839,31 @@ object GameEngine {
         // Turn character sprite toward the target
         s = s.copy(playerFacing = directionToward(s.playerX, s.playerY, target.x, target.y))
 
-        // Soft skill-requirement scaling (-35% dmg) & Tier 3-4 off-vocation penalty (-25% dmg)
+        // Soft skill-requirement scaling (-35% dmg for grandfathered equipped gear) & Tier 3-5 off-vocation penalty (-25% dmg)
         val reqType = weapon?.requiredSkillType
         val skillPenaltyMult = if (reqType != null && s.skills.levelFor(reqType) < weapon.requiredSkillLevel) 0.65 else 1.0
         val offVocationMult = s.weaponOffVocationMultiplier(weapon)
+        val accessoryAtk = s.equipment.totalAccessoryAttackBonus()
+        val effectiveTargetArmor = if (target.shatterTicks > 0) (target.type.armor * 0.55).roundToInt() else target.type.armor
 
         return when (weapon?.category) {
             ItemCategory.WEAPON_WAND -> {
                 if (s.mp >= weapon.manaCost) {
                     val magicMult = s.magicSkillMultiplier()
-                    val basePower = weapon.attack + s.level * 0.65
+                    val basePower = weapon.attack + accessoryAtk + s.level * 0.65
                     val rawDmg = (basePower * magicMult * Random.nextDouble(0.85, 1.18) * skillPenaltyMult * offVocationMult)
                         .roundToInt().coerceAtLeast(6)
-                    val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = true)
+                    val dmg = mitigateMonsterDamage(rawDmg, effectiveTargetArmor, isMagic = true)
                     s = s.copy(mp = s.mp - weapon.manaCost)
                     s = awardMagicXpFromMana(s, weapon.manaCost, nowMs)
                     s = s.addProjectileInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), target.x.toFloat(), target.y.toFloat(), ProjectileKind.ENERGY_BOLT, nowMs)
                     s = s.queuePlayerFx(null, null, PlayerActionState.CASTING)
-                    applyDamageToMonster(s, target.id, dmg, nowMs, projectileKind = ProjectileKind.ENERGY_BOLT)
+                    s = applyDamageToMonster(s, target.id, dmg, nowMs, projectileKind = ProjectileKind.ENERGY_BOLT)
+                    EquipmentProcEngine.resolveAttackProcs(s, target, dmg, nowMs)
                 } else if (dist <= 1) {
                     val meleeMult = s.attackSkillMultiplier(s.skills.fist.level)
                     val rawDmg = (Random.nextInt(4, 8) * meleeMult).roundToInt().coerceAtLeast(3)
-                    val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = false)
+                    val dmg = mitigateMonsterDamage(rawDmg, effectiveTargetArmor, isMagic = false)
                     s = advanceSkillPublic(s, SkillType.FIST, 1.5, nowMs)
                     s = s.queuePlayerFx(null, null, PlayerActionState.ATTACKING)
                     applyDamageToMonster(s, target.id, dmg, nowMs)
@@ -900,19 +903,20 @@ object GameEngine {
                 s = s.addProjectileInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), target.x.toFloat(), target.y.toFloat(), projKind, nowMs)
                 if (Random.nextDouble() <= hitChance) {
                     val distMult = s.attackSkillMultiplier(s.skills.distance.level)
-                    val basePower = weapon.attack + ammoAtkBonus + s.level * 0.60
+                    val basePower = weapon.attack + ammoAtkBonus + accessoryAtk + s.level * 0.60
                     val rawDmg = (basePower * distMult * Random.nextDouble(0.80, 1.20) * skillPenaltyMult * offVocationMult)
                         .roundToInt().coerceAtLeast(5)
-                    val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = false)
+                    val dmg = mitigateMonsterDamage(rawDmg, effectiveTargetArmor, isMagic = false)
                     s = s.queuePlayerFx(null, null, PlayerActionState.ATTACKING)
-                    applyDamageToMonster(s, target.id, dmg, nowMs, projectileKind = projKind)
+                    s = applyDamageToMonster(s, target.id, dmg, nowMs, projectileKind = projKind)
+                    EquipmentProcEngine.resolveAttackProcs(s, target, dmg, nowMs)
                 } else {
                     s.addFloatingInternal(s.floor, target.x.toFloat(), target.y.toFloat(), "MISS", FloatingTextKind.BLOCK, nowMs)
                         .queuePlayerFx("MISS", FloatingTextKind.BLOCK, PlayerActionState.ATTACKING, projKind, target.x, target.y)
                 }
             }
             else -> {
-                val baseAtk = weapon?.attack ?: 6
+                val baseAtk = (weapon?.attack ?: 6) + accessoryAtk
                 val meleeSkillType = PlayerSkills.meleeSkillTypeForWeapon(weapon?.id)
                 s = advanceSkillPublic(s, meleeSkillType, 3.2, nowMs)
                 val activeLevel = s.skills.levelFor(meleeSkillType)
@@ -920,14 +924,15 @@ object GameEngine {
                 val basePower = baseAtk + s.level * 0.60
                 val rawDmg = (basePower * meleeMult * Random.nextDouble(0.80, 1.20) * skillPenaltyMult * offVocationMult)
                     .roundToInt().coerceAtLeast(4)
-                val dmg = mitigateMonsterDamage(rawDmg, target.type.armor, isMagic = false)
+                val dmg = mitigateMonsterDamage(rawDmg, effectiveTargetArmor, isMagic = false)
                 s = s.queuePlayerFx(null, null, PlayerActionState.ATTACKING)
-                applyDamageToMonster(s, target.id, dmg, nowMs)
+                s = applyDamageToMonster(s, target.id, dmg, nowMs)
+                EquipmentProcEngine.resolveAttackProcs(s, target, dmg, nowMs)
             }
         }
     }
 
-    private fun applyDamageToMonster(
+    internal fun applyDamageToMonster(
         state: GameWorldState,
         monsterId: Int,
         damage: Int,
@@ -1347,7 +1352,7 @@ object GameEngine {
         if (!state.hasItem("health_potion")) return state.addLogInternal("Out of Health Potions! Buy more from Alaric.")
         val def = ItemCatalog.get("health_potion")
         val heal = def.restoreAmount + Random.nextInt(-10, 16)
-        val newHp = (state.hp + heal).coerceAtMost(state.maxHp)
+        val newHp = (state.hp + heal).coerceAtMost(state.effectiveMaxHp())
         val actualHeal = newHp - state.hp
         return state.copy(
             hp = newHp,
@@ -1442,7 +1447,7 @@ object GameEngine {
                 .queuePlayerFx("+$healPower HP", FloatingTextKind.HEAL, PlayerActionState.HEALING)
                 .addLogInternal("Cast ${runeDef.name} on ${inspectedAlly.name} (+$healPower HP).")
         } else {
-            val newHp = (next.hp + healPower).coerceAtMost(next.maxHp)
+            val newHp = (next.hp + healPower).coerceAtMost(next.effectiveMaxHp())
             val actual = newHp - next.hp
             next.copy(
                 hp = newHp,
@@ -1621,6 +1626,7 @@ object GameEngine {
         var s = state
         val updatedMonsters = s.monsters.toMutableList()
         val spawnedSummons = mutableListOf<MonsterEntity>()
+        val defensiveProcAttackers = mutableListOf<MonsterEntity>()
         val activeRemoteTargets = remotePlayersOnFloor.filter {
             it.floor == s.floor && it.hp > 0 && !floorMap.isProtectionZone(it.x, it.y)
         }
@@ -1628,6 +1634,13 @@ object GameEngine {
         for (i in updatedMonsters.indices) {
             var curM = updatedMonsters[i]
             if (curM.floor != s.floor) continue
+            if (curM.shatterTicks > 0 || curM.slowTicks > 0) {
+                curM = curM.copy(
+                    shatterTicks = (curM.shatterTicks - 1).coerceAtLeast(0),
+                    slowTicks = (curM.slowTicks - 1).coerceAtLeast(0)
+                )
+                updatedMonsters[i] = curM
+            }
 
             // 1. Determine target player: Host picks closest non-PZ player on floor; Non-host follows host's targetPlayerId
             val targetId: String?
@@ -1910,6 +1923,9 @@ object GameEngine {
                         )
                     )
                 }
+                if (s.hp > 0) {
+                    defensiveProcAttackers.add(curM)
+                }
                 if (s.hp <= 0) break
             } else if (isFloorHost && !targetsLocal && curM.type.rangedProjectile != null &&
                 distToTarget in 2..curM.type.preferredRange &&
@@ -1994,6 +2010,7 @@ object GameEngine {
                     }
 
                     if (moveDest != null) {
+                        val slowPenalty = if (curM.slowTicks > 0) 1 else 0
                         updatedMonsters[i] = curM.copy(
                             lastMoveFromX = curM.x,
                             lastMoveFromY = curM.y,
@@ -2001,13 +2018,36 @@ object GameEngine {
                             x = moveDest.first,
                             y = moveDest.second,
                             targetPlayerId = targetId,
-                            moveCooldown = (curM.type.moveIntervalTicks - 1).coerceAtLeast(0)
+                            moveCooldown = (curM.type.moveIntervalTicks - 1 + slowPenalty).coerceAtLeast(0)
                         )
                     }
                 }
             }
         }
-        return s.copy(monsters = updatedMonsters + spawnedSummons)
+        s = s.copy(monsters = updatedMonsters + spawnedSummons)
+
+        // 6. Tick proc Ignite Burn DoT on active floor monsters (awards full XP & loot on kill)
+        val burningIds = s.monsters.filter { it.floor == s.floor && it.hp > 0 && it.burnTicks > 0 }.map { it.id }
+        for (mId in burningIds) {
+            val bm = s.monsters.firstOrNull { it.id == mId } ?: continue
+            val bDmg = bm.burnDamagePerTick.coerceAtLeast(5)
+            s = s.copy(
+                monsters = s.monsters.map { m ->
+                    if (m.id == mId) m.copy(burnTicks = (m.burnTicks - 1).coerceAtLeast(0)) else m
+                }
+            )
+            s = s.addFloatingInternal(bm.floor, bm.x.toFloat(), bm.y.toFloat() - 0.18f, "-$bDmg", FloatingTextKind.FIRE, nowMs)
+            s = applyDamageToMonster(s, mId, bDmg, nowMs)
+        }
+
+        // 7. Resolve ON_DEFEND equipment procs (Shield, Chest Armor, Necklace, Ring) for incoming hits
+        if (!playerInPz && s.hp > 0) {
+            for (attacker in defensiveProcAttackers) {
+                if (s.hp <= 0) break
+                s = EquipmentProcEngine.resolveDefenseProcs(s, attacker, nowMs)
+            }
+        }
+        return s
     }
 
     /**
@@ -2520,7 +2560,7 @@ object GameEngine {
                 else state.addLogInternal("Stand on the southern Fishing Pier near water to cast your line.")
             }
             ItemCategory.FOOD -> {
-                val newHp = (state.hp + def.restoreAmount).coerceAtMost(state.maxHp)
+                val newHp = (state.hp + def.restoreAmount).coerceAtMost(state.effectiveMaxHp())
                 val newMp = (state.mp + def.restoreAmount / 2).coerceAtMost(state.maxMp)
                 val healed = newHp - state.hp
                 state.copy(hp = newHp, mp = newMp, backpack = removeItemPublic(state.backpack, itemId, 1))
@@ -2534,6 +2574,14 @@ object GameEngine {
             }
             else -> {
                 val slot = def.equipSlot ?: return state.addLogInternal("${def.name} can be smelted, forged, fletched, or sold to Alaric.")
+                val unmetReqs = state.unmetEquipRequirements(def)
+                if (unmetReqs.isNotEmpty()) {
+                    val reqText = unmetReqs.joinToString(" & ")
+                    return state
+                        .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "REQ UNMET", FloatingTextKind.INFO, nowMs)
+                        .addLogInternal("Cannot equip ${def.name}: requires $reqText.")
+                }
+
                 val previousEquipped = state.equipment.getSlot(slot)
                 var bp = removeItemPublic(state.backpack, itemId, 1)
                 if (previousEquipped != null) bp = addItemPublic(bp, previousEquipped, 1)
@@ -2553,18 +2601,19 @@ object GameEngine {
                     notes.append(" (Unequipped 2H weapon to wield Shield)")
                 }
 
-                if (def.requiredSkillType != null && state.skills.levelFor(def.requiredSkillType) < def.requiredSkillLevel) {
-                    notes.append(" (Req ${def.requiredSkillType.displayName} ${def.requiredSkillLevel} — -35% dmg)")
-                }
                 if (def.preferredVocation != null && state.vocation != def.preferredVocation) {
                     notes.append(" (${def.preferredVocation.displayName} mastery — -25% off-vocation dmg)")
+                }
+                if (def.proc != null) {
+                    notes.append(" • Proc: ${def.proc.name} (${def.proc.triggerChancePercent}%)")
                 }
                 val keepFollow = if (slot == EquipmentSlot.WEAPON && def.category != ItemCategory.WEAPON_MELEE) {
                     false
                 } else {
                     state.autoFollowTarget
                 }
-                state.copy(equipment = newEquip, backpack = bp, autoFollowTarget = keepFollow)
+                val nextState = state.copy(equipment = newEquip, backpack = bp, autoFollowTarget = keepFollow)
+                nextState.copy(hp = nextState.hp.coerceAtMost(nextState.effectiveMaxHp()))
                     .addLogInternal("Equipped ${def.name}.$notes")
             }
         }
@@ -2576,10 +2625,12 @@ object GameEngine {
             return state.copy(equipment = state.equipment.copy(ammoId = null))
                 .addLogInternal("Cleared active quiver selection.")
         }
-        return state.copy(
+        val next = state.copy(
             equipment = state.equipment.withSlot(slot, null),
             backpack = addItemPublic(state.backpack, equippedId, 1)
-        ).addLogInternal("Unequipped ${ItemCatalog.get(equippedId).name}.")
+        )
+        return next.copy(hp = next.hp.coerceAtMost(next.effectiveMaxHp()))
+            .addLogInternal("Unequipped ${ItemCatalog.get(equippedId).name}.")
     }
 
     fun dropItem(state: GameWorldState, itemId: String): GameWorldState {
@@ -2914,7 +2965,7 @@ object GameEngine {
     }
 
     private fun blessAtTemple(state: GameWorldState, nowMs: Long): GameWorldState {
-        return state.copy(hp = state.maxHp, mp = state.maxMp, poisonTicks = 0, fireTicks = 0)
+        return state.copy(hp = state.effectiveMaxHp(), mp = state.maxMp, poisonTicks = 0, fireTicks = 0)
             .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "BLESSED!", FloatingTextKind.HEAL, nowMs)
             .queuePlayerFx("BLESSED!", FloatingTextKind.HEAL, PlayerActionState.HEALING)
             .addLogInternal("Brother Alden: 'May the light of Rookvale restore your body and spirit.'")
@@ -3114,6 +3165,7 @@ object GameEngine {
         return state.copy(
             floatingTexts = state.floatingTexts.filter { nowMs - it.createdAtMs < 1350L },
             projectiles = state.projectiles.filter { nowMs - it.createdAtMs < it.durationMs },
+            procAoeEffects = state.procAoeEffects.filter { nowMs - it.createdAtMs < it.durationMs },
             floorWarningBanner = activeBanner,
             inspectedPlayerId = if (keepInspected) state.inspectedPlayerId else null,
             inspectedPlayerUntilMs = if (keepInspected) state.inspectedPlayerUntilMs else 0L
@@ -3135,9 +3187,28 @@ object GameEngine {
     private fun chebyshev(x1: Int, y1: Int, x2: Int, y2: Int): Int = max(abs(x1 - x2), abs(y1 - y2))
 }
 
-internal fun GameWorldState.addFloatingInternal(floor: Int, x: Float, y: Float, text: String, kind: FloatingTextKind, nowMs: Long): GameWorldState {
-    val jitterX = Random.nextFloat() * 0.25f - 0.125f
-    return copy(floatingTexts = (floatingTexts + FloatingText(GameEngine.allocateEffectId(), floor, x + jitterX, y, text, kind, nowMs)).takeLast(24))
+internal fun GameWorldState.addFloatingInternal(
+    floor: Int,
+    x: Float,
+    y: Float,
+    text: String,
+    kind: FloatingTextKind,
+    nowMs: Long,
+    customColorHex: Long? = null
+): GameWorldState {
+    val jitterX = if (kind == FloatingTextKind.PROC_CALLOUT) 0f else Random.nextFloat() * 0.25f - 0.125f
+    return copy(
+        floatingTexts = (floatingTexts + FloatingText(
+            id = GameEngine.allocateEffectId(),
+            floor = floor,
+            tileX = x + jitterX,
+            tileY = y,
+            text = text,
+            kind = kind,
+            createdAtMs = nowMs,
+            customColorHex = customColorHex
+        )).takeLast(28)
+    )
 }
 
 internal fun GameWorldState.addProjectileInternal(floor: Int, fx: Float, fy: Float, tx: Float, ty: Float, kind: ProjectileKind, nowMs: Long, durationMs: Long = 260L): GameWorldState {

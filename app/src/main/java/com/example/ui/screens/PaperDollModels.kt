@@ -433,6 +433,8 @@ data class PaperDollAppearance(
         private fun resolveOffhand(offhandId: String): Pair<OffhandVisualKind, MaterialPalette> {
             val id = offhandId.lowercase().trim()
             return when {
+                id.contains("cinderite") || id.contains("bastion") -> OffhandVisualKind.DRAGON_SHIELD to MaterialPalettes.CINDERITE
+                id.contains("vesperite") || id.contains("bulwark") -> OffhandVisualKind.KITE_SHIELD to MaterialPalettes.VESPERITE
                 id.contains("dragon") || id.contains("wyrm") -> OffhandVisualKind.DRAGON_SHIELD to MaterialPalettes.WYRMSCALE
                 id.contains("steel") || id.contains("dwarven") || id.contains("kite") || id.contains("heater") ->
                     OffhandVisualKind.KITE_SHIELD to MaterialPalettes.DWARVEN_STEEL
@@ -449,6 +451,8 @@ data class PaperDollAppearance(
         ): Pair<ArmorVisualKind, MaterialPalette> {
             val id = armorId?.lowercase()?.trim().orEmpty()
             return when {
+                id.contains("cinderite") || id.contains("warplate") -> ArmorVisualKind.WYRMSCALE to MaterialPalettes.CINDERITE
+                id.contains("vesperite") || id.contains("aegis") -> ArmorVisualKind.PLATE to MaterialPalettes.VESPERITE
                 id.contains("dragon") || id.contains("wyrm") -> ArmorVisualKind.WYRMSCALE to MaterialPalettes.WYRMSCALE
                 id.contains("brass") || id.contains("plate") || id.contains("mail") -> ArmorVisualKind.PLATE to MaterialPalettes.BRASS_PLATE
                 id.contains("robe") || id.contains("mystic") -> ArmorVisualKind.ROBE to MaterialPalettes.MAGE_ROBE

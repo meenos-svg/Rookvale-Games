@@ -148,7 +148,9 @@ object MonsterLootTable {
                 WeightedLootDrop("bilewood_conduit", 1, 1, dropChance = 0.30f, weight = 10),
                 WeightedLootDrop("steel_shield", 1, 1, dropChance = 0.26f, weight = 9),
                 WeightedLootDrop("duskmetal_falchion", 1, 1, dropChance = 0.22f, weight = 8),
-                WeightedLootDrop("life_amulet", 1, 1, dropChance = 0.18f, weight = 6)
+                WeightedLootDrop("bog_iron_ward_pendant", 1, 1, dropChance = 0.20f, weight = 8),
+                WeightedLootDrop("duskmetal_vampire_band", 1, 1, dropChance = 0.20f, weight = 8),
+                WeightedLootDrop("life_amulet", 1, 1, dropChance = 0.14f, weight = 5)
             ),
             bonusWeightRolls = 2
         ),
@@ -203,6 +205,8 @@ object MonsterLootTable {
                 WeightedLootDrop("quenchsteel_bastard", 1, 1, dropChance = 0.28f, weight = 12),
                 WeightedLootDrop("tallowbone_crosier", 1, 1, dropChance = 0.26f, weight = 10),
                 WeightedLootDrop("dragon_shield", 1, 1, dropChance = 0.18f, weight = 8),
+                WeightedLootDrop("stormglass_pendant", 1, 1, dropChance = 0.22f, weight = 9),
+                WeightedLootDrop("frostfang_coil", 1, 1, dropChance = 0.22f, weight = 9),
                 WeightedLootDrop("sd_rune", 1, 2, dropChance = 0.30f, weight = 10)
             ),
             bonusWeightRolls = 2
@@ -316,7 +320,11 @@ object MonsterLootTable {
                 WeightedLootDrop("vesperite_cleaver", 1, 1, dropChance = 0.24f, weight = 10),
                 WeightedLootDrop("vesperite_warmaul", 1, 1, dropChance = 0.22f, weight = 10),
                 WeightedLootDrop("vesperite_recurve_bow", 1, 1, dropChance = 0.22f, weight = 10),
-                WeightedLootDrop("vesperite_conduit_staff", 1, 1, dropChance = 0.22f, weight = 10)
+                WeightedLootDrop("vesperite_conduit_staff", 1, 1, dropChance = 0.22f, weight = 10),
+                WeightedLootDrop("vesperite_bulwark", 1, 1, dropChance = 0.20f, weight = 9),
+                WeightedLootDrop("vesperite_aegis_mail", 1, 1, dropChance = 0.20f, weight = 9),
+                WeightedLootDrop("vesperite_resonance_necklace", 1, 1, dropChance = 0.18f, weight = 8),
+                WeightedLootDrop("vesperite_catalyst_ring", 1, 1, dropChance = 0.18f, weight = 8)
             ),
             bonusWeightRolls = 2
         ),
@@ -372,7 +380,11 @@ object MonsterLootTable {
                 WeightedLootDrop("cinderite_greataxe", 1, 1, dropChance = 0.24f, weight = 10),
                 WeightedLootDrop("cinderite_worldbreaker", 1, 1, dropChance = 0.22f, weight = 10),
                 WeightedLootDrop("cinderite_ashen_bow", 1, 1, dropChance = 0.22f, weight = 10),
-                WeightedLootDrop("cinderite_soulspire", 1, 1, dropChance = 0.22f, weight = 10)
+                WeightedLootDrop("cinderite_soulspire", 1, 1, dropChance = 0.22f, weight = 10),
+                WeightedLootDrop("cinderite_bastion", 1, 1, dropChance = 0.20f, weight = 9),
+                WeightedLootDrop("cinderite_warplate", 1, 1, dropChance = 0.20f, weight = 9),
+                WeightedLootDrop("cinderheart_sovereign_torc", 1, 1, dropChance = 0.18f, weight = 8),
+                WeightedLootDrop("cinderite_overlord_band", 1, 1, dropChance = 0.18f, weight = 8)
             ),
             bonusWeightRolls = 2
         )

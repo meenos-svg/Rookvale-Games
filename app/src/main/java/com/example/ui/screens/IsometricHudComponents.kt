@@ -674,10 +674,11 @@ private fun CharacterVitalsHudCard(
                 )
 
                 // Red HP Bar
+                val effMaxHp = state.effectiveMaxHp()
                 CompactMeterBar(
                     label = "HP",
-                    valueText = "${state.hp}/${state.maxHp}",
-                    fraction = (state.hp.toFloat() / state.maxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
+                    valueText = "${state.hp}/$effMaxHp",
+                    fraction = (state.hp.toFloat() / effMaxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
                     fillColor = HealthCrimson,
                     trackColor = HealthCrimsonDark,
                     heightDp = 11

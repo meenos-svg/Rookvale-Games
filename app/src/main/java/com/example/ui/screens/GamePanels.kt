@@ -43,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
@@ -89,6 +90,13 @@ import com.example.ui.theme.TorchAmber
 import com.example.ui.theme.TorchGold
 import java.util.Locale
 
+private data class InspectedItemRequest(
+    val itemId: String,
+    val equippedSlot: EquipmentSlot? = null,
+    val primaryActionLabel: String? = null,
+    val onPrimaryAction: (() -> Unit)? = null
+)
+
 @Composable
 fun SlideUpGamePanel(
     state: GameWorldState,
@@ -134,13 +142,15 @@ fun SlideUpGamePanel(
         ActivePanel.NONE -> ""
     }
 
+    var inspectedItem by remember { mutableStateOf<InspectedItemRequest?>(null) }
+
     Surface(
         color = BasaltDark.copy(alpha = 0.96f),
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.5.dp, StoneBorderLight),
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 210.dp, max = 318.dp)
+            .heightIn(min = 210.dp, max = 330.dp)
             .pointerInput(Unit) { detectTapGestures { /* Consume taps on panel surface so background map doesn't walk */ } }
             .testTag("slide_up_panel_${state.activePanel.name.lowercase()}")
     ) {
@@ -186,8 +196,18 @@ fun SlideUpGamePanel(
 
             Box(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
                 when (state.activePanel) {
-                    ActivePanel.EQUIPMENT -> EquipmentPanelContent(state, onUnequipSlot)
-                    ActivePanel.BACKPACK -> BackpackPanelContent(state, onUseItem, onDropItem, onBindRune)
+                    ActivePanel.EQUIPMENT -> EquipmentPanelContent(
+                        state = state,
+                        onUnequipSlot = onUnequipSlot,
+                        onInspectItem = { inspectedItem = it }
+                    )
+                    ActivePanel.BACKPACK -> BackpackPanelContent(
+                        state = state,
+                        onUseItem = onUseItem,
+                        onDropItem = onDropItem,
+                        onBindRune = onBindRune,
+                        onInspectItem = { inspectedItem = it }
+                    )
                     ActivePanel.SKILLS -> SkillsPanelContent(state)
                     ActivePanel.DEPOT -> DepotPanelContent(
                         state = state,
@@ -198,17 +218,39 @@ fun SlideUpGamePanel(
                         onWithdrawGold = onWithdrawGold,
                         onWithdrawAllGold = onWithdrawAllGold
                     )
-                    ActivePanel.SHOP -> ShopPanelContent(state, onBuyItem, onSellItem)
-                    ActivePanel.FURNACE -> SmeltingFurnaceContent(state, onCraftRecipe)
-                    ActivePanel.ANVIL -> BlacksmithAnvilContent(state, onCraftRecipe)
-                    ActivePanel.FLETCHING_BENCH -> FletchingBenchContent(state, onCraftRecipe)
-                    ActivePanel.RUNECRAFTING_TABLE -> RunecraftingTableContent(state, onCraftRecipe)
+                    ActivePanel.SHOP -> ShopPanelContent(
+                        state = state,
+                        onBuy = onBuyItem,
+                        onSell = onSellItem,
+                        onInspectItem = { inspectedItem = it }
+                    )
+                    ActivePanel.FURNACE -> SmeltingFurnaceContent(
+                        state = state,
+                        onCraft = onCraftRecipe,
+                        onInspectItem = { id -> inspectedItem = InspectedItemRequest(id) }
+                    )
+                    ActivePanel.ANVIL -> BlacksmithAnvilContent(
+                        state = state,
+                        onCraft = onCraftRecipe,
+                        onInspectItem = { id -> inspectedItem = InspectedItemRequest(id) }
+                    )
+                    ActivePanel.FLETCHING_BENCH -> FletchingBenchContent(
+                        state = state,
+                        onCraft = onCraftRecipe,
+                        onInspectItem = { id -> inspectedItem = InspectedItemRequest(id) }
+                    )
+                    ActivePanel.RUNECRAFTING_TABLE -> RunecraftingTableContent(
+                        state = state,
+                        onCraft = onCraftRecipe,
+                        onInspectItem = { id -> inspectedItem = InspectedItemRequest(id) }
+                    )
                     ActivePanel.LOOT_CORPSE -> LootCorpseContent(
                         state = state,
                         corpse = state.corpses.firstOrNull { it.id == state.inspectingCorpseId },
                         onLootItem = onLootCorpseItem,
                         onLootGold = onLootCorpseGold,
-                        onLootAll = onLootAll
+                        onLootAll = onLootAll,
+                        onInspectItem = { inspectedItem = it }
                     )
                     ActivePanel.WORLD_MAP -> RegionalWorldMapContent(state, remotePlayers, onWalkToTile)
                     ActivePanel.SETTINGS -> SettingsPanelContent(
@@ -222,20 +264,47 @@ fun SlideUpGamePanel(
             }
         }
     }
+
+    inspectedItem?.let { req ->
+        ItemInspectionDialog(
+            state = state,
+            itemId = req.itemId,
+            equippedSlot = req.equippedSlot,
+            primaryActionLabel = req.primaryActionLabel,
+            onPrimaryAction = req.onPrimaryAction,
+            onDismiss = { inspectedItem = null }
+        )
+    }
 }
 
 @Composable
 private fun EquipmentPanelContent(
     state: GameWorldState,
-    onUnequipSlot: (EquipmentSlot) -> Unit
+    onUnequipSlot: (EquipmentSlot) -> Unit,
+    onInspectItem: (InspectedItemRequest) -> Unit
 ) {
     val eq = state.equipment
     val weapon = eq.weaponDef()
-    val weaponAtk = weapon?.attack ?: 6
+    val weaponAtk = (weapon?.attack ?: 6) + eq.totalAccessoryAttackBonus()
     val speedTxt = weapon?.speedLabel() ?: "1.0s"
     val isTwoHanded = state.isUsingTwoHandedWeapon()
     val dodgePct = (state.shieldDodgeChance(isRanged = false) * 100).toInt()
     val offVocPenalty = state.weaponOffVocationMultiplier(weapon) < 1.0
+    val procChanceBonus = eq.totalProcChanceBonusPct()
+    val procPowerBonus = eq.totalProcPowerBonusPct()
+    val procExtraTargets = eq.totalProcExtraTargets()
+    val bonusMaxHp = eq.totalBonusMaxHp()
+
+    val inspectOrUnequip: (EquipmentSlot, String) -> Unit = { slot, id ->
+        onInspectItem(
+            InspectedItemRequest(
+                itemId = id,
+                equippedSlot = slot,
+                primaryActionLabel = if (slot == EquipmentSlot.AMMO) "Clear Quiver" else "Unequip",
+                onPrimaryAction = { onUnequipSlot(slot) }
+            )
+        )
+    }
 
     val paperDollAppearance = remember(state.vocation, state.tunicColorIndex, state.hairColorIndex, eq) {
         PaperDollAppearance.fromEquipment(
@@ -247,15 +316,15 @@ private fun EquipmentPanelContent(
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = Modifier.fillMaxWidth().padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(StoneSurface, RoundedCornerShape(6.dp))
                 .border(1.dp, StoneBorderLight, RoundedCornerShape(6.dp))
-                .padding(horizontal = 10.dp, vertical = 7.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text("ATK $weaponAtk", style = MaterialTheme.typography.labelMedium, color = TorchGold)
@@ -268,7 +337,29 @@ private fun EquipmentPanelContent(
             Text("ARM ${eq.totalArmor()}", style = MaterialTheme.typography.labelMedium, color = ExpEmerald)
         }
 
-        // Interactive Live Paper-Doll Stage beside Classic 3-column Tibia Equipment Slots
+        if (procChanceBonus > 0 || procPowerBonus > 0 || procExtraTargets > 0 || bonusMaxHp > 0) {
+            val synergyText = buildList {
+                if (procChanceBonus > 0) add("+$procChanceBonus% Proc")
+                if (procPowerBonus > 0) add("+$procPowerBonus% Proc DMG")
+                if (procExtraTargets > 0) add("+$procExtraTargets AOE Tgt")
+                if (bonusMaxHp > 0) add("+$bonusMaxHp Max HP")
+            }.joinToString(" • ")
+            Text(
+                text = "Jewelry Synergy: $synergyText",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = TorchGold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1E1B2A), RoundedCornerShape(5.dp))
+                    .border(1.dp, TorchGold.copy(alpha = 0.45f), RoundedCornerShape(5.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .testTag("equipment_jewelry_synergy_banner")
+            )
+        }
+
+        // Interactive Live Paper-Doll Stage beside Classic 3x3 Equipment Slots (including Ring slot)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -279,8 +370,8 @@ private fun EquipmentPanelContent(
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.5.dp, TorchGold.copy(alpha = 0.72f)),
                 modifier = Modifier
-                    .width(108.dp)
-                    .height(186.dp)
+                    .width(104.dp)
+                    .height(182.dp)
                     .testTag("equipment_paper_doll_stage")
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -310,36 +401,36 @@ private fun EquipmentPanelContent(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    EquipSlotBox(EquipmentSlot.AMULET, eq.amuletId, null, null, onUnequipSlot, Modifier.weight(1f))
-                    EquipSlotBox(EquipmentSlot.HELMET, eq.helmetId, null, null, onUnequipSlot, Modifier.weight(1f))
-                    EquipSlotBox(EquipmentSlot.AMMO, eq.ammoId, state.activeAmmoCount(), null, onUnequipSlot, Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.AMULET, eq.amuletId, null, null, inspectOrUnequip, Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.HELMET, eq.helmetId, null, null, inspectOrUnequip, Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.AMMO, eq.ammoId, state.activeAmmoCount(), null, inspectOrUnequip, Modifier.weight(1f))
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    EquipSlotBox(EquipmentSlot.WEAPON, eq.weaponId, null, null, onUnequipSlot, Modifier.weight(1f))
-                    EquipSlotBox(EquipmentSlot.ARMOR, eq.armorId, null, null, onUnequipSlot, Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.WEAPON, eq.weaponId, null, null, inspectOrUnequip, Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.ARMOR, eq.armorId, null, null, inspectOrUnequip, Modifier.weight(1f))
                     EquipSlotBox(
                         slot = EquipmentSlot.SHIELD,
                         itemId = eq.shieldId,
                         ammoCount = null,
                         lockedLabel = if (isTwoHanded) "2H Occupied" else null,
-                        onUnequip = onUnequipSlot,
+                        onTapEquipped = inspectOrUnequip,
                         modifier = Modifier.weight(1f)
                     )
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Spacer(Modifier.weight(1f))
-                    EquipSlotBox(EquipmentSlot.LEGS, eq.legsId, null, null, onUnequipSlot, Modifier.weight(1f))
-                    EquipSlotBox(EquipmentSlot.BOOTS, eq.bootsId, null, null, onUnequipSlot, Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.RING, eq.ringId, null, null, inspectOrUnequip, Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.LEGS, eq.legsId, null, null, inspectOrUnequip, Modifier.weight(1f))
+                    EquipSlotBox(EquipmentSlot.BOOTS, eq.bootsId, null, null, inspectOrUnequip, Modifier.weight(1f))
                 }
             }
         }
         val statusHint = buildString {
             if (isTwoHanded) append("2H weapon active: Shield locked & Shielding Dodge penalized. ")
             if (offVocPenalty && weapon?.preferredVocation != null) {
-                append("Off-vocation Tier 3-4 weapon (-25% DMG; ${weapon.preferredVocation.displayName} mastery). ")
+                append("Off-vocation weapon (-25% DMG; ${weapon.preferredVocation.displayName} mastery). ")
             }
             if (isEmpty()) {
-                append("Tap hero to rotate 360°. Tap any equipped piece to unequip.")
+                append("Tap hero to turn 360°. Tap any worn item to inspect stats, procs & unequip.")
             }
         }.trim()
         Text(
@@ -356,45 +447,53 @@ private fun EquipSlotBox(
     itemId: String?,
     ammoCount: Int?,
     lockedLabel: String?,
-    onUnequip: (EquipmentSlot) -> Unit,
+    onTapEquipped: (EquipmentSlot, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val def = itemId?.let { ItemCatalog.get(it) }
     val isLocked = lockedLabel != null && def == null
+    val hasProc = def?.proc != null
+    val borderAccent = when {
+        hasProc -> Color(def!!.proc!!.elementColor).copy(alpha = 0.85f)
+        def != null && def.equipmentTier >= 4 -> tierBadgeColor(def.equipmentTier).copy(alpha = 0.8f)
+        def != null -> TorchGold.copy(alpha = 0.65f)
+        isLocked -> TorchAmber.copy(alpha = 0.55f)
+        else -> StoneBorderLight
+    }
     Surface(
         color = if (isLocked) ObsidianVoid.copy(alpha = 0.72f) else StoneSurface,
         shape = RoundedCornerShape(6.dp),
-        border = BorderStroke(
-            1.dp,
-            when {
-                def != null -> TorchGold.copy(alpha = 0.65f)
-                isLocked -> TorchAmber.copy(alpha = 0.55f)
-                else -> StoneBorderLight
-            }
-        ),
+        border = BorderStroke(1.dp, borderAccent),
         modifier = modifier
-            .height(58.dp)
-            .clickable(enabled = def != null) { onUnequip(slot) }
+            .height(56.dp)
+            .clickable(enabled = def != null) { if (itemId != null) onTapEquipped(slot, itemId) }
             .testTag("equip_slot_${slot.name.lowercase()}")
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (def != null) {
                 val icon = remember(def.id) { EntitySpriteAtlas.itemIcon(def.id) }
-                PixelSpritePreview(icon, Modifier.size(28.dp).background(ObsidianVoid, RoundedCornerShape(4.dp)))
-                Spacer(Modifier.width(5.dp))
+                PixelSpritePreview(icon, Modifier.size(26.dp).background(ObsidianVoid, RoundedCornerShape(4.dp)))
+                Spacer(Modifier.width(4.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (slot == EquipmentSlot.AMMO && ammoCount != null && def != null) "Ammo x$ammoCount" else slot.label,
+                    text = when {
+                        slot == EquipmentSlot.AMMO && ammoCount != null && def != null -> "Ammo x$ammoCount"
+                        hasProc -> "⚡ ${slot.label}"
+                        else -> slot.label
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = when {
+                        hasProc -> Color(def!!.proc!!.elementColor)
                         slot == EquipmentSlot.AMMO && (ammoCount ?: 0) > 0 -> TorchGold
                         isLocked -> TorchAmber
                         else -> ParchmentMuted
-                    }
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = def?.name ?: lockedLabel ?: "Empty",
@@ -417,7 +516,8 @@ private fun BackpackPanelContent(
     state: GameWorldState,
     onUseItem: (String) -> Unit,
     onDropItem: (String) -> Unit,
-    onBindRune: (String) -> Unit
+    onBindRune: (String) -> Unit,
+    onInspectItem: (InspectedItemRequest) -> Unit
 ) {
     var bagTab by remember { mutableIntStateOf(0) }
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -470,32 +570,56 @@ private fun BackpackPanelContent(
                             def.equipSlot != null -> "Equip"
                             else -> "Use"
                         }
+                        val unmet = state.unmetEquipRequirements(def)
+                        val meetsReqs = unmet.isEmpty()
                         val sub = buildString {
-                            append("${formatOz(def.weightOz * stack.count)} oz")
+                            if (def.equipmentTier > 0) append("T${def.equipmentTier} • ")
+                            if (def.equipSlot != null) {
+                                append("Req Lv ${def.requiredLevel}")
+                                def.requiredSkill?.let { (sk, lv) -> append("/${sk.displayName.take(4)} $lv") }
+                                append(" • ")
+                            }
                             if (isCastableRune) {
-                                append(" • MLv ${def.requiredMagicLevel}")
+                                append("MLv ${def.requiredMagicLevel}")
                                 if (isBound) append(" • BOUND")
+                                append(" • ")
                             }
                             if (def.attack > 0 && def.equipSlot == EquipmentSlot.WEAPON) {
-                                append(" • ATK ${def.attack}")
-                                if (def.isTwoHanded) append(" • 2H")
-                                append(" • ${def.speedLabel()}")
+                                append("ATK ${def.attack}")
+                                if (def.isTwoHanded) append(" 2H")
+                                append(" • ")
                             }
-                            if (def.requiredSkillType != null) {
-                                append(" • Req ${def.requiredSkillLevel}")
+                            if (def.defense > 0) append("DEF ${def.defense} • ")
+                            if (def.armor > 0) append("ARM ${def.armor} • ")
+                            if (def.proc != null) {
+                                append("⚡ ${def.proc.name} (${def.proc.triggerChancePercent}%) • ")
                             }
-                            if (def.preferredVocation != null && state.vocation != def.preferredVocation) {
-                                append(" • -25% (${def.preferredVocation.displayName})")
-                            }
-                            append(" • ${def.description}")
+                            append("${formatOz(def.weightOz * stack.count)} oz")
                         }
                         ItemActionRow(
                             stack = stack,
                             subtitleOverride = sub,
+                            subtitleColor = if (!meetsReqs && def.equipSlot != null) HealthCrimson else ParchmentMuted,
+                            accentBorderColor = when {
+                                !meetsReqs && def.equipSlot != null -> HealthCrimson.copy(alpha = 0.65f)
+                                def.proc != null -> Color(def.proc.elementColor).copy(alpha = 0.65f)
+                                else -> null
+                            },
                             primaryLabel = actionLabel,
+                            primaryContainerColor = if (!meetsReqs && def.equipSlot != null) HealthCrimson.copy(alpha = 0.78f) else TorchAmber,
+                            primaryContentColor = if (!meetsReqs && def.equipSlot != null) ParchmentLight else ObsidianVoid,
                             onPrimary = { onUseItem(stack.itemId) },
                             secondaryLabel = if (isCastableRune) (if (isBound) "Bound" else "Bind") else "Drop",
-                            onSecondary = if (isCastableRune) ({ onBindRune(stack.itemId) }) else ({ onDropItem(stack.itemId) })
+                            onSecondary = if (isCastableRune) ({ onBindRune(stack.itemId) }) else ({ onDropItem(stack.itemId) }),
+                            onInspect = {
+                                onInspectItem(
+                                    InspectedItemRequest(
+                                        itemId = stack.itemId,
+                                        primaryActionLabel = actionLabel,
+                                        onPrimaryAction = { onUseItem(stack.itemId) }
+                                    )
+                                )
+                            }
                         )
                     }
                 }
@@ -535,7 +659,16 @@ private fun BackpackPanelContent(
                             primaryLabel = if (def.id == "rope") "Climb" else "Use",
                             onPrimary = { onUseItem(stack.itemId) },
                             secondaryLabel = "Drop",
-                            onSecondary = { onDropItem(stack.itemId) }
+                            onSecondary = { onDropItem(stack.itemId) },
+                            onInspect = {
+                                onInspectItem(
+                                    InspectedItemRequest(
+                                        itemId = stack.itemId,
+                                        primaryActionLabel = if (def.id == "rope") "Climb" else "Use",
+                                        onPrimaryAction = { onUseItem(stack.itemId) }
+                                    )
+                                )
+                            }
                         )
                     }
                 }
@@ -675,7 +808,8 @@ private fun SkillBarRow(
 private fun ShopPanelContent(
     state: GameWorldState,
     onBuy: (String) -> Unit,
-    onSell: (String) -> Unit
+    onSell: (String) -> Unit,
+    onInspectItem: (InspectedItemRequest) -> Unit
 ) {
     var tab by remember { mutableIntStateOf(0) }
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -693,11 +827,21 @@ private fun ShopPanelContent(
                 items(ItemCatalog.shopInventoryIds, key = { it }) { itemId ->
                     val def = ItemCatalog.get(itemId)
                     val wt = if (def.isTool) "${formatOz(def.carriedWeightOz())} oz (Tool Bag)" else "${formatOz(def.weightOz)} oz"
+                    val reqNote = if (def.equipSlot != null && def.requiredLevel > 1) " • Req Lv ${def.requiredLevel}" else ""
                     ItemActionRow(
                         stack = ItemStack(itemId, 1),
-                        subtitleOverride = "${def.buyPrice} gp • $wt • ${def.description}",
+                        subtitleOverride = "${def.buyPrice} gp • $wt$reqNote • ${def.description}",
                         primaryLabel = "Buy ${def.buyPrice}g",
-                        onPrimary = { onBuy(itemId) }
+                        onPrimary = { onBuy(itemId) },
+                        onInspect = {
+                            onInspectItem(
+                                InspectedItemRequest(
+                                    itemId = itemId,
+                                    primaryActionLabel = "Buy (${def.buyPrice} gp)",
+                                    onPrimaryAction = { onBuy(itemId) }
+                                )
+                            )
+                        }
                     )
                 }
             }
@@ -721,7 +865,16 @@ private fun ShopPanelContent(
                             stack = stack,
                             subtitleOverride = "${bagTag}Sells for ${def.sellPrice} gp • ${formatOz(def.carriedWeightOz())} oz",
                             primaryLabel = "Sell +${def.sellPrice}g",
-                            onPrimary = { onSell(stack.itemId) }
+                            onPrimary = { onSell(stack.itemId) },
+                            onInspect = {
+                                onInspectItem(
+                                    InspectedItemRequest(
+                                        itemId = stack.itemId,
+                                        primaryActionLabel = "Sell (+${def.sellPrice} gp)",
+                                        onPrimaryAction = { onSell(stack.itemId) }
+                                    )
+                                )
+                            }
                         )
                     }
                 }
@@ -736,7 +889,8 @@ private fun LootCorpseContent(
     corpse: CorpseEntity?,
     onLootItem: (String, Int) -> Unit,
     onLootGold: (String) -> Unit,
-    onLootAll: (String) -> Unit
+    onLootAll: (String) -> Unit,
+    onInspectItem: (InspectedItemRequest) -> Unit
 ) {
     if (corpse == null || (corpse.gold <= 0 && corpse.items.isEmpty())) {
         Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -940,9 +1094,22 @@ private fun LootCorpseContent(
                         PixelSpritePreview(
                             bitmap = icon,
                             modifier = Modifier
-                                .size(34.dp)
+                                .size(36.dp)
                                 .background(ObsidianVoid, RoundedCornerShape(4.dp))
-                                .border(1.dp, StoneBorderDark, RoundedCornerShape(4.dp))
+                                .border(
+                                    1.dp,
+                                    if (def.proc != null) Color(def.proc.elementColor).copy(alpha = 0.85f) else StoneBorderDark,
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .clickable {
+                                    onInspectItem(
+                                        InspectedItemRequest(
+                                            itemId = stack.itemId,
+                                            primaryActionLabel = "Take Loot",
+                                            onPrimaryAction = { onLootItem(corpse.id, index) }
+                                        )
+                                    )
+                                }
                         )
                         Spacer(Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
@@ -1053,33 +1220,68 @@ internal fun ItemActionRow(
     onPrimary: () -> Unit,
     secondaryLabel: String? = null,
     onSecondary: (() -> Unit)? = null,
-    subtitleOverride: String? = null
+    subtitleOverride: String? = null,
+    subtitleColor: Color = ParchmentMuted,
+    accentBorderColor: Color? = null,
+    primaryContainerColor: Color = TorchAmber,
+    primaryContentColor: Color = ObsidianVoid,
+    onInspect: (() -> Unit)? = null
 ) {
     val def = ItemCatalog.get(stack.itemId)
     val icon = remember(stack.itemId) { EntitySpriteAtlas.itemIcon(stack.itemId) }
     Surface(
         color = StoneSurface,
         shape = RoundedCornerShape(6.dp),
-        border = BorderStroke(1.dp, StoneBorderLight.copy(alpha = 0.65f)),
+        border = BorderStroke(1.dp, accentBorderColor ?: StoneBorderLight.copy(alpha = 0.65f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (onInspect != null) Modifier.clickable(onClick = onInspect) else Modifier)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PixelSpritePreview(icon, Modifier.size(34.dp).background(ObsidianVoid, RoundedCornerShape(4.dp)).border(1.dp, StoneBorderDark, RoundedCornerShape(4.dp)))
+            PixelSpritePreview(
+                bitmap = icon,
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(ObsidianVoid, RoundedCornerShape(4.dp))
+                    .border(
+                        1.dp,
+                        accentBorderColor ?: StoneBorderDark,
+                        RoundedCornerShape(4.dp)
+                    )
+            )
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(if (stack.count > 1) "${def.name} x${stack.count}" else def.name, style = MaterialTheme.typography.titleMedium, color = ParchmentLight, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(subtitleOverride ?: "${formatOz(def.weightOz * stack.count)} oz • ${def.description}", style = MaterialTheme.typography.labelSmall, color = ParchmentMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = if (stack.count > 1) "${def.name} x${stack.count}" else def.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = ParchmentLight,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitleOverride ?: "${formatOz(def.weightOz * stack.count)} oz • ${def.description}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = subtitleColor,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
             Spacer(Modifier.width(6.dp))
             Button(
                 onClick = onPrimary,
-                colors = ButtonDefaults.buttonColors(containerColor = TorchAmber, contentColor = ObsidianVoid),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = primaryContainerColor,
+                    contentColor = primaryContentColor
+                ),
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                 shape = RoundedCornerShape(6.dp),
-                modifier = Modifier.height(34.dp)
+                modifier = Modifier
+                    .height(36.dp)
+                    .testTag("item_action_primary_${stack.itemId}")
             ) {
                 Text(primaryLabel, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
             }
@@ -1090,7 +1292,7 @@ internal fun ItemActionRow(
                     border = BorderStroke(1.dp, StoneBorderLight),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier.height(34.dp)
+                    modifier = Modifier.height(36.dp)
                 ) {
                     Text(secondaryLabel, style = MaterialTheme.typography.labelSmall, color = ParchmentMuted)
                 }

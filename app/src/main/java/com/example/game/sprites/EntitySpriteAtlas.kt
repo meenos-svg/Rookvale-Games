@@ -841,12 +841,29 @@ object EntitySpriteAtlas {
                 px(buf, ITEM_S, 11, 3, 0xFFFFFFFF.toInt())
             }
             ItemCategory.SHIELD -> {
-                val col = when (itemId) { "dragon_shield" -> 0xFF288C46.toInt(); "steel_shield" -> 0xFF7B8694.toInt(); else -> 0xFF8C5A2B.toInt() }
-                rect(buf, ITEM_S, 3, 2, 10, 11, col); rect(buf, ITEM_S, 5, 4, 6, 7, 0xFFE6B44C.toInt())
+                val (col, trim) = when (itemId) {
+                    "cinderite_bastion" -> 0xFF33211E.toInt() to 0xFFFF8826.toInt()
+                    "vesperite_bulwark" -> 0xFF6B4EB8.toInt() to 0xFFD9C7FF.toInt()
+                    "dragon_shield" -> 0xFF288C46.toInt() to 0xFFE6B44C.toInt()
+                    "steel_shield" -> 0xFF7B8694.toInt() to 0xFFE6B44C.toInt()
+                    else -> 0xFF8C5A2B.toInt() to 0xFFE6B44C.toInt()
+                }
+                rect(buf, ITEM_S, 3, 2, 10, 11, col)
+                rect(buf, ITEM_S, 5, 4, 6, 7, trim)
+                px(buf, ITEM_S, 7, 6, 0xFFFFFFFF.toInt())
             }
             ItemCategory.ARMOR -> {
-                val col = when (itemId) { "dragon_mail" -> 0xFF268F4A.toInt(); "brass_armor" -> 0xFFB8963E.toInt(); "mystic_robe" -> 0xFF3361BD.toInt(); else -> 0xFF7D502E.toInt() }
-                rect(buf, ITEM_S, 3, 3, 10, 11, col); rect(buf, ITEM_S, 6, 3, 4, 3, 0xFF1A1715.toInt())
+                val (col, trim) = when (itemId) {
+                    "cinderite_warplate" -> 0xFF2F1F1C.toInt() to 0xFFFF7A29.toInt()
+                    "vesperite_aegis_mail" -> 0xFF684EB2.toInt() to 0xFFD9C7FF.toInt()
+                    "dragon_mail" -> 0xFF268F4A.toInt() to 0xFFE6B44C.toInt()
+                    "brass_armor" -> 0xFFB8963E.toInt() to 0xFFE6C86E.toInt()
+                    "mystic_robe" -> 0xFF3361BD.toInt() to 0xFF9AC5FF.toInt()
+                    else -> 0xFF7D502E.toInt() to 0xFFA67248.toInt()
+                }
+                rect(buf, ITEM_S, 3, 3, 10, 11, col)
+                rect(buf, ITEM_S, 6, 3, 4, 3, 0xFF1A1715.toInt())
+                rect(buf, ITEM_S, 4, 7, 8, 2, trim)
             }
             ItemCategory.HELMET -> {
                 rect(buf, ITEM_S, 4, 5, 8, 7, if (itemId == "viking_helmet") 0xFF9EA8B5.toInt() else 0xFF7D502E.toInt())
@@ -859,7 +876,36 @@ object EntitySpriteAtlas {
                 rect(buf, ITEM_S, 3, 6, 4, 7, 0xFF59381E.toInt()); rect(buf, ITEM_S, 9, 6, 4, 7, 0xFF59381E.toInt())
             }
             ItemCategory.AMULET -> {
-                rect(buf, ITEM_S, 5, 3, 6, 4, 0xFFE6B44C.toInt()); rect(buf, ITEM_S, 6, 7, 4, 5, 0xFFD92B3A.toInt())
+                val (chainCol, gemCol) = when (itemId) {
+                    "cinderheart_sovereign_torc" -> 0xFFFFB247.toInt() to 0xFFFF4D1F.toInt()
+                    "vesperite_resonance_necklace" -> 0xFFCFC6E8.toInt() to 0xFFB07BFF.toInt()
+                    "stormglass_pendant" -> 0xFFB8D4E8.toInt() to 0xFF4CC6FF.toInt()
+                    "bog_iron_ward_pendant" -> 0xFF8C949E.toInt() to 0xFF5BD48B.toInt()
+                    else -> 0xFFE6B44C.toInt() to 0xFFD92B3A.toInt()
+                }
+                // Chain arch + radiant pendant gem
+                rect(buf, ITEM_S, 4, 2, 8, 2, chainCol)
+                rect(buf, ITEM_S, 4, 4, 2, 4, chainCol)
+                rect(buf, ITEM_S, 10, 4, 2, 4, chainCol)
+                rect(buf, ITEM_S, 5, 7, 6, 6, chainCol)
+                rect(buf, ITEM_S, 6, 8, 4, 4, gemCol)
+                px(buf, ITEM_S, 7, 9, 0xFFFFFFFF.toInt())
+            }
+            ItemCategory.RING -> {
+                val (bandCol, gemCol) = when (itemId) {
+                    "cinderite_overlord_band" -> 0xFF3A241E.toInt() to 0xFFFF7A29.toInt()
+                    "vesperite_catalyst_ring" -> 0xFFCDC4EB.toInt() to 0xFFB280FF.toInt()
+                    "frostfang_coil" -> 0xFFBBD7E6.toInt() to 0xFF5CE0FF.toInt()
+                    "duskmetal_vampire_band" -> 0xFF6B717A.toInt() to 0xFFE84066.toInt()
+                    else -> 0xFFD99A4E.toInt() to 0xFFFFDF80.toInt()
+                }
+                // Band oval + sparkling top gem
+                rect(buf, ITEM_S, 4, 6, 8, 2, bandCol)
+                rect(buf, ITEM_S, 4, 12, 8, 2, bandCol)
+                rect(buf, ITEM_S, 3, 7, 2, 6, bandCol)
+                rect(buf, ITEM_S, 11, 7, 2, 6, bandCol)
+                rect(buf, ITEM_S, 6, 3, 4, 4, gemCol)
+                px(buf, ITEM_S, 7, 4, 0xFFFFFFFF.toInt())
             }
         }
         return toBmp(buf, ITEM_S)

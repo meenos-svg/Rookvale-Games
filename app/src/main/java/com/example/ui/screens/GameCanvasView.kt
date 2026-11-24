@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -45,6 +46,7 @@ import com.example.game.model.GameWorldState
 import com.example.game.model.GraphicsQuality
 import com.example.game.model.MonsterEntity
 import com.example.game.model.ParticleDetailLevel
+import com.example.game.model.ProcVisualStyle
 import com.example.game.model.ProjectileKind
 import com.example.game.model.ThreatBand
 import com.example.game.model.TileType
@@ -705,8 +707,9 @@ fun GameCanvasView(
             // PASS 3B: Open-Top Cutaway Architecture (no opaque/tinted roofs blocking interiors;
             // foreground tall 2.4x walls dynamically lower & soften around the player in PASS 3).
 
-            // PASS 4: Projectiles, Spells, Splashes & Sparks (also registers moving spell lights!)
+            // PASS 4: Projectiles, Spells, Equipment Proc AOE Shockwaves & Sparks (registers moving lights!)
             drawIsometricProjectiles(st, camera, hw, now, quality, if (collectLights) visibleLights else null)
+            drawProcAoeEffects(st, camera, hw, hh, now, quality, if (collectLights) visibleLights else null)
 
             // PASS 5: Moody Twilight Atmospheric Grade & Dynamic Warm/Arcane Point-Light Pools
             if (drawLightingPass) {
@@ -756,6 +759,14 @@ fun GameCanvasView(
                 val fy = c.y - spritePx * 0.72f - progress * (hh * 2.2f)
                 val alpha = ((1f - progress * 0.85f) * 255).toInt().coerceIn(0, 255)
 
+                val isProcBanner = ft.kind == FloatingTextKind.PROC_CALLOUT
+                val prevTextSize = floatingPaint.textSize
+                val prevOutlineSize = outlinePaint.textSize
+                if (isProcBanner) {
+                    floatingPaint.textSize = prevTextSize * 1.18f
+                    outlinePaint.textSize = prevOutlineSize * 1.18f
+                }
+
                 floatingPaint.color = when (ft.kind) {
                     FloatingTextKind.DAMAGE_MONSTER -> android.graphics.Color.parseColor("#FF5238")
                     FloatingTextKind.DAMAGE_PLAYER -> android.graphics.Color.parseColor("#FF2B2B")
@@ -766,6 +777,7 @@ fun GameCanvasView(
                     FloatingTextKind.BLOCK -> android.graphics.Color.parseColor("#CBD5E1")
                     FloatingTextKind.XP -> android.graphics.Color.parseColor("#F5D76E")
                     FloatingTextKind.SKILL_UP -> android.graphics.Color.parseColor("#FFE45E")
+                    FloatingTextKind.PROC_CALLOUT -> (ft.customColorHex?.toInt() ?: android.graphics.Color.parseColor("#FFE45E"))
                     FloatingTextKind.INFO -> android.graphics.Color.parseColor("#EDE3CE")
                 }
                 floatingPaint.alpha = alpha
@@ -773,6 +785,10 @@ fun GameCanvasView(
                 drawContext.canvas.nativeCanvas.apply {
                     drawText(ft.text, fx, fy, outlinePaint)
                     drawText(ft.text, fx, fy, floatingPaint)
+                }
+                if (isProcBanner) {
+                    floatingPaint.textSize = prevTextSize
+                    outlinePaint.textSize = prevOutlineSize
                 }
             }
         }
@@ -1189,7 +1205,7 @@ private fun DrawScope.drawIsometricLocalPlayer(
         path = path
     )
 
-    val pHpFrac = (state.hp.toFloat() / state.maxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+    val pHpFrac = (state.hp.toFloat() / state.effectiveMaxHp().coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
     val pBarW = hw * 1.22f
     val pBarX = c.x - pBarW * 0.5f
     val pBarY = feetY - heightPx - 10f
@@ -1400,3 +1416,185 @@ private fun DrawScope.drawIsometricProjectiles(
         }
     }
 }
+
+/**
+ * Renders isometric equipment proc AOE effects (shockwave rings, arcane/volcanic novas,
+ * chain-arc lightning ribbons, meteor bursts, defensive thorns pulses, and siphon waves),
+ * smoothly scaling detail across LOW / MEDIUM / HIGH / HD graphics settings.
+ */
+private fun DrawScope.drawProcAoeEffects(
+    state: GameWorldState,
+    camera: IsometricCamera,
+    hw: Float,
+    hh: Float,
+    now: Long,
+    quality: GraphicsQuality,
+    lights: MutableList<ScenePointLight>?
+) {
+    val particleLevel = quality.particleLevel
+    val strokeScale = quality.strokeScale
+
+    state.procAoeEffects.forEach { fx ->
+        if (fx.floor != state.floor) return@forEach
+        val t = ((now - fx.createdAtMs).toFloat() / fx.durationMs.coerceAtLeast(1L)).coerceIn(0f, 1f)
+        if (t >= 1f) return@forEach
+
+        val center = camera.tileCenterToScreen(fx.centerX, fx.centerY)
+        val baseColor = Color(fx.elementColor)
+        val fade = (1f - t).coerceIn(0f, 1f)
+        val expand = 0.25f + t * 0.90f
+        val rx = hw * fx.aoeRadiusTiles * expand
+        val ry = hh * fx.aoeRadiusTiles * expand
+
+        // Register dynamic point-light pool on HIGH / HD lighting passes
+        if (lights != null && lights.size < 48) {
+            lights.add(
+                ScenePointLight(
+                    screenX = center.x,
+                    screenY = center.y,
+                    radiusPx = (rx * 1.45f).coerceAtLeast(hw * 1.8f),
+                    coreColor = Color.White,
+                    outerColor = baseColor,
+                    intensity = 0.52f * fade,
+                    flickerSeed = (fx.id % 19L).toFloat(),
+                    isArcane = fx.visualStyle == ProcVisualStyle.ARCANE_NOVA || fx.visualStyle == ProcVisualStyle.CHAIN_ARC
+                )
+            )
+        }
+
+        // Isometric ground ellipse helper
+        fun drawIsoRing(radiusX: Float, radiusY: Float, color: Color, strokeWidth: Float) {
+            drawOval(
+                color = color,
+                topLeft = Offset(center.x - radiusX, center.y - radiusY),
+                size = Size(radiusX * 2f, radiusY * 2f),
+                style = Stroke(width = strokeWidth)
+            )
+        }
+
+        fun drawIsoFill(radiusX: Float, radiusY: Float, color: Color) {
+            drawOval(
+                color = color,
+                topLeft = Offset(center.x - radiusX, center.y - radiusY),
+                size = Size(radiusX * 2f, radiusY * 2f)
+            )
+        }
+
+        when (fx.visualStyle) {
+            ProcVisualStyle.SHOCKWAVE_RING -> {
+                if (particleLevel != ParticleDetailLevel.MINIMAL) {
+                    drawIsoFill(rx * 0.92f, ry * 0.92f, baseColor.copy(alpha = fade * 0.18f))
+                }
+                drawIsoRing(rx, ry, baseColor.copy(alpha = fade * 0.88f), 4.6f * strokeScale)
+                if (particleLevel >= ParticleDetailLevel.MODERATE) {
+                    drawIsoRing(rx * 0.68f, ry * 0.68f, Color.White.copy(alpha = fade * 0.55f), 2.4f * strokeScale)
+                }
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawIsoRing(rx * 1.14f, ry * 1.14f, baseColor.copy(alpha = fade * 0.36f), 2.2f * strokeScale)
+                }
+            }
+
+            ProcVisualStyle.ARCANE_NOVA -> {
+                drawIsoFill(rx, ry, baseColor.copy(alpha = fade * 0.24f))
+                drawIsoRing(rx, ry, baseColor.copy(alpha = fade * 0.92f), 5.2f * strokeScale)
+                if (particleLevel >= ParticleDetailLevel.MODERATE) {
+                    val spokeCount = if (particleLevel == ParticleDetailLevel.HD_ENHANCED) 8 else 6
+                    for (i in 0 until spokeCount) {
+                        val angle = (i.toFloat() / spokeCount) * (Math.PI.toFloat() * 2f) + t * 1.3f
+                        val ex = center.x + kotlin.math.cos(angle) * rx * 0.96f
+                        val ey = center.y + kotlin.math.sin(angle) * ry * 0.96f
+                        drawLine(
+                            color = Color.White.copy(alpha = fade * 0.65f),
+                            start = center,
+                            end = Offset(ex, ey),
+                            strokeWidth = 2.4f * strokeScale,
+                            cap = StrokeCap.Round
+                        )
+                    }
+                }
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawIsoRing(rx * 0.55f, ry * 0.55f, Color(0xFFFFF4D6).copy(alpha = fade * 0.72f), 3.0f)
+                }
+            }
+
+            ProcVisualStyle.CHAIN_ARC -> {
+                drawIsoRing(rx * 0.78f, ry * 0.78f, baseColor.copy(alpha = fade * 0.72f), 3.4f * strokeScale)
+                val pts = fx.chainTargets.map { (tx, ty) ->
+                    val sPt = camera.tileCenterToScreen(tx, ty)
+                    Offset(sPt.x, sPt.y - hh * 0.55f)
+                }
+                if (pts.size >= 2) {
+                    for (i in 0 until pts.size - 1) {
+                        val a = pts[i]
+                        val b = pts[i + 1]
+                        val midX = (a.x + b.x) * 0.5f + ((if ((i + fx.id.toInt()) % 2 == 0) 1 else -1) * hw * 0.22f * fade)
+                        val midY = (a.y + b.y) * 0.5f - hh * 0.35f
+                        val mid = Offset(midX, midY)
+                        drawLine(baseColor.copy(alpha = fade * 0.92f), a, mid, strokeWidth = 4.2f * strokeScale, cap = StrokeCap.Round)
+                        drawLine(baseColor.copy(alpha = fade * 0.92f), mid, b, strokeWidth = 4.2f * strokeScale, cap = StrokeCap.Round)
+                        if (particleLevel >= ParticleDetailLevel.FULL) {
+                            drawLine(Color.White.copy(alpha = fade * 0.85f), a, mid, strokeWidth = 1.8f * strokeScale, cap = StrokeCap.Round)
+                            drawLine(Color.White.copy(alpha = fade * 0.85f), mid, b, strokeWidth = 1.8f * strokeScale, cap = StrokeCap.Round)
+                        }
+                    }
+                }
+                pts.forEach { p ->
+                    drawCircle(baseColor.copy(alpha = fade * 0.65f), hw * 0.24f * (0.6f + t * 0.5f), p)
+                    if (particleLevel >= ParticleDetailLevel.MODERATE) {
+                        drawCircle(Color.White.copy(alpha = fade * 0.85f), hw * 0.10f, p)
+                    }
+                }
+            }
+
+            ProcVisualStyle.METEOR_BURST -> {
+                // Descending streak in early frames + expanding impact crater ring
+                if (t < 0.45f) {
+                    val dropT = (t / 0.45f).coerceIn(0f, 1f)
+                    val skyStart = Offset(center.x - hw * 0.9f * (1f - dropT), center.y - hh * 4.2f * (1f - dropT))
+                    drawLine(baseColor.copy(alpha = 0.92f), skyStart, center, strokeWidth = 6.5f * strokeScale, cap = StrokeCap.Round)
+                    drawLine(Color.White.copy(alpha = 0.85f), skyStart, center, strokeWidth = 2.6f * strokeScale, cap = StrokeCap.Round)
+                }
+                drawIsoFill(rx, ry, baseColor.copy(alpha = fade * 0.28f))
+                drawIsoRing(rx, ry, baseColor.copy(alpha = fade * 0.95f), 5.5f * strokeScale)
+                if (particleLevel >= ParticleDetailLevel.FULL) {
+                    val sparkCount = if (particleLevel == ParticleDetailLevel.HD_ENHANCED) 10 else 6
+                    for (i in 0 until sparkCount) {
+                        val angle = (i.toFloat() / sparkCount) * (Math.PI.toFloat() * 2f)
+                        val sx = center.x + kotlin.math.cos(angle) * rx * 0.85f
+                        val sy = center.y + kotlin.math.sin(angle) * ry * 0.85f - hh * (1f - t) * 0.9f
+                        drawCircle(Color(0xFFFFE57F).copy(alpha = fade * 0.9f), 4.2f * strokeScale, Offset(sx, sy))
+                    }
+                }
+            }
+
+            ProcVisualStyle.THORNS_PULSE -> {
+                drawIsoFill(rx * 0.85f, ry * 0.85f, baseColor.copy(alpha = fade * 0.20f))
+                drawIsoRing(rx, ry, baseColor.copy(alpha = fade * 0.90f), 4.2f * strokeScale)
+                if (particleLevel >= ParticleDetailLevel.MODERATE) {
+                    val spikeCount = if (particleLevel == ParticleDetailLevel.HD_ENHANCED) 10 else 6
+                    for (i in 0 until spikeCount) {
+                        val angle = (i.toFloat() / spikeCount) * (Math.PI.toFloat() * 2f)
+                        val ix = center.x + kotlin.math.cos(angle) * rx * 0.55f
+                        val iy = center.y + kotlin.math.sin(angle) * ry * 0.55f
+                        val ox = center.x + kotlin.math.cos(angle) * rx * 1.12f
+                        val oy = center.y + kotlin.math.sin(angle) * ry * 1.12f
+                        drawLine(baseColor.copy(alpha = fade * 0.95f), Offset(ix, iy), Offset(ox, oy), strokeWidth = 3.2f * strokeScale, cap = StrokeCap.Round)
+                    }
+                }
+            }
+
+            ProcVisualStyle.SIPHON_WAVE -> {
+                // Inward contracting vampiric ring + outer crimson flash
+                val invExpand = (1.15f - t * 0.85f).coerceAtLeast(0.2f)
+                val irx = hw * fx.aoeRadiusTiles * invExpand
+                val iry = hh * fx.aoeRadiusTiles * invExpand
+                drawIsoFill(irx * 0.85f, iry * 0.85f, baseColor.copy(alpha = fade * 0.22f))
+                drawIsoRing(irx, iry, baseColor.copy(alpha = fade * 0.92f), 4.4f * strokeScale)
+                if (particleLevel >= ParticleDetailLevel.MODERATE) {
+                    drawIsoRing(rx * 0.72f, ry * 0.72f, Color(0xFFFF9EB8).copy(alpha = fade * 0.55f), 2.4f * strokeScale)
+                }
+            }
+        }
+    }
+}
+

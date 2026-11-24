@@ -230,6 +230,7 @@ object CloudSavePayloadCodec {
                 data.equipment.armorId?.let { put("armorId", it) }
                 data.equipment.weaponId?.let { put("weaponId", it) }
                 data.equipment.shieldId?.let { put("shieldId", it) }
+                data.equipment.ringId?.let { put("ringId", it) }
                 data.equipment.legsId?.let { put("legsId", it) }
                 data.equipment.bootsId?.let { put("bootsId", it) }
                 data.equipment.ammoId?.let { put("ammoId", it) }
@@ -288,6 +289,7 @@ object CloudSavePayloadCodec {
                 armorId = eqObj.optNullableString("armorId"),
                 weaponId = eqObj.optNullableString("weaponId"),
                 shieldId = eqObj.optNullableString("shieldId"),
+                ringId = eqObj.optNullableString("ringId"),
                 legsId = eqObj.optNullableString("legsId"),
                 bootsId = eqObj.optNullableString("bootsId"),
                 ammoId = eqObj.optNullableString("ammoId")

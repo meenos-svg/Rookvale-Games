@@ -260,6 +260,7 @@ enum class EquipmentSlot(val label: String) {
     ARMOR("Armor"),
     WEAPON("Weapon"),
     SHIELD("Shield"),
+    RING("Ring"),
     LEGS("Legs"),
     BOOTS("Boots"),
     AMMO("Ammo")
@@ -281,6 +282,7 @@ enum class ItemCategory {
     LEGS,
     BOOTS,
     AMULET,
+    RING,
     POTION_HP,
     POTION_MP,
     RUNE_BLANK,
@@ -297,6 +299,60 @@ enum class ItemCategory {
     LOOT_VALUABLE
 }
 
+enum class ProcTriggerType(val label: String) {
+    ON_ATTACK("On Attack"),
+    ON_DEFEND("On Defend")
+}
+
+enum class ProcVisualStyle {
+    SHOCKWAVE_RING,
+    ARCANE_NOVA,
+    CHAIN_ARC,
+    METEOR_BURST,
+    THORNS_PULSE,
+    SIPHON_WAVE
+}
+
+enum class ProcBonusEffect(val label: String) {
+    NONE("Pure Damage"),
+    IGNITE_BURN("Ignites Burn DoT"),
+    ARMOR_SHATTER("Shatters Armor"),
+    STAGGER_SLOW("Staggers & Slows"),
+    MANA_SIPHON("Restores Mana"),
+    AEGIS_WARD("Restores Guard HP"),
+    LIFE_SIPHON("Lifesteals 35% HP")
+}
+
+/**
+ * Data-driven automatic percentage-chance specialized equipment ability
+ * supporting single-target, multi-monster AOE, chain-arc, and defensive bursts.
+ */
+data class EquipmentProc(
+    val name: String,
+    val triggerChancePercent: Int,
+    val triggerType: ProcTriggerType,
+    val aoeRadiusTiles: Float,
+    val maxTargets: Int,
+    val damageMultiplier: Float,
+    val elementColor: Long,
+    val bonusEffect: ProcBonusEffect = ProcBonusEffect.NONE,
+    val visualStyle: ProcVisualStyle = ProcVisualStyle.SHOCKWAVE_RING,
+    val summary: String = ""
+)
+
+data class ProcAoeEffect(
+    val id: Long,
+    val floor: Int,
+    val centerX: Float,
+    val centerY: Float,
+    val aoeRadiusTiles: Float,
+    val elementColor: Long,
+    val visualStyle: ProcVisualStyle,
+    val chainTargets: List<Pair<Float, Float>> = emptyList(),
+    val createdAtMs: Long,
+    val durationMs: Long = 520L
+)
+
 data class ItemDefinition(
     val id: String,
     val name: String,
@@ -309,8 +365,11 @@ data class ItemDefinition(
     val armor: Int = 0,
     val range: Int = 1,
     val attackIntervalMs: Long = 1000L,
-    val requiredSkillType: SkillType? = null,
-    val requiredSkillLevel: Int = 10,
+    val equipmentTier: Int = 0,
+    val requiredLevel: Int = 1,
+    val requiredSkill: Pair<SkillType, Int>? = null,
+    val requiredSkillType: SkillType? = requiredSkill?.first,
+    val requiredSkillLevel: Int = requiredSkill?.second ?: 1,
     val requiredMagicLevel: Int = 0,
     val aoeRadius: Int = 0,
     val runeTier: Int = 0,
@@ -322,6 +381,11 @@ data class ItemDefinition(
     val stackable: Boolean = false,
     val isTwoHanded: Boolean = false,
     val preferredVocation: Vocation? = null,
+    val proc: EquipmentProc? = null,
+    val procChanceBonusPct: Int = 0,
+    val procPowerBonusPct: Int = 0,
+    val procExtraTargets: Int = 0,
+    val bonusMaxHp: Int = 0,
     val description: String = ""
 ) {
     val equipSlot: EquipmentSlot?
@@ -334,6 +398,7 @@ data class ItemDefinition(
             ItemCategory.LEGS -> EquipmentSlot.LEGS
             ItemCategory.BOOTS -> EquipmentSlot.BOOTS
             ItemCategory.AMULET -> EquipmentSlot.AMULET
+            ItemCategory.RING -> EquipmentSlot.RING
             else -> null
         }
 
@@ -350,6 +415,9 @@ data class ItemDefinition(
         attackIntervalMs <= 1050L -> "Balanced (${attackIntervalMs / 1000f}s)"
         else -> "Heavy (${attackIntervalMs / 1000f}s)"
     }
+
+    fun hasJewelryEnhancements(): Boolean =
+        procChanceBonusPct > 0 || procPowerBonusPct > 0 || procExtraTargets > 0 || bonusMaxHp > 0
 }
 
 @JsonClass(generateAdapter = true)
@@ -365,6 +433,7 @@ data class EquippedGear(
     val armorId: String? = null,
     val weaponId: String? = null,
     val shieldId: String? = null,
+    val ringId: String? = null,
     val legsId: String? = null,
     val bootsId: String? = null,
     val ammoId: String? = null
@@ -375,6 +444,7 @@ data class EquippedGear(
         EquipmentSlot.ARMOR -> armorId
         EquipmentSlot.WEAPON -> weaponId
         EquipmentSlot.SHIELD -> shieldId
+        EquipmentSlot.RING -> ringId
         EquipmentSlot.LEGS -> legsId
         EquipmentSlot.BOOTS -> bootsId
         EquipmentSlot.AMMO -> ammoId
@@ -386,13 +456,14 @@ data class EquippedGear(
         EquipmentSlot.ARMOR -> copy(armorId = itemId)
         EquipmentSlot.WEAPON -> copy(weaponId = itemId)
         EquipmentSlot.SHIELD -> copy(shieldId = itemId)
+        EquipmentSlot.RING -> copy(ringId = itemId)
         EquipmentSlot.LEGS -> copy(legsId = itemId)
         EquipmentSlot.BOOTS -> copy(bootsId = itemId)
         EquipmentSlot.AMMO -> copy(ammoId = itemId)
     }
 
     // Ammo stays stacked inside backpack; ammoId points to the selected quiver stack
-    fun nonAmmoIds(): List<String> = listOfNotNull(helmetId, amuletId, armorId, weaponId, shieldId, legsId, bootsId)
+    fun nonAmmoIds(): List<String> = listOfNotNull(helmetId, amuletId, armorId, weaponId, shieldId, ringId, legsId, bootsId)
 
     fun totalArmor(): Int = nonAmmoIds().sumOf { ItemCatalog.get(it).armor }
     fun totalDefense(): Int = nonAmmoIds().sumOf { ItemCatalog.get(it).defense }
@@ -401,8 +472,19 @@ data class EquippedGear(
         return shieldId?.let { ItemCatalog.get(it).defense } ?: 0
     }
     fun weaponDef(): ItemDefinition? = weaponId?.let { ItemCatalog.get(it) }
+    fun shieldDef(): ItemDefinition? = shieldId?.let { ItemCatalog.get(it) }
+    fun armorDef(): ItemDefinition? = armorId?.let { ItemCatalog.get(it) }
+    fun amuletDef(): ItemDefinition? = amuletId?.let { ItemCatalog.get(it) }
+    fun ringDef(): ItemDefinition? = ringId?.let { ItemCatalog.get(it) }
     fun ammoDef(): ItemDefinition? = ammoId?.let { ItemCatalog.get(it) }
     fun totalWeightOz(): Double = nonAmmoIds().sumOf { ItemCatalog.get(it).weightOz }
+
+    fun totalProcChanceBonusPct(): Int = nonAmmoIds().sumOf { ItemCatalog.get(it).procChanceBonusPct }
+    fun totalProcPowerBonusPct(): Int = nonAmmoIds().sumOf { ItemCatalog.get(it).procPowerBonusPct }
+    fun totalProcExtraTargets(): Int = nonAmmoIds().sumOf { ItemCatalog.get(it).procExtraTargets }
+    fun totalBonusMaxHp(): Int = nonAmmoIds().sumOf { ItemCatalog.get(it).bonusMaxHp }
+    fun totalAccessoryAttackBonus(): Int =
+        listOfNotNull(amuletId, ringId).sumOf { ItemCatalog.get(it).attack }
 }
 
 enum class Direction(val dx: Int, val dy: Int) {
@@ -756,7 +838,11 @@ data class MonsterEntity(
     val summonerId: Int? = null,
     val aoeCooldownTicks: Int = 2,
     val pendingAoeTiles: List<Pair<Int, Int>> = emptyList(),
-    val summonCooldownTicks: Int = 3
+    val summonCooldownTicks: Int = 3,
+    val burnTicks: Int = 0,
+    val burnDamagePerTick: Int = 0,
+    val shatterTicks: Int = 0,
+    val slowTicks: Int = 0
 )
 
 data class PendingRespawn(
@@ -805,6 +891,7 @@ enum class FloatingTextKind {
     BLOCK,
     XP,
     SKILL_UP,
+    PROC_CALLOUT,
     INFO
 }
 
@@ -815,7 +902,8 @@ data class FloatingText(
     val tileY: Float,
     val text: String,
     val kind: FloatingTextKind,
-    val createdAtMs: Long
+    val createdAtMs: Long,
+    val customColorHex: Long? = null
 )
 
 enum class ProjectileKind {
@@ -1122,6 +1210,12 @@ data class GameWorldState(
     val autoFollowTarget: Boolean = false,
     val floatingTexts: List<FloatingText> = emptyList(),
     val projectiles: List<ProjectileEffect> = emptyList(),
+    val procAoeEffects: List<ProcAoeEffect> = emptyList(),
+    val lastWeaponProcAtMs: Long = 0L,
+    val lastShieldProcAtMs: Long = 0L,
+    val lastArmorProcAtMs: Long = 0L,
+    val lastAmuletProcAtMs: Long = 0L,
+    val lastRingProcAtMs: Long = 0L,
     val statusLog: List<String> = listOf("Welcome to Rookvale! Train freely and visit The Oracle at Level 20."),
     val activePanel: ActivePanel = ActivePanel.NONE,
     val inspectingCorpseId: String? = null,
@@ -1143,6 +1237,29 @@ data class GameWorldState(
     val boundHealRuneId: String? = "healing_rune",
     val customHotbarSlots: List<String?> = listOf(null, null)
 ) {
+    fun effectiveMaxHp(): Int = maxHp + equipment.totalBonusMaxHp()
+
+    fun unmetEquipRequirements(def: ItemDefinition): List<String> {
+        val unmet = mutableListOf<String>()
+        if (def.requiredLevel > 1 && level < def.requiredLevel) {
+            unmet.add("Level ${def.requiredLevel} (you: $level)")
+        }
+        val reqSkill = def.requiredSkill
+        if (reqSkill != null) {
+            val (skillType, reqVal) = reqSkill
+            val currentVal = skills.levelFor(skillType)
+            if (currentVal < reqVal) {
+                unmet.add("${skillType.displayName} $reqVal (you: $currentVal)")
+            }
+        }
+        return unmet
+    }
+
+    fun meetsEquipRequirements(def: ItemDefinition): Boolean = unmetEquipRequirements(def).isEmpty()
+
+    fun effectiveProcChancePercent(proc: EquipmentProc): Int =
+        (proc.triggerChancePercent + equipment.totalProcChanceBonusPct()).coerceIn(1, 60)
+
     fun toolBagWeightOz(): Double =
         toolBag.sumOf { ItemCatalog.get(it.itemId).weightOz * TOOL_BAG_WEIGHT_MULTIPLIER * it.count }
 

@@ -59,7 +59,8 @@ import com.example.ui.theme.TorchGold
 @Composable
 fun SmeltingFurnaceContent(
     state: GameWorldState,
-    onCraft: (String) -> Unit
+    onCraft: (String) -> Unit,
+    onInspectItem: (String) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -78,7 +79,8 @@ fun SmeltingFurnaceContent(
                     recipe = recipe,
                     actionLabel = "Smelt",
                     accentColor = FireOrange,
-                    onCraft = { onCraft(recipe.id) }
+                    onCraft = { onCraft(recipe.id) },
+                    onInspect = { onInspectItem(recipe.outputItemId) }
                 )
             }
         }
@@ -88,7 +90,8 @@ fun SmeltingFurnaceContent(
 @Composable
 fun BlacksmithAnvilContent(
     state: GameWorldState,
-    onCraft: (String) -> Unit
+    onCraft: (String) -> Unit,
+    onInspectItem: (String) -> Unit = {}
 ) {
     var selectedTab by remember { mutableStateOf(CraftingTab.KNIGHT) }
     val filtered = remember(selectedTab) {
@@ -132,7 +135,8 @@ fun BlacksmithAnvilContent(
                     recipe = recipe,
                     actionLabel = "Forge",
                     accentColor = TorchAmber,
-                    onCraft = { onCraft(recipe.id) }
+                    onCraft = { onCraft(recipe.id) },
+                    onInspect = { onInspectItem(recipe.outputItemId) }
                 )
             }
         }
@@ -142,7 +146,8 @@ fun BlacksmithAnvilContent(
 @Composable
 fun FletchingBenchContent(
     state: GameWorldState,
-    onCraft: (String) -> Unit
+    onCraft: (String) -> Unit,
+    onInspectItem: (String) -> Unit = {}
 ) {
     val logCount = state.itemCount("wood_log")
     val featherCount = state.itemCount("wild_feather")
@@ -181,7 +186,8 @@ fun FletchingBenchContent(
                     recipe = recipe,
                     actionLabel = "Fletch",
                     accentColor = ExpEmerald,
-                    onCraft = { onCraft(recipe.id) }
+                    onCraft = { onCraft(recipe.id) },
+                    onInspect = { onInspectItem(recipe.outputItemId) }
                 )
             }
         }
@@ -191,7 +197,8 @@ fun FletchingBenchContent(
 @Composable
 fun RunecraftingTableContent(
     state: GameWorldState,
-    onCraft: (String) -> Unit
+    onCraft: (String) -> Unit,
+    onInspectItem: (String) -> Unit = {}
 ) {
     val blankCount = state.itemCount("blank_rune")
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -234,7 +241,8 @@ fun RunecraftingTableContent(
                 RunecraftingRecipeCard(
                     state = state,
                     recipe = recipe,
-                    onCraft = { onCraft(recipe.id) }
+                    onCraft = { onCraft(recipe.id) },
+                    onInspect = { onInspectItem(recipe.outputItemId) }
                 )
             }
         }
@@ -245,7 +253,8 @@ fun RunecraftingTableContent(
 private fun RunecraftingRecipeCard(
     state: GameWorldState,
     recipe: CraftingRecipe,
-    onCraft: () -> Unit
+    onCraft: () -> Unit,
+    onInspect: () -> Unit
 ) {
     val outDef = ItemCatalog.get(recipe.outputItemId)
     val icon = remember(outDef.id) { EntitySpriteAtlas.itemIcon(outDef.id) }
@@ -273,6 +282,7 @@ private fun RunecraftingRecipeCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable(onClick = onInspect)
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -362,13 +372,14 @@ private fun RecipeCraftCard(
     recipe: CraftingRecipe,
     actionLabel: String,
     accentColor: androidx.compose.ui.graphics.Color,
-    onCraft: () -> Unit
+    onCraft: () -> Unit,
+    onInspect: () -> Unit
 ) {
     val outDef = ItemCatalog.get(recipe.outputItemId)
     val icon = remember(outDef.id) { EntitySpriteAtlas.itemIcon(outDef.id) }
     val hasAllIngredients = recipe.ingredients.all { state.hasItem(it.itemId, it.count) }
-    val skillReqMet = outDef.requiredSkillType == null ||
-        state.skills.levelFor(outDef.requiredSkillType) >= outDef.requiredSkillLevel
+    val equipReqsMet = state.meetsEquipRequirements(outDef)
+    val tierColor = if (outDef.equipmentTier > 0) tierBadgeColor(outDef.equipmentTier) else accentColor
 
     Surface(
         color = StoneSurface,
@@ -381,53 +392,87 @@ private fun RecipeCraftCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable(onClick = onInspect)
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             PixelSpritePreview(
                 bitmap = icon,
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(38.dp)
                     .background(ObsidianVoid, RoundedCornerShape(4.dp))
-                    .border(1.dp, StoneBorderDark, RoundedCornerShape(4.dp))
+                    .border(1.dp, if (outDef.equipmentTier >= 4) tierColor.copy(alpha = 0.8f) else StoneBorderDark, RoundedCornerShape(4.dp))
             )
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = if (recipe.outputCount > 1) "${outDef.name} x${recipe.outputCount}" else outDef.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = ParchmentLight,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                // Stats strip for weapons / pickaxes / ammo
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Text(
+                        text = if (recipe.outputCount > 1) "${outDef.name} x${recipe.outputCount}" else outDef.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = ParchmentLight,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (outDef.equipmentTier > 0) {
+                        Text(
+                            text = "T${outDef.equipmentTier}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = tierColor,
+                            modifier = Modifier
+                                .background(tierColor.copy(alpha = 0.16f), RoundedCornerShape(4.dp))
+                                .border(1.dp, tierColor.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+                // Stats + Requirements strip
                 val statsLine = buildString {
                     if (outDef.attack > 0) {
                         append("ATK ${outDef.attack}")
                         if (outDef.isTwoHanded) append(" • 2H")
-                        append(" • ${outDef.speedLabel()} • ")
+                        if (outDef.equipSlot == com.example.game.model.EquipmentSlot.WEAPON) append(" • ${outDef.speedLabel()}")
+                        append(" • ")
                     }
+                    if (outDef.defense > 0) append("DEF ${outDef.defense} • ")
+                    if (outDef.armor > 0) append("ARM ${outDef.armor} • ")
+                    if (outDef.bonusMaxHp > 0) append("+${outDef.bonusMaxHp} HP • ")
+                    if (outDef.procChanceBonusPct > 0) append("+${outDef.procChanceBonusPct}% Proc • ")
+                    if (outDef.procPowerBonusPct > 0) append("+${outDef.procPowerBonusPct}% Pwr • ")
+                    if (outDef.procExtraTargets > 0) append("+${outDef.procExtraTargets} Tgt • ")
                     if (outDef.pickaxeTier > 0) append("Tier ${outDef.pickaxeTier} Pick • ")
+                    if (outDef.equipSlot != null) {
+                        append("Req Lv ${outDef.requiredLevel}")
+                        outDef.requiredSkill?.let { (sk, lv) ->
+                            append("/${sk.displayName.take(4)} $lv")
+                        }
+                        append(" • ")
+                    }
                     if (outDef.isTool) {
                         append("${formatOz(outDef.carriedWeightOz() * recipe.outputCount)} oz (Tool Bag)")
                     } else {
                         append("${formatOz(outDef.weightOz * recipe.outputCount)} oz")
                     }
-                    if (outDef.requiredSkillType != null) {
-                        append(" • Req ${outDef.requiredSkillType.displayName.take(5)} ${outDef.requiredSkillLevel}")
-                    }
-                    if (outDef.preferredVocation != null) {
-                        append(" • ${outDef.preferredVocation.displayName}")
-                        if (state.vocation != outDef.preferredVocation) append(" (-25%)")
-                    }
                 }
                 Text(
                     text = statsLine,
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (skillReqMet) TorchGold else HealthCrimson,
+                    color = if (equipReqsMet) TorchGold else HealthCrimson,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                outDef.proc?.let { proc ->
+                    Text(
+                        text = "⚡ ${proc.name} (${proc.triggerChancePercent}% ${if (proc.triggerType == com.example.game.model.ProcTriggerType.ON_DEFEND) "Defend" else "Attack"}) • Tap to inspect",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = androidx.compose.ui.graphics.Color(proc.elementColor),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 // Ingredients with live backpack availability counts
                 val reqText = recipe.ingredients.joinToString(" + ") { req ->
                     val have = state.itemCount(req.itemId)
@@ -454,7 +499,7 @@ private fun RecipeCraftCard(
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                 shape = RoundedCornerShape(6.dp),
                 modifier = Modifier
-                    .height(36.dp)
+                    .height(40.dp)
                     .testTag("craft_btn_${recipe.id}")
             ) {
                 Text(actionLabel, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
