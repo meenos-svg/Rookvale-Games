@@ -65,7 +65,10 @@ data class RemotePlayerState(
     val offhandId: String? = null,
     val armorId: String? = null,
     val helmetId: String? = null,
-    val bootsId: String? = null
+    val bootsId: String? = null,
+    val targetX: Int = x,
+    val targetY: Int = y,
+    val networkReceivedMs: Long = lastMoveMs
 )
 
 data class LocalPlayerPresencePayload(
@@ -91,7 +94,9 @@ data class LocalPlayerPresencePayload(
     val offhandId: String? = null,
     val armorId: String? = null,
     val helmetId: String? = null,
-    val bootsId: String? = null
+    val bootsId: String? = null,
+    val targetX: Int = x,
+    val targetY: Int = y
 )
 
 data class SyncedMonsterSnapshot(
@@ -218,7 +223,7 @@ fun electFloorHost(
 }
 
 object MultiplayerSanitizer {
-    private val validFloors = setOf(0, -1, -2, -3, -4)
+    private val validFloors = setOf(0, -1, -2, -3, -4, -5, -6)
     private val controlRegex = Regex("[\\p{Cntrl}&&[^\t]]")
 
     fun isValidFloor(floor: Int): Boolean = floor in validFloors

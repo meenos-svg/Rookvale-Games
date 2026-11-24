@@ -144,9 +144,9 @@ class MultiplayerCoopTest {
 
     @Test
     fun coopSharedMonsterDropsPersonalInstancedLootOnlyForContributors() {
-        val monster = MonsterEntity(42, MonsterType.CYCLOPS, -1, 16, 15, 16, 15, 200, 200)
+        val monster = MonsterEntity(42, MonsterType.GRIMMAW_CRUSHER, -1, 16, 15, 16, 15, 200, 200)
 
-        // Contributor player hits the Cyclops first
+        // Contributor player hits the Grimmaw Crusher first
         val contributor = GameEngine.createNewWorld("Roland").copy(
             saveId = "p_roland",
             floor = -1,

@@ -7,6 +7,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import com.example.game.model.GraphicsQuality
@@ -215,10 +216,11 @@ object IsometricTileDrawer {
         TileType.BLACKSMITH_ANVIL,
         TileType.FLETCHING_BENCH,
         TileType.RUNECRAFTING_TABLE,
-        TileType.ORE_OCHRE,
-        TileType.ORE_BOGSTONE,
-        TileType.ORE_BRIMSTONE,
-        TileType.ORE_AETHERIUM,
+        TileType.ORE_COPPER,
+        TileType.ORE_TIN,
+        TileType.ORE_BOG_IRON,
+        TileType.ORE_VESPERITE,
+        TileType.ORE_CINDERITE,
         TileType.DEPLETED_VEIN,
         TileType.FOUNTAIN,
         TileType.HEDGE,
@@ -1270,22 +1272,65 @@ object IsometricTileDrawer {
                 }
             }
             TileType.MOORED_BOAT -> drawMooredRowboat(scope, path, cam, cx, cy, nowMs, tx, ty, quality)
-            TileType.ORE_OCHRE, TileType.ORE_BOGSTONE, TileType.ORE_BRIMSTONE, TileType.ORE_AETHERIUM, TileType.DEPLETED_VEIN -> {
-                val veinColor = when (tile) {
-                    TileType.ORE_OCHRE -> Color(0xFFE38C3B)
-                    TileType.ORE_BOGSTONE -> Color(0xFFA6B9CC)
-                    TileType.ORE_BRIMSTONE -> FireOrange
-                    TileType.ORE_AETHERIUM -> Color(0xFFA98AFF)
-                    else -> Color(0xFF5C5854)
+            TileType.ORE_COPPER, TileType.ORE_TIN, TileType.ORE_BOG_IRON,
+            TileType.ORE_VESPERITE, TileType.ORE_CINDERITE, TileType.DEPLETED_VEIN -> {
+                val (rockTop, rockFaceX, rockFaceY) = when (tile) {
+                    TileType.ORE_COPPER -> Triple(Color(0xFF73675D), Color(0xFF473F38), Color(0xFF5C524A))
+                    TileType.ORE_TIN -> Triple(Color(0xFF757678), Color(0xFF494A4D), Color(0xFF5E6063))
+                    TileType.ORE_BOG_IRON -> Triple(Color(0xFF58605C), Color(0xFF353B38), Color(0xFF454C49))
+                    TileType.ORE_VESPERITE -> Triple(Color(0xFF4F4668), Color(0xFF2D273D), Color(0xFF3D3552))
+                    TileType.ORE_CINDERITE -> Triple(Color(0xFF34282C), Color(0xFF1D1519), Color(0xFF281E22))
+                    else -> Triple(Color(0xFF635E5A), Color(0xFF3D3A37), Color(0xFF4F4B47))
+                }
+                val (veinColor, glintColor) = when (tile) {
+                    TileType.ORE_COPPER -> Color(0xFFE08234) to Color(0xFFFFCA85)
+                    TileType.ORE_TIN -> Color(0xFFA9B9C8) to Color(0xFFF0F6FC)
+                    TileType.ORE_BOG_IRON -> Color(0xFF7D90A3) to Color(0xFFC5D6E8)
+                    TileType.ORE_VESPERITE -> Color(0xFFA782FF) to Color(0xFFF0E6FF)
+                    TileType.ORE_CINDERITE -> Color(0xFFFFAA2B) to Color(0xFFFFF2A6)
+                    else -> Color(0xFF5C5854) to Color(0xFF78736E)
+                }
+                val heightMult = when (tile) {
+                    TileType.ORE_VESPERITE -> 0.78f
+                    TileType.ORE_CINDERITE -> 0.82f
+                    TileType.DEPLETED_VEIN -> 0.44f
+                    else -> 0.68f
                 }
                 drawRotatedPrism(
-                    scope, path, cam, cx, cy, fracU = 0.72f, fracV = 0.68f, heightPx = unitH * 0.66f,
-                    topColor = Color(0xFF696460), faceXColor = Color(0xFF403D3A), faceYColor = Color(0xFF524E4A),
+                    scope, path, cam, cx, cy, fracU = 0.74f, fracV = 0.70f, heightPx = unitH * heightMult,
+                    topColor = rockTop, faceXColor = rockFaceX, faceYColor = rockFaceY,
                     quality = quality, isOverland = isOverland
                 )
                 if (tile != TileType.DEPLETED_VEIN) {
-                    scope.drawCircle(veinColor, cam.tileW * 0.065f, Offset(cx - 5f, cy - unitH * 0.44f))
-                    scope.drawCircle(veinColor.copy(alpha = 0.85f), cam.tileW * 0.055f, Offset(cx + 6f, cy - unitH * 0.34f))
+                    val shimmer = 0.76f + 0.24f * sin(nowMs * 0.0055 + tx * 1.3 + ty * 0.9).toFloat()
+                    if (tile == TileType.ORE_VESPERITE || tile == TileType.ORE_CINDERITE) {
+                        val auraCenter = Offset(cx, cy - unitH * 0.48f)
+                        scope.drawCircle(
+                            brush = Brush.radialGradient(
+                                listOf(veinColor.copy(alpha = 0.34f * shimmer), Color.Transparent),
+                                center = auraCenter,
+                                radius = cam.tileW * 0.34f
+                            ),
+                            radius = cam.tileW * 0.34f,
+                            center = auraCenter
+                        )
+                    }
+                    // Primary 3D mineral seams & specular glints
+                    scope.drawCircle(veinColor, cam.tileW * 0.072f, Offset(cx - cam.tileW * 0.09f, cy - unitH * 0.46f))
+                    scope.drawCircle(glintColor.copy(alpha = shimmer), cam.tileW * 0.034f, Offset(cx - cam.tileW * 0.10f, cy - unitH * 0.49f))
+                    scope.drawCircle(veinColor.copy(alpha = 0.92f), cam.tileW * 0.062f, Offset(cx + cam.tileW * 0.10f, cy - unitH * 0.36f))
+                    scope.drawCircle(glintColor.copy(alpha = shimmer), cam.tileW * 0.028f, Offset(cx + cam.tileW * 0.09f, cy - unitH * 0.39f))
+                    scope.drawCircle(veinColor.copy(alpha = 0.85f), cam.tileW * 0.052f, Offset(cx + cam.tileW * 0.01f, cy - unitH * 0.62f))
+                    if (tile == TileType.ORE_VESPERITE || tile == TileType.ORE_CINDERITE) {
+                        // Protruding crystalline / molten spire crest
+                        scope.drawLine(
+                            color = glintColor.copy(alpha = 0.92f * shimmer),
+                            start = Offset(cx, cy - unitH * 0.56f),
+                            end = Offset(cx + cam.tileW * 0.03f, cy - unitH * (heightMult + 0.18f)),
+                            strokeWidth = (cam.tileW * 0.048f).coerceAtLeast(2.2f),
+                            cap = StrokeCap.Round
+                        )
+                    }
                 }
             }
             else -> Unit

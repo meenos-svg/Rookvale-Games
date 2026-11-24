@@ -372,44 +372,45 @@ class ExampleUnitTest {
     @Test
     fun oreMiningEnforcesPickaxeTierDepletionAndRegeneration() {
         val hero = GameEngine.createNewWorld("Roland")
-        val aetherNodeEntry = hero.oreNodes.entries.first { it.value.kind == OreVeinKind.AETHERIUM }
-        val (aFloor, aX, aY) = aetherNodeEntry.key
+        val cinderNodeEntry = hero.oreNodes.entries.first { it.value.kind == OreVeinKind.CINDERITE }
+        val (cFloor, cX, cY) = cinderNodeEntry.key
 
-        val atAetherT1 = hero.copy(floor = aFloor, playerX = aX - 1, playerY = aY)
-        val rejected = CraftingAndMiningEngine.mineOreNode(atAetherT1, aX, aY, 1000L)
-        assertEquals(0, rejected.itemCount("pale_starstone"))
-        assertEquals(aetherNodeEntry.value.chargesLeft, rejected.oreNodes[aetherNodeEntry.key]!!.chargesLeft)
+        val atCinderT1 = hero.copy(floor = cFloor, playerX = cX - 1, playerY = cY)
+        val rejected = CraftingAndMiningEngine.mineOreNode(atCinderT1, cX, cY, 1000L)
+        assertEquals(0, rejected.itemCount("cinderite_ore"))
+        assertEquals(cinderNodeEntry.value.chargesLeft, rejected.oreNodes[cinderNodeEntry.key]!!.chargesLeft)
 
-        var state = atAetherT1.copy(
+        var state = atCinderT1.copy(
             toolBag = listOf(ItemStack("quenchsteel_delver", 1)),
             maxCapOz = 900.0
         )
         var attempts = 0
-        while (!state.oreNodes[aetherNodeEntry.key]!!.isDepleted && attempts < 40) {
-            state = CraftingAndMiningEngine.mineOreNode(state, aX, aY, 2000L + attempts * 500L)
+        while (!state.oreNodes[cinderNodeEntry.key]!!.isDepleted && attempts < 40) {
+            state = CraftingAndMiningEngine.mineOreNode(state, cX, cY, 2000L + attempts * 500L)
             attempts++
         }
-        assertTrue("Aetherium Lode should deplete after mining", state.oreNodes[aetherNodeEntry.key]!!.isDepleted)
-        assertTrue("Player should obtain Pale Starstone", state.itemCount("pale_starstone") >= 1)
+        assertTrue("Cinderite Seam should deplete after mining", state.oreNodes[cinderNodeEntry.key]!!.isDepleted)
+        assertTrue("Player should obtain Cinderite Ore", state.itemCount("cinderite_ore") >= 1)
 
-        repeat(OreVeinKind.AETHERIUM.regenTicks) {
+        repeat(OreVeinKind.CINDERITE.regenTicks) {
             state = CraftingAndMiningEngine.regenerateOreNodesTick(state)
         }
-        val restored = state.oreNodes[aetherNodeEntry.key]!!
-        assertFalse("Aetherium Lode must regenerate after regenTicks", restored.isDepleted)
-        assertEquals(OreVeinKind.AETHERIUM.maxCharges, restored.chargesLeft)
+        val restored = state.oreNodes[cinderNodeEntry.key]!!
+        assertFalse("Cinderite Seam must regenerate after regenTicks", restored.isDepleted)
+        assertEquals(OreVeinKind.CINDERITE.maxCharges, restored.chargesLeft)
     }
 
     @Test
     fun craftingRequiresPhysicalStationAndSmeltingCompressesCapWeight() {
         val base = GameEngine.createNewWorld("Roland").copy(
-            backpack = listOf(ItemStack("ochre_nugget", 2), ItemStack("jagged_ivory", 2)),
+            backpack = listOf(ItemStack("copper_ore", 1), ItemStack("tin_ore", 1), ItemStack("jagged_ivory", 2)),
             activePanel = ActivePanel.NONE
         )
 
         val blocked = CraftingAndMiningEngine.executeRecipe(base, "smelt_sunbrass", 1000L)
         assertEquals(0, blocked.itemCount("sunbrass_ingot"))
-        assertEquals(2, blocked.itemCount("ochre_nugget"))
+        assertEquals(1, blocked.itemCount("copper_ore"))
+        assertEquals(1, blocked.itemCount("tin_ore"))
 
         val capBefore = base.usedCapOz()
         val smelted = CraftingAndMiningEngine.executeRecipe(
@@ -418,7 +419,8 @@ class ExampleUnitTest {
             2000L
         )
         assertEquals(1, smelted.itemCount("sunbrass_ingot"))
-        assertEquals(0, smelted.itemCount("ochre_nugget"))
+        assertEquals(0, smelted.itemCount("copper_ore"))
+        assertEquals(0, smelted.itemCount("tin_ore"))
         assertTrue("Smelting should compress Cap weight", smelted.usedCapOz() < capBefore)
 
         val forged = CraftingAndMiningEngine.executeRecipe(
@@ -432,7 +434,7 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun shopAndMonsterCorpsesContainZeroFinishedWeapons() {
+    fun shopContainsZeroFinishedWeaponsAndRegularMonstersRespectRareBossWeaponDrops() {
         val weaponCategories = setOf(
             ItemCategory.WEAPON_MELEE,
             ItemCategory.WEAPON_DISTANCE,
@@ -444,16 +446,15 @@ class ExampleUnitTest {
             assertFalse("Alaric's Shop must not sell finished weapon: ${def.name}", def.category in weaponCategories)
         }
 
-        for (type in MonsterType.entries) {
+        for (type in MonsterType.entries.filter { !it.isBoss && it.tier <= 4 }) {
             repeat(10) { i ->
                 val dummy = MonsterEntity(i, type, -1, 10, 10, 10, 10, type.maxHp, type.maxHp)
                 val corpse = GameEngine.generateMonsterCorpse(dummy)
                 for (stack in corpse.items) {
                     val def = ItemCatalog.get(stack.itemId)
-                    // Basic wooden_club is allowed as a Tier 1/2 starter club drop; no forged Smithy weapons may drop
                     if (def.id == "wooden_club") continue
                     assertFalse(
-                        "Monster ${type.displayName} dropped forged weapon ${def.name} instead of raw materials",
+                        "Classic regular monster ${type.displayName} dropped forged weapon ${def.name}",
                         def.category in weaponCategories
                     )
                 }
@@ -463,7 +464,7 @@ class ExampleUnitTest {
 
     @Test
     fun variableWeaponAttackSpeedsAndAmmoConsumptionWorkCorrectly() {
-        val dummyTarget = MonsterEntity(9999, MonsterType.CYCLOPS, -1, 16, 15, 16, 15, 300, 300)
+        val dummyTarget = MonsterEntity(9999, MonsterType.GRIMMAW_CRUSHER, -1, 16, 15, 16, 15, 300, 300)
 
         val fastHero = GameEngine.createNewWorld("Roland").copy(
             floor = -1,

@@ -421,10 +421,11 @@ enum class OreVeinKind(
     val regenTicks: Int,
     val miningXpPoints: Double
 ) {
-    OCHRE("Ochre Vein", "ochre_nugget", 1, "Quarry Mattock", 4, 26, 4.5),
-    BOGSTONE("Bogstone Vein", "bogstone_shard", 2, "Sunbrass Pick", 4, 34, 6.5),
-    BRIMSTONE("Brimstone Seam", "cinder_pitch", 3, "Duskmetal Breaker", 4, 40, 8.0),
-    AETHERIUM("Aetherium Lode", "pale_starstone", 4, "Quenchsteel Delver", 3, 55, 11.5)
+    COPPER("Copper Vein", "copper_ore", 1, "Quarry Mattock", 4, 24, 4.0),
+    TIN("Tin Vein", "tin_ore", 1, "Quarry Mattock", 4, 26, 4.5),
+    BOG_IRON("Bog Iron Vein", "bog_iron_ore", 2, "Sunbrass Pick", 4, 34, 6.5),
+    VESPERITE("Vesperite Vein", "vesperite_ore", 3, "Duskmetal Breaker", 4, 42, 9.0),
+    CINDERITE("Cinderite Vein", "cinderite_ore", 4, "Quenchsteel Delver", 3, 55, 12.5)
 }
 
 enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
@@ -447,10 +448,11 @@ enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
     BLACKSMITH_ANVIL(false),
     FLETCHING_BENCH(false),
     RUNECRAFTING_TABLE(false),
-    ORE_OCHRE(false),
-    ORE_BOGSTONE(false),
-    ORE_BRIMSTONE(false),
-    ORE_AETHERIUM(false),
+    ORE_COPPER(false),
+    ORE_TIN(false),
+    ORE_BOG_IRON(false),
+    ORE_VESPERITE(false),
+    ORE_CINDERITE(false),
     DEPLETED_VEIN(false),
     DIRT_FLOOR(true),
     CAVE_WALL(false, true),
@@ -486,10 +488,11 @@ enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
     IRON_BAR_GATE(true);
 
     fun oreVeinKind(): OreVeinKind? = when (this) {
-        ORE_OCHRE -> OreVeinKind.OCHRE
-        ORE_BOGSTONE -> OreVeinKind.BOGSTONE
-        ORE_BRIMSTONE -> OreVeinKind.BRIMSTONE
-        ORE_AETHERIUM -> OreVeinKind.AETHERIUM
+        ORE_COPPER -> OreVeinKind.COPPER
+        ORE_TIN -> OreVeinKind.TIN
+        ORE_BOG_IRON -> OreVeinKind.BOG_IRON
+        ORE_VESPERITE -> OreVeinKind.VESPERITE
+        ORE_CINDERITE -> OreVeinKind.CINDERITE
         else -> null
     }
 }
@@ -530,7 +533,9 @@ data class FloorWarningBanner(
 enum class BossSpecialKind {
     NONE,
     VENOM_NOVA,
-    FLAME_BURST
+    FLAME_BURST,
+    QUARRY_QUAKE,
+    LABYRINTH_PYRE
 }
 
 enum class MonsterType(
@@ -602,10 +607,6 @@ enum class MonsterType(
     ),
 
     // --- TIER 3: Floor -2 Deep Caverns (Levels 6-10) ---
-    MINOTAUR(
-        displayName = "Minotaur", tier = 3, threatLevel = 7, maxHp = 215, armor = 10,
-        xpReward = 190, minDmg = 17, maxDmg = 32, goldMin = 34, goldMax = 78, moveIntervalTicks = 2
-    ),
     ORC_WARRIOR(
         displayName = "Orc Warrior", tier = 3, threatLevel = 8, maxHp = 245, armor = 11,
         xpReward = 225, minDmg = 20, maxDmg = 36, goldMin = 40, goldMax = 90, moveIntervalTicks = 1
@@ -629,11 +630,7 @@ enum class MonsterType(
         specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Warden of the Molten Chasm"
     ),
 
-    // --- TIER 4: Floor -3 Abyssal Crypt & Bosses (Levels 10+) ---
-    CYCLOPS(
-        displayName = "Cyclops", tier = 4, threatLevel = 11, maxHp = 370, armor = 15,
-        xpReward = 360, minDmg = 28, maxDmg = 52, goldMin = 72, goldMax = 155, moveIntervalTicks = 2
-    ),
+    // --- TIER 4: Floor -3 Abyssal Crypt & Floor -4 Wyrm Sanctum (Levels 10-20) ---
     DRAGON_HATCHLING(
         displayName = "Dragon Hatchling", tier = 4, threatLevel = 13, maxHp = 440, armor = 14,
         xpReward = 450, minDmg = 32, maxDmg = 58, goldMin = 95, goldMax = 195, moveIntervalTicks = 2,
@@ -658,6 +655,51 @@ enum class MonsterType(
         aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIRE_BREATH,
         inflictsFire = true, isBoss = true, summonTypeName = "DRAGON_HATCHLING", maxSummons = 2,
         specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Sovereign of the Wyrm Sanctum"
+    ),
+
+    // --- TIER 5: SW Frontier Grimmaw Crags Camp & Floor -5 The Grimmaw Quarry (Harder than classic Rookvale Dungeons) ---
+    GRIMMAW_QUARRYMAN(
+        displayName = "Grimmaw Quarryman", tier = 5, threatLevel = 16, maxHp = 520, armor = 19,
+        xpReward = 580, minDmg = 36, maxDmg = 64, goldMin = 120, goldMax = 240, moveIntervalTicks = 2
+    ),
+    GRIMMAW_ROCK_HURLER(
+        displayName = "Grimmaw Rock-Hurler", tier = 5, threatLevel = 17, maxHp = 490, armor = 17,
+        xpReward = 640, minDmg = 38, maxDmg = 68, goldMin = 135, goldMax = 265, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.THROWN_STONE
+    ),
+    GRIMMAW_CRUSHER(
+        displayName = "Grimmaw Crusher", tier = 5, threatLevel = 19, maxHp = 640, armor = 22,
+        xpReward = 780, minDmg = 44, maxDmg = 78, goldMin = 165, goldMax = 320, moveIntervalTicks = 2
+    ),
+    KRAGOR_THE_STONE_EYED(
+        displayName = "Kragor the Stone-Eyed", tier = 5, threatLevel = 23, maxHp = 1420, armor = 24,
+        xpReward = 2100, minDmg = 54, maxDmg = 96, goldMin = 420, goldMax = 760, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.THROWN_STONE,
+        isBoss = true, summonTypeName = "GRIMMAW_QUARRYMAN", maxSummons = 2,
+        specialKind = BossSpecialKind.QUARRY_QUAKE, bossTitle = "Colossus of the Grimmaw Quarry"
+    ),
+
+    // --- TIER 6: SE Frontier Gorek Badlands War-Camp & Floor -6 The Gorek Labyrinth (Pinnacle Endgame) ---
+    GOREK_RAIDER(
+        displayName = "Gorek Raider", tier = 6, threatLevel = 20, maxHp = 660, armor = 22,
+        xpReward = 840, minDmg = 46, maxDmg = 82, goldMin = 180, goldMax = 350, moveIntervalTicks = 1
+    ),
+    GOREK_PHALANX(
+        displayName = "Gorek Phalanx", tier = 6, threatLevel = 21, maxHp = 780, armor = 26,
+        xpReward = 960, minDmg = 48, maxDmg = 86, goldMin = 210, goldMax = 400, moveIntervalTicks = 2
+    ),
+    GOREK_HEX_CALLER(
+        displayName = "Gorek Hex-Caller", tier = 6, threatLevel = 22, maxHp = 620, armor = 20,
+        xpReward = 1040, minDmg = 52, maxDmg = 94, goldMin = 225, goldMax = 430, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.NECRO_BOLT,
+        inflictsFire = true
+    ),
+    VAELGOR_LABYRINTH_WARDEN(
+        displayName = "Vaelgor the Labyrinth Warden", tier = 6, threatLevel = 26, maxHp = 1780, armor = 28,
+        xpReward = 2850, minDmg = 64, maxDmg = 112, goldMin = 560, goldMax = 980, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
+        inflictsFire = true, isBoss = true, summonTypeName = "GOREK_RAIDER", maxSummons = 2,
+        specialKind = BossSpecialKind.LABYRINTH_PYRE, bossTitle = "Warden of the Gorek Labyrinth"
     );
 
     fun threatBandFor(playerLevel: Int): ThreatBand = when {
@@ -680,7 +722,8 @@ enum class MonsterType(
                 "STONEHORN_TROLL" -> SWAMP_TROLL
                 "MARROW_ARCHER" -> GOBLIN_SCOUT
                 "FORGE_BRUTE" -> ORC_WARRIOR
-                "RUNIC_GOLEM" -> CYCLOPS
+                "MINOTAUR" -> GOREK_RAIDER
+                "CYCLOPS", "RUNIC_GOLEM" -> GRIMMAW_CRUSHER
                 "WYRM_HATCHLING" -> DRAGON_HATCHLING
                 "CINDER_WRAITH" -> FIRE_DEVIL
                 "DRAGON_BOSS" -> ELDER_DRAGON

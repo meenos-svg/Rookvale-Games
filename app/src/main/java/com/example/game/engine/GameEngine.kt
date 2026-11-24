@@ -192,17 +192,26 @@ object GameEngine {
             }
         }
 
-        // Auto-migrate any tools sitting in backpack into the dedicated Tool Bag
-        var migratedToolBag = save.toolBag
+        // Normalize legacy ore/item IDs and auto-migrate any tools sitting in backpack into the Tool Bag
+        var migratedToolBag = emptyList<ItemStack>()
+        for (stack in save.toolBag) {
+            val cleanId = ItemCatalog.migrateLegacyItemId(stack.itemId)
+            migratedToolBag = addItemPublic(migratedToolBag, cleanId, stack.count)
+        }
         var migratedBackpack = mutableListOf<ItemStack>()
         var movedToolsCount = 0
         for (stack in save.backpack) {
-            if (ItemCatalog.get(stack.itemId).isTool) {
-                migratedToolBag = addItemPublic(migratedToolBag, stack.itemId, stack.count)
+            val cleanId = ItemCatalog.migrateLegacyItemId(stack.itemId)
+            if (ItemCatalog.get(cleanId).isTool) {
+                migratedToolBag = addItemPublic(migratedToolBag, cleanId, stack.count)
                 movedToolsCount += stack.count
             } else {
-                migratedBackpack.add(stack)
+                migratedBackpack = addItemPublic(migratedBackpack, cleanId, stack.count).toMutableList()
             }
+        }
+        var normalizedDepot = emptyList<ItemStack>()
+        for (stack in save.depot) {
+            normalizedDepot = addItemPublic(normalizedDepot, ItemCatalog.migrateLegacyItemId(stack.itemId), stack.count)
         }
 
         // Safely unequip any shield conflicting with a 2H weapon on older saves
@@ -212,12 +221,12 @@ object GameEngine {
             migratedEquip = migratedEquip.copy(shieldId = null)
         }
 
-        val hasAnyPickaxe = (migratedBackpack + migratedToolBag + save.depot)
+        val hasAnyPickaxe = (migratedBackpack + migratedToolBag + normalizedDepot)
             .any { ItemCatalog.get(it.itemId).category == ItemCategory.TOOL_PICKAXE }
         val migratedDepot = if (isLegacyV1 && !hasAnyPickaxe) {
-            addItemPublic(save.depot, "quarry_mattock", 1)
+            addItemPublic(normalizedDepot, "quarry_mattock", 1)
         } else {
-            save.depot
+            normalizedDepot
         }
 
         val notes = buildString {
@@ -809,7 +818,7 @@ object GameEngine {
 
     /**
      * Applies monster armor mitigation so weapon upgrades and skill training noticeably matter
-     * against heavy-armored dungeon foes (Minotaurs, Orc Warriors, Cyclopses, Bosses).
+     * against heavy-armored dungeon foes (Orc Warriors, Grimmaw Crushers, Gorek Phalanxes, Bosses).
      * Magic and runes pierce 45% of physical armor.
      */
     internal fun mitigateMonsterDamage(rawDamage: Int, monsterArmor: Int, isMagic: Boolean): Int {
@@ -1190,16 +1199,28 @@ object GameEngine {
                 }
                 val reduced = (rawDmg - (s.equipment.totalArmor() * 0.5).roundToInt()).coerceAtLeast(14)
                 val casterName = caster?.type?.displayName ?: "Boss"
-                val isVenom = event.inflictedStatus == "POISON" || caster?.type?.specialKind == BossSpecialKind.VENOM_NOVA
-                s = if (isVenom) {
-                    s.copy(
+                val special = caster?.type?.specialKind ?: BossSpecialKind.FLAME_BURST
+                val isVenom = event.inflictedStatus == "POISON" || special == BossSpecialKind.VENOM_NOVA
+                val isQuake = special == BossSpecialKind.QUARRY_QUAKE
+                s = when {
+                    isVenom -> s.copy(
                         hp = (s.hp - reduced).coerceAtLeast(0),
                         poisonTicks = max(s.poisonTicks, 6)
                     )
                         .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.POISON, nowMs)
                         .addLogInternal("$casterName's Venom Nova seared you for $reduced!")
-                } else {
-                    s.copy(
+                    isQuake -> s.copy(
+                        hp = (s.hp - reduced).coerceAtLeast(0)
+                    )
+                        .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.DAMAGE_PLAYER, nowMs)
+                        .addLogInternal("$casterName's Quarry Quake shattered the ground for $reduced!")
+                    special == BossSpecialKind.LABYRINTH_PYRE -> s.copy(
+                        hp = (s.hp - reduced).coerceAtLeast(0),
+                        fireTicks = max(s.fireTicks, 6)
+                    )
+                        .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.FIRE, nowMs)
+                        .addLogInternal("$casterName's Labyrinth Pyre engulfed you for $reduced!")
+                    else -> s.copy(
                         hp = (s.hp - reduced).coerceAtLeast(0),
                         fireTicks = max(s.fireTicks, 5)
                     )
@@ -1661,17 +1682,25 @@ object GameEngine {
                 continue
             }
 
-            // 2. Boss Telegraphed Ground Danger Zone Specials (Venom Nova / Flame Burst)
+            // 2. Boss Telegraphed Ground Danger Zone Specials (Venom Nova / Flame Burst / Quarry Quake / Labyrinth Pyre)
             if (isFloorHost && curM.type.aiStyle == MonsterAiStyle.BOSS_AOE_SUMMON) {
-                val isVenomBoss = curM.type.specialKind == BossSpecialKind.VENOM_NOVA
+                val special = curM.type.specialKind
+                val isVenomBoss = special == BossSpecialKind.VENOM_NOVA
+                val isQuakeBoss = special == BossSpecialKind.QUARRY_QUAKE
+                val isPyreBoss = special == BossSpecialKind.LABYRINTH_PYRE
                 if (curM.pendingAoeTiles.isNotEmpty()) {
                     val waveTiles = curM.pendingAoeTiles
-                    val waveProj = if (isVenomBoss) {
-                        ProjectileKind.VENOM_GLOB
-                    } else {
-                        curM.type.rangedProjectile ?: ProjectileKind.FIRE_BREATH
+                    val waveProj = when {
+                        isVenomBoss -> ProjectileKind.VENOM_GLOB
+                        isQuakeBoss -> ProjectileKind.THROWN_STONE
+                        isPyreBoss -> ProjectileKind.FIREBALL
+                        else -> curM.type.rangedProjectile ?: ProjectileKind.FIRE_BREATH
                     }
-                    val inflictedStatus = if (isVenomBoss) "POISON" else "FIRE"
+                    val inflictedStatus = when {
+                        isVenomBoss -> "POISON"
+                        isQuakeBoss -> null
+                        else -> "FIRE"
+                    }
                     s = s.copy(
                         outboundMonsterAttacks = s.outboundMonsterAttacks + LocalMonsterAttackEvent(
                             monsterId = curM.id,
@@ -1701,16 +1730,28 @@ object GameEngine {
                     if (!playerInPz && s.hp > 0 && (s.playerX to s.playerY) in waveTiles) {
                         val rawWave = Random.nextInt(curM.type.minDmg, curM.type.maxDmg + 12)
                         val waveDmg = (rawWave - (s.equipment.totalArmor() * 0.5).roundToInt()).coerceAtLeast(14)
-                        s = if (isVenomBoss) {
-                            s.copy(
+                        s = when {
+                            isVenomBoss -> s.copy(
                                 hp = (s.hp - waveDmg).coerceAtLeast(0),
                                 poisonTicks = max(s.poisonTicks, 6)
                             )
                                 .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.POISON, nowMs)
                                 .queuePlayerFx("-$waveDmg", FloatingTextKind.POISON, PlayerActionState.IDLE)
                                 .addLogInternal("${curM.type.displayName}'s Venom Nova seared you for $waveDmg!")
-                        } else {
-                            s.copy(
+                            isQuakeBoss -> s.copy(
+                                hp = (s.hp - waveDmg).coerceAtLeast(0)
+                            )
+                                .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.DAMAGE_PLAYER, nowMs)
+                                .queuePlayerFx("-$waveDmg", FloatingTextKind.DAMAGE_PLAYER, PlayerActionState.IDLE)
+                                .addLogInternal("${curM.type.displayName}'s Quarry Quake shattered you for $waveDmg!")
+                            isPyreBoss -> s.copy(
+                                hp = (s.hp - waveDmg).coerceAtLeast(0),
+                                fireTicks = max(s.fireTicks, 6)
+                            )
+                                .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.FIRE, nowMs)
+                                .queuePlayerFx("-$waveDmg", FloatingTextKind.FIRE, PlayerActionState.IDLE)
+                                .addLogInternal("${curM.type.displayName}'s Labyrinth Pyre engulfed you for $waveDmg!")
+                            else -> s.copy(
                                 hp = (s.hp - waveDmg).coerceAtLeast(0),
                                 fireTicks = max(s.fireTicks, 5)
                             )
@@ -1726,12 +1767,23 @@ object GameEngine {
                     val waveTiles = computeBossSpecialTiles(floorMap, curM.type, curM.x, curM.y, targetX, targetY)
                     if (waveTiles.isNotEmpty()) {
                         updatedMonsters[i] = curM.copy(pendingAoeTiles = waveTiles)
-                        val cueLabel = if (isVenomBoss) "VENOM NOVA!" else if (curM.type == MonsterType.IGNIS_LORD_OF_THE_PIT) "FLAME BURST!" else "FIRE WAVE!"
-                        val cueKind = if (isVenomBoss) FloatingTextKind.POISON else FloatingTextKind.FIRE
-                        val cueLog = if (isVenomBoss) {
-                            "${curM.type.displayName} swells with venom — dodge the glowing green danger zone!"
-                        } else {
-                            "${curM.type.displayName} charges a fiery burst — dodge the glowing warning tiles!"
+                        val cueLabel = when {
+                            isVenomBoss -> "VENOM NOVA!"
+                            isQuakeBoss -> "QUARRY QUAKE!"
+                            isPyreBoss -> "LABYRINTH PYRE!"
+                            curM.type == MonsterType.IGNIS_LORD_OF_THE_PIT -> "FLAME BURST!"
+                            else -> "FIRE WAVE!"
+                        }
+                        val cueKind = when {
+                            isVenomBoss -> FloatingTextKind.POISON
+                            isQuakeBoss -> FloatingTextKind.DAMAGE_PLAYER
+                            else -> FloatingTextKind.FIRE
+                        }
+                        val cueLog = when {
+                            isVenomBoss -> "${curM.type.displayName} swells with venom — dodge the glowing green danger zone!"
+                            isQuakeBoss -> "${curM.type.displayName} raises a massive monolith — dodge the glowing violet quake ring!"
+                            isPyreBoss -> "${curM.type.displayName} ignites a Labyrinth Pyre — dodge the glowing molten danger tiles!"
+                            else -> "${curM.type.displayName} charges a fiery burst — dodge the glowing warning tiles!"
                         }
                         s = s.addFloatingInternal(s.floor, curM.x.toFloat(), curM.y.toFloat(), cueLabel, cueKind, nowMs)
                             .addLogInternal(cueLog)
@@ -1990,6 +2042,46 @@ object GameEngine {
                     }
                 }
             }
+            tiles.toList()
+        }
+        type.specialKind == BossSpecialKind.QUARRY_QUAKE -> {
+            val tiles = linkedSetOf<Pair<Int, Int>>()
+            // 2-tile radial seismic quake ring around Kragor with outer shockwave fissures
+            for (dy in -2..2) {
+                for (dx in -2..2) {
+                    if (dx == 0 && dy == 0) continue
+                    val cheb = max(abs(dx), abs(dy))
+                    if (cheb == 1 || (cheb == 2 && (dx == 0 || dy == 0 || abs(dx) == abs(dy)))) {
+                        val tx = fromX + dx
+                        val ty = fromY + dy
+                        if (tx in 0 until floorMap.width &&
+                            ty in 0 until floorMap.height &&
+                            floorMap.tileAt(tx, ty).walkable &&
+                            !floorMap.isProtectionZone(tx, ty)
+                        ) {
+                            tiles += (tx to ty)
+                        }
+                    }
+                }
+            }
+            tiles.toList()
+        }
+        type.specialKind == BossSpecialKind.LABYRINTH_PYRE -> {
+            val tiles = linkedSetOf<Pair<Int, Int>>()
+            // Expanding volcanic cross + inner sanctum ring + targeted flame wave
+            for (d in -3..3) {
+                if (d == 0) continue
+                listOf(fromX + d to fromY, fromX to fromY + d).forEach { (tx, ty) ->
+                    if (tx in 0 until floorMap.width &&
+                        ty in 0 until floorMap.height &&
+                        floorMap.tileAt(tx, ty).walkable &&
+                        !floorMap.isProtectionZone(tx, ty)
+                    ) {
+                        tiles += (tx to ty)
+                    }
+                }
+            }
+            tiles.addAll(computeFireWaveTiles(floorMap, fromX, fromY, targetX, targetY))
             tiles.toList()
         }
         type == MonsterType.IGNIS_LORD_OF_THE_PIT -> {

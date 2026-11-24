@@ -409,9 +409,11 @@ data class PaperDollAppearance(
             val def = ItemCatalog.all[id]
             val palette = materialPaletteForId(id, def?.category)
             val kind = when {
-                id.contains("club") || id.contains("mace") || id.contains("cudgel") -> WeaponVisualKind.CLUB
+                id.contains("club") || id.contains("mace") || id.contains("cudgel") ||
+                    id.contains("warmaul") || id.contains("worldbreaker") -> WeaponVisualKind.CLUB
                 id.contains("dirk") || id.contains("dagger") -> WeaponVisualKind.DAGGER
-                id.contains("claymore") -> WeaponVisualKind.CLAYMORE
+                id.contains("claymore") || id.contains("greatsword") -> WeaponVisualKind.CLAYMORE
+                id.contains("longblade") -> WeaponVisualKind.SWORD
                 id.contains("rapier") -> WeaponVisualKind.RAPIER
                 id.contains("falchion") -> WeaponVisualKind.FALCHION
                 id.contains("glaive") || id.contains("halberd") -> WeaponVisualKind.GLAIVE
@@ -419,7 +421,7 @@ data class PaperDollAppearance(
                 id.contains("arbalest") || id.contains("crossbow") || id.contains("siegebow") -> WeaponVisualKind.ARBALEST
                 id.contains("bow") || id.contains("recurve") -> WeaponVisualKind.BOW
                 id.contains("javelin") || id.contains("spear") -> WeaponVisualKind.JAVELIN
-                id.contains("crosier") || id.contains("rod") || id.contains("staff") -> WeaponVisualKind.STAFF
+                id.contains("crosier") || id.contains("rod") || id.contains("staff") || id.contains("soulspire") -> WeaponVisualKind.STAFF
                 id.contains("wand") || id.contains("scepter") || id.contains("conduit") || id.contains("spire") -> WeaponVisualKind.WAND
                 def?.category == ItemCategory.WEAPON_WAND -> if (def.isTwoHanded) WeaponVisualKind.STAFF else WeaponVisualKind.WAND
                 def?.category == ItemCategory.WEAPON_DISTANCE -> if (def.isTwoHanded) WeaponVisualKind.BOW else WeaponVisualKind.JAVELIN
@@ -493,6 +495,8 @@ data class PaperDollAppearance(
         }
 
         private fun materialPaletteForId(id: String, category: ItemCategory?): MaterialPalette = when {
+            id.contains("cinderite") -> MaterialPalettes.CINDERITE
+            id.contains("vesperite") -> MaterialPalettes.VESPERITE
             id.contains("moonforge") || id.contains("starlight") -> MaterialPalettes.MOONFORGE
             id.contains("wyrm") || id.contains("dragon") || id.contains("drake") -> MaterialPalettes.WYRMSCALE_BLADE
             id.contains("cinder") || id.contains("fire") || id.contains("inferno") -> MaterialPalettes.CINDER_FLAME
@@ -583,6 +587,22 @@ object MaterialPalettes {
         shadow = Color(0xFF6C8BB3),
         accent = Color(0xFF73F0FF),
         glow = Color(0xFF68E8FF)
+    )
+    /** Tier 4 Vesperite: violet-silver crystalline forged metal with luminous amethyst sheen. */
+    val VESPERITE = MaterialPalette(
+        primary = Color(0xFF9C84E8),
+        highlight = Color(0xFFEBE2FF),
+        shadow = Color(0xFF47377A),
+        accent = Color(0xFFD6C2FF),
+        glow = Color(0xFFB58CFF)
+    )
+    /** Tier 5 Cinderite: obsidian-forged metal inlaid with glowing volcanic-gold fissures. */
+    val CINDERITE = MaterialPalette(
+        primary = Color(0xFF3E2D36),
+        highlight = Color(0xFFFFC95C),
+        shadow = Color(0xFF1A1217),
+        accent = Color(0xFFFF9E2B),
+        glow = Color(0xFFFF7A1F)
     )
     val BRASS_PLATE = MaterialPalette(
         primary = Color(0xFFB58A3C),

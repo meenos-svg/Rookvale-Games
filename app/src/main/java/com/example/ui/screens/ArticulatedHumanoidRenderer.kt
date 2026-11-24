@@ -933,6 +933,15 @@ object ArticulatedHumanoidRenderer {
                 )
                 drawCircle(pal.accent, 1.4f * u, pommel)
                 // Volumetric metallic blade with specular reflection highlight
+                if (useRim && pal.glow != null) {
+                    drawLine(
+                        color = pal.glow.copy(alpha = 0.36f),
+                        start = hand,
+                        end = tip,
+                        strokeWidth = bladeRadius * 3.1f,
+                        cap = StrokeCap.Round
+                    )
+                }
                 VolumetricShading.drawVolumetricCylinder(
                     this, hand, tip, bladeRadius, bladeRadius * 0.35f,
                     pal.primary, pal.highlight, pal.shadow, ow, facing.lightScreenX, useHighlightStrip = true, path = path
@@ -940,10 +949,10 @@ object ArticulatedHumanoidRenderer {
                 if (useSpec) {
                     // Crisp beveled metallic fuller & razor reflection gleam along blade
                     drawLine(
-                        pal.shadow.copy(alpha = 0.60f),
+                        (pal.glow ?: pal.shadow).copy(alpha = if (pal.glow != null) 0.72f else 0.60f),
                         Offset(hand.x + (tip.x - hand.x) * 0.14f, hand.y + (tip.y - hand.y) * 0.14f),
-                        Offset(hand.x + (tip.x - hand.x) * 0.72f, hand.y + (tip.y - hand.y) * 0.72f),
-                        strokeWidth = (bladeRadius * 0.28f).coerceAtLeast(0.8f),
+                        Offset(hand.x + (tip.x - hand.x) * 0.78f, hand.y + (tip.y - hand.y) * 0.78f),
+                        strokeWidth = (bladeRadius * 0.30f).coerceAtLeast(0.85f),
                         cap = StrokeCap.Round
                     )
                     drawLine(
@@ -958,35 +967,78 @@ object ArticulatedHumanoidRenderer {
                 val bDx = tip.x - hand.x
                 val bDy = tip.y - hand.y
                 val bLen = hypot(bDx, bDy).coerceAtLeast(1f)
-                val gx = (-bDy / bLen) * (if (appearance.weaponKind == WeaponVisualKind.CLAYMORE) 4.4f else 3.2f) * u
-                val gy = (bDx / bLen) * (if (appearance.weaponKind == WeaponVisualKind.CLAYMORE) 4.4f else 3.2f) * u
+                val gx = (-bDy / bLen) * (if (appearance.weaponKind == WeaponVisualKind.CLAYMORE) 4.8f else 3.4f) * u
+                val gy = (bDx / bLen) * (if (appearance.weaponKind == WeaponVisualKind.CLAYMORE) 4.8f else 3.4f) * u
                 VolumetricShading.drawVolumetricCylinder(
                     this, Offset(hand.x - gx, hand.y - gy), Offset(hand.x + gx, hand.y + gy),
-                    1.2f * u, 1.2f * u, pal.accent, SPECULAR_WHITE, Color(0xFF78531C), ow * 0.75f, facing.lightScreenX, false, path
+                    1.25f * u, 1.25f * u, pal.accent, SPECULAR_WHITE, Color(0xFF78531C), ow * 0.75f, facing.lightScreenX, false, path
                 )
             }
             WeaponVisualKind.AXE, WeaponVisualKind.GLAIVE -> {
                 val butt = facing.project(ox, oy, u, +7.0f, swingF - 5.2f, swingUp - 8.5f)
+                val haftMain = if (pal.glow != null) pal.shadow else MaterialPalettes.OAK_WOOD.primary
+                val haftHi = if (pal.glow != null) pal.primary else MaterialPalettes.OAK_WOOD.highlight
                 VolumetricShading.drawVolumetricCylinder(
                     this, butt, tip, 1.35f * u, 1.25f * u,
-                    MaterialPalettes.OAK_WOOD.primary, MaterialPalettes.OAK_WOOD.highlight, MaterialPalettes.OAK_WOOD.shadow,
+                    haftMain, haftHi, MaterialPalettes.OAK_WOOD.shadow,
                     ow * 0.85f, facing.lightScreenX, false, path
                 )
-                // Curved metallic axehead with gleaming cutting edge
+                // Curved metallic axehead with gleaming cutting edge (+ twin back-bit for high-tier greataxes)
                 val headC = Offset(hand.x + (tip.x - hand.x) * 0.85f, hand.y + (tip.y - hand.y) * 0.85f)
-                val bladeOff = facing.project(ox, oy, u, tipR, reachF + 3.2f, tipUp - 1.5f)
+                val bladeOff = facing.project(ox, oy, u, tipR, reachF + 3.4f, tipUp - 1.4f)
+                val frontBit = Offset((headC.x + bladeOff.x) * 0.5f, (headC.y + bladeOff.y) * 0.5f)
+                if (useRim && pal.glow != null) {
+                    drawCircle(
+                        Brush.radialGradient(listOf(pal.glow.copy(alpha = 0.42f), Color.Transparent), center = headC, radius = 7.4f * u),
+                        radius = 7.4f * u, center = headC
+                    )
+                }
+                if (appearance.isTwoHanded || pal.glow != null) {
+                    val backBitOff = facing.project(ox, oy, u, tipR, reachF - 2.6f, tipUp + 0.6f)
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, (headC.x + backBitOff.x) * 0.5f, (headC.y + backBitOff.y) * 0.5f,
+                        3.1f * u, 3.8f * u, pal.shadow, pal.primary, INK, ow * 0.9f,
+                        facing.lightScreenX, facing.lightScreenY, useSpecular = useSpec, useRim = useRim
+                    )
+                }
                 VolumetricShading.drawVolumetricEllipsoid(
-                    this, (headC.x + bladeOff.x) * 0.5f, (headC.y + bladeOff.y) * 0.5f,
-                    3.8f * u, 4.6f * u, pal.primary, pal.highlight, pal.shadow, ow,
+                    this, frontBit.x, frontBit.y,
+                    4.0f * u, 4.9f * u, pal.primary, pal.highlight, pal.shadow, ow,
                     facing.lightScreenX, facing.lightScreenY, useSpecular = useSpec, useRim = useRim
                 )
+                if (pal.glow != null) {
+                    drawCircle(pal.accent, 1.35f * u, headC)
+                }
             }
             WeaponVisualKind.CLUB -> {
-                VolumetricShading.drawVolumetricCylinder(
-                    this, pommel, tip, 1.3f * u, 2.9f * u,
-                    pal.primary, pal.highlight, pal.shadow, ow, facing.lightScreenX, useSpec, path
-                )
-                drawCircle(pal.accent, 1.2f * u, tip)
+                if (pal.glow != null) {
+                    // Tier 4/5 Flanged Warmaul / Worldbreaker with glowing runed hammerhead
+                    val butt = facing.project(ox, oy, u, +7.0f, swingF - 4.8f, swingUp - 7.5f)
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, butt, tip, 1.35f * u, 1.35f * u,
+                        pal.shadow, pal.primary, INK, ow * 0.85f, facing.lightScreenX, false, path
+                    )
+                    if (useRim) {
+                        drawCircle(
+                            Brush.radialGradient(listOf(pal.glow.copy(alpha = 0.45f), Color.Transparent), center = tip, radius = 8.0f * u),
+                            radius = 8.0f * u, center = tip
+                        )
+                    }
+                    val headA = facing.project(ox, oy, u, tipR, reachF - 2.6f, tipUp - 1.6f)
+                    val headB = facing.project(ox, oy, u, tipR, reachF + 3.8f, tipUp + 1.6f)
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, headA, headB, 3.4f * u, 3.4f * u,
+                        pal.primary, pal.highlight, pal.shadow, ow, facing.lightScreenX, true, path
+                    )
+                    drawCircle(pal.glow, 1.7f * u, tip)
+                    drawCircle(SPECULAR_WHITE, 0.75f * u, tip)
+                } else {
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, pommel, tip, 1.3f * u, 2.9f * u,
+                        pal.primary, pal.highlight, pal.shadow, ow, facing.lightScreenX, useSpec, path
+                    )
+                    drawCircle(pal.accent, 1.2f * u, tip)
+                }
             }
             WeaponVisualKind.JAVELIN -> {
                 val butt = facing.project(ox, oy, u, +7.0f, swingF - 7.5f, swingUp - 7.0f)
@@ -1007,24 +1059,32 @@ object ArticulatedHumanoidRenderer {
                 val bowBelly = facing.project(ox, oy, u, +7.6f, swingF + 9.2f, swingUp + 0.5f)
                 val pullBack = facing.project(ox, oy, u, +6.2f, swingF + 1.2f - atkEase * 4.5f, swingUp + 0.8f)
 
-                // Taut bowstring pulling back during attack draw
-                drawLine(Color(0xFFE8DFCE), limbTop, pullBack, strokeWidth = 1.0f * u)
-                drawLine(Color(0xFFE8DFCE), pullBack, limbBot, strokeWidth = 1.0f * u)
+                // Taut bowstring pulling back during attack draw (glows for Vesperite/Cinderite bows!)
+                val stringColor = pal.glow?.copy(alpha = 0.92f) ?: Color(0xFFE8DFCE)
+                drawLine(stringColor, limbTop, pullBack, strokeWidth = (if (pal.glow != null) 1.25f else 1.0f) * u)
+                drawLine(stringColor, pullBack, limbBot, strokeWidth = (if (pal.glow != null) 1.25f else 1.0f) * u)
 
-                // Curved volumetric wooden/moonforge bow limbs
+                // Curved volumetric wooden / Vesperite / Cinderite bow limbs
                 path.reset()
                 path.moveTo(limbTop.x, limbTop.y)
                 path.quadraticTo(bowBelly.x, bowBelly.y, limbBot.x, limbBot.y)
+                if (useRim && pal.glow != null) {
+                    drawPath(path, pal.glow.copy(alpha = 0.34f), style = Stroke(width = 6.2f * u, cap = StrokeCap.Round))
+                }
                 drawPath(path, INK, style = Stroke(width = 3.8f * u, cap = StrokeCap.Round))
                 drawPath(path, pal.primary, style = Stroke(width = 2.3f * u, cap = StrokeCap.Round))
                 if (useSpec) {
-                    drawPath(path, pal.highlight.copy(alpha = 0.7f), style = Stroke(width = 1.0f * u, cap = StrokeCap.Round))
+                    drawPath(path, pal.highlight.copy(alpha = 0.78f), style = Stroke(width = 1.0f * u, cap = StrokeCap.Round))
+                }
+                if (pal.glow != null) {
+                    drawCircle(pal.accent, 1.3f * u, limbTop)
+                    drawCircle(pal.accent, 1.3f * u, limbBot)
                 }
 
                 // Nocked arrow / quarrel pointing forward
                 val arrowTip = facing.project(ox, oy, u, +7.6f, swingF + 13.5f, swingUp + 0.8f)
                 drawLine(Color(0xFFD6B485), pullBack, arrowTip, strokeWidth = 1.3f * u, cap = StrokeCap.Round)
-                drawCircle(SPECULAR_WHITE, 1.15f * u, arrowTip)
+                drawCircle(pal.glow ?: SPECULAR_WHITE, 1.25f * u, arrowTip)
             }
             WeaponVisualKind.WAND, WeaponVisualKind.STAFF -> {
                 val staffBase = if (appearance.weaponKind == WeaponVisualKind.STAFF) {
@@ -1034,20 +1094,27 @@ object ArticulatedHumanoidRenderer {
                     this, staffBase, tip, 1.35f * u, 1.25f * u,
                     pal.shadow, pal.primary, VolumetricShading.coolShadow(pal.shadow, 0.4f), ow * 0.85f, facing.lightScreenX, useSpec, path
                 )
-                // Glowing crystal / arcane tip with bloom
+                // Glowing crystal / arcane tip with bloom & sculpted metallic prongs for high-tier staves
                 val glowC = pal.glow ?: pal.accent
                 val pulse = 1f + 0.14f * sin(nowMs * 0.008f) + atkEase * 0.35f
                 if (useRim) {
                     drawCircle(
                         Brush.radialGradient(
-                            listOf(glowC.copy(alpha = 0.58f), Color.Transparent),
-                            center = tip, radius = 8.2f * u * pulse
+                            listOf(glowC.copy(alpha = 0.62f), Color.Transparent),
+                            center = tip, radius = 9.0f * u * pulse
                         ),
-                        radius = 8.2f * u * pulse, center = tip
+                        radius = 9.0f * u * pulse, center = tip
                     )
                 }
+                if (appearance.weaponKind == WeaponVisualKind.STAFF && pal.glow != null) {
+                    val prongL = Offset(tip.x - 3.6f * u, tip.y - 2.6f * u)
+                    val prongR = Offset(tip.x + 3.6f * u, tip.y - 2.6f * u)
+                    val collar = Offset(tip.x, tip.y + 2.8f * u)
+                    drawLine(pal.accent, collar, prongL, strokeWidth = 1.4f * u, cap = StrokeCap.Round)
+                    drawLine(pal.accent, collar, prongR, strokeWidth = 1.4f * u, cap = StrokeCap.Round)
+                }
                 VolumetricShading.drawVolumetricEllipsoid(
-                    this, tip.x, tip.y, 2.8f * u * pulse, 3.2f * u * pulse,
+                    this, tip.x, tip.y, 2.9f * u * pulse, 3.3f * u * pulse,
                     glowC, Color.White, pal.primary, ow * 0.8f,
                     facing.lightScreenX, facing.lightScreenY, useSpecular = true, useRim = useRim
                 )

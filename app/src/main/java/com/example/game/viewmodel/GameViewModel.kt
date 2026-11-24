@@ -35,6 +35,7 @@ import com.example.game.sprites.EntitySpriteAtlas
 import com.example.game.sprites.TileSpriteAtlas
 import com.example.game.update.GitHubUpdateChecker
 import com.example.game.update.UpdateCheckState
+import com.example.game.world.WorldMaps
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -98,10 +99,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private var worldTickJob: Job? = null
     private var attackSubTickJob: Job? = null
     private var walkLoopJob: Job? = null
+    private var movementBroadcastJob: Job? = null
     private var cloudAutoSaveJob: Job? = null
     private var onlinePresenceSyncJob: Job? = null
     private var skillDebounceSaveJob: Job? = null
     private var lastStepMs: Long = 0L
+    @Volatile
+    private var lastLocalMoveUptimeMs: Long = 0L
+    @Volatile
+    private var lastMoveBroadcastUptimeMs: Long = 0L
     private var lastBackgroundSaveMs: Long = 0L
     private var lastKnownConnectionStatus: ConnectionStatus = ConnectionStatus.OFFLINE_SOLO
 
@@ -690,27 +696,53 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
                     persistCurrentState(silent = true)
                 } else if (movedTile) {
-                    broadcastCurrentState(PlayerActionState.WALKING)
+                    lastLocalMoveUptimeMs = now
+                    broadcastMovement(PlayerActionState.WALKING, now)
                 } else if (facingChanged) {
-                    broadcastCurrentState(PlayerActionState.IDLE)
+                    broadcastMovement(PlayerActionState.IDLE, now)
                 }
             }
         }
 
-        // Periodic 60-second cloud autosave while playing
+        // High-frequency 120ms Supabase Realtime Broadcast movement streamer (ack = false, zero DB writes)
+        movementBroadcastJob = viewModelScope.launch {
+            var wasMoving = false
+            while (true) {
+                delay(120L)
+                if (_screen.value != AppScreen.PLAYING) {
+                    wasMoving = false
+                    continue
+                }
+                val cur = _world.value
+                if (cur.saveId.isBlank()) continue
+                val nowUptime = SystemClock.uptimeMillis()
+                val isMoving = cur.walkPath.isNotEmpty() ||
+                    (cur.autoFollowTarget && cur.targetMonsterId != null) ||
+                    (nowUptime - lastLocalMoveUptimeMs) <= 260L
+                if (isMoving) {
+                    if (nowUptime - lastMoveBroadcastUptimeMs >= 100L) {
+                        broadcastMovement(PlayerActionState.WALKING, nowUptime)
+                    }
+                    wasMoving = true
+                } else if (wasMoving) {
+                    wasMoving = false
+                    broadcastMovement(PlayerActionState.IDLE, nowUptime)
+                }
+            }
+        }
+
+        // Periodic 20-second cloud autosave to public.players (decoupled from live movement)
         cloudAutoSaveJob = viewModelScope.launch {
             while (true) {
-                delay(60_000L)
+                delay(20_000L)
                 if (_screen.value == AppScreen.PLAYING) {
                     persistCurrentState(silent = true)
                 }
             }
         }
 
-        // 2-second Supabase public.players fallback poll + live position sync & Realtime heartbeat
+        // Realtime idle heartbeat + lightweight public.players fallback discovery poll (no per-step DB writes)
         onlinePresenceSyncJob = viewModelScope.launch(Dispatchers.IO) {
-            var lastPushedKey = ""
-            var lastCloudPushMs = 0L
             var lastBroadcastHeartbeatMs = 0L
             while (true) {
                 if (_screen.value == AppScreen.PLAYING && cloudRepository.isCloudConfigured()) {
@@ -718,16 +750,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     if (cur.saveId.isNotBlank()) {
                         val nowMs = System.currentTimeMillis()
                         val normalizedRegion = normalizeRegionId(cur.regionId)
-                        val stateKey = "${cur.playerX}:${cur.playerY}:${cur.floor}:$normalizedRegion:${cur.hp}:${cur.playerFacing.name}"
 
-                        // Keep public.players updated promptly on movement or every 10s so active players stay inside the 60s window
-                        if (stateKey != lastPushedKey || nowMs - lastCloudPushMs >= 10_000L) {
-                            lastPushedKey = stateKey
-                            lastCloudPushMs = nowMs
-                            persistCurrentState(silent = true)
-                        }
-
-                        // Periodic Realtime broadcast heartbeat so late joiners / dropped packets self-heal quickly
+                        // Periodic Realtime broadcast heartbeat so late joiners self-heal without touching Postgres
                         if (nowMs - lastBroadcastHeartbeatMs >= 4_000L) {
                             lastBroadcastHeartbeatMs = nowMs
                             if (multiplayerManager.uiState.value.status == ConnectionStatus.ONLINE) {
@@ -735,7 +759,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
 
-                        // Lightweight 2-second fallback poll on public.players (last 60s, excluding self by UUID & name)
+                        // Lightweight fallback discovery poll on public.players (never overwrites active Realtime peers)
                         val polled = runCatching {
                             cloudRepository.fetchRecentOnlinePlayers(
                                 sinceEpochMs = nowMs - 60_000L,
@@ -753,7 +777,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                 }
-                delay(2_000L)
+                delay(5_000L)
             }
         }
     }
@@ -762,12 +786,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         attackSubTickJob?.cancel()
         worldTickJob?.cancel()
         walkLoopJob?.cancel()
+        movementBroadcastJob?.cancel()
         cloudAutoSaveJob?.cancel()
         onlinePresenceSyncJob?.cancel()
         skillDebounceSaveJob?.cancel()
         attackSubTickJob = null
         worldTickJob = null
         walkLoopJob = null
+        movementBroadcastJob = null
         cloudAutoSaveJob = null
         onlinePresenceSyncJob = null
         skillDebounceSaveJob = null
@@ -830,6 +856,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun broadcastMovement(
+        actionState: PlayerActionState = PlayerActionState.WALKING,
+        nowUptimeMs: Long = SystemClock.uptimeMillis()
+    ) {
+        val cur = _world.value
+        if (cur.saveId.isNotBlank()) {
+            lastMoveBroadcastUptimeMs = nowUptimeMs
+            multiplayerManager.broadcastMovementPacket(cur.toPresencePayload(actionState, nowUptimeMs))
+        }
+    }
+
     private fun broadcastCurrentState(actionState: PlayerActionState = PlayerActionState.IDLE) {
         val cur = _world.value
         if (cur.saveId.isNotBlank()) {
@@ -838,9 +875,20 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun GameWorldState.toPresencePayload(
-        actionState: PlayerActionState = PlayerActionState.IDLE
+        actionState: PlayerActionState = PlayerActionState.IDLE,
+        nowUptimeMs: Long = SystemClock.uptimeMillis()
     ): LocalPlayerPresencePayload {
         val nowMs = System.currentTimeMillis()
+        val (tgtX, tgtY) = when {
+            walkPath.isNotEmpty() -> walkPath.first()
+            actionState == PlayerActionState.WALKING && (nowUptimeMs - lastLocalMoveUptimeMs) <= 260L -> {
+                val fl = WorldMaps.getFloor(floor)
+                val nx = (playerX + playerFacing.dx).coerceIn(0, fl.width - 1)
+                val ny = (playerY + playerFacing.dy).coerceIn(0, fl.height - 1)
+                if (fl.tileAt(nx, ny).walkable) nx to ny else playerX to playerY
+            }
+            else -> playerX to playerY
+        }
         return LocalPlayerPresencePayload(
             playerId = saveId,
             name = playerName,
@@ -850,6 +898,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             hairColorIndex = hairColorIndex,
             x = playerX,
             y = playerY,
+            targetX = tgtX,
+            targetY = tgtY,
             floor = floor,
             regionId = normalizeRegionId(regionId),
             hp = hp,
@@ -930,6 +980,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val remotes = multiplayerManager.uiState.value.remotePlayers
         var floorChanged = false
         var moved = false
+        var pathStarted = false
         var facingChanged = false
         var healed = false
         var skillChanged = false
@@ -939,6 +990,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val next = GameEngine.handleTileTap(prev, tx, ty, now, remotes)
             if (next.floor != prev.floor) floorChanged = true
             if (next.playerX != prev.playerX || next.playerY != prev.playerY) moved = true
+            if (next.walkPath != prev.walkPath && next.walkPath.isNotEmpty()) pathStarted = true
             if (next.playerFacing != prev.playerFacing) facingChanged = true
             if (next.hp != prev.hp) healed = true
             if (next.backpack != prev.backpack) inventoryChanged = true
@@ -952,12 +1004,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
             persistCurrentState(silent = true)
         } else {
-            if (moved) {
-                broadcastCurrentState(PlayerActionState.WALKING)
+            if (moved || pathStarted) {
+                lastLocalMoveUptimeMs = now
+                broadcastMovement(PlayerActionState.WALKING, now)
             } else if (healed) {
                 broadcastCurrentState(PlayerActionState.HEALING)
             } else if (facingChanged) {
-                broadcastCurrentState(PlayerActionState.IDLE)
+                broadcastMovement(PlayerActionState.IDLE, now)
             }
             if (skillLevelUp) persistCurrentState(silent = true)
             else if (skillChanged || inventoryChanged) scheduleDebouncedSkillSave()
@@ -984,9 +1037,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
             persistCurrentState(silent = true)
         } else if (moved) {
-            broadcastCurrentState(PlayerActionState.WALKING)
+            lastLocalMoveUptimeMs = now
+            broadcastMovement(PlayerActionState.WALKING, now)
         } else if (facingChanged) {
-            broadcastCurrentState(PlayerActionState.IDLE)
+            broadcastMovement(PlayerActionState.IDLE, now)
         }
     }
 
@@ -1097,7 +1151,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onWalkToTile(x: Int, y: Int) {
-        _world.update { prev -> GameEngine.walkToCoordinate(prev, x, y) }
+        val now = SystemClock.uptimeMillis()
+        var startedPath = false
+        _world.update { prev ->
+            val next = GameEngine.walkToCoordinate(prev, x, y)
+            if (next.walkPath.isNotEmpty()) startedPath = true
+            next
+        }
+        if (startedPath) {
+            lastLocalMoveUptimeMs = now
+            broadcastMovement(PlayerActionState.WALKING, now)
+        }
     }
 
     fun onBindCustomHotbarSlot(slotIndex: Int, itemId: String?) {

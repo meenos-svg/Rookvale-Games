@@ -223,7 +223,11 @@ private fun minimapTileColor(tile: TileType): Color = when (tile) {
     TileType.CRATE_BARREL, TileType.TEMPLE_PEW -> Color(0xFF946B3C)
     TileType.TREE_STUMP -> Color(0xFF5A422C)
     TileType.DEPOT_CHEST, TileType.MINI_DEPOT, TileType.SHOP_COUNTER, TileType.TEMPLE_ALTAR -> Color(0xFF5CE1FF)
-    TileType.ORE_OCHRE, TileType.ORE_BOGSTONE, TileType.ORE_BRIMSTONE, TileType.ORE_AETHERIUM -> Color(0xFFB599FF)
+    TileType.ORE_COPPER -> Color(0xFFE08234)
+    TileType.ORE_TIN -> Color(0xFFA9B9C8)
+    TileType.ORE_BOG_IRON -> Color(0xFF7D90A3)
+    TileType.ORE_VESPERITE -> Color(0xFFB599FF)
+    TileType.ORE_CINDERITE -> Color(0xFFFFB22E)
     TileType.TIMBER_WALL, TileType.TIMBER_WINDOW_WALL -> Color(0xFFCBBCA4)
     TileType.TEMPLE_WALL -> Color(0xFFE0D6C3)
     TileType.GATE_PILLAR -> Color(0xFFAAA091)
@@ -2105,10 +2109,13 @@ fun BossHpNameplateBar(
     modifier: Modifier = Modifier
 ) {
     val hpFrac = (boss.hp.toFloat() / boss.maxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
-    val isVenomBoss = boss.type.specialKind == BossSpecialKind.VENOM_NOVA
     val isTelegraphing = boss.pendingAoeTiles.isNotEmpty()
-    val accentColor = if (isVenomBoss) Color(0xFF7BFF33) else FireOrange
-    val barColor = if (isVenomBoss) Color(0xFF56D938) else HealthCrimson
+    val (accentColor, barColor) = when (boss.type.specialKind) {
+        BossSpecialKind.VENOM_NOVA -> Color(0xFF7BFF33) to Color(0xFF56D938)
+        BossSpecialKind.QUARRY_QUAKE -> Color(0xFFB692FF) to Color(0xFF7D5CE6)
+        BossSpecialKind.LABYRINTH_PYRE -> Color(0xFFFFC14D) to Color(0xFFD93B2B)
+        else -> FireOrange to HealthCrimson
+    }
     val infiniteTransition = rememberInfiniteTransition(label = "boss_telegraph_pulse")
     val warnAlpha by infiniteTransition.animateFloat(
         initialValue = 0.55f,
@@ -2207,7 +2214,12 @@ fun BossHpNameplateBar(
             }
 
             if (isTelegraphing) {
-                val warnText = if (isVenomBoss) "VENOM NOVA — DODGE DANGER ZONES!" else "FLAME BURST — DODGE DANGER ZONES!"
+                val warnText = when (boss.type.specialKind) {
+                    BossSpecialKind.VENOM_NOVA -> "VENOM NOVA — DODGE DANGER ZONES!"
+                    BossSpecialKind.QUARRY_QUAKE -> "QUARRY QUAKE — DODGE DANGER ZONES!"
+                    BossSpecialKind.LABYRINTH_PYRE -> "LABYRINTH PYRE — DODGE DANGER ZONES!"
+                    else -> "FLAME BURST — DODGE DANGER ZONES!"
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

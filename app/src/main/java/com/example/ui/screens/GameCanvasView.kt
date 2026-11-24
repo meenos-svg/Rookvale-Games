@@ -50,6 +50,7 @@ import com.example.game.model.ThreatBand
 import com.example.game.model.TileType
 import com.example.game.model.normalizeRegionId
 import com.example.game.multiplayer.PlayerActionState
+import com.example.game.multiplayer.RemotePlayerInterpolator
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.sprites.EntitySpriteAtlas
 import com.example.game.world.NpcRole
@@ -73,7 +74,7 @@ private sealed class DepthSortableItem(val depth: Float, val subOrder: Int) {
     class TallTile(depth: Float, val tx: Int, val ty: Int, val tile: TileType) : DepthSortableItem(depth, 1)
     class NpcItem(depth: Float, val npc: NpcSpot) : DepthSortableItem(depth, 2)
     class MonsterItem(depth: Float, val monster: MonsterEntity, val fx: Float, val fy: Float, val facingRad: Float) : DepthSortableItem(depth, 3)
-    class RemotePlayerItem(depth: Float, val player: RemotePlayerState, val fx: Float, val fy: Float, val moveFrac: Float, val facingRad: Float) : DepthSortableItem(depth, 4)
+    class RemotePlayerItem(depth: Float, val player: RemotePlayerState, val fx: Float, val fy: Float, val walkPhase: Float, val facingRad: Float) : DepthSortableItem(depth, 4)
     class LocalPlayerItem(depth: Float, val fx: Float, val fy: Float, val moveFrac: Float, val facingRad: Float) : DepthSortableItem(depth, 5)
 }
 
@@ -185,7 +186,7 @@ fun GameCanvasView(
     val camera = remember { IsometricCamera() }
     val reusablePath = remember { Path() }
     val reusableTileMatrix = remember { Matrix() }
-    val remoteVisualPos = remember { HashMap<String, FloatArray>(16) }
+    val remoteInterpolator = remember { RemotePlayerInterpolator() }
     val activeRemoteIds = remember { HashSet<String>(16) }
     val localFacingRad = remember { floatArrayOf(ScreenFacingResolver.directionToWorldRadians(Direction.SOUTH)) }
     val remoteFacingRad = remember { HashMap<String, Float>(16) }
@@ -397,22 +398,28 @@ fun GameCanvasView(
             val aoeCoreScale = 0.34f + aoeWavePulse * 0.26f
             st.monsters.forEach { m ->
                 if (m.floor == st.floor && m.pendingAoeTiles.isNotEmpty()) {
-                    val isVenom = m.type.specialKind == BossSpecialKind.VENOM_NOVA
-                    val fillBase = if (isVenom) Color(0xFF4CFF33) else FireOrange
-                    val strokeBase = if (isVenom) Color(0xFFB4FF6E) else TargetRed
-                    val coreBase = if (isVenom) Color(0xFFDEFF99) else Color(0xFFFFE066)
+                    val (fillBase, strokeBase, coreBase, isArcaneLight) = when (m.type.specialKind) {
+                        BossSpecialKind.VENOM_NOVA -> listOf(Color(0xFF4CFF33), Color(0xFFB4FF6E), Color(0xFFDEFF99), true)
+                        BossSpecialKind.QUARRY_QUAKE -> listOf(Color(0xFF8C5EFF), Color(0xFFD8C2FF), Color(0xFFF3EAFF), true)
+                        BossSpecialKind.LABYRINTH_PYRE -> listOf(Color(0xFFFF6D1F), Color(0xFFFFD45C), Color(0xFFFFF4B8), false)
+                        else -> listOf(FireOrange, TargetRed, Color(0xFFFFE066), false)
+                    }
+                    val fillColor = fillBase as Color
+                    val strokeColor = strokeBase as Color
+                    val coreColor = coreBase as Color
+                    val arcaneFlag = isArcaneLight as Boolean
                     m.pendingAoeTiles.forEach { (ax, ay) ->
                         if (ax in bounds.minTx..bounds.maxTx && ay in bounds.minTy..bounds.maxTy) {
                             val c = camera.tileCenterToScreen(ax.toFloat(), ay.toFloat())
                             IsometricTileDrawer.drawRotatedQuad(
                                 this, reusablePath, camera, c.x, c.y, fracU = 0.92f, fracV = 0.92f,
-                                fillColor = fillBase.copy(alpha = aoeFillAlpha),
-                                strokeColor = strokeBase.copy(alpha = 0.95f),
+                                fillColor = fillColor.copy(alpha = aoeFillAlpha),
+                                strokeColor = strokeColor.copy(alpha = 0.95f),
                                 strokeWidth = 3.2f
                             )
                             IsometricTileDrawer.drawRotatedQuad(
                                 this, reusablePath, camera, c.x, c.y, fracU = aoeCoreScale, fracV = aoeCoreScale,
-                                fillColor = coreBase.copy(alpha = (aoeFillAlpha + 0.22f).coerceAtMost(0.88f))
+                                fillColor = coreColor.copy(alpha = (aoeFillAlpha + 0.22f).coerceAtMost(0.88f))
                             )
                             if (collectLights && visibleLights.size < 44) {
                                 visibleLights.add(
@@ -420,11 +427,11 @@ fun GameCanvasView(
                                         screenX = c.x,
                                         screenY = c.y,
                                         radiusPx = hw * 1.65f,
-                                        coreColor = coreBase,
-                                        outerColor = fillBase,
+                                        coreColor = coreColor,
+                                        outerColor = fillColor,
                                         intensity = 0.65f + aoeWavePulse * 0.25f,
                                         flickerSeed = (ax * 3 + ay * 5).toFloat(),
-                                        isArcane = isVenom
+                                        isArcane = arcaneFlag
                                     )
                                 )
                             }
@@ -465,7 +472,6 @@ fun GameCanvasView(
             val localRegionId = normalizeRegionId(st.regionId)
             val dtSec = ((now - lerpClockMs[0]).coerceIn(1L, 120L)) / 1000f
             lerpClockMs[0] = now
-            val smoothAlpha = (1f - exp(-10.5f * dtSec)).coerceIn(0.08f, 1f)
             val turnAlpha = (1f - exp(-14.0f * dtSec)).coerceIn(0.12f, 1f)
 
             activeMonsterIds.clear()
@@ -477,17 +483,22 @@ fun GameCanvasView(
                     val myF = m.lastMoveFromY + (m.y - m.lastMoveFromY) * mFrac
                     if (m.type.isBoss && collectLights && visibleLights.size < 46) {
                         val mc = camera.tileCenterToScreen(mxF, myF)
-                        val isVenomBoss = m.type.specialKind == BossSpecialKind.VENOM_NOVA
+                        val (bossCore, bossOuter, bossArcane) = when (m.type.specialKind) {
+                            BossSpecialKind.VENOM_NOVA -> Triple(Color(0xFFA8FF6E), Color(0xFF4CFF33), true)
+                            BossSpecialKind.QUARRY_QUAKE -> Triple(Color(0xFFE0CCFF), Color(0xFF9466FF), true)
+                            BossSpecialKind.LABYRINTH_PYRE -> Triple(Color(0xFFFFE48C), Color(0xFFFF5E1A), false)
+                            else -> Triple(Color(0xFFFFC266), FireOrange, false)
+                        }
                         visibleLights.add(
                             ScenePointLight(
                                 screenX = mc.x,
                                 screenY = mc.y - hh * 0.8f,
                                 radiusPx = hw * 3.4f,
-                                coreColor = if (isVenomBoss) Color(0xFFA8FF6E) else Color(0xFFFFC266),
-                                outerColor = if (isVenomBoss) Color(0xFF4CFF33) else FireOrange,
+                                coreColor = bossCore,
+                                outerColor = bossOuter,
                                 intensity = 0.82f,
                                 flickerSeed = (m.id * 11).toFloat(),
-                                isArcane = isVenomBoss
+                                isArcane = bossArcane
                             )
                         )
                     }
@@ -528,37 +539,20 @@ fun GameCanvasView(
             latestRemotePlayers.forEach { rp ->
                 if (rp.floor != st.floor || normalizeRegionId(rp.regionId) != localRegionId) return@forEach
                 activeRemoteIds.add(rp.playerId)
-                val targetX = rp.x.toFloat()
-                val targetY = rp.y.toFloat()
-                val vis = remoteVisualPos[rp.playerId]
-                val visX: Float
-                val visY: Float
-                if (vis == null || vis[2].toInt() != rp.floor || hypot(targetX - vis[0], targetY - vis[1]) > 12f) {
-                    val fresh = floatArrayOf(targetX, targetY, rp.floor.toFloat())
-                    remoteVisualPos[rp.playerId] = fresh
-                    visX = targetX
-                    visY = targetY
-                } else {
-                    val nx = vis[0] + (targetX - vis[0]) * smoothAlpha
-                    val ny = vis[1] + (targetY - vis[1]) * smoothAlpha
-                    val snappedX = if (abs(targetX - nx) < 0.015f) targetX else nx
-                    val snappedY = if (abs(targetY - ny) < 0.015f) targetY else ny
-                    vis[0] = snappedX
-                    vis[1] = snappedY
-                    visX = snappedX
-                    visY = snappedY
-                }
-                val glideDx = targetX - visX
-                val glideDy = targetY - visY
-                val isGliding = hypot(glideDx, glideDy) > 0.03f
-                val rpMoveFrac = if (isGliding) 0.5f else ((now - rp.lastMoveMs).toFloat() / 190f).coerceIn(0f, 1f)
-                val desiredRpRad = if (hypot(glideDx, glideDy) > 0.04f) {
-                    ScreenFacingResolver.vectorToWorldRadians(glideDx, glideDy, rp.direction)
+                val rState = remoteInterpolator.updatePlayer(rp = rp, nowUptimeMs = now, dtSecRaw = dtSec)
+                val visX = rState.renderX
+                val visY = rState.renderY
+                val desiredRpRad = if (rState.isGliding && hypot(rState.velocityX, rState.velocityY) > 0.08f) {
+                    ScreenFacingResolver.vectorToWorldRadians(rState.velocityX, rState.velocityY, rp.direction)
                 } else {
                     ScreenFacingResolver.directionToWorldRadians(rp.direction)
                 }
                 val prevRpRad = remoteFacingRad[rp.playerId]
-                val smoothRpRad = if (prevRpRad == null) desiredRpRad else ScreenFacingResolver.shortestAngleLerp(prevRpRad, desiredRpRad, turnAlpha)
+                val smoothRpRad = if (prevRpRad == null || rState.hardSnappedThisFrame) {
+                    desiredRpRad
+                } else {
+                    ScreenFacingResolver.shortestAngleLerp(prevRpRad, desiredRpRad, turnAlpha)
+                }
                 remoteFacingRad[rp.playerId] = smoothRpRad
 
                 if (visX >= bounds.minTx - 2 && visX <= bounds.maxTx + 2 &&
@@ -570,20 +564,17 @@ fun GameCanvasView(
                             player = rp,
                             fx = visX,
                             fy = visY,
-                            moveFrac = rpMoveFrac,
+                            walkPhase = rState.walkPhase,
                             facingRad = smoothRpRad
                         )
                     )
                 }
             }
-            if (remoteVisualPos.size > activeRemoteIds.size) {
-                val iter = remoteVisualPos.keys.iterator()
+            remoteInterpolator.pruneInactive(activeRemoteIds)
+            if (remoteFacingRad.size > activeRemoteIds.size) {
+                val iter = remoteFacingRad.keys.iterator()
                 while (iter.hasNext()) {
-                    val key = iter.next()
-                    if (key !in activeRemoteIds) {
-                        iter.remove()
-                        remoteFacingRad.remove(key)
-                    }
+                    if (iter.next() !in activeRemoteIds) iter.remove()
                 }
             }
 
@@ -676,7 +667,7 @@ fun GameCanvasView(
                             rp = item.player,
                             fx = item.fx,
                             fy = item.fy,
-                            moveFrac = item.moveFrac,
+                            walkPhase = item.walkPhase,
                             facingRad = item.facingRad,
                             state = st,
                             camera = camera,
@@ -1029,7 +1020,7 @@ private fun DrawScope.drawIsometricRemotePlayer(
     rp: RemotePlayerState,
     fx: Float,
     fy: Float,
-    moveFrac: Float,
+    walkPhase: Float,
     facingRad: Float,
     state: GameWorldState,
     camera: IsometricCamera,
@@ -1057,7 +1048,6 @@ private fun DrawScope.drawIsometricRemotePlayer(
 
     val heightPx = spritePx * VolumetricShading.HEROIC_HUMANOID_SCALE
     val u = heightPx / 46f
-    val walkPhase = if (moveFrac < 0.99f) (now / 62f) else 0f
     val actionAge = now - rp.lastActionMs
     val isAttackAction = rp.actionState == PlayerActionState.ATTACKING || rp.actionState == PlayerActionState.CASTING
     val attackProgress = if (isAttackAction && actionAge in 0L..360L) (actionAge.toFloat() / 360f) else 0f

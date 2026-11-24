@@ -37,13 +37,21 @@ object OrganicMonsterRenderer {
         MonsterType.CRAG_WOLF -> 1.08f
         MonsterType.ORC_WARRIOR -> 1.14f
         MonsterType.SWAMP_TROLL -> 1.18f
-        MonsterType.MINOTAUR -> 1.20f
         MonsterType.DRAGON_HATCHLING -> 1.20f
-        MonsterType.CYCLOPS -> 1.24f
         MonsterType.BROODMOTHER_ARACHNE -> 1.25f
         MonsterType.IGNIS_LORD_OF_THE_PIT -> 1.27f
         MonsterType.DEMON_LORD -> 1.28f
         MonsterType.ELDER_DRAGON -> 1.32f
+        // Tier 5: Grimmaw Quarry Clan (stone-skinned subterranean giants)
+        MonsterType.GRIMMAW_QUARRYMAN -> 1.22f
+        MonsterType.GRIMMAW_ROCK_HURLER -> 1.20f
+        MonsterType.GRIMMAW_CRUSHER -> 1.28f
+        MonsterType.KRAGOR_THE_STONE_EYED -> 1.36f
+        // Tier 6: Gorek Labyrinth Clan (armored obsidian-horned beast-kin)
+        MonsterType.GOREK_RAIDER -> 1.18f
+        MonsterType.GOREK_PHALANX -> 1.24f
+        MonsterType.GOREK_HEX_CALLER -> 1.18f
+        MonsterType.VAELGOR_LABYRINTH_WARDEN -> 1.36f
         else -> 1.0f
     }
 
@@ -137,10 +145,6 @@ object OrganicMonsterRenderer {
                 ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
                 species = BipedMonsterStyle.GOBLIN_SCOUT, useSpec = useSpec, useRim = useRim, quality = quality, path = path
             )
-            MonsterType.MINOTAUR -> drawBipedMonster(
-                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
-                species = BipedMonsterStyle.MINOTAUR, useSpec = useSpec, useRim = useRim, quality = quality, path = path
-            )
             MonsterType.ORC_WARRIOR -> drawBipedMonster(
                 ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
                 species = BipedMonsterStyle.ORC_WARRIOR, useSpec = useSpec, useRim = useRim, quality = quality, path = path
@@ -153,10 +157,6 @@ object OrganicMonsterRenderer {
                 ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
                 species = BipedMonsterStyle.FIRE_DEVIL, useSpec = useSpec, useRim = useRim, quality = quality, path = path
             )
-            MonsterType.CYCLOPS -> drawBipedMonster(
-                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
-                species = BipedMonsterStyle.CYCLOPS, useSpec = useSpec, useRim = useRim, quality = quality, path = path
-            )
             MonsterType.NECROMANCER -> drawBipedMonster(
                 ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
                 species = BipedMonsterStyle.NECROMANCER, useSpec = useSpec, useRim = useRim, quality = quality, path = path
@@ -165,6 +165,38 @@ object OrganicMonsterRenderer {
                 ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
                 species = BipedMonsterStyle.DEMON_LORD, useSpec = useSpec, useRim = useRim, quality = quality, path = path
             )
+            MonsterType.GRIMMAW_QUARRYMAN -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.GRIMMAW_QUARRYMAN, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.GRIMMAW_ROCK_HURLER -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.GRIMMAW_ROCK_HURLER, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.GRIMMAW_CRUSHER -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.GRIMMAW_CRUSHER, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.KRAGOR_THE_STONE_EYED -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.KRAGOR_THE_STONE_EYED, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.GOREK_RAIDER -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.GOREK_RAIDER, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.GOREK_PHALANX -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.GOREK_PHALANX, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.GOREK_HEX_CALLER -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.GOREK_HEX_CALLER, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.VAELGOR_LABYRINTH_WARDEN -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
         }
 
         // Directional 3D attack slash arc on High/HD quality
@@ -172,10 +204,13 @@ object OrganicMonsterRenderer {
             val slashAlpha = (lunge * 0.76f).coerceIn(0f, 0.80f)
             val slashColor = when (type) {
                 MonsterType.FIRE_DEVIL, MonsterType.IGNIS_LORD_OF_THE_PIT, MonsterType.DEMON_LORD,
-                MonsterType.ELDER_DRAGON, MonsterType.DRAGON_HATCHLING -> Color(0xFFFF7A26)
+                MonsterType.ELDER_DRAGON, MonsterType.DRAGON_HATCHLING,
+                MonsterType.VAELGOR_LABYRINTH_WARDEN, MonsterType.GOREK_HEX_CALLER -> Color(0xFFFF7A26)
                 MonsterType.POISON_SPIDER, MonsterType.BROODMOTHER_ARACHNE,
                 MonsterType.YOUNG_SNAKE, MonsterType.SWAMP_TROLL -> Color(0xFF7BFF33)
-                MonsterType.NECROMANCER, MonsterType.GHOUL -> Color(0xFFC07BFF)
+                MonsterType.NECROMANCER, MonsterType.GHOUL,
+                MonsterType.KRAGOR_THE_STONE_EYED, MonsterType.GRIMMAW_CRUSHER -> Color(0xFFC07BFF)
+                MonsterType.GOREK_RAIDER, MonsterType.GOREK_PHALANX -> Color(0xFFFFC14D)
                 else -> Color(0xFFFFE7B0)
             }
             val arcCenter = facing.project(ox, oy, u, 0f, 10.5f, 18f)
@@ -1297,13 +1332,21 @@ object OrganicMonsterRenderer {
         SWAMP_TROLL,
         SKELETON,
         GOBLIN_SCOUT,
-        MINOTAUR,
         ORC_WARRIOR,
         GHOUL,
         FIRE_DEVIL,
-        CYCLOPS,
         NECROMANCER,
-        DEMON_LORD
+        DEMON_LORD,
+        // Tier 5: Grimmaw Quarry Clan (stone-skinned single-eyed subterranean giants)
+        GRIMMAW_QUARRYMAN,
+        GRIMMAW_ROCK_HURLER,
+        GRIMMAW_CRUSHER,
+        KRAGOR_THE_STONE_EYED,
+        // Tier 6: Gorek Labyrinth Clan (armored obsidian-horned beast-kin)
+        GOREK_RAIDER,
+        GOREK_PHALANX,
+        GOREK_HEX_CALLER,
+        VAELGOR_LABYRINTH_WARDEN
     }
 
     private fun DrawScope.drawBipedMonster(
@@ -1323,40 +1366,84 @@ object OrganicMonsterRenderer {
         quality: GraphicsQuality,
         path: Path
     ) {
+        val isGrimmaw = species == BipedMonsterStyle.GRIMMAW_QUARRYMAN ||
+            species == BipedMonsterStyle.GRIMMAW_ROCK_HURLER ||
+            species == BipedMonsterStyle.GRIMMAW_CRUSHER ||
+            species == BipedMonsterStyle.KRAGOR_THE_STONE_EYED
+        val isGorek = species == BipedMonsterStyle.GOREK_RAIDER ||
+            species == BipedMonsterStyle.GOREK_PHALANX ||
+            species == BipedMonsterStyle.GOREK_HEX_CALLER ||
+            species == BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN
+
+        // Pulsing boss floor aura for Kragor (amethyst seismic glow) & Vaelgor (obsidian pyre glow)
+        if (species == BipedMonsterStyle.KRAGOR_THE_STONE_EYED || species == BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN) {
+            val pulse = 0.74f + 0.26f * sin(t * 4.2f)
+            val auraInner = if (species == BipedMonsterStyle.KRAGOR_THE_STONE_EYED) Color(0xFFB58CFF) else Color(0xFFFF8A2B)
+            val auraOuter = if (species == BipedMonsterStyle.KRAGOR_THE_STONE_EYED) Color(0xFF5D38B8) else Color(0xFFBF241A)
+            drawOval(
+                brush = Brush.radialGradient(
+                    colorStops = arrayOf(
+                        0.0f to auraInner.copy(alpha = 0.36f * pulse),
+                        0.60f to auraOuter.copy(alpha = 0.18f * pulse),
+                        1.0f to Color.Transparent
+                    ),
+                    center = Offset(ox, oy),
+                    radius = u * 23.5f
+                ),
+                topLeft = Offset(ox - u * 23.5f, oy - u * 12.0f),
+                size = Size(u * 47.0f, u * 24.0f)
+            )
+        }
+
         val (skinMain, skinHi, skinSh) = when (species) {
             BipedMonsterStyle.SWAMP_TROLL -> Triple(Color(0xFF4F7A46), Color(0xFF7CB26B), Color(0xFF284524))
             BipedMonsterStyle.SKELETON -> Triple(Color(0xFFE6DEC8), Color(0xFFFFFBF0), Color(0xFF9C917A))
             BipedMonsterStyle.GOBLIN_SCOUT -> Triple(Color(0xFF5D8F3B), Color(0xFF8CC45E), Color(0xFF2F4F1C))
-            BipedMonsterStyle.MINOTAUR -> Triple(Color(0xFF7A4428), Color(0xFFAC6944), Color(0xFF422112))
             BipedMonsterStyle.ORC_WARRIOR -> Triple(Color(0xFF51703B), Color(0xFF7CA15B), Color(0xFF283B1C))
             BipedMonsterStyle.GHOUL -> Triple(Color(0xFF7D857B), Color(0xFFAAB5A8), Color(0xFF444A45))
             BipedMonsterStyle.FIRE_DEVIL -> Triple(Color(0xFFC9331E), Color(0xFFFF6D3B), Color(0xFF6B120B))
-            BipedMonsterStyle.CYCLOPS -> Triple(Color(0xFFA6744E), Color(0xFFD6A074), Color(0xFF5E3C23))
             BipedMonsterStyle.NECROMANCER -> Triple(Color(0xFF2A2236), Color(0xFF524469), Color(0xFF140F1C))
             BipedMonsterStyle.DEMON_LORD -> Triple(Color(0xFF8F1B1E), Color(0xFFD93B32), Color(0xFF450A0E))
+            // Grimmaw: craggy quarry granite & slate stone-skin
+            BipedMonsterStyle.GRIMMAW_QUARRYMAN -> Triple(Color(0xFF6E717A), Color(0xFF9CA1AD), Color(0xFF3E4047))
+            BipedMonsterStyle.GRIMMAW_ROCK_HURLER -> Triple(Color(0xFF78736C), Color(0xFFA8A197), Color(0xFF45423D))
+            BipedMonsterStyle.GRIMMAW_CRUSHER -> Triple(Color(0xFF5B6170), Color(0xFF8E97AD), Color(0xFF313540))
+            BipedMonsterStyle.KRAGOR_THE_STONE_EYED -> Triple(Color(0xFF4E4A63), Color(0xFF8F86B5), Color(0xFF272436))
+            // Gorek: dark ash-furred, obsidian-armored beast-kin
+            BipedMonsterStyle.GOREK_RAIDER -> Triple(Color(0xFF4E362E), Color(0xFF7D594B), Color(0xFF291B17))
+            BipedMonsterStyle.GOREK_PHALANX -> Triple(Color(0xFF3B353E), Color(0xFF6E6575), Color(0xFF1E1A21))
+            BipedMonsterStyle.GOREK_HEX_CALLER -> Triple(Color(0xFF382436), Color(0xFF6B4666), Color(0xFF1B101A))
+            BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN -> Triple(Color(0xFF2E2229), Color(0xFF634854), Color(0xFF140D12))
         }
 
         val torsoWidth = when (species) {
-            BipedMonsterStyle.DEMON_LORD, BipedMonsterStyle.CYCLOPS, BipedMonsterStyle.MINOTAUR -> 11.8f
+            BipedMonsterStyle.DEMON_LORD, BipedMonsterStyle.KRAGOR_THE_STONE_EYED,
+            BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN -> 12.8f
+            BipedMonsterStyle.GRIMMAW_CRUSHER, BipedMonsterStyle.GOREK_PHALANX -> 12.0f
+            BipedMonsterStyle.GRIMMAW_QUARRYMAN, BipedMonsterStyle.GRIMMAW_ROCK_HURLER,
+            BipedMonsterStyle.GOREK_RAIDER -> 11.2f
             BipedMonsterStyle.SWAMP_TROLL, BipedMonsterStyle.ORC_WARRIOR -> 10.4f
+            BipedMonsterStyle.GOREK_HEX_CALLER -> 9.4f
             BipedMonsterStyle.SKELETON, BipedMonsterStyle.GHOUL -> 7.0f
             BipedMonsterStyle.GOBLIN_SCOUT -> 7.4f
             else -> 8.6f
         }
         val isHeavyBrute = species == BipedMonsterStyle.DEMON_LORD ||
-            species == BipedMonsterStyle.CYCLOPS ||
-            species == BipedMonsterStyle.MINOTAUR ||
             species == BipedMonsterStyle.SWAMP_TROLL ||
-            species == BipedMonsterStyle.ORC_WARRIOR
+            species == BipedMonsterStyle.ORC_WARRIOR ||
+            isGrimmaw || isGorek
         val shoulderR = torsoWidth * 0.98f
         val hipUp = 13.5f + bobUp
         val shoulderUp = 28.8f + bobUp + breath * 0.55f
         val headUp = 36.6f + bobUp + breath * 0.6f
         val hasWings = species == BipedMonsterStyle.DEMON_LORD
         val hasTail = species == BipedMonsterStyle.FIRE_DEVIL || species == BipedMonsterStyle.DEMON_LORD
-        val hasCape = species == BipedMonsterStyle.NECROMANCER || species == BipedMonsterStyle.GHOUL
+        val hasCape = species == BipedMonsterStyle.NECROMANCER ||
+            species == BipedMonsterStyle.GHOUL ||
+            species == BipedMonsterStyle.GOREK_HEX_CALLER ||
+            species == BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN
 
-        // 8 sortable layers: 0=BACK_EXTRAS(wings/tail/cape), 1=L_LEG, 2=R_LEG, 3=L_ARM_OFF, 4=R_ARM_WEAP, 5=TORSO, 6=HEAD
+        // 7 sortable layers: 0=BACK_EXTRAS(wings/tail/cape), 1=L_LEG, 2=R_LEG, 3=L_ARM_OFF, 4=R_ARM_WEAP, 5=TORSO, 6=HEAD
         val order = IntArray(7) { it }
         val depths = floatArrayOf(
             if (facing.isBackFacing && hasCape) 0.4f else facing.depthOf(0f, -6.5f) - 1.2f, // 0 BACK_EXTRAS
@@ -1371,7 +1458,7 @@ object OrganicMonsterRenderer {
 
         for (i in 0 until 7) {
             when (order[i]) {
-                0 -> { // WINGS / TAIL / NECRO CAPE
+                0 -> { // WINGS / TAIL / CAPES
                     if (hasWings) {
                         val flap = sin(t * 4.0f) * 3.8f + lunge * 4.0f
                         for (side in -1..1 step 2) {
@@ -1417,11 +1504,16 @@ object OrganicMonsterRenderer {
                         )
                     }
                     if (hasCape) {
-                        val capeColor = if (species == BipedMonsterStyle.NECROMANCER) Color(0xFF5E162B) else Color(0xFF474F49)
-                        val topL = facing.project(ox, oy, u, -6.5f, -3.5f, shoulderUp)
-                        val topR = facing.project(ox, oy, u, +6.5f, -3.5f, shoulderUp)
-                        val botR = facing.project(ox, oy, u, +8.2f, -5.8f, 4.0f + bobUp * 0.3f)
-                        val botL = facing.project(ox, oy, u, -8.2f, -5.8f, 4.0f + bobUp * 0.3f)
+                        val capeColor = when (species) {
+                            BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN -> Color(0xFF8C1D24)
+                            BipedMonsterStyle.GOREK_HEX_CALLER -> Color(0xFF541C47)
+                            BipedMonsterStyle.NECROMANCER -> Color(0xFF5E162B)
+                            else -> Color(0xFF474F49)
+                        }
+                        val topL = facing.project(ox, oy, u, -7.2f, -3.5f, shoulderUp)
+                        val topR = facing.project(ox, oy, u, +7.2f, -3.5f, shoulderUp)
+                        val botR = facing.project(ox, oy, u, +9.0f, -5.8f, 4.0f + bobUp * 0.3f)
+                        val botL = facing.project(ox, oy, u, -9.0f, -5.8f, 4.0f + bobUp * 0.3f)
                         path.reset()
                         path.moveTo(topL.x, topL.y)
                         path.lineTo(topR.x, topR.y)
@@ -1432,40 +1524,46 @@ object OrganicMonsterRenderer {
                         drawPath(path, INK, style = Stroke(ow * 0.85f, join = StrokeJoin.Round))
                     }
                 }
-                1, 2 -> { // LEGS (with contact dots & species foot shapes)
+                1, 2 -> { // LEGS (with contact dots & species greaves / stone legs / cloven hooves)
                     val isRight = order[i] == 2
                     val side = if (isRight) 1f else -1f
                     val step = if (isRight) stride else -stride
-                    val hip = facing.project(ox, oy, u, side * 3.6f, 0f, hipUp)
-                    val foot = facing.project(ox, oy, u, side * 4.0f, step * 4.4f, 1.4f + (step * 1.8f).coerceAtLeast(0f))
-                    VolumetricShading.drawFootContactDot(this, foot, u * 2.6f, u * 1.3f)
+                    val hip = facing.project(ox, oy, u, side * 3.8f, 0f, hipUp)
+                    val foot = facing.project(ox, oy, u, side * 4.2f, step * 4.4f, 1.4f + (step * 1.8f).coerceAtLeast(0f))
+                    VolumetricShading.drawFootContactDot(this, foot, u * 2.8f, u * 1.4f)
 
-                    if (species == BipedMonsterStyle.NECROMANCER) {
-                        // Flowing lower robe skirt covers legs cleanly
+                    if (species == BipedMonsterStyle.NECROMANCER || species == BipedMonsterStyle.GOREK_HEX_CALLER) {
                         VolumetricShading.drawVolumetricCylinder(
                             this, hip, foot, u * 4.2f, u * 4.8f,
                             main = skinMain, highlight = skinHi, shadow = skinSh,
                             outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
                         )
                     } else {
-                        val legR = if (species == BipedMonsterStyle.SKELETON) u * 1.45f else u * 2.9f
+                        val legR = when {
+                            species == BipedMonsterStyle.SKELETON -> u * 1.45f
+                            isGrimmaw -> u * 3.4f
+                            else -> u * 2.9f
+                        }
+                        val legMain = if (isGorek) Color(0xFF2B252E) else skinMain
+                        val legHi = if (isGorek) Color(0xFF594F61) else skinHi
                         VolumetricShading.drawVolumetricCylinder(
-                            this, hip, foot, legR, legR * 0.82f,
-                            main = skinMain, highlight = skinHi, shadow = skinSh,
+                            this, hip, foot, legR, legR * 0.84f,
+                            main = legMain, highlight = legHi, shadow = skinSh,
                             outlineW = ow * 0.9f, lightX = facing.lightScreenX, path = path
                         )
-                        val footColor = when (species) {
-                            BipedMonsterStyle.MINOTAUR, BipedMonsterStyle.DEMON_LORD, BipedMonsterStyle.FIRE_DEVIL -> Color(0xFF261C1B)
+                        val footColor = when {
+                            isGorek || species == BipedMonsterStyle.DEMON_LORD || species == BipedMonsterStyle.FIRE_DEVIL -> Color(0xFF1E171A)
+                            isGrimmaw -> Color(0xFF35373D)
                             else -> skinSh
                         }
                         VolumetricShading.drawVolumetricEllipsoid(
-                            this, foot.x, foot.y, legR * 1.15f, legR * 0.65f,
+                            this, foot.x, foot.y, legR * 1.18f, legR * 0.65f,
                             main = footColor, highlight = skinMain, shadow = INK,
                             outlineW = ow * 0.8f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
                         )
                     }
                 }
-                5 -> { // VOLUMETRIC 3D TORSO (species armor, ribcage, molten runes, belt)
+                5 -> { // VOLUMETRIC 3D TORSO (obsidian armor, stone monoliths, Vesperite/Cinderite veins)
                     val topC = facing.project(ox, oy, u, 0f, 0f, shoulderUp)
                     val botC = facing.project(ox, oy, u, 0f, 0f, hipUp)
                     val profileScale = 0.72f + 0.28f * abs(facing.forwardDepth)
@@ -1473,7 +1571,6 @@ object OrganicMonsterRenderer {
                     val botHW = u * (torsoWidth * 0.74f) * profileScale
 
                     if (species == BipedMonsterStyle.SKELETON) {
-                        // 3D Spine + curved ivory ribs + pelvis
                         VolumetricShading.drawVolumetricCylinder(
                             this, topC, botC, u * 1.8f, u * 1.6f,
                             main = skinMain, highlight = skinHi, shadow = skinSh,
@@ -1497,11 +1594,17 @@ object OrganicMonsterRenderer {
                         val torsoMain = when (species) {
                             BipedMonsterStyle.ORC_WARRIOR -> Color(0xFF5D4029)
                             BipedMonsterStyle.GOBLIN_SCOUT -> Color(0xFF6B4C2E)
+                            BipedMonsterStyle.GOREK_RAIDER -> Color(0xFF332D38)
+                            BipedMonsterStyle.GOREK_PHALANX -> Color(0xFF28242E)
+                            BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN -> Color(0xFF241B24)
                             else -> skinMain
                         }
                         val torsoHi = when (species) {
                             BipedMonsterStyle.ORC_WARRIOR -> Color(0xFF8C6342)
                             BipedMonsterStyle.GOBLIN_SCOUT -> Color(0xFF966E45)
+                            BipedMonsterStyle.GOREK_RAIDER -> Color(0xFF635A6E)
+                            BipedMonsterStyle.GOREK_PHALANX -> Color(0xFF5E576B)
+                            BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN -> Color(0xFFFFB240)
                             else -> skinHi
                         }
                         val torsoSh = VolumetricShading.coolShadow(torsoMain, 0.48f)
@@ -1511,7 +1614,7 @@ object OrganicMonsterRenderer {
                             bottomCenter = botC,
                             topHalfW = topHW,
                             botHalfW = botHW,
-                            domeHeight = u * 3.4f,
+                            domeHeight = u * 3.6f,
                             main = torsoMain,
                             highlight = torsoHi,
                             shadow = torsoSh,
@@ -1521,18 +1624,46 @@ object OrganicMonsterRenderer {
                             path = path
                         )
 
-                        // Sculpted muscular deltoid shoulder masses & pectoral ink definition on heavy brutes/bosses
+                        // Sculpted stone monolith pauldrons (Grimmaw), riveted obsidian pauldrons (Gorek), or muscle deltoids
                         if (isHeavyBrute) {
+                            val pauldronMain = when {
+                                isGorek -> Color(0xFF2A242E)
+                                species == BipedMonsterStyle.KRAGOR_THE_STONE_EYED -> Color(0xFF5E5678)
+                                else -> skinMain
+                            }
+                            val pauldronHi = when {
+                                species == BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN -> Color(0xFFFFAA33)
+                                isGorek -> Color(0xFF6A6075)
+                                species == BipedMonsterStyle.KRAGOR_THE_STONE_EYED -> Color(0xFFCBB5FF)
+                                else -> skinHi
+                            }
                             for (side in -1..1 step 2) {
-                                val deltoid = facing.project(ox, oy, u, side * shoulderR * 0.96f, 0.4f, shoulderUp - 0.8f)
+                                val deltoid = facing.project(ox, oy, u, side * shoulderR * 0.96f, 0.4f, shoulderUp - 0.6f)
                                 VolumetricShading.drawVolumetricEllipsoid(
-                                    this, deltoid.x, deltoid.y, u * 4.4f, u * 3.8f,
-                                    main = skinMain, highlight = skinHi, shadow = skinSh,
-                                    outlineW = ow * 0.92f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                                    this, deltoid.x, deltoid.y, u * (if (isGrimmaw || isGorek) 5.0f else 4.4f), u * 4.1f,
+                                    main = pauldronMain, highlight = pauldronHi, shadow = skinSh,
+                                    outlineW = ow * 0.94f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
                                     useSpecular = useSpec, useRim = useRim
                                 )
+                                if (species == BipedMonsterStyle.KRAGOR_THE_STONE_EYED) {
+                                    // Embedded glowing Vesperite crystals jutting from Kragor's stone shoulders
+                                    val cTip = facing.project(ox, oy, u, side * (shoulderR + 3.8f), 0.2f, shoulderUp + 5.8f)
+                                    VolumetricShading.drawVolumetricCylinder(
+                                        this, deltoid, cTip, u * 1.9f, u * 0.6f,
+                                        main = Color(0xFF9C7AFF), highlight = Color(0xFFF2E8FF), shadow = Color(0xFF3E2978),
+                                        outlineW = ow * 0.78f, lightX = facing.lightScreenX, path = path
+                                    )
+                                } else if (species == BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN) {
+                                    // Spiked obsidian-gold labyrinth pauldrons
+                                    val spTip = facing.project(ox, oy, u, side * (shoulderR + 4.4f), 0.4f, shoulderUp + 6.4f)
+                                    VolumetricShading.drawVolumetricCylinder(
+                                        this, deltoid, spTip, u * 1.8f, u * 0.55f,
+                                        main = Color(0xFFFF9B2B), highlight = Color(0xFFFFF0A8), shadow = Color(0xFF421C14),
+                                        outlineW = ow * 0.78f, lightX = facing.lightScreenX, path = path
+                                    )
+                                }
                             }
-                            if (!facing.isBackFacing) {
+                            if (!facing.isBackFacing && !isGorek) {
                                 val pecL = facing.project(ox, oy, u, -3.4f, 4.2f, shoulderUp - 4.4f)
                                 val pecM = facing.project(ox, oy, u, 0f, 4.6f, shoulderUp - 5.6f)
                                 val pecR = facing.project(ox, oy, u, +3.4f, 4.2f, shoulderUp - 4.4f)
@@ -1541,66 +1672,118 @@ object OrganicMonsterRenderer {
                             }
                         }
 
-                        // Species torso details (chest runes, leather cross-strap, crimson necromancer stole)
+                        // Species torso emblems, quarry chains, Vesperite cores, and Cinderite armor trims
                         when (species) {
                             BipedMonsterStyle.DEMON_LORD, BipedMonsterStyle.FIRE_DEVIL -> {
                                 val runeC = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -3.4f else +3.8f, (shoulderUp + hipUp) * 0.54f)
                                 drawCircle(Color(0xFFFF7A26).copy(alpha = 0.82f), u * 3.9f, runeC)
                                 drawCircle(Color(0xFFFFEE88), u * 1.95f, runeC)
                             }
-                            BipedMonsterStyle.CYCLOPS, BipedMonsterStyle.MINOTAUR -> {
+                            BipedMonsterStyle.GRIMMAW_QUARRYMAN, BipedMonsterStyle.GRIMMAW_ROCK_HURLER,
+                            BipedMonsterStyle.GRIMMAW_CRUSHER -> {
+                                // Heavy iron quarry harness chain across craggy granite chest
+                                val strapStart = facing.project(ox, oy, u, -7.6f, 0f, shoulderUp)
+                                val strapEnd = facing.project(ox, oy, u, +6.6f, 0f, hipUp + 1.5f)
+                                drawLine(INK, strapStart, strapEnd, strokeWidth = u * 3.8f, cap = StrokeCap.Round)
+                                drawLine(Color(0xFF525866), strapStart, strapEnd, strokeWidth = u * 2.5f, cap = StrokeCap.Round)
+                                drawLine(Color(0xFFB799FF), strapStart, strapEnd, strokeWidth = u * 0.85f)
+                            }
+                            BipedMonsterStyle.KRAGOR_THE_STONE_EYED -> {
+                                // Glowing Vesperite stone-heart fissure in Kragor's granite torso
+                                val coreC = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -3.6f else +4.4f, (shoulderUp + hipUp) * 0.54f)
+                                drawCircle(Color(0xFF9C6BFF).copy(alpha = 0.85f), u * 4.4f, coreC)
+                                drawCircle(Color(0xFFF0E4FF), u * 2.1f, coreC)
+                            }
+                            BipedMonsterStyle.GOREK_RAIDER, BipedMonsterStyle.GOREK_PHALANX -> {
+                                // Riveted bronze-gold obsidian cuirass cross-trim
                                 val strapStart = facing.project(ox, oy, u, -7.2f, 0f, shoulderUp)
                                 val strapEnd = facing.project(ox, oy, u, +6.2f, 0f, hipUp + 1.5f)
                                 drawLine(INK, strapStart, strapEnd, strokeWidth = u * 3.6f, cap = StrokeCap.Round)
-                                drawLine(Color(0xFF472B16), strapStart, strapEnd, strokeWidth = u * 2.5f, cap = StrokeCap.Round)
-                                drawLine(Color(0xFFE8B958), strapStart, strapEnd, strokeWidth = u * 0.85f)
+                                drawLine(Color(0xFFD9953B), strapStart, strapEnd, strokeWidth = u * 1.8f, cap = StrokeCap.Round)
                             }
-                            BipedMonsterStyle.NECROMANCER -> {
+                            BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN -> {
+                                // Blazing Cinderite-gold labyrinth sigil embossed on obsidian chestplate
+                                val sigilC = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -3.6f else +4.4f, (shoulderUp + hipUp) * 0.54f)
+                                drawCircle(Color(0xFFFF6E1A).copy(alpha = 0.88f), u * 4.2f, sigilC)
+                                drawCircle(Color(0xFFFFE680), u * 2.0f, sigilC)
+                            }
+                            BipedMonsterStyle.GOREK_HEX_CALLER, BipedMonsterStyle.NECROMANCER -> {
                                 val trimTop = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -2.8f else +3.2f, shoulderUp)
                                 val trimBot = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -2.8f else +3.2f, hipUp - 3.5f)
-                                drawLine(Color(0xFF9C2240), trimTop, trimBot, strokeWidth = u * 2.8f, cap = StrokeCap.Round)
+                                drawLine(
+                                    if (species == BipedMonsterStyle.GOREK_HEX_CALLER) Color(0xFFFF6D26) else Color(0xFF9C2240),
+                                    trimTop, trimBot, strokeWidth = u * 2.8f, cap = StrokeCap.Round
+                                )
                                 drawLine(Color(0xFFD9A84E), trimTop, trimBot, strokeWidth = u * 0.7f)
                             }
                             else -> Unit
                         }
                     }
                 }
-                3 -> { // LEFT ARM + OFFHAND SHIELD / CLAW / ORB
+                3 -> { // LEFT ARM + OFFHAND SHIELD / TOWER SHIELD / HEX ORB
                     val sh = facing.project(ox, oy, u, -shoulderR, 0f, shoulderUp - 1.5f)
                     val hand = facing.project(ox, oy, u, -shoulderR - 1.5f, +4.2f - stride * 2.2f, hipUp + 4.5f)
-                    val armR = if (species == BipedMonsterStyle.SKELETON) u * 1.35f else u * 2.4f
+                    val armR = when {
+                        species == BipedMonsterStyle.SKELETON -> u * 1.35f
+                        isGrimmaw -> u * 3.1f
+                        else -> u * 2.45f
+                    }
                     VolumetricShading.drawVolumetricCylinder(
-                        this, sh, hand, armR, armR * 0.82f,
+                        this, sh, hand, armR, armR * 0.84f,
                         main = skinMain, highlight = skinHi, shadow = skinSh,
                         outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
                     )
-                    // Offhand shields for armed foes (Skeleton, Goblin Scout, Orc Warrior)
-                    if (species == BipedMonsterStyle.SKELETON || species == BipedMonsterStyle.GOBLIN_SCOUT || species == BipedMonsterStyle.ORC_WARRIOR) {
-                        val shC = facing.project(ox, oy, u, -shoulderR - 2.6f, +5.8f, hipUp + 5.2f)
-                        val isIron = species == BipedMonsterStyle.ORC_WARRIOR
-                        val shieldRx = u * (if (isIron) 4.4f else 3.8f) * (0.55f + 0.45f * abs(facing.forwardDepth))
-                        VolumetricShading.drawVolumetricEllipsoid(
-                            this, shC.x, shC.y, shieldRx, u * (if (isIron) 5.8f else 4.4f),
-                            main = if (isIron) Color(0xFF5D6775) else Color(0xFF8A592E),
-                            highlight = if (isIron) Color(0xFFB3C0D4) else Color(0xFFBF8652),
-                            shadow = Color(0xFF2B211B),
-                            outlineW = ow * 0.9f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
-                            useSpecular = useSpec
-                        )
-                        drawCircle(Color(0xFFD9A84E), u * 1.15f, shC)
-                    } else if (species == BipedMonsterStyle.NECROMANCER && quality != GraphicsQuality.LOW) {
-                        // Orbiting violet soul wisp
-                        val wisp = facing.project(ox, oy, u, -shoulderR - 3.5f + cos(t * 4f) * 1.8f, +5.0f, hipUp + 8.5f + sin(t * 4f) * 1.8f)
-                        drawCircle(Color(0xFFAE5CFF).copy(alpha = 0.45f), u * 3.4f, wisp)
-                        drawCircle(Color(0xFFE8C8FF), u * 1.5f, wisp)
+                    when (species) {
+                        BipedMonsterStyle.SKELETON, BipedMonsterStyle.GOBLIN_SCOUT, BipedMonsterStyle.ORC_WARRIOR -> {
+                            val shC = facing.project(ox, oy, u, -shoulderR - 2.6f, +5.8f, hipUp + 5.2f)
+                            val isIron = species == BipedMonsterStyle.ORC_WARRIOR
+                            val shieldRx = u * (if (isIron) 4.4f else 3.8f) * (0.55f + 0.45f * abs(facing.forwardDepth))
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, shC.x, shC.y, shieldRx, u * (if (isIron) 5.8f else 4.4f),
+                                main = if (isIron) Color(0xFF5D6775) else Color(0xFF8A592E),
+                                highlight = if (isIron) Color(0xFFB3C0D4) else Color(0xFFBF8652),
+                                shadow = Color(0xFF2B211B),
+                                outlineW = ow * 0.9f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                                useSpecular = useSpec
+                            )
+                            drawCircle(Color(0xFFD9A84E), u * 1.15f, shC)
+                        }
+                        BipedMonsterStyle.GOREK_PHALANX -> {
+                            // Heavy obsidian-and-gold labyrinth tower shield
+                            val shC = facing.project(ox, oy, u, -shoulderR - 3.2f, +6.2f, hipUp + 5.8f)
+                            val shieldRx = u * 5.2f * (0.55f + 0.45f * abs(facing.forwardDepth))
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, shC.x, shC.y, shieldRx, u * 8.2f,
+                                main = Color(0xFF28222E), highlight = Color(0xFF6B5E78), shadow = Color(0xFF120F17),
+                                outlineW = ow * 1.0f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                                useSpecular = useSpec, useRim = useRim
+                            )
+                            drawCircle(Color(0xFFFFB238), u * 1.7f, shC)
+                        }
+                        BipedMonsterStyle.NECROMANCER -> if (quality != GraphicsQuality.LOW) {
+                            val wisp = facing.project(ox, oy, u, -shoulderR - 3.5f + cos(t * 4f) * 1.8f, +5.0f, hipUp + 8.5f + sin(t * 4f) * 1.8f)
+                            drawCircle(Color(0xFFAE5CFF).copy(alpha = 0.45f), u * 3.4f, wisp)
+                            drawCircle(Color(0xFFE8C8FF), u * 1.5f, wisp)
+                        }
+                        BipedMonsterStyle.GOREK_HEX_CALLER -> if (quality != GraphicsQuality.LOW) {
+                            // Orbiting molten Cinderite hex-orb
+                            val wisp = facing.project(ox, oy, u, -shoulderR - 3.5f + cos(t * 4.5f) * 2.0f, +5.4f, hipUp + 9.0f + sin(t * 4.5f) * 1.8f)
+                            drawCircle(Color(0xFFFF6D1A).copy(alpha = 0.50f), u * 3.8f, wisp)
+                            drawCircle(Color(0xFFFFEE99), u * 1.7f, wisp)
+                        }
+                        else -> Unit
                     }
                 }
-                4 -> { // RIGHT ARM + 3D WEAPON (Club, Sword, Battleaxe, Cleaver, Trident, Staff, Greatsword)
+                4 -> { // RIGHT ARM + 3D WEAPON (Quarry Pick, Boulder, Stone Maul, Obsidian Cleaver, Labyrinth Halberd)
                     val sh = facing.project(ox, oy, u, +shoulderR, 0f, shoulderUp - 1.5f)
                     val swingF = 4.6f + stride * 2.2f + lunge * 6.5f
                     val swingUp = hipUp + 5.0f + lunge * 4.5f
                     val hand = facing.project(ox, oy, u, +shoulderR + 1.2f, swingF, swingUp)
-                    val armR = if (species == BipedMonsterStyle.SKELETON) u * 1.35f else u * 2.5f
+                    val armR = when {
+                        species == BipedMonsterStyle.SKELETON -> u * 1.35f
+                        isGrimmaw -> u * 3.1f
+                        else -> u * 2.5f
+                    }
                     VolumetricShading.drawVolumetricCylinder(
                         this, sh, hand, armR, armR * 0.85f,
                         main = skinMain, highlight = skinHi, shadow = skinSh,
@@ -1609,29 +1792,119 @@ object OrganicMonsterRenderer {
 
                     val tip = facing.project(ox, oy, u, +shoulderR + 3.2f, swingF + 9.5f + lunge * 5.0f, swingUp + 12.5f - lunge * 6.0f)
                     when (species) {
-                        BipedMonsterStyle.SWAMP_TROLL, BipedMonsterStyle.CYCLOPS -> {
+                        BipedMonsterStyle.SWAMP_TROLL -> {
                             VolumetricShading.drawVolumetricCylinder(
                                 this, hand, tip, u * 1.5f, u * 3.6f,
                                 main = Color(0xFF754C29), highlight = Color(0xFFA87648), shadow = Color(0xFF3E2410),
                                 outlineW = ow * 0.9f, lightX = facing.lightScreenX, path = path
                             )
                         }
+                        BipedMonsterStyle.GRIMMAW_QUARRYMAN -> {
+                            // Heavy iron-headed quarry pickaxe
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, hand, tip, u * 1.3f, u * 1.2f,
+                                main = Color(0xFF6B4323), outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
+                            )
+                            val pickA = Offset(tip.x - u * 4.4f, tip.y + u * 1.2f)
+                            val pickB = Offset(tip.x + u * 4.8f, tip.y + u * 1.8f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, pickA, pickB, u * 1.4f, u * 1.4f,
+                                main = Color(0xFF9EA8B8), highlight = Color(0xFFF0F5FC), shadow = Color(0xFF47505E),
+                                outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                        BipedMonsterStyle.GRIMMAW_ROCK_HURLER -> {
+                            // Hoisted craggy Vesperite-flecked boulder ready to hurl
+                            val rockC = facing.project(ox, oy, u, +shoulderR + 2.8f, swingF + 3.5f + lunge * 5.5f, swingUp + 6.5f)
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, rockC.x, rockC.y, u * 5.2f, u * 4.6f,
+                                main = Color(0xFF6B6661), highlight = Color(0xFFABA39B), shadow = Color(0xFF302E2C),
+                                outlineW = ow * 0.95f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
+                            )
+                            drawCircle(Color(0xFFB594FF), u * 1.4f, Offset(rockC.x - u * 1.2f, rockC.y - u * 0.8f))
+                        }
+                        BipedMonsterStyle.GRIMMAW_CRUSHER, BipedMonsterStyle.KRAGOR_THE_STONE_EYED -> {
+                            // Colossal monolith stone-and-Vesperite quarry warmaul
+                            val isBoss = species == BipedMonsterStyle.KRAGOR_THE_STONE_EYED
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, hand, tip, u * 1.6f, u * 1.6f,
+                                main = Color(0xFF4A424D), highlight = Color(0xFF83788A), shadow = INK,
+                                outlineW = ow * 0.9f, lightX = facing.lightScreenX, path = path
+                            )
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, tip.x, tip.y, u * (if (isBoss) 6.2f else 5.0f), u * (if (isBoss) 4.8f else 3.8f),
+                                main = if (isBoss) Color(0xFF5B4E80) else Color(0xFF6B6E78),
+                                highlight = if (isBoss) Color(0xFFE6D8FF) else Color(0xFFAAB0BD),
+                                shadow = Color(0xFF262330),
+                                outlineW = ow * 1.0f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                                useSpecular = useSpec, useRim = useRim
+                            )
+                            if (isBoss) {
+                                drawCircle(Color(0xFFB88CFF), u * 2.2f, tip)
+                                drawCircle(Color(0xFFFFFFFF), u * 0.9f, tip)
+                            }
+                        }
+                        BipedMonsterStyle.GOREK_RAIDER -> {
+                            // Obsidian-forged curved war-cleaver
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, hand, tip, u * 1.2f, u * 1.2f,
+                                main = Color(0xFF54331A), outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
+                            )
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, tip.x, tip.y, u * 4.6f, u * 3.4f,
+                                main = Color(0xFF3E3547), highlight = Color(0xFFFFB240), shadow = Color(0xFF17131C),
+                                outlineW = ow * 0.92f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec
+                            )
+                        }
+                        BipedMonsterStyle.GOREK_PHALANX -> {
+                            // Long obsidian phalanx pike
+                            val spearBot = facing.project(ox, oy, u, +shoulderR + 1.0f, swingF - 3.5f, 3.0f)
+                            val spearTop = facing.project(ox, oy, u, +shoulderR + 3.4f, swingF + 13.5f + lunge * 6.0f, swingUp + 16.0f - lunge * 6.5f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, spearBot, spearTop, u * 1.15f, u * 0.9f,
+                                main = Color(0xFF3B2B24), highlight = Color(0xFF7D5A48), shadow = INK,
+                                outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
+                            )
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, spearTop.x, spearTop.y, u * 2.2f, u * 3.8f,
+                                main = Color(0xFF594D63), highlight = Color(0xFFFFCC66), shadow = INK,
+                                outlineW = ow * 0.85f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec
+                            )
+                        }
+                        BipedMonsterStyle.GOREK_HEX_CALLER -> {
+                            // Horned volcanic brazier staff
+                            val staffBot = facing.project(ox, oy, u, +shoulderR + 1.0f, swingF - 1.5f, 2.0f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, staffBot, tip, u * 1.25f, u * 1.1f,
+                                main = Color(0xFF302029), highlight = Color(0xFF734D60), shadow = INK,
+                                outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
+                            )
+                            drawCircle(Color(0xFFFF6D1A), u * 3.0f, tip)
+                            drawCircle(Color(0xFFFFF2A6), u * 1.4f, tip)
+                        }
+                        BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN -> {
+                            // Blazing Cinderite-edged Labyrinth Warden Greataxe-Halberd
+                            val haftBot = facing.project(ox, oy, u, +shoulderR + 0.8f, swingF - 4.0f, 3.0f)
+                            val bladeTop = facing.project(ox, oy, u, +shoulderR + 3.8f, swingF + 12.5f + lunge * 6.0f, swingUp + 15.5f - lunge * 7.0f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, haftBot, bladeTop, u * 1.45f, u * 1.35f,
+                                main = Color(0xFF281D24), highlight = Color(0xFFFFB240), shadow = INK,
+                                outlineW = ow * 0.9f, lightX = facing.lightScreenX, path = path
+                            )
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, bladeTop.x, bladeTop.y, u * 6.0f, u * 5.0f,
+                                main = Color(0xFF36242C), highlight = Color(0xFFFFC14D), shadow = Color(0xFF140D12),
+                                outlineW = ow * 1.0f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                                useSpecular = true, useRim = useRim
+                            )
+                            drawCircle(Color(0xFFFF7A1F), u * 2.2f, bladeTop)
+                            drawCircle(Color(0xFFFFF2A8), u * 1.0f, bladeTop)
+                        }
                         BipedMonsterStyle.SKELETON, BipedMonsterStyle.ORC_WARRIOR, BipedMonsterStyle.GOBLIN_SCOUT -> {
                             VolumetricShading.drawVolumetricCylinder(
                                 this, hand, tip, u * 1.35f, u * 0.75f,
                                 main = Color(0xFF9EA8B8), highlight = Color(0xFFE8F0FC), shadow = Color(0xFF4F5866),
                                 outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
-                            )
-                        }
-                        BipedMonsterStyle.MINOTAUR -> {
-                            VolumetricShading.drawVolumetricCylinder(
-                                this, hand, tip, u * 1.1f, u * 1.1f,
-                                main = Color(0xFF6B4323), outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
-                            )
-                            VolumetricShading.drawVolumetricEllipsoid(
-                                this, tip.x, tip.y, u * 4.4f, u * 3.2f,
-                                main = Color(0xFF9DA8B8), highlight = Color(0xFFF0F5FC), shadow = Color(0xFF47505E),
-                                outlineW = ow * 0.9f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec
                             )
                         }
                         BipedMonsterStyle.FIRE_DEVIL, BipedMonsterStyle.DEMON_LORD -> {
@@ -1656,20 +1929,22 @@ object OrganicMonsterRenderer {
                             )
                         }
                         BipedMonsterStyle.GHOUL -> {
-                            // Elongated hooked necrotic claws
                             drawLine(Color(0xFFCFD9C8), hand, tip, strokeWidth = u * 1.4f, cap = StrokeCap.Round)
                         }
                     }
                 }
-                6 -> { // TURNING 3D HEAD (Horns, Tusks, Ears, Single Cyclops Eye, Hood)
+                6 -> { // TURNING 3D HEAD (Grimmaw Single Stone-Eye & Crystal Brow, Gorek Obsidian Curved Horns)
                     val headPos = facing.project(ox, oy, u, 0f, +1.0f, headUp)
-                    val headR = when (species) {
-                        BipedMonsterStyle.CYCLOPS, BipedMonsterStyle.DEMON_LORD -> u * 5.8f
-                        BipedMonsterStyle.GOBLIN_SCOUT -> u * 5.2f
+                    val headR = when {
+                        species == BipedMonsterStyle.KRAGOR_THE_STONE_EYED ||
+                            species == BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN ||
+                            species == BipedMonsterStyle.DEMON_LORD -> u * 6.2f
+                        isGrimmaw || isGorek -> u * 5.8f
+                        species == BipedMonsterStyle.GOBLIN_SCOUT -> u * 5.2f
                         else -> u * 5.4f
                     }
 
-                    // Goblin long pointed side-swept ears (visible across all 8 octants!)
+                    // Goblin long pointed side-swept ears
                     if (species == BipedMonsterStyle.GOBLIN_SCOUT) {
                         for (side in -1..1 step 2) {
                             val eb = facing.project(ox, oy, u, side * 4.5f, +0.5f, headUp + 0.5f)
@@ -1682,17 +1957,38 @@ object OrganicMonsterRenderer {
                         }
                     }
 
-                    // Sweeping heavy sculpted 3D Horns (Minotaur, Fire Devil, Demon Lord)
-                    if (species == BipedMonsterStyle.MINOTAUR || species == BipedMonsterStyle.FIRE_DEVIL || species == BipedMonsterStyle.DEMON_LORD) {
-                        val hornColor = if (species == BipedMonsterStyle.MINOTAUR) Color(0xFFE8DFC8) else Color(0xFF2B2226)
-                        val hornSpan = if (species == BipedMonsterStyle.DEMON_LORD) 12.2f else 9.6f
+                    // Sweeping heavy sculpted 3D Horns (Gorek Obsidian Horns, Fire Devil, Demon Lord)
+                    if (isGorek || species == BipedMonsterStyle.FIRE_DEVIL || species == BipedMonsterStyle.DEMON_LORD) {
+                        val hornMain = when {
+                            species == BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN -> Color(0xFF1F171F)
+                            isGorek -> Color(0xFF28222B)
+                            else -> Color(0xFF2B2226)
+                        }
+                        val hornHi = if (isGorek) Color(0xFFFFB84D) else Color(0xFFFFF4DC)
+                        val hornSpan = when (species) {
+                            BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN, BipedMonsterStyle.DEMON_LORD -> 13.0f
+                            else -> 10.2f
+                        }
                         for (side in -1..1 step 2) {
                             val hb = facing.project(ox, oy, u, side * 4.0f, +0.5f, headUp + 3.6f)
-                            val ht = facing.project(ox, oy, u, side * hornSpan, +2.4f, headUp + 10.6f)
+                            val ht = facing.project(ox, oy, u, side * hornSpan, +2.6f, headUp + 11.2f)
                             VolumetricShading.drawVolumetricCylinder(
-                                this, hb, ht, u * 2.25f, u * 0.65f,
-                                main = hornColor, highlight = Color(0xFFFFF4DC), shadow = INK,
+                                this, hb, ht, u * 2.35f, u * 0.65f,
+                                main = hornMain, highlight = hornHi, shadow = INK,
                                 outlineW = ow * 0.88f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                    }
+
+                    // Kragor's Vesperite crystal crown ridge atop his stone skull
+                    if (species == BipedMonsterStyle.KRAGOR_THE_STONE_EYED) {
+                        for (side in -1..1) {
+                            val cb = facing.project(ox, oy, u, side * 2.8f, +0.2f, headUp + 4.4f)
+                            val ct = facing.project(ox, oy, u, side * 4.4f, +0.8f, headUp + if (side == 0) 11.4f else 9.0f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, cb, ct, u * 1.55f, u * 0.5f,
+                                main = Color(0xFFA17DFF), highlight = Color(0xFFF3EBFF), shadow = Color(0xFF422C7D),
+                                outlineW = ow * 0.78f, lightX = facing.lightScreenX, path = path
                             )
                         }
                     }
@@ -1706,17 +2002,32 @@ object OrganicMonsterRenderer {
 
                     // Face features ONLY when facing toward or sideways to the camera!
                     if (!facing.isBackFacing) {
-                        when (species) {
-                            BipedMonsterStyle.CYCLOPS -> {
-                                // Iconic huge central eye
-                                val eye = facing.project(ox, oy, u, 0f, +5.8f, headUp + 0.8f)
-                                drawCircle(INK, u * 2.8f, eye)
-                                drawCircle(Color(0xFFFFF8E8), u * 2.2f, eye)
-                                drawCircle(Color(0xFFE04832), u * 1.25f, eye)
-                                drawCircle(INK, u * 0.6f, eye)
+                        when {
+                            isGrimmaw -> {
+                                // Iconic Grimmaw single glowing subterranean stone-eye!
+                                val isKragor = species == BipedMonsterStyle.KRAGOR_THE_STONE_EYED
+                                val eye = facing.project(ox, oy, u, 0f, +5.8f, headUp + 0.9f)
+                                drawCircle(INK, u * (if (isKragor) 3.3f else 2.8f), eye)
+                                drawCircle(if (isKragor) Color(0xFFEBDFFF) else Color(0xFFFFF4D8), u * (if (isKragor) 2.55f else 2.15f), eye)
+                                drawCircle(if (isKragor) Color(0xFF9C5CFF) else Color(0xFFFF9826), u * (if (isKragor) 1.55f else 1.25f), eye)
+                                drawCircle(if (isKragor) Color(0xFFFFFFFF) else INK, u * 0.65f, eye)
+                                // Craggy lower stone jaw line
+                                val jaw = facing.project(ox, oy, u, 0f, +5.6f, headUp - 2.6f)
+                                drawLine(INK, Offset(jaw.x - u * 2.6f, jaw.y), Offset(jaw.x + u * 2.6f, jaw.y), strokeWidth = ow * 0.95f)
                             }
-                            BipedMonsterStyle.NECROMANCER -> {
-                                // Shadowed hood void with glowing violet eyes
+                            isGorek -> {
+                                // Glowing volcanic-gold eyes & heavy obsidian war-helm brow + gilded nose-guard
+                                val eyeColor = if (species == BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN) Color(0xFFFFEE75) else Color(0xFFFF962B)
+                                for (side in -1..1 step 2) {
+                                    val ep = facing.project(ox, oy, u, side * 2.2f, +5.6f, headUp + 0.8f)
+                                    drawCircle(INK, u * 1.65f, ep)
+                                    drawCircle(eyeColor, u * 1.15f, ep)
+                                }
+                                // Obsidian war-mask snout ring / gilded clasp
+                                val ring = facing.project(ox, oy, u, 0f, +6.6f, headUp - 2.2f)
+                                drawCircle(Color(0xFFFFC14D), u * 1.55f, ring, style = Stroke(u * 0.9f))
+                            }
+                            species == BipedMonsterStyle.NECROMANCER -> {
                                 val voidP = facing.project(ox, oy, u, 0f, +4.4f, headUp - 0.2f)
                                 drawOval(
                                     color = Color(0xFF0B0812),
@@ -1728,7 +2039,7 @@ object OrganicMonsterRenderer {
                                     drawCircle(Color(0xFFCC7BFF), u * 1.0f, ep)
                                 }
                             }
-                            BipedMonsterStyle.SKELETON -> {
+                            species == BipedMonsterStyle.SKELETON -> {
                                 for (side in -1..1 step 2) {
                                     val ep = facing.project(ox, oy, u, side * 1.9f, +5.4f, headUp + 0.5f)
                                     drawCircle(INK, u * 1.45f, ep)
@@ -1749,21 +2060,16 @@ object OrganicMonsterRenderer {
                                     drawCircle(INK, u * 1.55f, ep)
                                     drawCircle(eyeColor, u * 1.12f, ep)
                                 }
-                                // Prominent tusks for Orc / Swamp Troll / Demon Lord fangs
                                 if (species == BipedMonsterStyle.ORC_WARRIOR || species == BipedMonsterStyle.SWAMP_TROLL || species == BipedMonsterStyle.DEMON_LORD) {
                                     for (side in -1..1 step 2) {
                                         val tk = facing.project(ox, oy, u, side * 2.1f, +5.9f, headUp - 2.3f)
                                         drawCircle(Color(0xFFF7F0DA), u * 1.25f, tk)
                                         drawCircle(INK, u * 1.25f, tk, style = Stroke(ow * 0.65f))
                                     }
-                                } else if (species == BipedMonsterStyle.MINOTAUR) {
-                                    val ring = facing.project(ox, oy, u, 0f, +6.6f, headUp - 2.2f)
-                                    drawCircle(Color(0xFFF0C450), u * 1.55f, ring, style = Stroke(u * 0.85f))
                                 }
                             }
                         }
                     } else if (species == BipedMonsterStyle.ORC_WARRIOR || species == BipedMonsterStyle.SWAMP_TROLL) {
-                        // Back-of-head dark hair / topknot detail visible when viewed from behind
                         val braid = facing.project(ox, oy, u, 0f, -4.6f, headUp + 1.2f)
                         VolumetricShading.drawVolumetricEllipsoid(
                             this, braid.x, braid.y, u * 2.8f, u * 3.4f,

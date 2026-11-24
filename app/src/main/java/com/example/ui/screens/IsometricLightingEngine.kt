@@ -349,6 +349,29 @@ object IsometricLightingEngine {
                     isArcane = true
                 )
             )
+            TileType.ORE_VESPERITE -> outLights.add(
+                ScenePointLight(
+                    screenX = cx,
+                    screenY = cy - unitH * 0.45f,
+                    radiusPx = unitW * 1.35f,
+                    coreColor = Color(0xFFE6D6FF),
+                    outerColor = Color(0xFF8E63FF),
+                    intensity = 0.48f,
+                    flickerSeed = seed,
+                    isArcane = true
+                )
+            )
+            TileType.ORE_CINDERITE -> outLights.add(
+                ScenePointLight(
+                    screenX = cx,
+                    screenY = cy - unitH * 0.45f,
+                    radiusPx = unitW * 1.50f,
+                    coreColor = Color(0xFFFFE48C),
+                    outerColor = FireOrange,
+                    intensity = 0.56f,
+                    flickerSeed = seed * 1.2f
+                )
+            )
             TileType.FOUNTAIN -> outLights.add(
                 ScenePointLight(
                     screenX = cx,

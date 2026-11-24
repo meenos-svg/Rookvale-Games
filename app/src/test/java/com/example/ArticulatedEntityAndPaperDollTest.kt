@@ -419,8 +419,12 @@ class ArticulatedEntityAndPaperDollTest {
             MonsterType.CRAG_WOLF,
             MonsterType.ORC_WARRIOR,
             MonsterType.SWAMP_TROLL,
-            MonsterType.MINOTAUR,
-            MonsterType.CYCLOPS,
+            MonsterType.GRIMMAW_QUARRYMAN,
+            MonsterType.GRIMMAW_CRUSHER,
+            MonsterType.KRAGOR_THE_STONE_EYED,
+            MonsterType.GOREK_RAIDER,
+            MonsterType.GOREK_PHALANX,
+            MonsterType.VAELGOR_LABYRINTH_WARDEN,
             MonsterType.DEMON_LORD,
             MonsterType.ELDER_DRAGON
         )

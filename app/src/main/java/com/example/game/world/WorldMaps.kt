@@ -99,16 +99,22 @@ object WorldMaps {
         LandmarkLabel(0, 242, 180, "CITY SEWERS (FLOOR -1)"),
         LandmarkLabel(0, 152, 173, "CELLAR ROPE HOLE (FLOOR -1)"),
         LandmarkLabel(0, 196, 134, "NORTH STARTER MEADOWS"),
-        LandmarkLabel(0, 92, 97, "NW OCHRE QUARRY (FLOOR -1)"),
+        LandmarkLabel(0, 92, 97, "NW COPPER QUARRY (FLOOR -1)"),
         LandmarkLabel(0, 264, 85, "MOUNTAIN CAVERN (FLOOR -1)"),
         LandmarkLabel(0, 308, 67, "DEEP ABYSSAL CAVERN (FLOOR -2)"),
         LandmarkLabel(0, 312, 207, "DARK FOREST SINKHOLE (FLOOR -1)"),
+        LandmarkLabel(0, 88, 320, "GRIMMAW CRAGS CAMP (LVL 16+)"),
+        LandmarkLabel(0, 84, 317, "THE GRIMMAW QUARRY (FLOOR -5)"),
+        LandmarkLabel(0, 312, 320, "GOREK BADLANDS CAMP (LVL 20+)"),
+        LandmarkLabel(0, 316, 317, "THE GOREK LABYRINTH (FLOOR -6)"),
         LandmarkLabel(0, 196, 8, "NORTH BORDER HIGHWAY"),
         LandmarkLabel(0, 8, 192, "WEST BORDER HIGHWAY"),
         LandmarkLabel(0, 391, 192, "EAST BORDER HIGHWAY"),
         LandmarkLabel(-1, 24, 34, "BROODMOTHER'S WEBBED DEN"),
         LandmarkLabel(-2, 24, 12, "MOLTEN PIT SANCTUM"),
-        LandmarkLabel(-3, 24, 18, "DEEP FORGE OUTPOST")
+        LandmarkLabel(-3, 24, 18, "DEEP FORGE OUTPOST"),
+        LandmarkLabel(-5, 24, 12, "KRAGOR'S QUARRY PIT"),
+        LandmarkLabel(-6, 24, 11, "VAELGOR'S LABYRINTH SANCTUM")
     )
 
     val portals: List<FloorPortal> = listOf(
@@ -130,6 +136,14 @@ object WorldMaps {
         // Floor 0 NE Crag Hills Deep Cavern <-> Direct Floor -2 Deep Caverns
         FloorPortal(0, 308, 66, -2, 11, 24, requiresRope = false),
         FloorPortal(-2, 10, 24, 0, 308, 67, requiresRope = false),
+
+        // Floor 0 SW Frontier Grimmaw Crags Camp <-> Floor -5 The Grimmaw Quarry
+        FloorPortal(0, 84, 316, -5, 24, 40, requiresRope = false),
+        FloorPortal(-5, 24, 41, 0, 84, 317, requiresRope = false),
+
+        // Floor 0 SE Frontier Gorek Badlands War-Camp <-> Floor -6 The Gorek Labyrinth
+        FloorPortal(0, 316, 316, -6, 24, 40, requiresRope = false),
+        FloorPortal(-6, 24, 41, 0, 316, 317, requiresRope = false),
 
         // Floor -1 <-> Floor -2 (Rope-Hole Down / Rope-Spot Up)
         FloorPortal(-1, 24, 38, -2, 24, 37, requiresRope = false),
@@ -192,6 +206,22 @@ object WorldMaps {
         MonsterSpawn(0, 300, 72, MonsterType.SWAMP_TROLL),
         MonsterSpawn(0, 316, 68, MonsterType.SKELETON),
 
+        // --- Floor 0 SW Frontier: Grimmaw Crags & Quarry Camp (TIER 5 — High Difficulty, far off from Rookvale City) ---
+        MonsterSpawn(0, 114, 318, MonsterType.GRIMMAW_QUARRYMAN),
+        MonsterSpawn(0, 102, 310, MonsterType.GRIMMAW_ROCK_HURLER),
+        MonsterSpawn(0, 102, 330, MonsterType.GRIMMAW_QUARRYMAN),
+        MonsterSpawn(0, 92, 322, MonsterType.GRIMMAW_CRUSHER),
+        MonsterSpawn(0, 74, 314, MonsterType.GRIMMAW_ROCK_HURLER),
+        MonsterSpawn(0, 78, 330, MonsterType.GRIMMAW_CRUSHER),
+
+        // --- Floor 0 SE Frontier: Gorek Badlands & War-Camp (TIER 6 — Pinnacle Difficulty, far off from Rookvale City) ---
+        MonsterSpawn(0, 286, 318, MonsterType.GOREK_RAIDER),
+        MonsterSpawn(0, 298, 310, MonsterType.GOREK_PHALANX),
+        MonsterSpawn(0, 298, 330, MonsterType.GOREK_RAIDER),
+        MonsterSpawn(0, 308, 322, MonsterType.GOREK_HEX_CALLER),
+        MonsterSpawn(0, 326, 314, MonsterType.GOREK_PHALANX),
+        MonsterSpawn(0, 324, 330, MonsterType.GOREK_HEX_CALLER),
+
         // --- Floor -1: Mossy Sewers & Caves (TIER 2 — Levels 3-6 + Dungeon Boss) ---
         MonsterSpawn(-1, 26, 13, MonsterType.CAVE_RAT),
         MonsterSpawn(-1, 13, 21, MonsterType.SWAMP_TROLL),
@@ -205,10 +235,10 @@ object WorldMaps {
         MonsterSpawn(-1, 24, 34, MonsterType.BROODMOTHER_ARACHNE),
 
         // --- Floor -2: Deep Caverns & Molten Chasm (TIER 3 — Levels 6-10 + Dungeon Boss) ---
-        MonsterSpawn(-2, 12, 33, MonsterType.MINOTAUR),
+        MonsterSpawn(-2, 12, 33, MonsterType.ORC_WARRIOR),
         MonsterSpawn(-2, 35, 33, MonsterType.ORC_WARRIOR),
         MonsterSpawn(-2, 13, 25, MonsterType.FIRE_DEVIL),
-        MonsterSpawn(-2, 37, 25, MonsterType.MINOTAUR),
+        MonsterSpawn(-2, 37, 25, MonsterType.GHOUL),
         MonsterSpawn(-2, 24, 25, MonsterType.GHOUL),
         MonsterSpawn(-2, 20, 12, MonsterType.ORC_WARRIOR),
         MonsterSpawn(-2, 28, 12, MonsterType.GHOUL),
@@ -216,20 +246,39 @@ object WorldMaps {
         MonsterSpawn(-2, 24, 12, MonsterType.IGNIS_LORD_OF_THE_PIT),
 
         // --- Floor -3: Abyssal Crypt & Boss (TIER 4 — Levels 10-18) ---
-        MonsterSpawn(-3, 14, 14, MonsterType.CYCLOPS),
-        MonsterSpawn(-3, 34, 14, MonsterType.CYCLOPS),
+        MonsterSpawn(-3, 14, 14, MonsterType.DRAGON_HATCHLING),
+        MonsterSpawn(-3, 34, 14, MonsterType.NECROMANCER),
         MonsterSpawn(-3, 12, 24, MonsterType.DRAGON_HATCHLING),
         MonsterSpawn(-3, 35, 24, MonsterType.NECROMANCER),
         MonsterSpawn(-3, 16, 32, MonsterType.NECROMANCER),
         MonsterSpawn(-3, 32, 32, MonsterType.DRAGON_HATCHLING),
         MonsterSpawn(-3, 24, 34, MonsterType.DEMON_LORD),
 
-        // --- Floor -4: Obsidian Wyrm Sanctum (Endgame Raid — Levels 16-20+) ---
+        // --- Floor -4: Obsidian Wyrm Sanctum (Classic Endgame Raid — Levels 16-20) ---
         MonsterSpawn(-4, 18, 32, MonsterType.DRAGON_HATCHLING),
         MonsterSpawn(-4, 32, 32, MonsterType.FIRE_DEVIL),
         MonsterSpawn(-4, 14, 24, MonsterType.NECROMANCER),
         MonsterSpawn(-4, 34, 24, MonsterType.DRAGON_HATCHLING),
-        MonsterSpawn(-4, 24, 16, MonsterType.ELDER_DRAGON)
+        MonsterSpawn(-4, 24, 16, MonsterType.ELDER_DRAGON),
+
+        // --- Floor -5: The Grimmaw Quarry (TIER 5 Endgame Dungeon — Harder than Classic Rookvale Dungeons) ---
+        MonsterSpawn(-5, 14, 34, MonsterType.GRIMMAW_QUARRYMAN),
+        MonsterSpawn(-5, 34, 34, MonsterType.GRIMMAW_QUARRYMAN),
+        MonsterSpawn(-5, 12, 25, MonsterType.GRIMMAW_ROCK_HURLER),
+        MonsterSpawn(-5, 36, 25, MonsterType.GRIMMAW_ROCK_HURLER),
+        MonsterSpawn(-5, 20, 26, MonsterType.GRIMMAW_CRUSHER),
+        MonsterSpawn(-5, 28, 26, MonsterType.GRIMMAW_CRUSHER),
+        MonsterSpawn(-5, 24, 12, MonsterType.KRAGOR_THE_STONE_EYED),
+
+        // --- Floor -6: The Gorek Labyrinth (TIER 6 Pinnacle Maze Dungeon — Hardest Challenge in Rookvale) ---
+        MonsterSpawn(-6, 13, 34, MonsterType.GOREK_RAIDER),
+        MonsterSpawn(-6, 35, 34, MonsterType.GOREK_RAIDER),
+        MonsterSpawn(-6, 13, 24, MonsterType.GOREK_PHALANX),
+        MonsterSpawn(-6, 35, 24, MonsterType.GOREK_PHALANX),
+        MonsterSpawn(-6, 24, 25, MonsterType.GOREK_HEX_CALLER),
+        MonsterSpawn(-6, 19, 14, MonsterType.GOREK_HEX_CALLER),
+        MonsterSpawn(-6, 29, 14, MonsterType.GOREK_PHALANX),
+        MonsterSpawn(-6, 24, 11, MonsterType.VAELGOR_LABYRINTH_WARDEN)
     )
 
     val floors: Map<Int, WorldFloor> = mapOf(
@@ -237,7 +286,9 @@ object WorldMaps {
         -1 to buildSewersFloor(),
         -2 to buildCryptsFloor(),
         -3 to buildForgehallFloor(),
-        -4 to buildWyrmSanctumFloor()
+        -4 to buildWyrmSanctumFloor(),
+        -5 to buildGrimmawQuarryFloor(),
+        -6 to buildGorekLabyrinthFloor()
     )
 
     fun getFloor(floorId: Int): WorldFloor = floors[floorId] ?: floors.getValue(0)
@@ -255,6 +306,8 @@ object WorldMaps {
         -2 -> 24 to 37
         -3 -> 24 to 9
         -4 -> 24 to 39
+        -5 -> 24 to 40
+        -6 -> 24 to 40
         else -> TEMPLE_SPAWN_X to TEMPLE_SPAWN_Y
     }
 
@@ -402,6 +455,8 @@ object WorldMaps {
                 if (x in 188..204 || y in 184..200) continue
                 if (x in 62..132 && y in 62..132) continue // NW Quarry
                 if (x in 230..332 && y in 48..116) continue // NE Crag Hills
+                if (x in 48..134 && y in 278..362) continue // SW Grimmaw Crags Camp
+                if (x in 266..352 && y in 278..362) continue // SE Gorek Badlands War-Camp
 
                 val h = deterministicHash(x, y, 19) and 255
                 val inEastForest = x >= 278 && y in 140..340
@@ -455,12 +510,14 @@ object WorldMaps {
             grid.set(65, y, TileType.MOUNTAIN_ROCK)
             if (y < 104) grid.set(66, y, TileType.MOUNTAIN_ROCK)
         }
-        // Ochre Veins around quarry ledges
+        // Copper & Tin Veins around outer NW Quarry ledges (Overworld Outskirts Tier 1)
         listOf(
             70 to 78, 72 to 86, 70 to 98, 74 to 110,
-            82 to 74, 96 to 74, 108 to 78, 116 to 88,
-            80 to 114, 104 to 112
-        ).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_OCHRE) }
+            82 to 74, 96 to 74
+        ).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_COPPER) }
+        listOf(
+            108 to 78, 116 to 88, 80 to 114, 104 to 112
+        ).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_TIN) }
         // Winding trail from North Highway (194, 120) & West Highway (118, 190) into Quarry
         grid.drawRoadSegment(194, 120, 120, 112, 1, TileType.DIRT_FLOOR)
         grid.drawRoadSegment(120, 112, 92, 98, 1, TileType.DIRT_FLOOR)
@@ -477,10 +534,10 @@ object WorldMaps {
             grid.set(x, ridgeY, TileType.MOUNTAIN_ROCK)
             grid.set(x, ridgeY + 1, TileType.MOUNTAIN_ROCK)
         }
-        // Ochre & Bogstone outcrops in Crag Hills
-        listOf(254 to 76, 276 to 74, 296 to 62, 320 to 62).forEach { (vx, vy) ->
-            grid.set(vx, vy, TileType.ORE_OCHRE)
-        }
+        // Copper, Tin & Bog Iron outcrops along outer Crag Hills
+        listOf(254 to 76, 276 to 74).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_COPPER) }
+        listOf(268 to 70, 296 to 62).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_TIN) }
+        listOf(320 to 62, 246 to 82).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_BOG_IRON) }
         // Winding mountain trails from North Highway to both caverns
         grid.drawRoadSegment(198, 112, 248, 96, 1, TileType.DIRT_FLOOR)
         grid.drawRoadSegment(248, 96, 264, 86, 1, TileType.DIRT_FLOOR)
@@ -497,11 +554,89 @@ object WorldMaps {
         grid.set(306, 65, TileType.TORCH_WALL)
         grid.set(310, 65, TileType.TORCH_WALL)
 
-        // 7. East Deep Dark Woods Trail & Sinkhole (Floor -1)
+        // 7. East Deep Dark Woods Trail, Bog Iron Marshes & Sinkhole (Floor -1)
         grid.fillEllipse(312, 206, 10, 8, TileType.DARK_GRASS)
         grid.drawRoadSegment(284, 192, 312, 206, 1, TileType.DIRT_FLOOR)
         grid.set(312, 206, TileType.ROPE_HOLE_DOWN)
         grid.set(312, 207, TileType.DIRT_FLOOR)
+        listOf(302 to 214, 322 to 214, 180 to 274, 212 to 274).forEach { (vx, vy) ->
+            grid.set(vx, vy, TileType.ORE_BOG_IRON)
+        }
+
+        // 7B. NEW FRONTIER AREA 1: SW GRIMMAW CRAGS & QUARRY CAMP (x=54..126, y=288..352 — High Difficulty, far off from Rookvale City)
+        grid.fillEllipse(88, 320, 34, 28, TileType.DIRT_FLOOR)
+        grid.fillRect(68, 306, 108, 334, TileType.COBBLESTONE)
+        // Natural crag cliff ridge wrapping the west & south borders
+        for (x in 56..118) {
+            grid.set(x, 348, TileType.MOUNTAIN_ROCK)
+            if (x < 96) grid.set(x, 347, TileType.MOUNTAIN_ROCK)
+        }
+        for (y in 294..348) {
+            grid.set(56, y, TileType.MOUNTAIN_ROCK)
+            if (y > 304) grid.set(57, y, TileType.MOUNTAIN_ROCK)
+        }
+        // Fortified Grimmaw stone camp barricades with wide East War-Gate (y=317..323)
+        for (x in 66..112) {
+            grid.set(x, 304, TileType.STONE_WALL)
+            grid.set(x, 336, TileType.STONE_WALL)
+        }
+        for (y in 304..336) {
+            grid.set(66, y, TileType.STONE_WALL)
+            if (y !in 317..323) grid.set(112, y, TileType.STONE_WALL)
+        }
+        // East Gate iron-barred archway & warning torch beacons
+        for (y in 318..322) grid.set(112, y, TileType.IRON_BAR_GATE)
+        listOf(112 to 316, 112 to 324, 82 to 314, 86 to 314, 72 to 305, 104 to 305, 72 to 335, 104 to 335).forEach { (tx, ty) ->
+            grid.set(tx, ty, TileType.TORCH_WALL)
+        }
+        // Quarry camp supply crates & weapon racks
+        listOf(70 to 308, 71 to 308, 106 to 332, 107 to 332).forEach { (px, py) -> grid.set(px, py, TileType.CRATE_BARREL) }
+        listOf(106 to 308, 70 to 332).forEach { (px, py) -> grid.set(px, py, TileType.WEAPON_RACK) }
+        // Outskirts Copper/Tin/Bog Iron veins outside Grimmaw Crags
+        listOf(62 to 300, 64 to 342).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_COPPER) }
+        listOf(118 to 302, 118 to 338).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_BOG_IRON) }
+        // Frontier Road branching west off South Highway (195, 318) -> Grimmaw Camp Gate (112, 320)
+        grid.drawRoadSegment(195, 318, 154, 318, 2, TileType.DIRT_FLOOR)
+        grid.drawRoadSegment(154, 318, 110, 320, 2, TileType.DIRT_FLOOR)
+        listOf(168 to 315, 168 to 321, 134 to 316, 134 to 322).forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
+        // Grimmaw Quarry Dungeon Entrance (Floor -5)
+        grid.set(84, 316, TileType.STAIRS_DOWN)
+        grid.set(84, 317, TileType.COBBLESTONE)
+
+        // 7C. NEW FRONTIER AREA 2: SE GOREK BADLANDS & WAR-CAMP (x=274..346, y=288..352 — Pinnacle Difficulty, far off from Rookvale City)
+        grid.fillEllipse(312, 320, 34, 28, TileType.DARK_GRASS)
+        grid.fillEllipse(312, 320, 28, 22, TileType.CRYPT_FLOOR)
+        grid.fillRect(292, 306, 332, 334, TileType.OBSIDIAN_FLOOR)
+        // Scorched lava fissures flanking the outer north & east badlands
+        grid.fillRect(296, 294, 328, 296, TileType.LAVA)
+        grid.fillRect(340, 304, 342, 336, TileType.LAVA)
+        // Fortified Gorek War-Camp bastion walls with wide West Gate (y=317..323)
+        for (x in 288..334) {
+            grid.set(x, 304, TileType.STONE_WALL)
+            grid.set(x, 336, TileType.STONE_WALL)
+        }
+        for (y in 304..336) {
+            grid.set(334, y, TileType.STONE_WALL)
+            if (y !in 317..323) grid.set(288, y, TileType.STONE_WALL)
+        }
+        // West Bastion Iron-Barred Gate & crimson war-braziers
+        for (y in 318..322) grid.set(288, y, TileType.IRON_BAR_GATE)
+        listOf(288 to 316, 288 to 324, 314 to 314, 318 to 314, 296 to 305, 328 to 305, 296 to 335, 328 to 335).forEach { (tx, ty) ->
+            grid.set(tx, ty, TileType.TORCH_WALL)
+        }
+        // War-camp weapon racks & supply barrels
+        listOf(294 to 308, 328 to 308, 294 to 332).forEach { (px, py) -> grid.set(px, py, TileType.WEAPON_RACK) }
+        listOf(328 to 332, 329 to 332).forEach { (px, py) -> grid.set(px, py, TileType.CRATE_BARREL) }
+        // Outskirts Tin & Bog Iron veins outside Gorek Badlands
+        listOf(282 to 302, 282 to 338).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_BOG_IRON) }
+        listOf(336 to 298, 336 to 342).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_TIN) }
+        // Frontier Road branching east off South Highway (197, 318) -> Gorek Bastion Gate (288, 320)
+        grid.drawRoadSegment(197, 318, 244, 318, 2, TileType.DIRT_FLOOR)
+        grid.drawRoadSegment(244, 318, 290, 320, 2, TileType.DIRT_FLOOR)
+        listOf(228 to 315, 228 to 321, 266 to 316, 266 to 322).forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
+        // Gorek Labyrinth Citadel Entrance (Floor -6)
+        grid.set(316, 316, TileType.STAIRS_DOWN)
+        grid.set(316, 317, TileType.OBSIDIAN_FLOOR)
 
         // 8. Starter Meadows & Rustic Farms outside North & West Gates
         // North farmstead garden plot (fenced patch with open gate)
@@ -976,9 +1111,9 @@ object WorldMaps {
         fillRect(g, 20, 32, 28, 38, TileType.DIRT_FLOOR)
         listOf(20 to 33, 28 to 33, 20 to 37, 28 to 37).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
 
-        // Ochre & Bogstone Veins tucked in dungeon alcoves
-        listOf(9 to 15, 10 to 24, 40 to 14).forEach { (x, y) -> g[y][x] = TileType.ORE_OCHRE }
-        listOf(16 to 28, 29 to 39, 40 to 31, 19 to 39).forEach { (x, y) -> g[y][x] = TileType.ORE_BOGSTONE }
+        // Bog Iron & Vesperite Veins tucked in guarded Floor -1 dungeon alcoves
+        listOf(9 to 15, 10 to 24, 40 to 14).forEach { (x, y) -> g[y][x] = TileType.ORE_BOG_IRON }
+        listOf(16 to 28, 29 to 39, 40 to 31, 19 to 39).forEach { (x, y) -> g[y][x] = TileType.ORE_VESPERITE }
 
         // Atmospheric Flickering Iron Wall Torches along corridors, bridges, and Boss Den
         listOf(
@@ -1070,9 +1205,9 @@ object WorldMaps {
         fillRect(g, 31, 7, 33, 9, TileType.LAVA)
         listOf(19 to 10, 29 to 10, 19 to 14, 29 to 14).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
 
-        // Bogstone Veins & Brimstone Seams
-        listOf(8 to 21, 8 to 28, 34 to 35).forEach { (x, y) -> g[y][x] = TileType.ORE_BOGSTONE }
-        listOf(18 to 8, 30 to 8, 42 to 27, 19 to 39).forEach { (x, y) -> g[y][x] = TileType.ORE_BRIMSTONE }
+        // Vesperite Veins & Deep Cinderite Veins guarded in Floor -2 chambers
+        listOf(8 to 21, 8 to 28, 34 to 35).forEach { (x, y) -> g[y][x] = TileType.ORE_VESPERITE }
+        listOf(18 to 8, 30 to 8, 42 to 27, 19 to 39).forEach { (x, y) -> g[y][x] = TileType.ORE_CINDERITE }
 
         // Flickering Iron Wall Torches casting warm light pools down every corridor & chamber
         listOf(
@@ -1120,9 +1255,9 @@ object WorldMaps {
         g[18][21] = TileType.TORCH_WALL
         g[18][27] = TileType.TORCH_WALL
 
-        // Brimstone Seams & Deep Aetherium Lodes
-        listOf(10 to 10, 39 to 10, 10 to 28, 39 to 30).forEach { (x, y) -> g[y][x] = TileType.ORE_BRIMSTONE }
-        listOf(9 to 35, 38 to 35, 16 to 40, 32 to 40).forEach { (x, y) -> g[y][x] = TileType.ORE_AETHERIUM }
+        // Vesperite Veins & Deep Cinderite Veins
+        listOf(10 to 10, 39 to 10, 10 to 28, 39 to 30).forEach { (x, y) -> g[y][x] = TileType.ORE_VESPERITE }
+        listOf(9 to 35, 38 to 35, 16 to 40, 32 to 40).forEach { (x, y) -> g[y][x] = TileType.ORE_CINDERITE }
 
         // Portals
         g[8][24] = TileType.STAIRS_UP
@@ -1163,8 +1298,8 @@ object WorldMaps {
         // Obsidian cover pillars for dodging Dragon fire breath
         listOf(17 to 13, 31 to 13, 17 to 19, 31 to 19).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
 
-        // Rich Aetherium Lodes guarded by Wyrms & the Ancient Dragon
-        listOf(13 to 10, 35 to 10, 12 to 22, 36 to 22, 24 to 9).forEach { (x, y) -> g[y][x] = TileType.ORE_AETHERIUM }
+        // Rich Cinderite Veins guarded by Wyrms & the Ancient Dragon
+        listOf(13 to 10, 35 to 10, 12 to 22, 36 to 22, 24 to 9).forEach { (x, y) -> g[y][x] = TileType.ORE_CINDERITE }
 
         // Portals
         g[40][24] = TileType.STAIRS_UP
@@ -1173,12 +1308,177 @@ object WorldMaps {
         return WorldFloor(
             floorId = -4,
             name = "Obsidian Wyrm Sanctum",
-            subtitle = "Dungeon Floor -4 • Endgame Boss Lair",
+            subtitle = "Dungeon Floor -4 • Classic Endgame Lair",
             width = s,
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),
             dangerLevel = "Deadly",
-            recommendedLevel = "Lvl 16-20+",
+            recommendedLevel = "Lvl 16-20",
+            dangerSeverity = 4
+        )
+    }
+
+    /**
+     * Dedicated Endgame Floor -5: THE GRIMMAW QUARRY
+     * Entered via the SW Frontier Grimmaw Crags Camp. Features towering stone pillars,
+     * excavated quarry terraces, a flooded subterranean chasm with stone bridges, rich
+     * Vesperite veins, and Kragor the Stone-Eyed's boss pit.
+     */
+    private fun buildGrimmawQuarryFloor(): WorldFloor {
+        val s = 48
+        val g = createBlank(s, s, TileType.STONE_WALL)
+
+        // 1. Southern Entry Quarry Terrace (Stairs Up at (24,41) -> Floor 0 Grimmaw Crags Camp)
+        fillRect(g, 19, 36, 29, 42, TileType.CRYPT_FLOOR)
+        listOf(21 to 38, 27 to 38).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
+
+        // Flanking West & East Excavation Yards (connected via 3-tile quarry haul passages)
+        fillRect(g, 9, 31, 17, 38, TileType.DIRT_FLOOR)
+        fillRect(g, 18, 36, 18, 38, TileType.CRYPT_FLOOR)
+        fillRect(g, 31, 31, 39, 38, TileType.DIRT_FLOOR)
+        fillRect(g, 30, 36, 30, 38, TileType.CRYPT_FLOOR)
+
+        // Central Iron-Barred Quarry Checkpoints leading north into Main Pillared Gallery
+        fillRect(g, 23, 30, 25, 35, TileType.CRYPT_FLOOR)
+        g[33][23] = TileType.IRON_BAR_GATE
+        g[33][24] = TileType.IRON_BAR_GATE
+        g[33][25] = TileType.IRON_BAR_GATE
+
+        // 2. Grand Pillared Excavation Gallery (x=9..39, y=22..29)
+        fillRect(g, 9, 22, 39, 29, TileType.CRYPT_FLOOR)
+        fillRect(g, 11, 29, 13, 31, TileType.DIRT_FLOOR) // West haul link
+        fillRect(g, 35, 29, 37, 31, TileType.DIRT_FLOOR) // East haul link
+        // Towering carved stone support pillars
+        listOf(
+            14 to 24, 14 to 27, 20 to 24, 20 to 27,
+            28 to 24, 28 to 27, 34 to 24, 34 to 27
+        ).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
+
+        // 3. Subterranean Flooded Quarry Chasm + Twin Stone Bridges
+        fillRect(g, 12, 18, 36, 21, TileType.WATER)
+        fillRect(g, 23, 18, 25, 21, TileType.STONE_BRIDGE)
+        fillRect(g, 15, 18, 16, 21, TileType.STONE_BRIDGE)
+        fillRect(g, 32, 18, 33, 21, TileType.STONE_BRIDGE)
+
+        // 4. Kragor the Stone-Eyed's Boss Pit (x=14..34, y=7..17)
+        fillRect(g, 14, 7, 34, 17, TileType.CRYPT_FLOOR)
+        fillRect(g, 17, 9, 31, 15, TileType.DIRT_FLOOR)
+        g[17][23] = TileType.IRON_BAR_GATE
+        g[17][24] = TileType.IRON_BAR_GATE
+        g[17][25] = TileType.IRON_BAR_GATE
+        listOf(18 to 10, 30 to 10, 18 to 14, 30 to 14).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
+
+        // Rich Vesperite Ore Veins across quarry alcoves & Kragor's pit rim
+        listOf(
+            10 to 32, 10 to 37, 38 to 32, 38 to 37,
+            10 to 23, 38 to 23, 15 to 8, 33 to 8
+        ).forEach { (vx, vy) -> g[vy][vx] = TileType.ORE_VESPERITE }
+
+        // Atmospheric Flickering Iron Wall Torches
+        listOf(
+            24 to 43, 18 to 39, 30 to 39, 22 to 33, 26 to 33,
+            9 to 25, 39 to 25, 22 to 22, 26 to 22,
+            22 to 17, 26 to 17, 13 to 12, 35 to 12, 24 to 6
+        ).forEach { (tx, ty) -> g[ty][tx] = TileType.TORCH_WALL }
+
+        // Return Stairway Up to Floor 0 Grimmaw Crags Camp
+        g[41][24] = TileType.STAIRS_UP
+
+        return WorldFloor(
+            floorId = -5,
+            name = "The Grimmaw Quarry",
+            subtitle = "Endgame Dungeon • Floor -5 (Vesperite Veins)",
+            width = s,
+            height = s,
+            chunkedGrid = ChunkedTileGrid.fromArray(g),
+            dangerLevel = "Extreme",
+            recommendedLevel = "Lvl 16-24",
+            dangerSeverity = 4
+        )
+    }
+
+    /**
+     * Dedicated Pinnacle Floor -6: THE GOREK LABYRINTH
+     * Entered via the SE Frontier Gorek Badlands War-Camp. Features winding 2-3 tile
+     * branching labyrinth corridors, guarded chambers, iron-barred gates, lava chasms
+     * with stone bridges, glowing Cinderite veins, and Vaelgor the Labyrinth Warden's sanctum.
+     */
+    private fun buildGorekLabyrinthFloor(): WorldFloor {
+        val s = 48
+        val g = createBlank(s, s, TileType.STONE_WALL)
+
+        // 1. Southern Labyrinth Entry Gatehouse (Stairs Up at (24,41) -> Floor 0 Gorek War-Camp)
+        fillRect(g, 20, 37, 28, 42, TileType.OBSIDIAN_FLOOR)
+        fillRect(g, 23, 33, 25, 36, TileType.CRYPT_FLOOR)
+        g[36][23] = TileType.IRON_BAR_GATE
+        g[36][24] = TileType.IRON_BAR_GATE
+        g[36][25] = TileType.IRON_BAR_GATE
+
+        // 2. Branching South-West & South-East Maze Corridors + Guard Chambers
+        fillRect(g, 10, 33, 22, 35, TileType.CRYPT_FLOOR)
+        fillRect(g, 26, 33, 38, 35, TileType.CRYPT_FLOOR)
+        fillRect(g, 10, 30, 16, 36, TileType.OBSIDIAN_FLOOR) // SW Raider Barracks
+        fillRect(g, 32, 30, 38, 36, TileType.OBSIDIAN_FLOOR) // SE Raider Barracks
+
+        // Winding Vertical Labyrinth Arms (2-3 tiles wide with maze zigzags)
+        fillRect(g, 11, 22, 13, 29, TileType.CRYPT_FLOOR)
+        fillRect(g, 35, 22, 37, 29, TileType.CRYPT_FLOOR)
+        fillRect(g, 14, 24, 19, 26, TileType.CRYPT_FLOOR)
+        fillRect(g, 29, 24, 34, 26, TileType.CRYPT_FLOOR)
+        // Central Labyrinth Crossroads Chamber
+        fillRect(g, 20, 22, 28, 28, TileType.OBSIDIAN_FLOOR)
+        listOf(22 to 24, 26 to 24, 22 to 26, 26 to 26).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
+        // Narrow central north-south passage with iron gate
+        fillRect(g, 23, 29, 25, 32, TileType.CRYPT_FLOOR)
+        g[30][23] = TileType.IRON_BAR_GATE
+        g[30][24] = TileType.IRON_BAR_GATE
+        g[30][25] = TileType.IRON_BAR_GATE
+
+        // 3. Volcanic Labyrinth Chasm + Twin Narrow Stone Bridges
+        fillRect(g, 10, 18, 38, 21, TileType.LAVA)
+        fillRect(g, 23, 18, 25, 21, TileType.STONE_BRIDGE)
+        fillRect(g, 12, 18, 13, 21, TileType.STONE_BRIDGE)
+        fillRect(g, 35, 18, 36, 21, TileType.STONE_BRIDGE)
+        // Northern flanking corridors around Sanctum
+        fillRect(g, 11, 13, 14, 17, TileType.CRYPT_FLOOR)
+        fillRect(g, 34, 13, 37, 17, TileType.CRYPT_FLOOR)
+        fillRect(g, 15, 14, 16, 15, TileType.CRYPT_FLOOR)
+        fillRect(g, 32, 14, 33, 15, TileType.CRYPT_FLOOR)
+
+        // 4. Vaelgor the Labyrinth Warden — Inner Obsidian Sanctum (x=16..32, y=7..16)
+        fillRect(g, 16, 7, 32, 16, TileType.OBSIDIAN_FLOOR)
+        fillRect(g, 16, 7, 18, 9, TileType.LAVA)
+        fillRect(g, 30, 7, 32, 9, TileType.LAVA)
+        g[17][23] = TileType.IRON_BAR_GATE
+        g[17][24] = TileType.IRON_BAR_GATE
+        g[17][25] = TileType.IRON_BAR_GATE
+        listOf(20 to 10, 28 to 10, 20 to 14, 28 to 14).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
+
+        // Deep Cinderite Ore Veins tucked in maze dead-ends & Sanctum alcoves
+        listOf(
+            10 to 31, 38 to 31, 11 to 22, 37 to 22,
+            11 to 13, 37 to 13, 19 to 8, 29 to 8
+        ).forEach { (vx, vy) -> g[vy][vx] = TileType.ORE_CINDERITE }
+
+        // Flickering Iron Wall Torches throughout the winding corridors
+        listOf(
+            24 to 43, 22 to 36, 26 to 36, 13 to 29, 35 to 29,
+            19 to 25, 29 to 25, 22 to 22, 26 to 22,
+            22 to 17, 26 to 17, 15 to 11, 33 to 11, 24 to 6
+        ).forEach { (tx, ty) -> g[ty][tx] = TileType.TORCH_WALL }
+
+        // Return Stairway Up to Floor 0 Gorek Badlands War-Camp
+        g[41][24] = TileType.STAIRS_UP
+
+        return WorldFloor(
+            floorId = -6,
+            name = "The Gorek Labyrinth",
+            subtitle = "Pinnacle Maze • Floor -6 (Cinderite Veins)",
+            width = s,
+            height = s,
+            chunkedGrid = ChunkedTileGrid.fromArray(g),
+            dangerLevel = "Pinnacle",
+            recommendedLevel = "Lvl 20-30+",
             dangerSeverity = 4
         )
     }

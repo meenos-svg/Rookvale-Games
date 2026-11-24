@@ -415,17 +415,33 @@ object EntitySpriteAtlas {
                 rect(buf, S, 11, 18 + bob, 10, 6, 0xFF1E261A.toInt())
                 px(buf, S, 13, 20 + bob, 0xFF8CFF33.toInt()); px(buf, S, 18, 20 + bob, 0xFF8CFF33.toInt())
             }
-            MonsterType.MINOTAUR -> {
-                drawShadow(buf, 5, 25, 22, 5)
-                val fur = 0xFF6B3E26.toInt()
-                val armor = 0xFF7D8591.toInt()
-                rect(buf, S, 8, 20 + bob, 5, 7, fur); rect(buf, S, 19, 20 + bob, 5, 7, fur)
-                rect(buf, S, 7, 10 + bob, 18, 11, armor) // iron cuirass
-                rect(buf, S, 10, 11 + bob, 12, 8, 0xFF9EA6B3.toInt())
-                rect(buf, S, 10, 3 + bob, 12, 8, fur) // bull head
-                rect(buf, S, 6, 1 + bob, 4, 4, 0xFFE8DFC8.toInt()); rect(buf, S, 22, 1 + bob, 4, 4, 0xFFE8DFC8.toInt()) // curved horns
-                px(buf, S, 13, 6 + bob, 0xFFFF3B2E.toInt()); px(buf, S, 18, 6 + bob, 0xFFFF3B2E.toInt())
-                rect(buf, S, 25, 6 + bob, 4, 15, 0xFFB0B8C4.toInt()) // battle axe
+            MonsterType.GOREK_RAIDER, MonsterType.GOREK_PHALANX, MonsterType.GOREK_HEX_CALLER, MonsterType.VAELGOR_LABYRINTH_WARDEN -> {
+                drawShadow(buf, 4, 25, 24, 6)
+                val isBoss = type == MonsterType.VAELGOR_LABYRINTH_WARDEN
+                val armor = if (isBoss) 0xFF211824.toInt() else 0xFF342C3D.toInt()
+                val trim = if (isBoss) 0xFFFFB238.toInt() else 0xFFD9953B.toInt()
+                val eye = if (isBoss) 0xFFFFF08A.toInt() else 0xFFFF8C24.toInt()
+                rect(buf, S, 8, 20 + bob, 5, 7, 0xFF261E29.toInt()); rect(buf, S, 19, 20 + bob, 5, 7, 0xFF261E29.toInt())
+                rect(buf, S, 7, 10 + bob, 18, 11, armor)
+                rect(buf, S, 11, 12 + bob, 10, 6, trim)
+                rect(buf, S, 10, 3 + bob, 12, 8, 0xFF4A342E.toInt())
+                // Sweeping obsidian curved horns
+                rect(buf, S, 5, 1 + bob, 5, 4, 0xFF1D1721.toInt()); rect(buf, S, 22, 1 + bob, 5, 4, 0xFF1D1721.toInt())
+                px(buf, S, 6, 1 + bob, trim); px(buf, S, 25, 1 + bob, trim)
+                px(buf, S, 13, 6 + bob, eye); px(buf, S, 18, 6 + bob, eye)
+                when (type) {
+                    MonsterType.GOREK_PHALANX -> {
+                        rect(buf, S, 3, 10 + bob, 5, 12, armor) // obsidian tower shield
+                        rect(buf, S, 25, 4 + bob, 3, 18, trim) // pike
+                    }
+                    MonsterType.GOREK_HEX_CALLER -> {
+                        rect(buf, S, 24, 5 + bob, 3, 17, 0xFF3E2638.toInt())
+                        rect(buf, S, 23, 3 + bob, 5, 4, 0xFFFF6D1A.toInt()) // hex brazier
+                    }
+                    else -> {
+                        rect(buf, S, 25, 5 + bob, 5, 15, if (isBoss) 0xFFFF7A1F.toInt() else 0xFF8C7E9E.toInt())
+                    }
+                }
             }
             MonsterType.ORC_WARRIOR -> {
                 drawShadow(buf, 6, 25, 20, 5)
@@ -460,16 +476,24 @@ object EntitySpriteAtlas {
                 px(buf, S, 13, 6 + bob, 0xFFFFE57F.toInt()); px(buf, S, 18, 6 + bob, 0xFFFFE57F.toInt())
                 rect(buf, S, 23, 8 + bob, 5, 5, flame) // floating fireball
             }
-            MonsterType.CYCLOPS -> {
-                drawShadow(buf, 5, 25, 22, 6)
-                val skin = 0xFFB8875A.toInt()
-                val hi = 0xFFD4A272.toInt()
-                rect(buf, S, 8, 20 + bob, 6, 8, skin); rect(buf, S, 18, 20 + bob, 6, 8, skin)
-                rect(buf, S, 8, 17 + bob, 16, 5, 0xFF3D2E29.toInt())
-                rect(buf, S, 6, 7 + bob, 20, 11, skin); rect(buf, S, 9, 8 + bob, 14, 8, hi)
+            MonsterType.GRIMMAW_QUARRYMAN, MonsterType.GRIMMAW_ROCK_HURLER, MonsterType.GRIMMAW_CRUSHER, MonsterType.KRAGOR_THE_STONE_EYED -> {
+                drawShadow(buf, 4, 25, 24, 6)
+                val isBoss = type == MonsterType.KRAGOR_THE_STONE_EYED
+                val stone = if (isBoss) 0xFF534C6B.toInt() else 0xFF6E727D.toInt()
+                val hi = if (isBoss) 0xFF9C8CE0.toInt() else 0xFF9EA3B0.toInt()
+                val eyeCore = if (isBoss) 0xFFB58CFF.toInt() else 0xFFFF9826.toInt()
+                rect(buf, S, 8, 20 + bob, 6, 8, stone); rect(buf, S, 18, 20 + bob, 6, 8, stone)
+                rect(buf, S, 8, 17 + bob, 16, 5, 0xFF353740.toInt())
+                rect(buf, S, 6, 7 + bob, 20, 11, stone); rect(buf, S, 9, 8 + bob, 14, 8, hi)
                 rect(buf, S, 11, 1 + bob, 10, 7, hi)
-                rect(buf, S, 14, 3 + bob, 4, 3, 0xFFFFF4D1.toInt()); rect(buf, S, 15, 4 + bob, 2, 2, 0xFFE65C1A.toInt())
-                rect(buf, S, 25, 4 + bob, 5, 16, 0xFF5C3A1E.toInt())
+                // Single luminous subterranean Grimmaw stone-eye
+                rect(buf, S, 14, 3 + bob, 4, 3, 0xFFFFF4E0.toInt()); rect(buf, S, 15, 4 + bob, 2, 2, eyeCore)
+                if (isBoss) {
+                    rect(buf, S, 13, 0 + bob, 6, 2, 0xFFC7A8FF.toInt()) // Vesperite crystal brow crown
+                    rect(buf, S, 24, 3 + bob, 6, 17, 0xFF8C6BFF.toInt()) // Vesperite monolith maul
+                } else {
+                    rect(buf, S, 25, 4 + bob, 5, 16, 0xFF5D626E.toInt())
+                }
             }
             MonsterType.DRAGON_HATCHLING -> {
                 drawShadow(buf, 7, 24, 18, 5)
@@ -618,20 +642,25 @@ object EntitySpriteAtlas {
         val buf = buf16()
         val def = ItemCatalog.get(itemId)
         val tierTint = when {
+            itemId.contains("cinderite") -> 0xFFFFAA2B.toInt()
+            itemId.contains("vesperite") -> 0xFFB48CFF.toInt()
             itemId.contains("moonforge") || itemId.contains("starlight") || itemId.contains("starstone") -> 0xFFB599FF.toInt()
             itemId.contains("wyrm") || itemId.contains("drake") || itemId.contains("cinderheart") || itemId.contains("fire") -> 0xFFFF6E24.toInt()
             itemId.contains("quenchsteel") || itemId.contains("colossus") || itemId.contains("tallowbone") -> 0xFF9AC2E6.toInt()
             itemId.contains("duskmetal") || itemId.contains("bog") || itemId.contains("brindle") || itemId.contains("bile") -> 0xFF7B8B9E.toInt()
-            itemId.contains("sunbrass") || itemId.contains("ochre") || itemId.contains("rookvale") -> 0xFFE39B42.toInt()
+            itemId.contains("sunbrass") || itemId.contains("copper") || itemId.contains("ochre") || itemId.contains("rookvale") -> 0xFFE39B42.toInt()
+            itemId.contains("tin") -> 0xFFAAB8C7.toInt()
             else -> 0xFFD2DBE6.toInt()
         }
 
         when (def.category) {
             ItemCategory.RAW_ORE -> {
                 val oreCol = when (itemId) {
-                    "ochre_nugget" -> 0xFFD97D2B.toInt()
-                    "bogstone_shard" -> 0xFF7B8B9E.toInt()
-                    "cinder_pitch" -> 0xFFE65319.toInt()
+                    "copper_ore", "ochre_nugget" -> 0xFFE08234.toInt()
+                    "tin_ore" -> 0xFFA9B9C8.toInt()
+                    "bog_iron_ore", "bogstone_shard" -> 0xFF7B8B9E.toInt()
+                    "vesperite_ore", "cinder_pitch" -> 0xFFA782FF.toInt()
+                    "cinderite_ore", "pale_starstone" -> 0xFFFFAA2B.toInt()
                     else -> 0xFF9B7BFF.toInt()
                 }
                 rect(buf, ITEM_S, 3, 5, 10, 8, 0xFF47413D.toInt())
@@ -689,6 +718,8 @@ object EntitySpriteAtlas {
                             "runic_slate" -> 0xFF63768C.toInt()
                             "ember_heart" -> 0xFFFF6E24.toInt()
                             "wyrmscale_plate" -> 0xFF299C4F.toInt()
+                            "grimmaw_stone_core" -> 0xFFA682FF.toInt()
+                            "gorek_obsidian_horn" -> 0xFFFFA833.toInt()
                             else -> 0xFFD4C9B0.toInt()
                         }
                         rect(buf, ITEM_S, 4, 4, 8, 8, c)
@@ -774,7 +805,11 @@ object EntitySpriteAtlas {
                 if (itemId == "wooden_club") {
                     for (i in 0..9) px(buf, ITEM_S, 3 + i, 12 - i, 0xFF7D4E26.toInt())
                     rect(buf, ITEM_S, 9, 2, 5, 5, 0xFF5C3818.toInt())
-                } else if (itemId.contains("axe") || itemId.contains("glaive") || itemId.contains("halberd")) {
+                } else if (itemId.contains("warmaul") || itemId.contains("worldbreaker")) {
+                    for (i in 0..9) px(buf, ITEM_S, 3 + i, 12 - i, 0xFF4E4047.toInt())
+                    rect(buf, ITEM_S, 7, 2, 7, 5, tierTint)
+                    rect(buf, ITEM_S, 9, 3, 3, 2, 0xFFFFFFFF.toInt())
+                } else if (itemId.contains("axe") || itemId.contains("cleaver") || itemId.contains("glaive") || itemId.contains("halberd")) {
                     for (i in 0..10) px(buf, ITEM_S, 3 + i, 12 - i, 0xFF6B4226.toInt())
                     rect(buf, ITEM_S, 8, 2, 6, 6, tierTint)
                 } else {

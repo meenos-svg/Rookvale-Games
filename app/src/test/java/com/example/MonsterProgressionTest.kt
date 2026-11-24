@@ -23,28 +23,34 @@ import org.junit.Test
 class MonsterProgressionTest {
 
     @Test
-    fun allNineteenMonstersScaleAcrossFourTiersAndSpawnOnWalkableNonPzTiles() {
-        assertEquals(19, MonsterType.entries.size)
-        val tierAvgHp = (1..4).map { t ->
+    fun allTwentyFiveMonstersScaleAcrossSixTiersAndSpawnOnWalkableNonPzTiles() {
+        assertEquals(25, MonsterType.entries.size)
+        val tierAvgHp = (1..6).map { t ->
             MonsterType.entries.filter { it.tier == t && !it.isBoss }.map { it.maxHp }.average()
         }
         assertTrue("Tier 2 HP must exceed Tier 1", tierAvgHp[1] > tierAvgHp[0])
         assertTrue("Tier 3 HP must exceed Tier 2", tierAvgHp[2] > tierAvgHp[1])
         assertTrue("Tier 4 HP must exceed Tier 3", tierAvgHp[3] > tierAvgHp[2])
+        assertTrue("Tier 5 Grimmaw HP must exceed classic Tier 4", tierAvgHp[4] > tierAvgHp[3])
+        assertTrue("Tier 6 Gorek HP must exceed Tier 5 Grimmaw", tierAvgHp[5] > tierAvgHp[4])
 
-        val tierAvgArmor = (1..4).map { t ->
+        val tierAvgArmor = (1..6).map { t ->
             MonsterType.entries.filter { it.tier == t && !it.isBoss }.map { it.armor }.average()
         }
         assertTrue("Tier 2 armor must exceed Tier 1", tierAvgArmor[1] > tierAvgArmor[0])
         assertTrue("Tier 3 armor must exceed Tier 2", tierAvgArmor[2] > tierAvgArmor[1])
         assertTrue("Tier 4 armor must exceed Tier 3", tierAvgArmor[3] > tierAvgArmor[2])
+        assertTrue("Tier 5 Grimmaw armor must exceed classic Tier 4", tierAvgArmor[4] > tierAvgArmor[3])
+        assertTrue("Tier 6 Gorek armor must exceed Tier 5 Grimmaw", tierAvgArmor[5] > tierAvgArmor[4])
 
-        // Every spawn coordinate across all 5 floors must be walkable and outside Protection Zone
+        // Every spawn coordinate across all 7 floors must be walkable and outside Protection Zone
         val spawns = WorldMaps.initialMonsters()
         assertTrue("Must spawn Broodmother Arachne on Floor -1", spawns.any { it.floor == -1 && it.type == MonsterType.BROODMOTHER_ARACHNE })
         assertTrue("Must spawn Ignis Lord of the Pit on Floor -2", spawns.any { it.floor == -2 && it.type == MonsterType.IGNIS_LORD_OF_THE_PIT })
         assertTrue("Must spawn Demon Lord on Floor -3", spawns.any { it.floor == -3 && it.type == MonsterType.DEMON_LORD })
         assertTrue("Must spawn Elder Dragon on Floor -4", spawns.any { it.floor == -4 && it.type == MonsterType.ELDER_DRAGON })
+        assertTrue("Must spawn Kragor the Stone-Eyed on Floor -5", spawns.any { it.floor == -5 && it.type == MonsterType.KRAGOR_THE_STONE_EYED })
+        assertTrue("Must spawn Vaelgor the Labyrinth Warden on Floor -6", spawns.any { it.floor == -6 && it.type == MonsterType.VAELGOR_LABYRINTH_WARDEN })
         for (m in spawns) {
             val fl = WorldMaps.getFloor(m.floor)
             assertTrue(
@@ -95,22 +101,22 @@ class MonsterProgressionTest {
         assertEquals(ThreatBand.EASY, MonsterType.CAVE_RAT.threatBandFor(playerLevel = 5))
         assertEquals(ThreatBand.EVEN, MonsterType.SWAMP_TROLL.threatBandFor(playerLevel = 4))
         assertEquals(ThreatBand.CHALLENGING, MonsterType.ORC_WARRIOR.threatBandFor(playerLevel = 6))
-        assertEquals(ThreatBand.DEADLY, MonsterType.CYCLOPS.threatBandFor(playerLevel = 5))
+        assertEquals(ThreatBand.DEADLY, MonsterType.GRIMMAW_CRUSHER.threatBandFor(playerLevel = 5))
         assertEquals(ThreatBand.DEADLY, MonsterType.DEMON_LORD.threatBandFor(playerLevel = 25))
         assertEquals(ThreatBand.DEADLY, MonsterType.ELDER_DRAGON.threatBandFor(playerLevel = 30))
 
-        // High-armor Cyclops mitigates noticeably more physical damage than 0-armor Cave Rat,
+        // High-armor Grimmaw Crusher mitigates noticeably more physical damage than 0-armor Cave Rat,
         // while magic pierces 45% of monster armor
         var ratPhys = 0
-        var cyclopsPhys = 0
-        var cyclopsMagic = 0
+        var crusherPhys = 0
+        var crusherMagic = 0
         repeat(40) {
             ratPhys += GameEngine.mitigateMonsterDamage(25, MonsterType.CAVE_RAT.armor, isMagic = false)
-            cyclopsPhys += GameEngine.mitigateMonsterDamage(25, MonsterType.CYCLOPS.armor, isMagic = false)
-            cyclopsMagic += GameEngine.mitigateMonsterDamage(25, MonsterType.CYCLOPS.armor, isMagic = true)
+            crusherPhys += GameEngine.mitigateMonsterDamage(25, MonsterType.GRIMMAW_CRUSHER.armor, isMagic = false)
+            crusherMagic += GameEngine.mitigateMonsterDamage(25, MonsterType.GRIMMAW_CRUSHER.armor, isMagic = true)
         }
-        assertTrue("Cyclops armor must reduce physical damage vs Cave Rat", cyclopsPhys < ratPhys * 0.75)
-        assertTrue("Magic must pierce Cyclops armor better than physical", cyclopsMagic > cyclopsPhys)
+        assertTrue("Grimmaw Crusher armor must reduce physical damage vs Cave Rat", crusherPhys < ratPhys * 0.75)
+        assertTrue("Magic must pierce Grimmaw Crusher armor better than physical", crusherMagic > crusherPhys)
     }
 
     @Test
