@@ -273,11 +273,11 @@ object IsometricLightingEngine {
             TileType.TORCH_WALL -> outLights.add(
                 ScenePointLight(
                     screenX = cx,
-                    screenY = cy - unitH * 0.58f,
-                    radiusPx = unitW * 2.45f,
-                    coreColor = Color(0xFFFFCA68),
+                    screenY = cy - unitH * 0.62f,
+                    radiusPx = unitW * 2.85f,
+                    coreColor = Color(0xFFFFD478),
                     outerColor = FireOrange,
-                    intensity = 0.95f,
+                    intensity = 1.05f,
                     flickerSeed = seed
                 )
             )
@@ -438,6 +438,18 @@ object IsometricLightingEngine {
                     isArcane = true
                 )
             )
+            ProjectileKind.VENOM_GLOB -> outLights.add(
+                ScenePointLight(
+                    screenX = px,
+                    screenY = py,
+                    radiusPx = hw * 2.5f,
+                    coreColor = Color(0xFFA8FF5C),
+                    outerColor = Color(0xFF2ED95B),
+                    intensity = 0.90f,
+                    flickerSeed = px * 0.06f,
+                    isArcane = true
+                )
+            )
             else -> Unit
         }
     }
@@ -453,7 +465,9 @@ object IsometricLightingEngine {
         quality: GraphicsQuality,
         lights: List<ScenePointLight>
     ) {
-        if (!quality.drawTwilightAtmosphere && !quality.drawPointLightPools) return
+        val isUnderground = floorId < 0
+        val drawDungeonMood = isUnderground && quality != GraphicsQuality.LOW
+        if (!quality.drawTwilightAtmosphere && !quality.drawPointLightPools && !drawDungeonMood) return
         val w = scope.size.width
         val h = scope.size.height
         if (w <= 0f || h <= 0f) return
@@ -461,20 +475,22 @@ object IsometricLightingEngine {
         val isOverland = floorId == 0
         val isHd = quality.lightingMode == LightingDetailMode.HD_MULTI_LAYER
 
-        // 1. Moody Twilight atmospheric dusk grade (cool slate-indigo on overland, deeper cavern shade underground)
-        if (quality.drawTwilightAtmosphere) {
+        // 1. Moody Twilight on overland; tighter moody torchlit shadow veil in underground dungeons
+        if (quality.drawTwilightAtmosphere || drawDungeonMood) {
             val duskTint = when {
                 isOverland && isHd -> Color(0x420D162E)
                 isOverland -> Color(0x38101A33)
-                isHd -> Color(0x48090B16)
-                else -> Color(0x3A0B0D18)
+                isHd -> Color(0x66060812)
+                quality == GraphicsQuality.HIGH -> Color(0x58070914)
+                else -> Color(0x44080A14)
             }
             scope.drawRect(
                 color = duskTint,
                 topLeft = Offset.Zero,
                 size = scope.size
             )
-            // Subtle cool moonlit twilight top-left horizon gradient on overland
+            // Subtle cool moonlit twilight top-left horizon gradient on overland,
+            // or moody subterranean edge vignette on underground floors
             if (isOverland) {
                 scope.drawRect(
                     brush = Brush.linearGradient(
@@ -489,11 +505,26 @@ object IsometricLightingEngine {
                     topLeft = Offset.Zero,
                     size = scope.size
                 )
+            } else {
+                val vigR = maxOf(w, h) * 0.68f
+                scope.drawRect(
+                    brush = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0.0f to Color.Transparent,
+                            0.48f to Color(0x1A050710),
+                            1.0f to Color(0x5204050C)
+                        ),
+                        center = Offset(w * 0.5f, h * 0.5f),
+                        radius = vigR
+                    ),
+                    topLeft = Offset.Zero,
+                    size = scope.size
+                )
             }
         }
 
         // 2. Dynamic flickering warm amber & cool cyan/arcane radial point-light pools
-        if (quality.drawPointLightPools && lights.isNotEmpty()) {
+        if ((quality.drawPointLightPools || drawDungeonMood) && lights.isNotEmpty()) {
             val timeSec = nowMs * 0.001
             for (light in lights) {
                 val r = light.radiusPx

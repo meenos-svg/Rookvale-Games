@@ -164,7 +164,16 @@ fun GameScreen(
                     .padding(top = 108.dp, bottom = 52.dp)
             )
 
-            // TOP-CENTER LIVE FPS PILL & FLOOR DESCENT DANGER BANNER
+            // TOP-CENTER LIVE FPS PILL, ACTIVE BOSS HP NAMEPLATE & FLOOR DESCENT DANGER BANNER
+            val activeBoss = remember(state.monsters, state.targetMonsterId, state.floor, state.playerX, state.playerY) {
+                val targetedBoss = state.monsters.firstOrNull {
+                    it.id == state.targetMonsterId && it.floor == state.floor && it.type.isBoss && it.hp > 0
+                }
+                targetedBoss ?: state.monsters
+                    .filter { it.floor == state.floor && it.type.isBoss && it.hp > 0 }
+                    .minByOrNull { maxOf(kotlin.math.abs(it.x - state.playerX), kotlin.math.abs(it.y - state.playerY)) }
+                    ?.takeIf { maxOf(kotlin.math.abs(it.x - state.playerX), kotlin.math.abs(it.y - state.playerY)) <= 10 }
+            }
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -177,6 +186,15 @@ fun GameScreen(
                         fps = liveFps,
                         quality = displaySettings.graphicsQuality
                     )
+                }
+                AnimatedVisibility(
+                    visible = activeBoss != null && state.activePanel == ActivePanel.NONE,
+                    enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+                    exit = fadeOut() + slideOutVertically(targetOffsetY = { -it })
+                ) {
+                    activeBoss?.let { boss ->
+                        BossHpNameplateBar(boss = boss)
+                    }
                 }
                 AnimatedVisibility(
                     visible = state.floorWarningBanner != null && state.activePanel == ActivePanel.NONE,

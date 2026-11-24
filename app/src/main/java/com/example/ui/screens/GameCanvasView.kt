@@ -23,6 +23,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -36,6 +37,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import com.example.game.model.BossSpecialKind
 import com.example.game.model.CorpseEntity
 import com.example.game.model.Direction
 import com.example.game.model.FloatingTextKind
@@ -58,6 +60,7 @@ import com.example.ui.theme.HealthCrimson
 import com.example.ui.theme.ObsidianVoid
 import com.example.ui.theme.PoisonGreen
 import com.example.ui.theme.TargetRed
+import com.example.ui.theme.TorchAmber
 import com.example.ui.theme.TorchGold
 import kotlin.math.PI
 import kotlin.math.abs
@@ -290,6 +293,23 @@ fun GameCanvasView(
 
             depthQueue.clear()
             visibleLights.clear()
+            val collectLights = quality.drawPointLightPools || (st.floor < 0 && quality != GraphicsQuality.LOW)
+            val drawLightingPass = quality.drawTwilightAtmosphere || collectLights
+
+            if (st.floor < 0 && collectLights) {
+                val heroScreen = camera.tileCenterToScreen(camPlayerX, camPlayerY)
+                visibleLights.add(
+                    ScenePointLight(
+                        screenX = heroScreen.x,
+                        screenY = heroScreen.y - hh * 0.55f,
+                        radiusPx = hw * 4.5f,
+                        coreColor = Color(0xFFFFE4A8),
+                        outerColor = TorchAmber,
+                        intensity = 0.62f,
+                        flickerSeed = 1.7f
+                    )
+                )
+            }
 
             // PASS 1: Chunk-Culled & Rotated-Viewport-Culled 2.5D Terrain Quads (Pixel-Mosaic in High/HD)
             for (cy in chunkBounds.minChunkY..chunkBounds.maxChunkY) {
@@ -330,7 +350,7 @@ fun GameCanvasView(
                                 tilePaint = reusableTilePaint
                             )
 
-                            if (quality.drawPointLightPools) {
+                            if (collectLights) {
                                 IsometricLightingEngine.collectTilePointLight(
                                     tile = renderTile,
                                     tx = tx,
@@ -372,22 +392,42 @@ fun GameCanvasView(
                 }
             }
 
-            val aoePulse = if (((now / 160L) % 2L) == 0L) 0.44f else 0.24f
+            val aoeWavePulse = ((sin(now * 0.015) + 1.0) * 0.5).toFloat()
+            val aoeFillAlpha = 0.24f + aoeWavePulse * 0.28f
+            val aoeCoreScale = 0.34f + aoeWavePulse * 0.26f
             st.monsters.forEach { m ->
                 if (m.floor == st.floor && m.pendingAoeTiles.isNotEmpty()) {
+                    val isVenom = m.type.specialKind == BossSpecialKind.VENOM_NOVA
+                    val fillBase = if (isVenom) Color(0xFF4CFF33) else FireOrange
+                    val strokeBase = if (isVenom) Color(0xFFB4FF6E) else TargetRed
+                    val coreBase = if (isVenom) Color(0xFFDEFF99) else Color(0xFFFFE066)
                     m.pendingAoeTiles.forEach { (ax, ay) ->
                         if (ax in bounds.minTx..bounds.maxTx && ay in bounds.minTy..bounds.maxTy) {
                             val c = camera.tileCenterToScreen(ax.toFloat(), ay.toFloat())
                             IsometricTileDrawer.drawRotatedQuad(
-                                this, reusablePath, camera, c.x, c.y, fracU = 0.90f, fracV = 0.90f,
-                                fillColor = FireOrange.copy(alpha = aoePulse),
-                                strokeColor = TargetRed.copy(alpha = 0.92f),
-                                strokeWidth = 3f
+                                this, reusablePath, camera, c.x, c.y, fracU = 0.92f, fracV = 0.92f,
+                                fillColor = fillBase.copy(alpha = aoeFillAlpha),
+                                strokeColor = strokeBase.copy(alpha = 0.95f),
+                                strokeWidth = 3.2f
                             )
                             IsometricTileDrawer.drawRotatedQuad(
-                                this, reusablePath, camera, c.x, c.y, fracU = 0.38f, fracV = 0.38f,
-                                fillColor = Color(0xFFFFE066).copy(alpha = aoePulse + 0.25f)
+                                this, reusablePath, camera, c.x, c.y, fracU = aoeCoreScale, fracV = aoeCoreScale,
+                                fillColor = coreBase.copy(alpha = (aoeFillAlpha + 0.22f).coerceAtMost(0.88f))
                             )
+                            if (collectLights && visibleLights.size < 44) {
+                                visibleLights.add(
+                                    ScenePointLight(
+                                        screenX = c.x,
+                                        screenY = c.y,
+                                        radiusPx = hw * 1.65f,
+                                        coreColor = coreBase,
+                                        outerColor = fillBase,
+                                        intensity = 0.65f + aoeWavePulse * 0.25f,
+                                        flickerSeed = (ax * 3 + ay * 5).toFloat(),
+                                        isArcane = isVenom
+                                    )
+                                )
+                            }
                         }
                     }
                 }
@@ -395,7 +435,18 @@ fun GameCanvasView(
 
             st.corpses.forEach { corpse ->
                 if (corpse.floor == st.floor && corpse.x in bounds.minTx..bounds.maxTx && corpse.y in bounds.minTy..bounds.maxTy) {
-                    drawIsometricCorpse(corpse, camera, reusablePath, hw, hh, spritePx, animFrame)
+                    drawIsometricCorpse(
+                        corpse = corpse,
+                        camera = camera,
+                        path = reusablePath,
+                        hw = hw,
+                        hh = hh,
+                        spritePx = spritePx,
+                        animFrame = animFrame,
+                        now = now,
+                        labelPaint = labelPaint,
+                        labelShadowPaint = labelShadowPaint
+                    )
                 }
             }
 
@@ -424,6 +475,22 @@ fun GameCanvasView(
                     val mFrac = ((now - m.lastMoveTimeMs).toFloat() / 220f).coerceIn(0f, 1f)
                     val mxF = m.lastMoveFromX + (m.x - m.lastMoveFromX) * mFrac
                     val myF = m.lastMoveFromY + (m.y - m.lastMoveFromY) * mFrac
+                    if (m.type.isBoss && collectLights && visibleLights.size < 46) {
+                        val mc = camera.tileCenterToScreen(mxF, myF)
+                        val isVenomBoss = m.type.specialKind == BossSpecialKind.VENOM_NOVA
+                        visibleLights.add(
+                            ScenePointLight(
+                                screenX = mc.x,
+                                screenY = mc.y - hh * 0.8f,
+                                radiusPx = hw * 3.4f,
+                                coreColor = if (isVenomBoss) Color(0xFFA8FF6E) else Color(0xFFFFC266),
+                                outerColor = if (isVenomBoss) Color(0xFF4CFF33) else FireOrange,
+                                intensity = 0.82f,
+                                flickerSeed = (m.id * 11).toFloat(),
+                                isArcane = isVenomBoss
+                            )
+                        )
+                    }
 
                     val dxToHero = camPlayerX - mxF
                     val dyToHero = camPlayerY - myF
@@ -648,10 +715,10 @@ fun GameCanvasView(
             // foreground tall 2.4x walls dynamically lower & soften around the player in PASS 3).
 
             // PASS 4: Projectiles, Spells, Splashes & Sparks (also registers moving spell lights!)
-            drawIsometricProjectiles(st, camera, hw, now, quality, visibleLights)
+            drawIsometricProjectiles(st, camera, hw, now, quality, if (collectLights) visibleLights else null)
 
             // PASS 5: Moody Twilight Atmospheric Grade & Dynamic Warm/Arcane Point-Light Pools
-            if (quality.drawTwilightAtmosphere || quality.drawPointLightPools) {
+            if (drawLightingPass) {
                 IsometricLightingEngine.drawTwilightAndPointLightPass(
                     scope = this,
                     floorId = st.floor,
@@ -728,9 +795,13 @@ private fun DrawScope.drawIsometricCorpse(
     hw: Float,
     hh: Float,
     spritePx: Int,
-    animFrame: Int
+    animFrame: Int,
+    now: Long,
+    labelPaint: Paint,
+    labelShadowPaint: Paint
 ) {
     val c = camera.tileCenterToScreen(corpse.x.toFloat(), corpse.y.toFloat())
+    val expiringSoon = !corpse.isPlayerCorpse && corpse.isExpiringSoon(now)
     if (corpse.isPlayerCorpse) {
         val pulse = if (animFrame == 0) 0.65f else 0.30f
         IsometricTileDrawer.drawRotatedQuad(
@@ -738,6 +809,15 @@ private fun DrawScope.drawIsometricCorpse(
             fillColor = TorchGold.copy(alpha = pulse * 0.22f),
             strokeColor = TorchGold.copy(alpha = pulse),
             strokeWidth = 3.2f
+        )
+    } else if (expiringSoon) {
+        val warnPulse = ((sin(now * 0.014) + 1.0) * 0.5).toFloat()
+        val ringColor = if (warnPulse > 0.5f) Color(0xFFFF5A36) else TorchGold
+        IsometricTileDrawer.drawRotatedQuad(
+            this, path, camera, c.x, c.y, fracU = 0.90f, fracV = 0.90f,
+            fillColor = ringColor.copy(alpha = 0.16f + warnPulse * 0.24f),
+            strokeColor = ringColor.copy(alpha = 0.55f + warnPulse * 0.42f),
+            strokeWidth = 2.8f
         )
     }
     val size = (spritePx * 0.78f).roundToInt()
@@ -747,6 +827,44 @@ private fun DrawScope.drawIsometricCorpse(
         dstSize = IntSize(size, size),
         filterQuality = FilterQuality.None
     )
+
+    if (expiringSoon) {
+        val remMs = corpse.remainingMs(now) ?: 0L
+        val secsLeft = ((remMs + 999L) / 1000L).coerceIn(1L, 15L)
+        val badgeText = "${secsLeft}s"
+        val badgeW = 46f
+        val badgeH = 22f
+        val bx = c.x - badgeW * 0.5f
+        val by = c.y - size * 0.78f - badgeH
+        val warnColor = if (secsLeft <= 5L) Color(0xFFFF4040) else Color(0xFFFFB74D)
+
+        drawRoundRect(
+            color = Color(0xE0140E0C),
+            topLeft = Offset(bx, by),
+            size = Size(badgeW, badgeH),
+            cornerRadius = CornerRadius(6f, 6f)
+        )
+        drawRoundRect(
+            color = warnColor,
+            topLeft = Offset(bx, by),
+            size = Size(badgeW, badgeH),
+            cornerRadius = CornerRadius(6f, 6f),
+            style = Stroke(width = 1.8f)
+        )
+        val prevColor = labelPaint.color
+        val prevSize = labelPaint.textSize
+        val prevShadowSize = labelShadowPaint.textSize
+        labelPaint.color = if (secsLeft <= 5L) android.graphics.Color.parseColor("#FF6B6B") else android.graphics.Color.parseColor("#FFD166")
+        labelPaint.textSize = 15.5f
+        labelShadowPaint.textSize = 15.5f
+        drawContext.canvas.nativeCanvas.apply {
+            drawText(badgeText, c.x, by + badgeH * 0.74f, labelShadowPaint)
+            drawText(badgeText, c.x, by + badgeH * 0.74f, labelPaint)
+        }
+        labelPaint.color = prevColor
+        labelPaint.textSize = prevSize
+        labelShadowPaint.textSize = prevShadowSize
+    }
 }
 
 private fun DrawScope.drawIsometricNpc(
@@ -1128,7 +1246,7 @@ private fun DrawScope.drawIsometricProjectiles(
         val px = start.x + (end.x - start.x) * t
         val py = start.y + (end.y - start.y) * t - hw * 0.35f - arcLift
 
-        if (quality.drawPointLightPools && outLights != null) {
+        if (outLights != null) {
             IsometricLightingEngine.collectProjectilePointLight(proj.kind, px, py, hw, outLights)
         }
 
@@ -1241,6 +1359,24 @@ private fun DrawScope.drawIsometricProjectiles(
                 drawCircle(Color(0xFF2E1042), 13f, Offset(px, py))
                 drawCircle(Color(0xFFB34BFF), 8.5f, Offset(px, py))
                 drawCircle(Color(0xFFFF66A3), 4f, Offset(px, py))
+            }
+            ProjectileKind.VENOM_GLOB -> {
+                if (particleLevel == ParticleDetailLevel.HD_ENHANCED) {
+                    drawCircle(Color(0xFF56FF33).copy(alpha = 0.30f), 21f, Offset(px, py))
+                    drawCircle(Color(0xFF56FF33).copy(alpha = 0.40f), 8f, Offset(trailX, trailY))
+                }
+                drawCircle(Color(0xFF143312), 13.5f, Offset(px, py))
+                drawCircle(Color(0xFF52E639), 9.5f, Offset(px, py))
+                drawCircle(Color(0xFFD9FF8C), 4.8f, Offset(px, py))
+                if (particleLevel != ParticleDetailLevel.MINIMAL && t > 0.62f) {
+                    val splashFrac = ((t - 0.62f) / 0.38f).coerceIn(0f, 1f)
+                    drawCircle(
+                        Color(0xFF7BFF33).copy(alpha = (1f - splashFrac) * 0.70f),
+                        hw * (0.40f + splashFrac * 1.15f),
+                        end,
+                        style = Stroke(4.2f * quality.strokeScale)
+                    )
+                }
             }
             ProjectileKind.SPLASH -> {
                 drawCircle(Color(0xFF8CD9FF).copy(alpha = 1f - t), 7f + t * hw * 0.55f, end, style = Stroke(3.5f * quality.strokeScale))

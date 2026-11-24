@@ -23,8 +23,8 @@ import org.junit.Test
 class MonsterProgressionTest {
 
     @Test
-    fun allSeventeenMonstersScaleAcrossFourTiersAndSpawnOnWalkableNonPzTiles() {
-        assertEquals(17, MonsterType.entries.size)
+    fun allNineteenMonstersScaleAcrossFourTiersAndSpawnOnWalkableNonPzTiles() {
+        assertEquals(19, MonsterType.entries.size)
         val tierAvgHp = (1..4).map { t ->
             MonsterType.entries.filter { it.tier == t && !it.isBoss }.map { it.maxHp }.average()
         }
@@ -41,6 +41,8 @@ class MonsterProgressionTest {
 
         // Every spawn coordinate across all 5 floors must be walkable and outside Protection Zone
         val spawns = WorldMaps.initialMonsters()
+        assertTrue("Must spawn Broodmother Arachne on Floor -1", spawns.any { it.floor == -1 && it.type == MonsterType.BROODMOTHER_ARACHNE })
+        assertTrue("Must spawn Ignis Lord of the Pit on Floor -2", spawns.any { it.floor == -2 && it.type == MonsterType.IGNIS_LORD_OF_THE_PIT })
         assertTrue("Must spawn Demon Lord on Floor -3", spawns.any { it.floor == -3 && it.type == MonsterType.DEMON_LORD })
         assertTrue("Must spawn Elder Dragon on Floor -4", spawns.any { it.floor == -4 && it.type == MonsterType.ELDER_DRAGON })
         for (m in spawns) {

@@ -40,6 +40,8 @@ object OrganicMonsterRenderer {
         MonsterType.MINOTAUR -> 1.20f
         MonsterType.DRAGON_HATCHLING -> 1.20f
         MonsterType.CYCLOPS -> 1.24f
+        MonsterType.BROODMOTHER_ARACHNE -> 1.25f
+        MonsterType.IGNIS_LORD_OF_THE_PIT -> 1.27f
         MonsterType.DEMON_LORD -> 1.28f
         MonsterType.ELDER_DRAGON -> 1.32f
         else -> 1.0f
@@ -109,6 +111,12 @@ object OrganicMonsterRenderer {
             MonsterType.POISON_SPIDER -> drawPoisonSpider(
                 ox, oy, u, ow, facing, walkPhase, timeSec + seedRad, lunge, useSpec, useRim, path
             )
+            MonsterType.BROODMOTHER_ARACHNE -> drawBroodmotherArachne(
+                ox, oy, u, ow, facing, walkPhase, timeSec + seedRad, lunge, useSpec, useRim, path
+            )
+            MonsterType.IGNIS_LORD_OF_THE_PIT -> drawIgnisLordOfThePit(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad, useSpec, useRim, path
+            )
             MonsterType.DRAGON_HATCHLING -> drawDragon3D(
                 ox, oy, u, ow, facing, stride, bobUp, timeSec + seedRad, lunge,
                 isElder = false, useSpec = useSpec, useRim = useRim, quality = quality, path = path
@@ -163,8 +171,10 @@ object OrganicMonsterRenderer {
         if (lunge > 0.20f && (quality == GraphicsQuality.HIGH || quality == GraphicsQuality.HD)) {
             val slashAlpha = (lunge * 0.76f).coerceIn(0f, 0.80f)
             val slashColor = when (type) {
-                MonsterType.FIRE_DEVIL, MonsterType.DEMON_LORD, MonsterType.ELDER_DRAGON, MonsterType.DRAGON_HATCHLING -> Color(0xFFFF7A26)
-                MonsterType.POISON_SPIDER, MonsterType.YOUNG_SNAKE, MonsterType.SWAMP_TROLL -> Color(0xFF7BFF33)
+                MonsterType.FIRE_DEVIL, MonsterType.IGNIS_LORD_OF_THE_PIT, MonsterType.DEMON_LORD,
+                MonsterType.ELDER_DRAGON, MonsterType.DRAGON_HATCHLING -> Color(0xFFFF7A26)
+                MonsterType.POISON_SPIDER, MonsterType.BROODMOTHER_ARACHNE,
+                MonsterType.YOUNG_SNAKE, MonsterType.SWAMP_TROLL -> Color(0xFF7BFF33)
                 MonsterType.NECROMANCER, MonsterType.GHOUL -> Color(0xFFC07BFF)
                 else -> Color(0xFFFFE7B0)
             }
@@ -642,6 +652,342 @@ object OrganicMonsterRenderer {
                                 outlineW = ow * 0.7f, lightX = facing.lightScreenX, path = path
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * FLOOR -1 BOSS: BROODMOTHER ARACHNE (~2.2 tiles wide/tall)
+     * Colossal obsidian-and-crimson arachnid queen with glowing venom aura, 8 spiked armored legs,
+     * pulsating emerald venom sac abdomen, chitin crown crest, 6 glowing eyes & dripping fangs.
+     */
+    private fun DrawScope.drawBroodmotherArachne(
+        ox: Float,
+        oy: Float,
+        u: Float,
+        ow: Float,
+        facing: ResolvedScreenFacing,
+        walkPhase: Float,
+        t: Float,
+        lunge: Float,
+        useSpec: Boolean,
+        useRim: Boolean,
+        path: Path
+    ) {
+        val carapaceMain = Color(0xFF23182E)
+        val carapaceHi = Color(0xFF4F3866)
+        val carapaceSh = Color(0xFF100A17)
+        val crimsonPlate = Color(0xFF9E1F3F)
+        val crimsonHi = Color(0xFFD93B60)
+        val venomBright = Color(0xFF7BFF33)
+        val venomCore = Color(0xFFD9FF8C)
+        val pulse = 0.75f + 0.25f * sin(t * 4.4f)
+        val bodyUp = 15.0f + sin(t * 3.0f) * 1.1f + lunge * 2.2f
+
+        // Pulsing toxic venom boss aura on the dungeon floor
+        drawOval(
+            brush = Brush.radialGradient(
+                colorStops = arrayOf(
+                    0.0f to venomBright.copy(alpha = 0.34f * pulse),
+                    0.62f to Color(0xFF1F9E3C).copy(alpha = 0.16f * pulse),
+                    1.0f to Color.Transparent
+                ),
+                center = Offset(ox, oy),
+                radius = u * 26.5f
+            ),
+            topLeft = Offset(ox - u * 26.5f, oy - u * 13.5f),
+            size = Size(u * 53.0f, u * 27.0f)
+        )
+
+        val legF = floatArrayOf(+7.5f, +2.6f, -2.4f, -7.8f)
+        val order = IntArray(10) { it }
+        val depths = FloatArray(10)
+        for (i in 0 until 4) {
+            depths[i] = facing.depthOf(-16.5f, legF[i] * 1.45f)
+            depths[4 + i] = facing.depthOf(+16.5f, legF[i] * 1.45f)
+        }
+        depths[8] = facing.depthOf(0f, -9.5f)
+        depths[9] = facing.depthOf(0f, +6.2f) + 0.45f
+        sortIndices(order, depths)
+
+        for (k in 0 until 10) {
+            when (val id = order[k]) {
+                in 0..7 -> {
+                    val side = if (id < 4) -1f else +1f
+                    val idx = id % 4
+                    val fBase = legF[idx]
+                    val tripod = if ((idx + if (side < 0) 0 else 1) % 2 == 0) 1f else -1f
+                    val step = if (abs(walkPhase) > 0.01f) sin(walkPhase + tripod * 1.4f) else sin(t * 2.6f + id) * 0.22f
+                    val lift = (step * 2.8f).coerceAtLeast(0f)
+                    val coxa = facing.project(ox, oy, u, side * 5.2f, fBase * 0.62f + 1.2f, bodyUp - 0.8f)
+                    val knee = facing.project(ox, oy, u, side * 14.2f, fBase * 1.25f + step * 2.0f, bodyUp + 9.2f + lift * 0.6f)
+                    val foot = facing.project(ox, oy, u, side * 21.8f, fBase * 1.75f + step * 2.8f, 0.8f + lift)
+
+                    if (lift < 1.2f) {
+                        VolumetricShading.drawFootContactDot(this, foot, u * 2.6f, u * 1.4f)
+                    }
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, coxa, knee, u * 2.35f, u * 1.85f,
+                        main = carapaceMain, highlight = carapaceHi, shadow = carapaceSh,
+                        outlineW = ow * 0.92f, lightX = facing.lightScreenX, path = path
+                    )
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, knee, foot, u * 1.82f, u * 0.92f,
+                        main = crimsonPlate, highlight = crimsonHi, shadow = carapaceSh,
+                        outlineW = ow * 0.86f, lightX = facing.lightScreenX, path = path
+                    )
+                    // Venom-tipped knee spur
+                    drawCircle(INK, u * 1.55f, knee)
+                    drawCircle(venomBright.copy(alpha = 0.92f * pulse), u * 1.15f, knee)
+                }
+                8 -> { // COLOSSAL CROWNED VENOM-SAC ABDOMEN
+                    val abd = facing.project(ox, oy, u, 0f, -9.8f, bodyUp + 4.4f)
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, abd.x, abd.y, u * 13.4f, u * 11.2f,
+                        main = carapaceMain, highlight = carapaceHi, shadow = carapaceSh,
+                        outlineW = ow * 1.18f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                    // Crimson carapace dorsal plates & glowing venom sac glands
+                    val plateTop = facing.project(ox, oy, u, 0f, -8.5f, bodyUp + 12.2f)
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, plateTop.x, plateTop.y, u * 8.2f, u * 4.8f,
+                        main = crimsonPlate, highlight = crimsonHi, shadow = carapaceSh,
+                        outlineW = ow * 0.85f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec
+                    )
+                    for (side in -1..1 step 2) {
+                        val sac = facing.project(ox, oy, u, side * 5.6f, -11.4f, bodyUp + 8.8f)
+                        drawCircle(INK, u * 3.0f, sac)
+                        drawCircle(venomBright.copy(alpha = 0.88f * pulse), u * 2.4f, sac)
+                        drawCircle(venomCore, u * 1.1f, Offset(sac.x - u * 0.5f, sac.y - u * 0.5f))
+                    }
+                    val markMid = facing.project(ox, oy, u, 0f, -10.0f, bodyUp + 12.8f)
+                    drawCircle(venomBright, u * 2.5f, markMid)
+                    drawCircle(venomCore, u * 1.2f, markMid)
+                }
+                9 -> { // CROWNED CEPHALOTHORAX, 6 GLOWING EYES & VENOM FANGS
+                    val ceph = facing.project(ox, oy, u, 0f, +6.2f, bodyUp + 0.8f)
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, ceph.x, ceph.y, u * 8.2f, u * 6.8f,
+                        main = carapaceMain, highlight = carapaceHi, shadow = carapaceSh,
+                        outlineW = ow * 1.1f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                    // Twin jagged chitin crown horns above eyes
+                    for (side in -1..1 step 2) {
+                        val hBase = facing.project(ox, oy, u, side * 3.8f, +5.0f, bodyUp + 5.8f)
+                        val hTip = facing.project(ox, oy, u, side * 7.8f, +2.8f, bodyUp + 12.2f)
+                        VolumetricShading.drawVolumetricCylinder(
+                            this, hBase, hTip, u * 1.9f, u * 0.65f,
+                            main = Color(0xFFE3D7BE), highlight = Color(0xFFFFF8E6), shadow = Color(0xFF7D6E59),
+                            outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                        )
+                    }
+                    if (!facing.isBackFacing) {
+                        val eyeSpec = listOf(
+                            Triple(-3.8f, +11.2f, 1.0f),
+                            Triple(-2.0f, +11.8f, 2.2f),
+                            Triple(-0.6f, +12.2f, 0.8f),
+                            Triple(+0.6f, +12.2f, 0.8f),
+                            Triple(+2.0f, +11.8f, 2.2f),
+                            Triple(+3.8f, +11.2f, 1.0f)
+                        )
+                        for ((er, ef, eup) in eyeSpec) {
+                            val ep = facing.project(ox, oy, u, er, ef, bodyUp + eup)
+                            drawCircle(INK, u * 1.55f, ep)
+                            drawCircle(venomBright, u * 1.15f, ep)
+                            drawCircle(venomCore, u * 0.5f, ep)
+                        }
+                        // Massive dripping fangs
+                        for (side in -1..1 step 2) {
+                            val fBase = facing.project(ox, oy, u, side * 3.2f, +11.4f, bodyUp - 1.8f)
+                            val fTip = facing.project(ox, oy, u, side * 2.2f, +14.2f + lunge * 3.2f, bodyUp - 6.8f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, fBase, fTip, u * 1.75f, u * 0.65f,
+                                main = Color(0xFF3A3245), highlight = venomBright, shadow = INK,
+                                outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
+                            )
+                            drawCircle(venomBright.copy(alpha = 0.9f * pulse), u * 0.95f, fTip)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * FLOOR -2 BOSS: IGNIS, LORD OF THE PIT (~2.3 tiles tall)
+     * Towering charred-basalt & molten-magma infernal warlord with blazing floor aura, glowing chest
+     * lava fissures, spiked volcanic pauldrons, crown of magma horns, and flaming obsidian greatsword.
+     */
+    private fun DrawScope.drawIgnisLordOfThePit(
+        ox: Float,
+        oy: Float,
+        u: Float,
+        ow: Float,
+        facing: ResolvedScreenFacing,
+        stride: Float,
+        bobUp: Float,
+        breath: Float,
+        lunge: Float,
+        t: Float,
+        useSpec: Boolean,
+        useRim: Boolean,
+        path: Path
+    ) {
+        val basaltMain = Color(0xFF2B2229)
+        val basaltHi = Color(0xFF54434E)
+        val basaltSh = Color(0xFF130E14)
+        val magmaOuter = Color(0xFFFF4D17)
+        val magmaCore = Color(0xFFFFD84D)
+        val pulse = 0.78f + 0.22f * sin(t * 5.2f)
+
+        val hipUp = 15.0f + bobUp
+        val shoulderUp = 31.8f + bobUp + breath * 0.65f
+        val headUp = 40.4f + bobUp + breath * 0.7f
+        val shoulderR = 13.0f
+
+        // Blazing molten floor aura ring
+        drawOval(
+            brush = Brush.radialGradient(
+                colorStops = arrayOf(
+                    0.0f to magmaOuter.copy(alpha = 0.36f * pulse),
+                    0.55f to Color(0xFFB3240C).copy(alpha = 0.18f * pulse),
+                    1.0f to Color.Transparent
+                ),
+                center = Offset(ox, oy),
+                radius = u * 25.0f
+            ),
+            topLeft = Offset(ox - u * 25.0f, oy - u * 12.5f),
+            size = Size(u * 50.0f, u * 25.0f)
+        )
+
+        val order = IntArray(6) { it }
+        val depths = floatArrayOf(
+            facing.depthOf(-4.5f, -stride * 4.2f) - 0.6f,            // 0 L_LEG
+            facing.depthOf(+4.5f, +stride * 4.2f) - 0.6f,            // 1 R_LEG
+            facing.depthOf(-shoulderR, 1.2f),                        // 2 L_ARM_SHIELD
+            facing.depthOf(+shoulderR, 3.0f + lunge * 5.5f),         // 3 R_ARM_BLADE
+            0.0f,                                                    // 4 TORSO
+            0.75f + facing.forwardDepth * 0.35f                      // 5 HEAD
+        )
+        sortIndices(order, depths)
+
+        for (i in 0 until 6) {
+            when (order[i]) {
+                0, 1 -> {
+                    val side = if (order[i] == 0) -1f else +1f
+                    val swing = if (order[i] == 0) -stride else stride
+                    val hip = facing.project(ox, oy, u, side * 4.6f, swing * 1.4f, hipUp)
+                    val knee = facing.project(ox, oy, u, side * 5.0f, swing * 3.2f + 1.5f, hipUp * 0.52f)
+                    val foot = facing.project(ox, oy, u, side * 5.2f, swing * 4.4f, 1.2f)
+                    VolumetricShading.drawFootContactDot(this, foot, u * 3.8f, u * 2.0f)
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, hip, knee, u * 4.4f, u * 3.6f,
+                        main = basaltMain, highlight = basaltHi, shadow = basaltSh,
+                        outlineW = ow * 1.05f, lightX = facing.lightScreenX, path = path
+                    )
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, knee, foot, u * 3.6f, u * 3.0f,
+                        main = basaltMain, highlight = magmaOuter, shadow = basaltSh,
+                        outlineW = ow * 1.05f, lightX = facing.lightScreenX, path = path
+                    )
+                }
+                2 -> { // LEFT MOLTEN PAULDRON & ARM
+                    val sh = facing.project(ox, oy, u, -shoulderR, 0f, shoulderUp)
+                    val hand = facing.project(ox, oy, u, -shoulderR - 3.6f, 4.5f - stride * 2.0f, hipUp + 3.0f)
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, sh, hand, u * 4.2f, u * 3.2f,
+                        main = basaltMain, highlight = basaltHi, shadow = basaltSh,
+                        outlineW = ow, lightX = facing.lightScreenX, path = path
+                    )
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, sh.x, sh.y - u * 1.2f, u * 6.4f, u * 5.2f,
+                        main = basaltMain, highlight = magmaOuter, shadow = basaltSh,
+                        outlineW = ow * 1.1f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                    drawCircle(magmaCore.copy(alpha = 0.85f * pulse), u * 1.8f, Offset(sh.x, sh.y - u * 1.2f))
+                }
+                3 -> { // RIGHT MOLTEN PAULDRON & FLAMING OBSIDIAN GREATSWORD
+                    val sh = facing.project(ox, oy, u, +shoulderR, 0f, shoulderUp)
+                    val hand = facing.project(ox, oy, u, +shoulderR + 3.5f, 6.2f + lunge * 7.5f, hipUp + 5.0f + lunge * 5.0f)
+                    val tip = facing.project(ox, oy, u, +shoulderR + 6.0f, 18.5f + lunge * 11.0f, shoulderUp + 9.0f - lunge * 11.0f)
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, sh, hand, u * 4.2f, u * 3.2f,
+                        main = basaltMain, highlight = basaltHi, shadow = basaltSh,
+                        outlineW = ow, lightX = facing.lightScreenX, path = path
+                    )
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, sh.x, sh.y - u * 1.2f, u * 6.4f, u * 5.2f,
+                        main = basaltMain, highlight = magmaOuter, shadow = basaltSh,
+                        outlineW = ow * 1.1f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                    // Flaming magma greatsword aura & jagged blade
+                    drawLine(magmaOuter.copy(alpha = 0.55f * pulse), hand, tip, strokeWidth = u * 6.2f, cap = StrokeCap.Round)
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, hand, tip, u * 2.8f, u * 1.2f,
+                        main = magmaOuter, highlight = magmaCore, shadow = Color(0xFF7A140A),
+                        outlineW = ow * 0.95f, lightX = facing.lightScreenX, path = path
+                    )
+                    drawCircle(magmaCore, u * 2.0f, hand)
+                }
+                4 -> { // BROAD VOLCANIC TORSO WITH MOLTEN CORE FISSURES
+                    val chest = facing.project(ox, oy, u, 0f, 0.5f, (hipUp + shoulderUp) * 0.52f)
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, chest.x, chest.y, u * 12.6f, u * 11.2f,
+                        main = basaltMain, highlight = basaltHi, shadow = basaltSh,
+                        outlineW = ow * 1.2f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                    if (!facing.isBackFacing) {
+                        val core = facing.project(ox, oy, u, 0f, 6.2f, (hipUp + shoulderUp) * 0.54f)
+                        drawCircle(magmaOuter.copy(alpha = 0.85f * pulse), u * 5.2f, core)
+                        drawCircle(magmaCore.copy(alpha = 0.92f * pulse), u * 2.8f, core)
+                        // Magma chest fissure lines
+                        for (side in -1..1 step 2) {
+                            val crackEnd = facing.project(ox, oy, u, side * 6.8f, 5.2f, shoulderUp - 2.2f)
+                            drawLine(magmaOuter.copy(alpha = 0.9f * pulse), core, crackEnd, strokeWidth = u * 1.5f, cap = StrokeCap.Round)
+                        }
+                    }
+                }
+                5 -> { // VOLCANIC HORNED HELM & BLAZING EYES
+                    val head = facing.project(ox, oy, u, 0f, 1.5f, headUp)
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, head.x, head.y, u * 6.6f, u * 6.2f,
+                        main = basaltMain, highlight = basaltHi, shadow = basaltSh,
+                        outlineW = ow * 1.15f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                    // Sweeping volcanic crown horns with glowing molten tips
+                    for (side in -1..1 step 2) {
+                        val hBase = facing.project(ox, oy, u, side * 4.4f, 1.0f, headUp + 3.2f)
+                        val hMid = facing.project(ox, oy, u, side * 11.2f, -1.0f, headUp + 9.2f)
+                        val hTip = facing.project(ox, oy, u, side * 9.5f, +2.0f, headUp + 15.6f)
+                        VolumetricShading.drawVolumetricCylinder(
+                            this, hBase, hMid, u * 2.5f, u * 1.7f,
+                            main = basaltMain, highlight = magmaOuter, shadow = basaltSh,
+                            outlineW = ow * 0.9f, lightX = facing.lightScreenX, path = path
+                        )
+                        VolumetricShading.drawVolumetricCylinder(
+                            this, hMid, hTip, u * 1.7f, u * 0.7f,
+                            main = magmaOuter, highlight = magmaCore, shadow = Color(0xFF7A140A),
+                            outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                        )
+                    }
+                    if (!facing.isBackFacing) {
+                        for (side in -1..1 step 2) {
+                            val ep = facing.project(ox, oy, u, side * 2.4f, 6.8f, headUp + 0.6f)
+                            drawCircle(INK, u * 1.6f, ep)
+                            drawCircle(magmaCore, u * 1.2f, ep)
+                        }
+                        // Glowing furnace maw
+                        val maw = facing.project(ox, oy, u, 0f, 6.8f, headUp - 2.6f)
+                        drawOval(magmaOuter, Offset(maw.x - u * 2.4f, maw.y - u * 1.0f), Size(u * 4.8f, u * 2.0f))
                     }
                 }
             }

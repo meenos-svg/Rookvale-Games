@@ -60,7 +60,13 @@ import androidx.compose.material.icons.filled.SetMeal
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SportsMma
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -108,6 +114,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.R
 import com.example.game.engine.GameEngine
 import com.example.game.model.ActivePanel
+import com.example.game.model.BossSpecialKind
 import com.example.game.model.Direction
 import com.example.game.model.GameWorldState
 import com.example.game.model.ItemCatalog
@@ -194,6 +201,8 @@ private fun minimapTileColor(tile: TileType): Color = when (tile) {
     TileType.ARCANE_FLOOR -> Color(0xFF4C3F73)
     TileType.DIRT_FLOOR -> Color(0xFF73573E)
     TileType.WOOD_PIER, TileType.WOOD_BRIDGE -> Color(0xFFA87E52)
+    TileType.STONE_BRIDGE -> Color(0xFF8C867B)
+    TileType.IRON_BAR_GATE -> Color(0xFF697380)
     TileType.CRYPT_FLOOR -> Color(0xFF4F545E)
     TileType.OBSIDIAN_FLOOR -> Color(0xFF3A3142)
     TileType.WATER -> Color(0xFF23669E)
@@ -2084,3 +2093,151 @@ fun RegionalWorldMapContent(
         }
     }
 }
+
+/**
+ * Top-center Boss HP Nameplate displayed when engaging or approaching a Dungeon Boss
+ * (Broodmother Arachne, Ignis Lord of the Pit, Demon Lord, Elder Dragon).
+ * Pulses a dodge alert whenever the boss is telegraphing a ground danger-zone special.
+ */
+@Composable
+fun BossHpNameplateBar(
+    boss: MonsterEntity,
+    modifier: Modifier = Modifier
+) {
+    val hpFrac = (boss.hp.toFloat() / boss.maxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+    val isVenomBoss = boss.type.specialKind == BossSpecialKind.VENOM_NOVA
+    val isTelegraphing = boss.pendingAoeTiles.isNotEmpty()
+    val accentColor = if (isVenomBoss) Color(0xFF7BFF33) else FireOrange
+    val barColor = if (isVenomBoss) Color(0xFF56D938) else HealthCrimson
+    val infiniteTransition = rememberInfiniteTransition(label = "boss_telegraph_pulse")
+    val warnAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 360),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "boss_warn_alpha"
+    )
+
+    Surface(
+        color = BasaltDark.copy(alpha = 0.92f),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(
+            width = if (isTelegraphing) 1.8.dp else 1.3.dp,
+            color = if (isTelegraphing) accentColor.copy(alpha = warnAlpha) else TorchGold.copy(alpha = 0.8f)
+        ),
+        modifier = modifier
+            .widthIn(min = 228.dp, max = 330.dp)
+            .testTag("boss_hp_nameplate")
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .background(accentColor.copy(alpha = 0.22f), RoundedCornerShape(4.dp))
+                            .border(1.dp, accentColor.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "BOSS",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            ),
+                            color = accentColor
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = boss.type.displayName,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+                            color = ParchmentLight,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (boss.type.bossTitle.isNotEmpty()) {
+                            Text(
+                                text = boss.type.bossTitle,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                                color = ParchmentMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "${boss.hp} / ${boss.maxHp}",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    ),
+                    color = ParchmentLight
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(ObsidianVoid)
+                    .border(0.8.dp, StoneBorderDark, RoundedCornerShape(4.dp))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(hpFrac)
+                        .fillMaxHeight()
+                        .background(barColor)
+                )
+            }
+
+            if (isTelegraphing) {
+                val warnText = if (isVenomBoss) "VENOM NOVA — DODGE DANGER ZONES!" else "FLAME BURST — DODGE DANGER ZONES!"
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(accentColor.copy(alpha = 0.18f * warnAlpha))
+                        .border(0.8.dp, accentColor.copy(alpha = warnAlpha), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.WarningAmber,
+                        contentDescription = "Boss Special Telegraph Warning",
+                        tint = accentColor,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = warnText,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        ),
+                        color = accentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+

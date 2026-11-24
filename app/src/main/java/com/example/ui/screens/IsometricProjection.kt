@@ -231,7 +231,8 @@ object IsometricTileDrawer {
         TileType.TEMPLE_PEW,
         TileType.WEAPON_RACK,
         TileType.MOORED_BOAT,
-        TileType.WOOD_BED -> true
+        TileType.WOOD_BED,
+        TileType.IRON_BAR_GATE -> true
         else -> false
     }
 
@@ -289,7 +290,9 @@ object IsometricTileDrawer {
         TileType.ARCANE_FLOOR,
         TileType.COBBLESTONE,
         TileType.CRYPT_FLOOR,
-        TileType.OBSIDIAN_FLOOR -> true
+        TileType.OBSIDIAN_FLOOR,
+        TileType.STONE_BRIDGE,
+        TileType.IRON_BAR_GATE -> true
         else -> false
     }
 
@@ -520,6 +523,7 @@ object IsometricTileDrawer {
             TileType.FOUNTAIN, TileType.MARKET_AWNING, TileType.SMELTING_FURNACE, TileType.BLACKSMITH_ANVIL,
             TileType.FLETCHING_BENCH, TileType.LANTERN_POST, TileType.GATE_PILLAR -> TileType.COBBLESTONE
             TileType.TIMBER_WALL, TileType.TIMBER_WINDOW_WALL -> TileType.COBBLESTONE
+            TileType.IRON_BAR_GATE -> TileType.CRYPT_FLOOR
             else -> tile
         }
 
@@ -571,6 +575,7 @@ object IsometricTileDrawer {
                 TileType.ARCANE_FLOOR -> if ((tx + ty) and 1 == 0) Color(0xFF37314A) else Color(0xFF2E2840)
                 TileType.WOOD_PIER -> if (ty and 1 == 0) Color(0xFF8F6642) else Color(0xFF7B5636)
                 TileType.WOOD_BRIDGE -> if (ty and 1 == 0) Color(0xFF997149) else Color(0xFF87613C)
+                TileType.STONE_BRIDGE -> if ((tx + ty) and 1 == 0) Color(0xFF706B65) else Color(0xFF635E58)
                 TileType.DIRT_FLOOR -> if (h < 6) Color(0xFF785C42) else Color(0xFF6B5038)
                 TileType.CRYPT_FLOOR -> if ((tx + ty) and 1 == 0) Color(0xFF505561) else Color(0xFF444954)
                 TileType.OBSIDIAN_FLOOR -> if ((tx + ty) and 1 == 0) Color(0xFF362F40) else Color(0xFF2C2636)
@@ -742,6 +747,31 @@ object IsometricTileDrawer {
                     scope.drawLine(postColor, p0, Offset(p0.x, p0.y - railH), 2.2f)
                     scope.drawLine(postColor, p1, Offset(p1.x, p1.y - railH), 2.2f)
                     scope.drawLine(railColor, Offset(p0.x, p0.y - railH * 0.85f), Offset(p1.x, p1.y - railH * 0.85f), 2.2f)
+                }
+            }
+            TileType.STONE_BRIDGE -> {
+                // Dressed mortared stone bridge deck with low stone parapet curbs bordering water/lava chasms
+                if (quality != GraphicsQuality.LOW) {
+                    val seam = Color(0x55221F1C)
+                    scope.drawLine(seam, Offset(cx - cam.ux * 0.44f, cy - cam.uy * 0.44f), Offset(cx + cam.ux * 0.44f, cy + cam.uy * 0.44f), 1.3f * quality.strokeScale)
+                    scope.drawLine(Color(0x28FFF2D6), Offset(cx - cam.vx * 0.42f, cy - cam.vy * 0.42f), Offset(cx + cam.vx * 0.42f, cy + cam.vy * 0.42f), 1.0f)
+                }
+                val isHazard = { t: TileType -> t == TileType.WATER || t == TileType.LAVA }
+                val curbTop = Color(0xFF91897D)
+                val curbSideX = Color(0xFF544E47)
+                val curbSideY = Color(0xFF6B645B)
+                val curbH = cam.tileH * 0.28f
+                if (isHazard(floorMap.tileAt(tx - 1, ty))) {
+                    drawRotatedPrism(scope, path, cam, cx, cy, fracU = 0.16f, fracV = 0.96f, heightPx = curbH, offsetU = -0.42f, topColor = curbTop, faceXColor = curbSideX, faceYColor = curbSideY, quality = quality, isOverland = false)
+                }
+                if (isHazard(floorMap.tileAt(tx + 1, ty))) {
+                    drawRotatedPrism(scope, path, cam, cx, cy, fracU = 0.16f, fracV = 0.96f, heightPx = curbH, offsetU = 0.42f, topColor = curbTop, faceXColor = curbSideX, faceYColor = curbSideY, quality = quality, isOverland = false)
+                }
+                if (isHazard(floorMap.tileAt(tx, ty - 1))) {
+                    drawRotatedPrism(scope, path, cam, cx, cy, fracU = 0.96f, fracV = 0.16f, heightPx = curbH, offsetV = -0.42f, topColor = curbTop, faceXColor = curbSideX, faceYColor = curbSideY, quality = quality, isOverland = false)
+                }
+                if (isHazard(floorMap.tileAt(tx, ty + 1))) {
+                    drawRotatedPrism(scope, path, cam, cx, cy, fracU = 0.96f, fracV = 0.16f, heightPx = curbH, offsetV = 0.42f, topColor = curbTop, faceXColor = curbSideX, faceYColor = curbSideY, quality = quality, isOverland = false)
                 }
             }
             TileType.WATER -> {
@@ -947,6 +977,10 @@ object IsometricTileDrawer {
                     drawWarmFlickerGlow(scope, cx, cy - unitH * 2.42f * cScale, unitH * 0.92f, nowMs, tx, ty, quality)
                 }
             }
+            TileType.IRON_BAR_GATE -> {
+                val cut = computeWallCutaway(cam, tx, ty, playerFx, playerFy)
+                drawIronBarGateArch(scope, path, cam, floorMap, tx, ty, cx, cy, quality, cut)
+            }
             TileType.STONE_WALL, TileType.CITY_WALL, TileType.TORCH_WALL -> {
                 val cut = computeWallCutaway(cam, tx, ty, playerFx, playerFy)
                 drawDetailedStoneWall(scope, path, cam, floorMap, tx, ty, cx, cy, hasTorch = tile == TileType.TORCH_WALL, nowMs = nowMs, quality = quality, cutaway = cut)
@@ -969,6 +1003,20 @@ object IsometricTileDrawer {
                     faceYColor = if (isCave) Color(0xFF46424A) else Color(0xFF787066),
                     quality = quality, isOverland = isOverland, alpha = cut.alpha
                 )
+                // Damp sewer moss seams & stone fractures on underground cavern walls
+                if (isCave && !isOverland && quality != GraphicsQuality.LOW && cut.heightScale > 0.55f) {
+                    val hSeed = tileHash(tx, ty, 31) and 15
+                    if (floorMap.floorId == -1 && hSeed < 9) {
+                        val mossColor = Color(0xFF3A6B39).copy(alpha = 0.68f * cut.alpha)
+                        scope.drawCircle(mossColor, cam.tileW * 0.08f, Offset(cx - cam.tileW * 0.14f, cy - hPx * 0.34f))
+                        scope.drawCircle(Color(0xFF284D28).copy(alpha = 0.55f * cut.alpha), cam.tileW * 0.06f, Offset(cx + cam.tileW * 0.12f, cy - hPx * 0.22f))
+                    }
+                    if (hSeed % 3 == 0) {
+                        val crack = Color(0xAA141216).copy(alpha = 0.65f * cut.alpha)
+                        scope.drawLine(crack, Offset(cx - cam.tileW * 0.08f, cy - hPx * 0.55f), Offset(cx + cam.tileW * 0.03f, cy - hPx * 0.28f), 1.4f)
+                        scope.drawLine(crack, Offset(cx + cam.tileW * 0.03f, cy - hPx * 0.28f), Offset(cx - cam.tileW * 0.02f, cy - hPx * 0.14f), 1.2f)
+                    }
+                }
             }
             TileType.TREE -> drawTreeProp(scope, path, cam, cx, cy, tx, ty, nowMs, quality)
             TileType.TREE_STUMP -> {
@@ -1413,8 +1461,109 @@ object IsometricTileDrawer {
         if (isOverland && cScale > 0.62f) {
             drawDoorwayTimberLintelIfAdjacent(scope, path, cam, floorMap, tx, ty, cx, cy, totalH, cAlpha, quality)
         }
+        // Damp moss patches & cracked dungeon mortar underground
+        if (!isOverland && quality != GraphicsQuality.LOW && cScale > 0.55f) {
+            val hSeed = tileHash(tx, ty, 47) and 15
+            if (floorMap.floorId == -1 && hSeed < 8) {
+                scope.drawCircle(
+                    Color(0xFF3C6E3B).copy(alpha = 0.62f * cAlpha),
+                    cam.tileW * 0.075f,
+                    Offset(cx - cam.tileW * 0.12f, cy - totalH * 0.30f)
+                )
+                scope.drawCircle(
+                    Color(0xFF294E28).copy(alpha = 0.52f * cAlpha),
+                    cam.tileW * 0.055f,
+                    Offset(cx + cam.tileW * 0.10f, cy - totalH * 0.42f)
+                )
+            }
+            if (hSeed % 3 == 1) {
+                val crackColor = Color(0xB0171412).copy(alpha = 0.7f * cAlpha)
+                scope.drawLine(crackColor, Offset(cx - cam.tileW * 0.07f, cy - totalH * 0.68f), Offset(cx + cam.tileW * 0.04f, cy - totalH * 0.44f), 1.5f)
+                scope.drawLine(crackColor, Offset(cx + cam.tileW * 0.04f, cy - totalH * 0.44f), Offset(cx - cam.tileW * 0.01f, cy - totalH * 0.24f), 1.2f)
+            }
+        }
         if (hasTorch && cScale > 0.55f) {
-            drawWarmFlickerGlow(scope, cx, cy - totalH * 0.72f, h * 1.15f, nowMs, tx, ty, quality)
+            // Wrought-iron wall sconce bracket + flickering torch head
+            val sconceY = cy - totalH * 0.68f
+            val ironColor = Color(0xFF252830).copy(alpha = cAlpha)
+            scope.drawLine(ironColor, Offset(cx - cam.tileW * 0.03f, sconceY + h * 0.24f), Offset(cx + cam.tileW * 0.04f, sconceY + h * 0.04f), 3.0f)
+            scope.drawLine(Color(0xFF593E26).copy(alpha = cAlpha), Offset(cx + cam.tileW * 0.04f, sconceY + h * 0.04f), Offset(cx + cam.tileW * 0.06f, sconceY - h * 0.14f), 3.4f)
+            drawWarmFlickerGlow(scope, cx + cam.tileW * 0.06f, sconceY - h * 0.16f, h * 1.22f, nowMs, tx, ty, quality)
+        }
+    }
+
+    /**
+     * Walk-under vaulted dungeon archway with raised wrought-iron portcullis bars.
+     * Automatically softens/lowers via [cutaway] when standing in front of the player.
+     */
+    private fun drawIronBarGateArch(
+        scope: DrawScope,
+        path: Path,
+        cam: IsometricCamera,
+        floorMap: WorldFloor,
+        tx: Int,
+        ty: Int,
+        cx: Float,
+        cy: Float,
+        quality: GraphicsQuality,
+        cutaway: WallCutaway
+    ) {
+        val h = cam.tileH
+        val cScale = cutaway.heightScale
+        val cAlpha = cutaway.alpha
+        val totalH = h * (TALL_WALL_HEIGHT_MULT * 0.92f) * cScale
+
+        val hasWallW = isBuildingWall(floorMap.tileAt(tx - 1, ty)) || floorMap.tileAt(tx - 1, ty) == TileType.IRON_BAR_GATE
+        val hasWallE = isBuildingWall(floorMap.tileAt(tx + 1, ty)) || floorMap.tileAt(tx + 1, ty) == TileType.IRON_BAR_GATE
+        val spansAlongX = hasWallW || hasWallE
+
+        val ironDark = Color(0xFF20242C).copy(alpha = cAlpha)
+        val ironMid = Color(0xFF49505C).copy(alpha = cAlpha)
+        val ironHighlight = Color(0xFF838C9C).copy(alpha = cAlpha)
+
+        // Overhead stone arch beam (leaves clear headroom so characters walk cleanly beneath!)
+        val archBaseZ = totalH * 0.68f
+        val archThickness = totalH * 0.24f
+        if (spansAlongX) {
+            drawRotatedPrism(
+                scope, path, cam, cx, cy, fracU = 1.02f, fracV = 0.28f,
+                heightPx = archThickness, baseZ = archBaseZ,
+                topColor = Color(0xFF7B756D), faceXColor = Color(0xFF4B4742), faceYColor = Color(0xFF615C55),
+                quality = quality, isOverland = false, alpha = cAlpha, drawMortarCourses = true
+            )
+        } else {
+            drawRotatedPrism(
+                scope, path, cam, cx, cy, fracU = 0.28f, fracV = 1.02f,
+                heightPx = archThickness, baseZ = archBaseZ,
+                topColor = Color(0xFF7B756D), faceXColor = Color(0xFF4B4742), faceYColor = Color(0xFF615C55),
+                quality = quality, isOverland = false, alpha = cAlpha, drawMortarCourses = true
+            )
+        }
+
+        // Raised wrought-iron portcullis spikes hanging from the stone arch lintel + side iron frame rails
+        if (cScale > 0.45f) {
+            val ax = if (spansAlongX) cam.ux else cam.vx
+            val ay = if (spansAlongX) cam.uy else cam.vy
+            val barStroke = (cam.tileW * 0.032f).coerceIn(1.8f, 3.6f)
+            val topYOff = archBaseZ
+            val teethBottomOff = totalH * 0.36f
+            for (i in -2..2) {
+                val frac = i * 0.20f
+                val bx = cx + ax * frac
+                val by = cy + ay * frac
+                val barBottom = if (i == -2 || i == 2) 0f else teethBottomOff
+                scope.drawLine(ironDark, Offset(bx, by - topYOff), Offset(bx, by - barBottom), barStroke + 1.1f)
+                scope.drawLine(ironMid, Offset(bx, by - topYOff), Offset(bx, by - barBottom), barStroke * 0.72f)
+                if (i != -2 && i != 2) {
+                    // Pointed iron portcullis tooth tip
+                    scope.drawCircle(ironHighlight, barStroke * 0.55f, Offset(bx, by - barBottom))
+                }
+            }
+            // Crossbar tying the raised portcullis spears together
+            val pL = Offset(cx - ax * 0.44f, cy - ay * 0.44f - totalH * 0.52f)
+            val pR = Offset(cx + ax * 0.44f, cy + ay * 0.44f - totalH * 0.52f)
+            scope.drawLine(ironDark, pL, pR, barStroke + 1.0f)
+            scope.drawLine(ironHighlight, pL, pR, barStroke * 0.55f)
         }
     }
 

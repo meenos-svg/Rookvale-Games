@@ -521,6 +521,42 @@ object EntitySpriteAtlas {
                 rect(buf, S, 9, 0 + bob, 3, 4, 0xFFE6D4A8.toInt()); rect(buf, S, 20, 0 + bob, 3, 4, 0xFFE6D4A8.toInt())
                 rect(buf, S, 12, 5 + bob, 2, 2, 0xFFFF551A.toInt()); rect(buf, S, 18, 5 + bob, 2, 2, 0xFFFF551A.toInt())
             }
+            MonsterType.BROODMOTHER_ARACHNE -> {
+                drawShadow(buf, 3, 25, 26, 6)
+                val carapace = 0xFF1F1629.toInt()
+                val crimson = 0xFF8C1D3A.toInt()
+                val venom = if (frame == 0) 0xFF6CFF2B.toInt() else 0xFFA6FF66.toInt()
+                // Spiked arachnid legs
+                for (ly in listOf(12, 16, 20)) {
+                    rect(buf, S, 2, ly + bob, 7, 2, carapace)
+                    rect(buf, S, 23, ly + bob, 7, 2, carapace)
+                    px(buf, S, 4, ly + bob, venom); px(buf, S, 27, ly + bob, venom)
+                }
+                // Colossal abdomen & venom hourglass
+                rect(buf, S, 8, 9 + bob, 16, 13, carapace)
+                rect(buf, S, 10, 11 + bob, 12, 9, crimson)
+                rect(buf, S, 13, 13 + bob, 6, 5, venom)
+                // Crowned head & 6 venom eyes
+                rect(buf, S, 10, 4 + bob, 12, 7, carapace)
+                rect(buf, S, 12, 6 + bob, 2, 2, venom); rect(buf, S, 15, 5 + bob, 2, 2, venom); rect(buf, S, 18, 6 + bob, 2, 2, venom)
+            }
+            MonsterType.IGNIS_LORD_OF_THE_PIT -> {
+                drawShadow(buf, 3, 25, 26, 6)
+                val basalt = 0xFF282026.toInt()
+                val lava = if (frame == 0) 0xFFFF5A1F.toInt() else 0xFFFFB833.toInt()
+                val core = 0xFFFFEE88.toInt()
+                // Molten pauldrons & horned silhouette
+                rect(buf, S, 4, 10 + bob, 6, 12, basalt); rect(buf, S, 22, 10 + bob, 6, 12, basalt)
+                rect(buf, S, 5, 11 + bob, 4, 4, lava); rect(buf, S, 23, 11 + bob, 4, 4, lava)
+                // Basalt torso with molten magma core
+                rect(buf, S, 9, 9 + bob, 14, 16, basalt)
+                rect(buf, S, 12, 12 + bob, 8, 9, lava)
+                rect(buf, S, 14, 14 + bob, 4, 5, core)
+                // Volcanic horned helm & blazing eyes
+                rect(buf, S, 10, 3 + bob, 12, 7, basalt)
+                rect(buf, S, 7, 0 + bob, 3, 5, lava); rect(buf, S, 22, 0 + bob, 3, 5, lava)
+                rect(buf, S, 12, 5 + bob, 2, 2, core); rect(buf, S, 18, 5 + bob, 2, 2, core)
+            }
         }
         return toBmp(buf, S)
     }

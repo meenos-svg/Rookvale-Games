@@ -106,6 +106,8 @@ object WorldMaps {
         LandmarkLabel(0, 196, 8, "NORTH BORDER HIGHWAY"),
         LandmarkLabel(0, 8, 192, "WEST BORDER HIGHWAY"),
         LandmarkLabel(0, 391, 192, "EAST BORDER HIGHWAY"),
+        LandmarkLabel(-1, 24, 34, "BROODMOTHER'S WEBBED DEN"),
+        LandmarkLabel(-2, 24, 12, "MOLTEN PIT SANCTUM"),
         LandmarkLabel(-3, 24, 18, "DEEP FORGE OUTPOST")
     )
 
@@ -190,26 +192,28 @@ object WorldMaps {
         MonsterSpawn(0, 300, 72, MonsterType.SWAMP_TROLL),
         MonsterSpawn(0, 316, 68, MonsterType.SKELETON),
 
-        // --- Floor -1: Mossy Sewers & Caves (TIER 2 — Levels 3-6) ---
-        MonsterSpawn(-1, 24, 14, MonsterType.CAVE_RAT),
-        MonsterSpawn(-1, 20, 18, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(-1, 32, 16, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(-1, 16, 20, MonsterType.SKELETON),
-        MonsterSpawn(-1, 14, 28, MonsterType.POISON_SPIDER),
-        MonsterSpawn(-1, 22, 28, MonsterType.SKELETON),
-        MonsterSpawn(-1, 32, 26, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(-1, 28, 33, MonsterType.POISON_SPIDER),
-        MonsterSpawn(-1, 20, 35, MonsterType.SWAMP_TROLL),
+        // --- Floor -1: Mossy Sewers & Caves (TIER 2 — Levels 3-6 + Dungeon Boss) ---
+        MonsterSpawn(-1, 26, 13, MonsterType.CAVE_RAT),
+        MonsterSpawn(-1, 13, 21, MonsterType.SWAMP_TROLL),
+        MonsterSpawn(-1, 37, 13, MonsterType.GOBLIN_SCOUT),
+        MonsterSpawn(-1, 13, 24, MonsterType.SKELETON),
+        MonsterSpawn(-1, 37, 30, MonsterType.POISON_SPIDER),
+        MonsterSpawn(-1, 24, 27, MonsterType.SKELETON),
+        MonsterSpawn(-1, 24, 19, MonsterType.GOBLIN_SCOUT),
+        MonsterSpawn(-1, 21, 35, MonsterType.POISON_SPIDER),
+        MonsterSpawn(-1, 27, 35, MonsterType.POISON_SPIDER),
+        MonsterSpawn(-1, 24, 34, MonsterType.BROODMOTHER_ARACHNE),
 
-        // --- Floor -2: Deep Caverns (TIER 3 — Levels 6-10) ---
-        MonsterSpawn(-2, 18, 32, MonsterType.MINOTAUR),
-        MonsterSpawn(-2, 30, 32, MonsterType.ORC_WARRIOR),
-        MonsterSpawn(-2, 14, 24, MonsterType.FIRE_DEVIL),
-        MonsterSpawn(-2, 34, 24, MonsterType.MINOTAUR),
-        MonsterSpawn(-2, 24, 24, MonsterType.GHOUL),
-        MonsterSpawn(-2, 18, 16, MonsterType.ORC_WARRIOR),
-        MonsterSpawn(-2, 30, 16, MonsterType.GHOUL),
-        MonsterSpawn(-2, 24, 12, MonsterType.FIRE_DEVIL),
+        // --- Floor -2: Deep Caverns & Molten Chasm (TIER 3 — Levels 6-10 + Dungeon Boss) ---
+        MonsterSpawn(-2, 12, 33, MonsterType.MINOTAUR),
+        MonsterSpawn(-2, 35, 33, MonsterType.ORC_WARRIOR),
+        MonsterSpawn(-2, 13, 25, MonsterType.FIRE_DEVIL),
+        MonsterSpawn(-2, 37, 25, MonsterType.MINOTAUR),
+        MonsterSpawn(-2, 24, 25, MonsterType.GHOUL),
+        MonsterSpawn(-2, 20, 12, MonsterType.ORC_WARRIOR),
+        MonsterSpawn(-2, 28, 12, MonsterType.GHOUL),
+        MonsterSpawn(-2, 24, 15, MonsterType.FIRE_DEVIL),
+        MonsterSpawn(-2, 24, 12, MonsterType.IGNIS_LORD_OF_THE_PIT),
 
         // --- Floor -3: Abyssal Crypt & Boss (TIER 4 — Levels 10-18) ---
         MonsterSpawn(-3, 14, 14, MonsterType.CYCLOPS),
@@ -913,29 +917,78 @@ object WorldMaps {
         val s = 48
         val g = createBlank(s, s, TileType.CAVE_WALL)
 
-        // Northern sewer arrival galleries (matching City Sewers, Cellar, Quarry & Mountain Cave)
-        fillRect(g, 8, 9, 41, 17, TileType.DIRT_FLOOR)
-        fillRect(g, 11, 14, 19, 25, TileType.DIRT_FLOOR)
-        // Central subterranean cistern & water channel
-        fillRect(g, 16, 18, 35, 34, TileType.DIRT_FLOOR)
-        fillRect(g, 22, 22, 27, 25, TileType.WATER)
-        // East dark-forest cavern tunnel
-        fillRect(g, 33, 25, 41, 33, TileType.DIRT_FLOOR)
-        // Southern descent chamber toward Floor -2
-        fillRect(g, 17, 33, 31, 41, TileType.DIRT_FLOOR)
-        // Side stone pillars
-        listOf(18 to 13, 31 to 13, 19 to 29, 32 to 29).forEach { (px, py) -> g[py][px] = TileType.CAVE_WALL }
+        // 1. NW Cellar & Quarry Crypt (Portals: (10,10) Cellar & (14,14) Quarry)
+        fillRect(g, 8, 9, 16, 17, TileType.CRYPT_FLOOR)
+        fillRect(g, 11, 12, 15, 16, TileType.DIRT_FLOOR)
+        listOf(10 to 13, 15 to 11).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
 
-        // Ochre & Bogstone Veins
-        listOf(9 to 12, 13 to 22, 39 to 14).forEach { (x, y) -> g[y][x] = TileType.ORE_OCHRE }
-        listOf(12 to 32, 30 to 36, 39 to 31, 20 to 40).forEach { (x, y) -> g[y][x] = TileType.ORE_BOGSTONE }
+        // Narrow 3-tile North Sewer Corridor -> North Gatehouse (Iron-Barred Gate threshold)
+        fillRect(g, 17, 11, 24, 13, TileType.CRYPT_FLOOR)
+        g[11][18] = TileType.IRON_BAR_GATE
+        g[12][18] = TileType.IRON_BAR_GATE
+        g[13][18] = TileType.STONE_WALL
 
-        // Torches
-        g[8][28] = TileType.TORCH_WALL
-        g[8][38] = TileType.TORCH_WALL
-        g[41][24] = TileType.TORCH_WALL
+        // 2. North Central Sewer Gatehouse (Portal: (28,10) City Sewers)
+        fillRect(g, 25, 9, 31, 15, TileType.CRYPT_FLOOR)
+        g[12][26] = TileType.STONE_WALL
+        g[12][30] = TileType.STONE_WALL
 
-        // Portals
+        // Narrow 3-tile NE Corridor -> Mountain Cavern Gallery
+        fillRect(g, 32, 11, 34, 13, TileType.DIRT_FLOOR)
+        g[11][33] = TileType.IRON_BAR_GATE
+        g[12][33] = TileType.IRON_BAR_GATE
+        g[13][33] = TileType.STONE_WALL
+
+        // 3. NE Mountain Cavern Gallery (Portal: (38,10) Mountain Cavern)
+        fillRect(g, 35, 9, 41, 16, TileType.DIRT_FLOOR)
+        g[13][39] = TileType.CAVE_WALL
+
+        // 4. West Pillar-Lined Crypt Chamber (connected via narrow 2-tile vertical corridor)
+        fillRect(g, 12, 18, 13, 19, TileType.CRYPT_FLOOR)
+        fillRect(g, 9, 20, 17, 28, TileType.CRYPT_FLOOR)
+        listOf(11 to 22, 15 to 22, 11 to 26, 15 to 26).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
+
+        // 5. Central Flooded Cistern Chasm + Twin Stone Bridges
+        fillRect(g, 27, 16, 28, 17, TileType.CRYPT_FLOOR) // Link from Gatehouse
+        fillRect(g, 18, 18, 31, 28, TileType.CRYPT_FLOOR)
+        fillRect(g, 18, 21, 31, 25, TileType.WATER) // Subterranean water chasm
+        fillRect(g, 21, 21, 22, 25, TileType.STONE_BRIDGE) // West Stone Bridge
+        fillRect(g, 27, 21, 28, 25, TileType.STONE_BRIDGE) // East Stone Bridge
+        // Iron-barred gate linking West Crypt -> South Cistern Ledge
+        g[26][18] = TileType.IRON_BAR_GATE
+        g[27][18] = TileType.IRON_BAR_GATE
+        g[28][18] = TileType.STONE_WALL
+
+        // 6. Winding East Sinkhole Tunnel & Spider Alcove (Portal: (38,28) Dark Forest Sinkhole)
+        fillRect(g, 38, 17, 39, 24, TileType.DIRT_FLOOR) // North-South winding tunnel
+        fillRect(g, 32, 26, 34, 28, TileType.DIRT_FLOOR) // Cistern-to-East corridor
+        fillRect(g, 35, 25, 41, 33, TileType.DIRT_FLOOR)
+        g[29][36] = TileType.CAVE_WALL
+
+        // 7. Boss Gatehouse Corridor -> Broodmother's Webbed Den (Boss Chamber)
+        fillRect(g, 23, 29, 25, 30, TileType.CRYPT_FLOOR)
+        g[30][23] = TileType.IRON_BAR_GATE
+        g[30][24] = TileType.IRON_BAR_GATE
+        g[30][25] = TileType.IRON_BAR_GATE
+
+        // Broodmother Arachne's Boss Chamber (x=18..30, y=31..40)
+        fillRect(g, 18, 31, 30, 40, TileType.CRYPT_FLOOR)
+        fillRect(g, 20, 32, 28, 38, TileType.DIRT_FLOOR)
+        listOf(20 to 33, 28 to 33, 20 to 37, 28 to 37).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
+
+        // Ochre & Bogstone Veins tucked in dungeon alcoves
+        listOf(9 to 15, 10 to 24, 40 to 14).forEach { (x, y) -> g[y][x] = TileType.ORE_OCHRE }
+        listOf(16 to 28, 29 to 39, 40 to 31, 19 to 39).forEach { (x, y) -> g[y][x] = TileType.ORE_BOGSTONE }
+
+        // Atmospheric Flickering Iron Wall Torches along corridors, bridges, and Boss Den
+        listOf(
+            10 to 8, 14 to 8, 21 to 10, 28 to 8, 38 to 8,
+            10 to 19, 13 to 29, 21 to 17, 29 to 17,
+            37 to 20, 40 to 22, 22 to 30, 26 to 30,
+            17 to 34, 31 to 34, 24 to 41
+        ).forEach { (tx, ty) -> g[ty][tx] = TileType.TORCH_WALL }
+
+        // Portals (exact coordinates preserved & guaranteed walkable)
         g[10][28] = TileType.STAIRS_UP
         g[10][38] = TileType.STAIRS_UP
         g[10][10] = TileType.ROPE_SPOT_UP
@@ -951,7 +1004,7 @@ object WorldMaps {
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),
             dangerLevel = "Moderate",
-            recommendedLevel = "Lvl 3-6",
+            recommendedLevel = "Lvl 3-8",
             dangerSeverity = 1
         )
     }
@@ -960,28 +1013,75 @@ object WorldMaps {
         val s = 48
         val g = createBlank(s, s, TileType.STONE_WALL)
 
-        fillRect(g, 16, 30, 32, 41, TileType.CRYPT_FLOOR) // Southern rope chamber
-        fillRect(g, 20, 16, 28, 30, TileType.CRYPT_FLOOR) // Central nave
-        fillRect(g, 8, 18, 20, 29, TileType.CRYPT_FLOOR)  // West ossuary
-        fillRect(g, 28, 18, 42, 29, TileType.CRYPT_FLOOR) // East ossuary
-        fillRect(g, 14, 6, 34, 17, TileType.CRYPT_FLOOR)  // Northern sanctum
+        // 1. Southern Rope Landing Vestibule (Portal: (24,38) Rope-Spot Up to Floor -1)
+        fillRect(g, 18, 34, 30, 40, TileType.CRYPT_FLOOR)
+        listOf(20 to 36, 28 to 36).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
 
-        // Crypt pillars
-        listOf(19 to 35, 29 to 35, 13 to 22, 13 to 26, 35 to 22, 35 to 26, 19 to 11, 29 to 11).forEach { (px, py) ->
-            g[py][px] = TileType.STONE_WALL
-        }
+        // Narrow 3-tile Central Crypt Corridor with Iron-Barred Gate
+        fillRect(g, 23, 28, 25, 33, TileType.CRYPT_FLOOR)
+        g[33][23] = TileType.IRON_BAR_GATE
+        g[33][24] = TileType.IRON_BAR_GATE
+        g[33][25] = TileType.IRON_BAR_GATE
+
+        // 2. Central Pillar-Lined Ossuary Hall
+        fillRect(g, 19, 22, 29, 27, TileType.CRYPT_FLOOR)
+        listOf(21 to 24, 27 to 24).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
+
+        // 3. West Crag Stairs Hall (Portal: (10,24) Stairs Up to Floor 0 NE Crag Hills)
+        fillRect(g, 15, 23, 18, 25, TileType.CRYPT_FLOOR)
+        g[23][16] = TileType.IRON_BAR_GATE
+        g[24][16] = TileType.IRON_BAR_GATE
+        g[25][16] = TileType.STONE_WALL
+        fillRect(g, 8, 21, 14, 28, TileType.CRYPT_FLOOR)
+        listOf(11 to 22, 11 to 27).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
+
+        // 4. East Brimstone Crypt (Portal: (40,24) Rope Hole Down to Floor -3)
+        fillRect(g, 30, 23, 33, 25, TileType.CRYPT_FLOOR)
+        g[23][32] = TileType.STONE_WALL
+        g[24][32] = TileType.IRON_BAR_GATE
+        g[25][32] = TileType.IRON_BAR_GATE
+        fillRect(g, 34, 21, 42, 28, TileType.CRYPT_FLOOR)
+        listOf(36 to 22, 36 to 27).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
+
+        // 5. Flanking West & East Crypt Vault Wings (winding 2-tile connector loops)
+        fillRect(g, 10, 31, 15, 36, TileType.CRYPT_FLOOR)
+        fillRect(g, 11, 29, 12, 30, TileType.CRYPT_FLOOR)
+        fillRect(g, 16, 35, 17, 36, TileType.CRYPT_FLOOR)
+        fillRect(g, 33, 31, 38, 36, TileType.CRYPT_FLOOR)
+        fillRect(g, 36, 29, 37, 30, TileType.CRYPT_FLOOR)
+        fillRect(g, 31, 35, 32, 36, TileType.CRYPT_FLOOR)
+
+        // 6. Molten Lava Chasm crossed by Central & West Stone Bridges
+        fillRect(g, 14, 18, 34, 21, TileType.LAVA)
+        fillRect(g, 23, 18, 25, 21, TileType.STONE_BRIDGE) // Grand Central Stone Bridge
+        fillRect(g, 16, 18, 17, 21, TileType.STONE_BRIDGE) // Secondary West Stone Bridge
+        fillRect(g, 16, 22, 17, 22, TileType.CRYPT_FLOOR)  // South landing of West Bridge
+        fillRect(g, 16, 17, 17, 17, TileType.CRYPT_FLOOR)  // North landing of West Bridge
+
+        // Boss Sanctum Iron-Barred Gate at North end of Central Bridge
+        g[17][23] = TileType.IRON_BAR_GATE
+        g[17][24] = TileType.IRON_BAR_GATE
+        g[17][25] = TileType.IRON_BAR_GATE
+
+        // 7. Ignis, Lord of the Pit — Molten Pit Sanctum (x=15..33, y=7..16)
+        fillRect(g, 15, 7, 33, 16, TileType.CRYPT_FLOOR)
+        fillRect(g, 17, 8, 31, 15, TileType.OBSIDIAN_FLOOR)
+        fillRect(g, 15, 7, 17, 9, TileType.LAVA)
+        fillRect(g, 31, 7, 33, 9, TileType.LAVA)
+        listOf(19 to 10, 29 to 10, 19 to 14, 29 to 14).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
 
         // Bogstone Veins & Brimstone Seams
-        listOf(9 to 20, 9 to 27, 39 to 19).forEach { (x, y) -> g[y][x] = TileType.ORE_BOGSTONE }
-        listOf(15 to 8, 33 to 8, 41 to 27, 17 to 39).forEach { (x, y) -> g[y][x] = TileType.ORE_BRIMSTONE }
+        listOf(8 to 21, 8 to 28, 34 to 35).forEach { (x, y) -> g[y][x] = TileType.ORE_BOGSTONE }
+        listOf(18 to 8, 30 to 8, 42 to 27, 19 to 39).forEach { (x, y) -> g[y][x] = TileType.ORE_BRIMSTONE }
 
-        // Torches
-        g[41][24] = TileType.TORCH_WALL
-        g[6][24] = TileType.TORCH_WALL
-        g[18][14] = TileType.TORCH_WALL
-        g[18][34] = TileType.TORCH_WALL
+        // Flickering Iron Wall Torches casting warm light pools down every corridor & chamber
+        listOf(
+            24 to 41, 20 to 33, 28 to 33, 13 to 30, 35 to 30,
+            10 to 20, 40 to 20, 22 to 28, 26 to 28,
+            22 to 17, 26 to 17, 14 to 12, 34 to 12, 24 to 6
+        ).forEach { (tx, ty) -> g[ty][tx] = TileType.TORCH_WALL }
 
-        // Portals
+        // Portals (exact coordinates preserved & guaranteed walkable)
         g[38][24] = TileType.ROPE_SPOT_UP
         g[24][10] = TileType.STAIRS_UP // Direct return stairway up to NE Crag Hills on Floor 0!
         g[8][24] = TileType.STAIRS_DOWN
@@ -995,7 +1095,7 @@ object WorldMaps {
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),
             dangerLevel = "High",
-            recommendedLevel = "Lvl 6-10",
+            recommendedLevel = "Lvl 6-12",
             dangerSeverity = 2
         )
     }

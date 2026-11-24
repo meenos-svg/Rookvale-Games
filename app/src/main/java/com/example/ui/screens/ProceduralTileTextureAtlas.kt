@@ -70,7 +70,8 @@ object ProceduralTileTextureAtlas {
         TileType.WOOD_PLANK_FLOOR -> SurfaceFamily.WOOD_PLANK_FLOOR
         TileType.WOOD_PIER, TileType.WOOD_BRIDGE -> SurfaceFamily.WOOD_BRIDGE
         TileType.ARCANE_FLOOR -> SurfaceFamily.ARCANE_FLOOR
-        TileType.CRYPT_FLOOR, TileType.STAIRS_DOWN, TileType.STAIRS_UP -> SurfaceFamily.CRYPT_FLOOR
+        TileType.CRYPT_FLOOR, TileType.STAIRS_DOWN, TileType.STAIRS_UP,
+        TileType.STONE_BRIDGE, TileType.IRON_BAR_GATE -> SurfaceFamily.CRYPT_FLOOR
         TileType.OBSIDIAN_FLOOR -> SurfaceFamily.OBSIDIAN_FLOOR
         else -> null
     }

@@ -636,6 +636,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 flushOutboundMonsterHits()
                 flushOutboundMonsterAttacks()
                 flushOutboundPlayerEffects()
+                flushOutboundSystemAlerts()
 
                 val latest = _world.value
                 if (floorChanged) {
@@ -779,21 +780,27 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun flushOutboundMonsterHits() {
         val pending = _world.value.outboundMonsterHits
-        if (pending.isEmpty()) return
-        val snapshot = _world.value
-        _world.update { it.copy(outboundMonsterHits = emptyList()) }
-        for (hit in pending) {
-            multiplayerManager.broadcastMonsterHit(
-                hit = hit,
-                attackerId = snapshot.saveId,
-                attackerName = snapshot.playerName
-            )
-            if (hit.resultingHp <= 0 && hit.isBoss) {
-                multiplayerManager.broadcastSystemCallout(
-                    "${snapshot.playerName} helped slay the ${hit.monsterTypeName}!",
-                    hit.floor
+        if (pending.isNotEmpty()) {
+            val snapshot = _world.value
+            _world.update { it.copy(outboundMonsterHits = emptyList()) }
+            for (hit in pending) {
+                multiplayerManager.broadcastMonsterHit(
+                    hit = hit,
+                    attackerId = snapshot.saveId,
+                    attackerName = snapshot.playerName
                 )
             }
+        }
+        flushOutboundSystemAlerts()
+    }
+
+    private fun flushOutboundSystemAlerts() {
+        val alerts = _world.value.outboundSystemAlerts
+        if (alerts.isEmpty()) return
+        val floor = _world.value.floor
+        _world.update { it.copy(outboundSystemAlerts = emptyList()) }
+        for (msg in alerts) {
+            multiplayerManager.broadcastSystemCallout(msg, floor)
         }
     }
 

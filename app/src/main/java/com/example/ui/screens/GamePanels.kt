@@ -37,11 +37,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import android.os.SystemClock
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -742,8 +746,83 @@ private fun LootCorpseContent(
     }
     val remainingCap = state.remainingCapOz()
     val totalStacks = corpse.items.size + if (corpse.gold > 0) 1 else 0
+    var nowUptimeMs by remember(corpse.id) { mutableLongStateOf(SystemClock.uptimeMillis()) }
+    LaunchedEffect(corpse.id, corpse.expiresAtMs, corpse.isPlayerCorpse) {
+        if (!corpse.isPlayerCorpse && corpse.expiresAtMs > 0L) {
+            while (true) {
+                nowUptimeMs = SystemClock.uptimeMillis()
+                delay(250L)
+            }
+        }
+    }
+    val remainingMs = corpse.remainingMs(nowUptimeMs)
+    val expiringSoon = corpse.isExpiringSoon(nowUptimeMs)
 
     Column(modifier = Modifier.fillMaxWidth()) {
+        if (corpse.isPlayerCorpse || remainingMs != null) {
+            val badgeBg = when {
+                corpse.isPlayerCorpse -> TorchGold.copy(alpha = 0.14f)
+                expiringSoon -> HealthCrimson.copy(alpha = 0.24f)
+                else -> StoneSurface
+            }
+            val badgeBorder = when {
+                corpse.isPlayerCorpse -> TorchGold.copy(alpha = 0.65f)
+                expiringSoon -> HealthCrimson
+                else -> StoneBorderDark
+            }
+            val badgeTextColor = when {
+                corpse.isPlayerCorpse -> TorchGold
+                expiringSoon -> Color(0xFFFF7B7B)
+                else -> ParchmentMuted
+            }
+            val labelText = when {
+                corpse.isPlayerCorpse -> "Your recovery corpse — protected from auto-despawn"
+                remainingMs != null -> {
+                    val totalSecs = ((remainingMs + 999L) / 1000L).coerceAtLeast(0L)
+                    val mins = totalSecs / 60L
+                    val secs = totalSecs % 60L
+                    if (expiringSoon) {
+                        "Corpse vanishing in ${totalSecs}s — loot quickly!"
+                    } else if (mins > 0L) {
+                        "Unlooted corpse vanishes in ${mins}m ${secs.toString().padStart(2, '0')}s"
+                    } else {
+                        "Unlooted corpse vanishes in ${totalSecs}s"
+                    }
+                }
+                else -> ""
+            }
+            Surface(
+                color = badgeBg,
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(1.dp, badgeBorder),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .testTag("corpse_expiry_badge")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (expiringSoon) {
+                        Icon(
+                            imageVector = Icons.Default.WarningAmber,
+                            contentDescription = "Corpse Expiring Soon",
+                            tint = Color(0xFFFF7B7B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Text(
+                        text = labelText,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = if (expiringSoon) FontWeight.Bold else FontWeight.Medium
+                        ),
+                        color = badgeTextColor
+                    )
+                }
+            }
+        }
         // Scrollable list of tappable loot items (plus tappable Gold Coins row)
         LazyColumn(
             modifier = Modifier

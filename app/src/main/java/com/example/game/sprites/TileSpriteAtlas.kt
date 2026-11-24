@@ -104,6 +104,8 @@ object TileSpriteAtlas {
         TileType.WEAPON_RACK -> drawBlacksmithAnvil()
         TileType.MOORED_BOAT -> drawWater(frame)
         TileType.WOOD_BED -> drawShopCounter()
+        TileType.STONE_BRIDGE -> drawCryptFloor()
+        TileType.IRON_BAR_GATE -> drawObliqueWall(0xFF5D626B.toInt(), 0xFF3A3E45.toInt(), 0xFF1F2227.toInt(), 0xFF2A2E34.toInt())
     }
 
     private fun drawGrass(): ImageBitmap {

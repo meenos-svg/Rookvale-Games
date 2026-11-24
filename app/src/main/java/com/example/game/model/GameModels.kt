@@ -33,6 +33,10 @@ const val ADVENTURER_CAP_PER_LEVEL_OZ = 125.0
 const val GOLD_COIN_WEIGHT_OZ = 0.01
 const val TREE_REGROW_TICKS = 60
 const val TREE_CHOP_COOLDOWN_MS = 900L
+const val REGULAR_CORPSE_LIFETIME_MS = 90_000L
+const val BOSS_CORPSE_LIFETIME_MS = 180_000L
+const val CORPSE_EXPIRY_WARNING_MS = 15_000L
+const val BOSS_RESPAWN_MS = 300_000L
 
 data class SpriteColorSwatch(
     val name: String,
@@ -477,7 +481,9 @@ enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
     TEMPLE_PEW(false),
     WEAPON_RACK(false),
     MOORED_BOAT(false),
-    WOOD_BED(false);
+    WOOD_BED(false),
+    STONE_BRIDGE(true),
+    IRON_BAR_GATE(true);
 
     fun oreVeinKind(): OreVeinKind? = when (this) {
         ORE_OCHRE -> OreVeinKind.OCHRE
@@ -521,6 +527,12 @@ data class FloorWarningBanner(
     val createdAtMs: Long
 )
 
+enum class BossSpecialKind {
+    NONE,
+    VENOM_NOVA,
+    FLAME_BURST
+}
+
 enum class MonsterType(
     val displayName: String,
     val tier: Int,
@@ -540,7 +552,9 @@ enum class MonsterType(
     val inflictsFire: Boolean = false,
     val isBoss: Boolean = false,
     val summonTypeName: String? = null,
-    val maxSummons: Int = 0
+    val maxSummons: Int = 0,
+    val specialKind: BossSpecialKind = BossSpecialKind.NONE,
+    val bossTitle: String = ""
 ) {
     // --- TIER 1: Starter Overland (Levels 1-3) ---
     CAVE_RAT(
@@ -579,6 +593,13 @@ enum class MonsterType(
         xpReward = 115, minDmg = 11, maxDmg = 23, goldMin = 20, goldMax = 48, moveIntervalTicks = 1,
         inflictsPoison = true
     ),
+    BROODMOTHER_ARACHNE(
+        displayName = "Broodmother Arachne", tier = 2, threatLevel = 8, maxHp = 460, armor = 9,
+        xpReward = 480, minDmg = 18, maxDmg = 34, goldMin = 110, goldMax = 220, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.VENOM_GLOB,
+        inflictsPoison = true, isBoss = true, summonTypeName = "POISON_SPIDER", maxSummons = 1,
+        specialKind = BossSpecialKind.VENOM_NOVA, bossTitle = "Matriarch of the Mossy Sewers"
+    ),
 
     // --- TIER 3: Floor -2 Deep Caverns (Levels 6-10) ---
     MINOTAUR(
@@ -599,6 +620,13 @@ enum class MonsterType(
         xpReward = 275, minDmg = 22, maxDmg = 40, goldMin = 52, goldMax = 115, moveIntervalTicks = 2,
         aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 3, rangedProjectile = ProjectileKind.FIREBALL,
         inflictsFire = true
+    ),
+    IGNIS_LORD_OF_THE_PIT(
+        displayName = "Ignis, Lord of the Pit", tier = 3, threatLevel = 12, maxHp = 690, armor = 14,
+        xpReward = 780, minDmg = 28, maxDmg = 52, goldMin = 180, goldMax = 340, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
+        inflictsFire = true, isBoss = true, summonTypeName = "FIRE_DEVIL", maxSummons = 1,
+        specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Warden of the Molten Chasm"
     ),
 
     // --- TIER 4: Floor -3 Abyssal Crypt & Bosses (Levels 10+) ---
@@ -621,13 +649,15 @@ enum class MonsterType(
         displayName = "Demon Lord", tier = 4, threatLevel = 18, maxHp = 860, armor = 18,
         xpReward = 1150, minDmg = 42, maxDmg = 76, goldMin = 240, goldMax = 440, moveIntervalTicks = 2,
         aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
-        inflictsFire = true, isBoss = true, summonTypeName = "FIRE_DEVIL", maxSummons = 2
+        inflictsFire = true, isBoss = true, summonTypeName = "FIRE_DEVIL", maxSummons = 2,
+        specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Overlord of the Abyssal Forge"
     ),
     ELDER_DRAGON(
         displayName = "Elder Dragon", tier = 4, threatLevel = 20, maxHp = 1120, armor = 20,
         xpReward = 1550, minDmg = 48, maxDmg = 88, goldMin = 320, goldMax = 580, moveIntervalTicks = 2,
         aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIRE_BREATH,
-        inflictsFire = true, isBoss = true, summonTypeName = "DRAGON_HATCHLING", maxSummons = 2
+        inflictsFire = true, isBoss = true, summonTypeName = "DRAGON_HATCHLING", maxSummons = 2,
+        specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Sovereign of the Wyrm Sanctum"
     );
 
     fun threatBandFor(playerLevel: Int): ThreatBand = when {
@@ -692,7 +722,8 @@ data class PendingRespawn(
     val spawnX: Int,
     val spawnY: Int,
     val ticksRemaining: Int,
-    val originalMonsterId: Int = 0
+    val originalMonsterId: Int = 0,
+    val respawnAtMs: Long = 0L
 )
 
 @JsonClass(generateAdapter = true)
@@ -705,8 +736,21 @@ data class CorpseEntity(
     val isPlayerCorpse: Boolean,
     val monsterTypeName: String? = null,
     val gold: Int = 0,
-    val items: List<ItemStack> = emptyList()
-)
+    val items: List<ItemStack> = emptyList(),
+    val createdAtMs: Long = 0L,
+    val expiresAtMs: Long = 0L
+) {
+    fun remainingMs(nowMs: Long): Long? =
+        if (isPlayerCorpse || expiresAtMs <= 0L) null else (expiresAtMs - nowMs).coerceAtLeast(0L)
+
+    fun isExpired(nowMs: Long): Boolean =
+        !isPlayerCorpse && expiresAtMs > 0L && nowMs >= expiresAtMs
+
+    fun isExpiringSoon(nowMs: Long): Boolean {
+        val rem = remainingMs(nowMs) ?: return false
+        return rem in 1L..CORPSE_EXPIRY_WARNING_MS
+    }
+}
 
 enum class FloatingTextKind {
     DAMAGE_MONSTER,
@@ -744,6 +788,7 @@ enum class ProjectileKind {
     FIREBALL,
     THROWN_STONE,
     NECRO_BOLT,
+    VENOM_GLOB,
     SPLASH,
     MINING_SPARK,
     WOOD_CHIP
@@ -1049,6 +1094,7 @@ data class GameWorldState(
     val outboundMonsterHits: List<LocalMonsterHitEvent> = emptyList(),
     val outboundMonsterAttacks: List<LocalMonsterAttackEvent> = emptyList(),
     val outboundPlayerEffects: List<LocalPlayerActionFxEvent> = emptyList(),
+    val outboundSystemAlerts: List<String> = emptyList(),
     val questFlags: Map<String, Boolean> = emptyMap(),
     val boundAttackRuneId: String? = "magic_dart_rune",
     val boundHealRuneId: String? = "healing_rune",
