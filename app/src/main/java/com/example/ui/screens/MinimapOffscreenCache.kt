@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PorterDuff
+import android.graphics.RectF
 import android.graphics.Typeface
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -51,11 +52,11 @@ class MinimapOffscreenCache {
     var redrawCount: Int = 0
         private set
 
-    // Pre-allocated Android drawing tools (zero allocations per redraw)
-    private val tilePaint = Paint().apply {
-        style = Paint.Style.FILL
-        isAntiAlias = false
-    }
+    // Pre-allocated Android drawing tools & reusable 128x128 smooth terrain buffer (zero allocations per redraw)
+    private val terrainPixels = IntArray(TERRAIN_BUF_SIZE * TERRAIN_BUF_SIZE)
+    private var terrainBitmap: Bitmap? = null
+    private val terrainDestRect = RectF()
+    private val terrainBlitPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
@@ -203,31 +204,56 @@ class MinimapOffscreenCache {
         val cx = width * 0.5f
         val cy = height * 0.5f
         val scale = (minOf(width, height) * 0.46f) / radius.coerceAtLeast(1).toFloat()
+        val invScale = 1f / scale.coerceAtLeast(0.0001f)
         val rad = IsometricCamera.normalizeYawDeg(cameraYawDeg) * (PI / 180.0)
-        val cosY = cos(rad).toFloat() * scale
-        val sinY = sin(rad).toFloat() * scale
-        val dotSize = (scale * 1.32f).coerceAtLeast(2.2f)
-        val halfDot = dotSize * 0.5f
+        val cosRaw = cos(rad).toFloat()
+        val sinRaw = sin(rad).toFloat()
+        val cosY = cosRaw * scale
+        val sinY = sinRaw * scale
 
         val playerX = state.playerX
         val playerY = state.playerY
-        val floorW = floorMap.width
-        val floorH = floorMap.height
+        val playerCenterX = playerX + 0.5f
+        val playerCenterY = playerY + 0.5f
+        val floorW = floorMap.width.toFloat()
+        val floorH = floorMap.height.toFloat()
+        val isOverland = state.floor == 0
+        val outOfBoundsCol = if (isOverland) 0xFF0A2038.toInt() else 0xFF10131A.toInt()
 
-        // 1. Rotated terrain pips synchronized with cameraYaw
-        for (dy in -radius..radius) {
-            val wy = playerY + dy
-            if (wy < 0 || wy >= floorH) continue
-            for (dx in -radius..radius) {
-                val wx = playerX + dx
-                if (wx < 0 || wx >= floorW) continue
-                val sx = cx + dx * cosY - dy * sinY
-                val sy = cy + dx * sinY + dy * cosY
-                if (sx < -dotSize || sx > width + dotSize || sy < -dotSize || sy > height + dotSize) continue
-                tilePaint.color = minimapTileColor(floorMap.tileAt(wx, wy)).toArgb()
-                c.drawRect(sx - halfDot, sy - halfDot, sx + halfDot, sy + halfDot, tilePaint)
+        // 1. Smooth continuous rotated terrain sampled via exact inverse-yaw projection
+        val invBuf = 1f / TERRAIN_BUF_SIZE.toFloat()
+        val stepUx = (width * invBuf) * invScale
+        val stepUy = (height * invBuf) * invScale
+        val startUx = ((0.5f * invBuf) * width - cx) * invScale
+        val startUy = ((0.5f * invBuf) * height - cy) * invScale
+        val dWxPerPx = stepUx * cosRaw
+        val dWyPerPx = -stepUx * sinRaw
+
+        for (py in 0 until TERRAIN_BUF_SIZE) {
+            val uy = startUy + py * stepUy
+            var wx = playerCenterX + startUx * cosRaw + uy * sinRaw
+            var wy = playerCenterY - startUx * sinRaw + uy * cosRaw
+            val rowOff = py * TERRAIN_BUF_SIZE
+            for (px in 0 until TERRAIN_BUF_SIZE) {
+                terrainPixels[rowOff + px] = if (wx < 0f || wx >= floorW || wy < 0f || wy >= floorH) {
+                    outOfBoundsCol
+                } else if (isOverland) {
+                    WorldMapTerrainSampler.sampleOverlandTileBlendedArgb(wx, wy, floorMap)
+                } else {
+                    WorldMapTerrainSampler.sampleDungeonPixelArgb(wx, wy, floorMap)
+                }
+                wx += dWxPerPx
+                wy += dWyPerPx
             }
         }
+        val tBmp = terrainBitmap ?: Bitmap.createBitmap(
+            TERRAIN_BUF_SIZE,
+            TERRAIN_BUF_SIZE,
+            Bitmap.Config.ARGB_8888
+        ).also { terrainBitmap = it }
+        tBmp.setPixels(terrainPixels, 0, TERRAIN_BUF_SIZE, 0, 0, TERRAIN_BUF_SIZE, TERRAIN_BUF_SIZE)
+        terrainDestRect.set(0f, 0f, width, height)
+        c.drawBitmap(tBmp, null, terrainDestRect, terrainBlitPaint)
 
         // 2. Live camera forward-view direction cone
         val coneLen = minOf(width, height) * 0.34f
@@ -323,6 +349,7 @@ class MinimapOffscreenCache {
     }
 
     companion object {
+        const val TERRAIN_BUF_SIZE: Int = 128
         const val YAW_REDRAW_THRESHOLD_DEG: Float = 2.0f
         const val ENTITY_REDRAW_INTERVAL_MS: Long = 83L // ~12 FPS cap for dynamic entity updates
     }

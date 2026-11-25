@@ -57,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -65,12 +66,10 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -417,10 +416,15 @@ private fun buildLocalTileWindowBitmap(
     val pixels = IntArray(bmpW * bmpH)
     for (py in 0 until bmpH) {
         val wy = (startY + py * step).coerceAtMost(floorMap.height - 1)
+        val fy = wy + 0.5f
         val rowOff = py * bmpW
         for (px in 0 until bmpW) {
             val wx = (startX + px * step).coerceAtMost(floorMap.width - 1)
-            pixels[rowOff + px] = minimapTileColor(floorMap.tileAt(wx, wy)).toArgb()
+            pixels[rowOff + px] = WorldMapTerrainSampler.sampleOverlandTileBlendedArgb(
+                fx = wx + 0.5f,
+                fy = fy,
+                floorMap = floorMap
+            )
         }
     }
     val bmp = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
@@ -519,9 +523,9 @@ fun EnhancedRegionalWorldMapContent(
         )
     }
 
-    val parchmentBitmap: ImageBitmap? = if (isOverland) {
-        ImageBitmap.imageResource(id = com.example.R.drawable.world_map_parchment)
-    } else null
+    val overviewBitmap: ImageBitmap? = remember(isOverland) {
+        if (isOverland) WorldMapOverviewCache.getOrBuild() else null
+    }
 
     // Full dungeon bitmap cache for compact underground floors (< 0)
     val cachedDungeonBitmap: ImageBitmap? = remember(state.floor) {
@@ -530,9 +534,10 @@ fun EnhancedRegionalWorldMapContent(
         val h = floorMap.height
         val pixels = IntArray(w * h)
         for (ty in 0 until h) {
+            val fy = ty + 0.5f
             val rowOff = ty * w
             for (tx in 0 until w) {
-                pixels[rowOff + tx] = minimapTileColor(floorMap.tileAt(tx, ty)).toArgb()
+                pixels[rowOff + tx] = WorldMapTerrainSampler.sampleDungeonPixelArgb(tx + 0.5f, fy, floorMap)
             }
         }
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -613,6 +618,26 @@ fun EnhancedRegionalWorldMapContent(
             style = Paint.Style.STROKE
             strokeWidth = 1.2f
             color = android.graphics.Color.argb(170, 212, 175, 92)
+        }
+    }
+    val biomeWatermarkFillPaint = remember {
+        Paint().apply {
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC)
+            letterSpacing = 0.08f
+            textSize = 15f
+        }
+    }
+    val biomeWatermarkHaloPaint = remember {
+        Paint().apply {
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC)
+            letterSpacing = 0.08f
+            style = Paint.Style.STROKE
+            strokeWidth = 3.2f
+            textSize = 15f
         }
     }
     val tooltipRect = remember { RectF() }
@@ -851,27 +876,27 @@ fun EnhancedRegionalWorldMapContent(
                             val visH = (viewBottom - viewTop).coerceAtLeast(1f)
                             val pxPerTile = w / visW
 
-                            // LAYER 1: Cropped Painted Parchment Continent (Floor 0 when detailAlpha < 1f)
-                            if (parchmentBitmap != null && detailAlpha < 0.99f) {
-                                val srcX = ((viewLeft / floorMap.width.toFloat()) * parchmentBitmap.width).toInt()
-                                    .coerceIn(0, (parchmentBitmap.width - 1).coerceAtLeast(0))
-                                val srcY = ((viewTop / floorMap.height.toFloat()) * parchmentBitmap.height).toInt()
-                                    .coerceIn(0, (parchmentBitmap.height - 1).coerceAtLeast(0))
-                                val srcW = ((visW / floorMap.width.toFloat()) * parchmentBitmap.width).roundToInt()
-                                    .coerceIn(1, (parchmentBitmap.width - srcX).coerceAtLeast(1))
-                                val srcH = ((visH / floorMap.height.toFloat()) * parchmentBitmap.height).roundToInt()
-                                    .coerceIn(1, (parchmentBitmap.height - srcY).coerceAtLeast(1))
+                            // LAYER 1: Unified Seamless Live-Terrain Continent Overview (Floor 0)
+                            if (overviewBitmap != null && detailAlpha < 0.99f) {
+                                val srcX = ((viewLeft / floorMap.width.toFloat()) * overviewBitmap.width).toInt()
+                                    .coerceIn(0, (overviewBitmap.width - 1).coerceAtLeast(0))
+                                val srcY = ((viewTop / floorMap.height.toFloat()) * overviewBitmap.height).toInt()
+                                    .coerceIn(0, (overviewBitmap.height - 1).coerceAtLeast(0))
+                                val srcW = ((visW / floorMap.width.toFloat()) * overviewBitmap.width).roundToInt()
+                                    .coerceIn(1, (overviewBitmap.width - srcX).coerceAtLeast(1))
+                                val srcH = ((visH / floorMap.height.toFloat()) * overviewBitmap.height).roundToInt()
+                                    .coerceIn(1, (overviewBitmap.height - srcY).coerceAtLeast(1))
                                 drawImage(
-                                    image = parchmentBitmap,
+                                    image = overviewBitmap,
                                     srcOffset = IntOffset(srcX, srcY),
                                     srcSize = IntSize(srcW, srcH),
                                     dstOffset = IntOffset.Zero,
                                     dstSize = dstSize,
-                                    filterQuality = FilterQuality.Low
+                                    filterQuality = FilterQuality.Medium
                                 )
                             }
 
-                            // LAYER 2: Crisp Live Terrain Tile Window (Floor 0 close-zoom hybrid) or Dungeon Bitmap
+                            // LAYER 2: Unified Blended Local Terrain Window (Floor 0 close-zoom) or Dungeon Bitmap
                             if (activeLocalWindow != null && detailAlpha > 0.01f) {
                                 val srcLeftF = (viewLeft - activeLocalWindow.minX) / activeLocalWindow.step.toFloat()
                                 val srcTopF = (viewTop - activeLocalWindow.minY) / activeLocalWindow.step.toFloat()
@@ -888,7 +913,7 @@ fun EnhancedRegionalWorldMapContent(
                                     dstOffset = IntOffset.Zero,
                                     dstSize = dstSize,
                                     alpha = detailAlpha,
-                                    filterQuality = FilterQuality.None
+                                    filterQuality = FilterQuality.Medium
                                 )
                             } else if (cachedDungeonBitmap != null) {
                                 val srcX = viewLeft.toInt().coerceIn(0, (cachedDungeonBitmap.width - 1).coerceAtLeast(0))
@@ -901,24 +926,50 @@ fun EnhancedRegionalWorldMapContent(
                                     srcSize = IntSize(srcW, srcH),
                                     dstOffset = IntOffset.Zero,
                                     dstSize = dstSize,
-                                    filterQuality = FilterQuality.None
+                                    filterQuality = FilterQuality.Medium
                                 )
                             }
 
-                            // LAYER 3: Subtle 4x3 400x400 region grid lines on Floor 0
+                            // LAYER 3: Subtle Overview Parchment Edge Vignette & Soft Floating Biome Watermark Titles
+                            // (No rectangular region grid boxes or hard sector border frames!)
                             if (isOverland) {
-                                val gridAlpha = (0.28f - detailAlpha * 0.14f).coerceAtLeast(0.10f)
-                                val gridCol = Color(0xFFF2D68A).copy(alpha = gridAlpha)
-                                for (c in 1..3) {
-                                    val gx = WorldMapViewportCamera.worldToScreen(c * 400f, viewTop, camera, w, h).x
-                                    if (gx in -2f..(w + 2f)) {
-                                        drawLine(gridCol, Offset(gx, 0f), Offset(gx, h), strokeWidth = 1f)
-                                    }
+                                val vignetteAlpha = ((2.75f - camera.mapZoom) / 1.75f).coerceIn(0f, 1f) * 0.28f
+                                if (vignetteAlpha > 0.01f) {
+                                    drawRect(
+                                        brush = Brush.radialGradient(
+                                            colorStops = arrayOf(
+                                                0.0f to Color.Transparent,
+                                                0.62f to Color(0xFF3E2E1A).copy(alpha = vignetteAlpha * 0.18f),
+                                                0.88f to Color(0xFF281D11).copy(alpha = vignetteAlpha * 0.68f),
+                                                1.0f to Color(0xFF1A120A).copy(alpha = vignetteAlpha)
+                                            ),
+                                            center = Offset(w * 0.5f, h * 0.5f),
+                                            radius = max(w, h) * 0.72f
+                                        )
+                                    )
                                 }
-                                for (r in 1..2) {
-                                    val gy = WorldMapViewportCamera.worldToScreen(viewLeft, r * 400f, camera, w, h).y
-                                    if (gy in -2f..(h + 2f)) {
-                                        drawLine(gridCol, Offset(0f, gy), Offset(w, gy), strokeWidth = 1f)
+
+                                val biomeTitleAlpha = ((2.45f - camera.mapZoom) / 0.85f).coerceIn(0f, 1f)
+                                if (biomeTitleAlpha > 0.02f) {
+                                    val titleSize = (11.5f + (camera.mapZoom - 1f).coerceIn(0f, 1.4f) * 2.5f)
+                                        .coerceIn(11.5f, 15.5f)
+                                    biomeWatermarkFillPaint.textSize = titleSize
+                                    biomeWatermarkHaloPaint.textSize = titleSize
+                                    val fillAlpha = (biomeTitleAlpha * 188f).toInt().coerceIn(0, 255)
+                                    val haloAlpha = (biomeTitleAlpha * 175f).toInt().coerceIn(0, 255)
+                                    biomeWatermarkHaloPaint.color = android.graphics.Color.argb(haloAlpha, 12, 16, 22)
+                                    val nc = drawContext.canvas.nativeCanvas
+                                    WorldMapTerrainSampler.overlandBiomeWatermarks.forEach { wm ->
+                                        val pos = WorldMapViewportCamera.worldToScreen(wm.x, wm.y, camera, w, h)
+                                        if (pos.x in 24f..(w - 24f) && pos.y in 16f..(h - 14f)) {
+                                            biomeWatermarkFillPaint.color = if (wm.isWater) {
+                                                android.graphics.Color.argb(fillAlpha, 162, 214, 232)
+                                            } else {
+                                                android.graphics.Color.argb(fillAlpha, 244, 230, 194)
+                                            }
+                                            nc.drawText(wm.title, pos.x, pos.y, biomeWatermarkHaloPaint)
+                                            nc.drawText(wm.title, pos.x, pos.y, biomeWatermarkFillPaint)
+                                        }
                                     }
                                 }
                             }

@@ -1055,21 +1055,27 @@ object WorldBiomeBlueprint {
     }
 
     private fun resolveRoadTile(x: Int, y: Int): TileType? {
+        val fx = x.toFloat()
+        val fy = y.toFloat()
+        // Subtle organic wiggle so overland trails curve gently rather than stepping like harsh blocks
+        val wobble = (sin(fx * 0.11f + fy * 0.09f) * 0.42f + cos(fx * 0.07f - fy * 0.13f) * 0.28f)
         for (seg in allRoadSegments) {
-            val minX = minOf(seg.x0, seg.x1) - seg.halfWidth
-            val maxX = maxOf(seg.x0, seg.x1) + seg.halfWidth
-            val minY = minOf(seg.y0, seg.y1) - seg.halfWidth
-            val maxY = maxOf(seg.y0, seg.y1) + seg.halfWidth
+            val pad = seg.halfWidth + 2
+            val minX = minOf(seg.x0, seg.x1) - pad
+            val maxX = maxOf(seg.x0, seg.x1) + pad
+            val minY = minOf(seg.y0, seg.y1) - pad
+            val maxY = maxOf(seg.y0, seg.y1) + pad
             if (x !in minX..maxX || y !in minY..maxY) continue
 
             val dx = (seg.x1 - seg.x0).toFloat()
             val dy = (seg.y1 - seg.y0).toFloat()
             val lenSq = dx * dx + dy * dy
-            val t = if (lenSq < 0.001f) 0f else (((x - seg.x0) * dx + (y - seg.y0) * dy) / lenSq).coerceIn(0f, 1f)
+            val t = if (lenSq < 0.001f) 0f else (((fx - seg.x0) * dx + (fy - seg.y0) * dy) / lenSq).coerceIn(0f, 1f)
             val px = seg.x0 + dx * t
             val py = seg.y0 + dy * t
-            val dist = hypot((x - px).toDouble(), (y - py).toDouble())
-            if (dist <= seg.halfWidth + 0.55) {
+            val dist = hypot((fx - px).toDouble(), (fy - py).toDouble()).toFloat()
+            val effectiveHalf = seg.halfWidth + 0.55f + (if (seg.tile == TileType.DIRT_FLOOR) wobble else wobble * 0.35f)
+            if (dist <= effectiveHalf) {
                 return seg.tile
             }
         }
@@ -1077,12 +1083,86 @@ object WorldBiomeBlueprint {
     }
 
     /**
-     * Smooth organic continent distance field:
-     * Positive = land, Negative = sea (`-0.14..0` coastal shallows, `< -0.14` deep ocean).
+     * Smooth organic road/bridge proximity signal in [0f, 1f] for continuous cartographic map rendering
+     * without allocating or querying tile chunks. Returns positive coverage for roads/bridges and
+     * encodes type via sign or separate bridge check.
      */
-    private fun landmassField(x: Int, y: Int): Float {
-        val fx = x.toFloat()
-        val fy = y.toFloat()
+    fun isOnSeaBridge(fx: Float, fy: Float): Boolean {
+        for (i in 0 until seaBridges.size) {
+            val b = seaBridges[i]
+            if (fx >= b.x1 - 0.8f && fx <= b.x2 + 0.8f && fy >= b.y1 - 0.8f && fy <= b.y2 + 0.8f) {
+                return true
+            }
+        }
+        return false
+    }
+
+    fun continuousRoadCoverage(fx: Float, fy: Float): Float {
+        val wobble = sin(fx * 0.095f + fy * 0.085f) * 0.55f + cos(fx * 0.065f - fy * 0.115f) * 0.35f
+        var best = 0f
+        val segs = allRoadSegments
+        for (i in 0 until segs.size) {
+            val seg = segs[i]
+            val pad = seg.halfWidth + 4f
+            val minX = minOf(seg.x0, seg.x1) - pad
+            val maxX = maxOf(seg.x0, seg.x1) + pad
+            val minY = minOf(seg.y0, seg.y1) - pad
+            val maxY = maxOf(seg.y0, seg.y1) + pad
+            if (fx < minX || fx > maxX || fy < minY || fy > maxY) continue
+
+            val dx = (seg.x1 - seg.x0).toFloat()
+            val dy = (seg.y1 - seg.y0).toFloat()
+            val lenSq = dx * dx + dy * dy
+            val t = if (lenSq < 0.001f) 0f else (((fx - seg.x0) * dx + (fy - seg.y0) * dy) / lenSq).coerceIn(0f, 1f)
+            val px = seg.x0 + dx * t
+            val py = seg.y0 + dy * t
+            val dist = hypot((fx - px).toDouble(), (fy - py).toDouble()).toFloat()
+            val halfW = seg.halfWidth + 1.15f + wobble * 0.45f
+            if (dist < halfW + 1.4f) {
+                val cov = ((halfW + 1.4f - dist) / 2.2f).coerceIn(0f, 1f)
+                if (cov > best) best = cov
+            }
+        }
+        return best
+    }
+
+    /**
+     * Smooth continuous continent elevation & bathymetry field across the entire 1600x1200 world:
+     * Positive = land, Negative = sea (`-0.14..0` coastal shallows, `< -0.14` deep ocean).
+     * Seamlessly incorporates Rookvale Valley's Eastern Ocean Bay so there is zero seam at x=1200 or y=400/800.
+     */
+    fun continuousLandmassField(fx: Float, fy: Float): Float {
+        // Gentle world-edge ocean falloff so outer margins fade naturally into deep ocean
+        val edgeDist = minOf(fx, WORLD_OVERLAND_WIDTH - 1f - fx, fy, WORLD_OVERLAND_HEIGHT - 1f - fy)
+        val edgeFalloff = if (edgeDist < 28f) -((28f - edgeDist) / 28f) * 0.45f else 0f
+
+        val base = rawLandmassFieldFloat(fx, fy) + edgeFalloff
+
+        // Smoothly carve Rookvale Valley's organic Eastern Ocean Bay (around gx >= 1564, gy in 414..786)
+        // using smoothstep transitions so the coastline flows continuously north/south into neighboring seas.
+        if (fx > 1520f && fy > 380f && fy < 820f) {
+            val ly = fy - 400f
+            val shoreX = 1564f + sin(ly * 0.032f) * 3.5f + cos(ly * 0.017f) * 2.0f
+            val northBlend = smoothstep(392f, 424f, fy)
+            val southBlend = 1f - smoothstep(776f, 808f, fy)
+            val bayEnvelope = northBlend * southBlend
+            if (bayEnvelope > 0.001f) {
+                val bayField = (shoreX - fx) / 56f
+                val blended = base * (1f - bayEnvelope) + minOf(base, bayField) * bayEnvelope
+                return blended
+            }
+        }
+        return base
+    }
+
+    private fun smoothstep(edge0: Float, edge1: Float, x: Float): Float {
+        val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
+
+    private fun landmassField(x: Int, y: Int): Float = rawLandmassFieldFloat(x.toFloat(), y.toFloat())
+
+    private fun rawLandmassFieldFloat(fx: Float, fy: Float): Float {
         val coastNoise = (sin(fx * 0.023f + fy * 0.017f) * 0.09f +
             cos(fx * 0.041f - fy * 0.031f) * 0.06f)
 
@@ -1126,6 +1206,14 @@ object WorldBiomeBlueprint {
         val h = deterministicHash(x, y, 31) and 255
         val detail = deterministicHash(x, y, 73) and 255
 
+        // Continuous organic domain warp (±22 tiles) removes hard rectangular biome cutoffs
+        val fx = x.toFloat()
+        val fy = y.toFloat()
+        val warpX = (sin(fy * 0.019f + fx * 0.008f) * 16f + cos(fy * 0.041f - fx * 0.023f) * 7f).toInt()
+        val warpY = (cos(fx * 0.017f - fy * 0.009f) * 16f + sin(fx * 0.037f + fy * 0.021f) * 7f).toInt()
+        val wx = x + warpX
+        val wy = y + warpY
+
         val nearMonsterClearing = outerMonsterClearings.any { (sx, sy) ->
             abs(x - sx) <= 3 && abs(y - sy) <= 3
         }
@@ -1137,18 +1225,18 @@ object WorldBiomeBlueprint {
         }
 
         // 1. Far Northern Arctic Snow & Southern Alpine Rim
-        if (y < 95 && landVal > 0.08f) {
-            if (!nearPortal && y < 48 && h < 110) return TileType.MOUNTAIN_ROCK
+        if (wy < 95 && landVal > 0.08f) {
+            if (!nearPortal && wy < 48 && h < 110) return TileType.MOUNTAIN_ROCK
             if (!nearPortal && h < 22) return TileType.TREE
             return TileType.SNOW
         }
-        if (y > 1115 && landVal > 0.1f) {
+        if (wy > 1115 && landVal > 0.1f) {
             if (!nearPortal && h < 120) return TileType.MOUNTAIN_ROCK
             return TileType.SNOW
         }
 
-        // 2. NW Abyssal Isle & Ashen Caldera Volcano (x < 460, y < 355)
-        if (x < 470 && y < 355) {
+        // 2. NW Abyssal Isle & Ashen Caldera Volcano
+        if (wx < 470 && wy < 355) {
             val craterDist = hypot((x - 328).toDouble(), (y - 185).toDouble())
             if (craterDist < 22.0) return TileType.LAVA
             if (!nearPortal && craterDist < 42.0 && h < 115) return TileType.MOUNTAIN_ROCK
@@ -1156,34 +1244,34 @@ object WorldBiomeBlueprint {
             return if (detail < 205) TileType.VOLCANIC_ASH else TileType.DIRT_FLOOR
         }
 
-        // 3. The Writhing Marshes (x < 445, y in 355..670)
-        if (x < 445 && y in 355..670) {
+        // 3. The Writhing Marshes
+        if (wx < 450 && wy in 355..670) {
             if (!nearPortal && h < 16 && landVal > 0.22f) return TileType.WATER
             if (!nearPortal && h in 16..46) return TileType.TREE
             return if (detail < 185) TileType.MARSH else TileType.DARK_GRASS
         }
 
-        // 4. SW Volcanic Badlands (x < 395, y >= 940)
-        if (x < 395 && y >= 940) {
+        // 4. SW Volcanic Badlands
+        if (wx < 395 && wy >= 940) {
             if (!nearPortal && h < 12 && landVal > 0.25f) return TileType.LAVA
             if (!nearPortal && h in 12..42 && landVal > 0.18f) return TileType.MOUNTAIN_ROCK
             return if (detail < 195) TileType.VOLCANIC_ASH else TileType.DIRT_FLOOR
         }
 
-        // 5. Sunspire Golden Desert (x < 535, y in 670..995)
-        if (x < 535 && y in 670..995) {
+        // 5. Sunspire Golden Desert
+        if (wx < 535 && wy in 670..995) {
             if (!nearPortal && h < 18 && landVal > 0.25f) return TileType.MOUNTAIN_ROCK
             return if (detail < 232) TileType.SAND else TileType.DIRT_FLOOR
         }
 
-        // 6. Blightwood Corrupted Forest (x in 925..1145, y < 290)
-        if (x in 925..1145 && y < 290) {
+        // 6. Blightwood Corrupted Forest
+        if (wx in 920..1150 && wy < 295) {
             if (!nearPortal && h < 62) return TileType.TREE
             return if (detail < 210) TileType.BLIGHT_SOIL else TileType.DARK_GRASS
         }
 
-        // 7. Frostpeak Snowy Highlands (x >= 1145, y < 395)
-        if (x >= 1145 && y < 395) {
+        // 7. Frostpeak Snowy Highlands
+        if (wx >= 1145 && wy < 395) {
             val snowLine = 265 + (sin(x * 0.025) * 28.0).toInt()
             if (y < snowLine) {
                 if (!nearPortal && h < 38 && landVal > 0.22f) return TileType.MOUNTAIN_ROCK
@@ -1194,8 +1282,8 @@ object WorldBiomeBlueprint {
             return if (detail < 140) TileType.DARK_GRASS else TileType.GRASS
         }
 
-        // 8. Southern Emerald Jungle Continent (x in 540..1240, y >= 870)
-        if (x in 540..1240 && y >= 870) {
+        // 8. Southern Emerald Jungle Continent
+        if (wx in 540..1240 && wy >= 870) {
             if (!nearPortal && h < 54 && landVal > 0.14f) return TileType.TREE
             return when {
                 detail < 195 -> TileType.JUNGLE_FLOOR
@@ -1204,8 +1292,8 @@ object WorldBiomeBlueprint {
             }
         }
 
-        // 9. SE Ember Isles Archipelago (x >= 1340, y >= 840)
-        if (x >= 1340 && y >= 840) {
+        // 9. SE Ember Isles Archipelago
+        if (wx >= 1340 && wy >= 840) {
             val peakDist = hypot((x - 1518).toDouble(), (y - 952).toDouble())
             if (peakDist < 12.0) return TileType.LAVA
             if (!nearPortal && h < 34 && landVal > 0.2f) return TileType.MOUNTAIN_ROCK

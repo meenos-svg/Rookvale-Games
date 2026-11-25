@@ -671,19 +671,19 @@ object WorldMaps {
             }
         }
 
-        // 2. Soft regional border rim (leaving wide open highways at North, East, West & South!)
+        // 2. Seamless organic valley edge transition (no hard rectangular rock/tree box border!)
         for (i in 0 until s) {
-            if (i !in 191..201) {
-                grid.set(i, 0, TileType.MOUNTAIN_ROCK)
-                grid.set(i, 1, TileType.TREE)
-                grid.set(i, s - 1, TileType.MOUNTAIN_ROCK)
-                grid.set(i, s - 2, TileType.TREE)
+            val edgeHashN = deterministicHash(i, 0, 53) and 255
+            val edgeHashS = deterministicHash(i, s - 1, 59) and 255
+            val edgeHashW = deterministicHash(0, i, 61) and 255
+            val edgeHashE = deterministicHash(s - 1, i, 67) and 255
+            if (i !in 186..206) {
+                if (edgeHashN < 18) grid.set(i, 1, TileType.TREE)
+                if (edgeHashS < 18) grid.set(i, s - 2, TileType.TREE)
             }
-            if (i !in 187..197 && i !in 226..248) {
-                grid.set(0, i, TileType.MOUNTAIN_ROCK)
-                grid.set(1, i, TileType.TREE)
-                grid.set(s - 1, i, TileType.MOUNTAIN_ROCK)
-                grid.set(s - 2, i, TileType.TREE)
+            if (i !in 182..202 && i !in 222..252) {
+                if (edgeHashW < 18) grid.set(1, i, TileType.TREE)
+                if (edgeHashE < 18 && i < 14) grid.set(s - 2, i, TileType.TREE)
             }
         }
 
@@ -1279,6 +1279,16 @@ object WorldMaps {
      * Dynamically streams 32x32 chunks with an LRU cap (~180 chunks ≈ 185 KB RAM) while
      * anchoring the exact preserved Rookvale City & Valley in the East-Central Heartland (3, 1).
      */
+    /**
+     * Fast direct lookup inside the pre-built Rookvale Heartland grid (1200..1599, 400..799)
+     * without allocating or evicting streaming chunks in [ChunkedTileGrid].
+     */
+    fun fastHeartlandTileOrNull(gx: Int, gy: Int): TileType? {
+        if (!WorldBiomeBlueprint.isInRookvaleHeartland(gx, gy)) return null
+        WorldBiomeBlueprint.validatedPortTileAt(gx, gy)?.let { return it }
+        return rookvaleHeartlandGrid.get(gx - ROOKVALE_ORIGIN_X, gy - ROOKVALE_ORIGIN_Y)
+    }
+
     private fun buildOverlandSurface(): WorldFloor {
         val heartland = rookvaleHeartlandGrid
         val streamingGrid = ChunkedTileGrid(
