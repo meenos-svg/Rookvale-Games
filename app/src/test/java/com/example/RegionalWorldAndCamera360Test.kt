@@ -8,6 +8,8 @@ import com.example.game.model.OVERLAND_REGION_SIZE
 import com.example.game.model.PlayerSaveData
 import com.example.game.model.TileType
 import com.example.game.model.WORLD_CHUNK_SIZE
+import com.example.game.model.WORLD_OVERLAND_HEIGHT
+import com.example.game.model.WORLD_OVERLAND_WIDTH
 import com.example.game.world.WorldMaps
 import com.example.ui.screens.IsometricCamera
 import com.example.ui.screens.MinimapCoordinateMapper
@@ -17,23 +19,28 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.util.ArrayDeque
 import kotlin.math.abs
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36])
 class RegionalWorldAndCamera360Test {
 
     @Test
     fun chunked400x400OverlandStructureAndCulling() {
         val floor0 = WorldMaps.getFloor(0)
-        assertEquals(OVERLAND_REGION_SIZE, floor0.width)
-        assertEquals(OVERLAND_REGION_SIZE, floor0.height)
+        assertEquals(WORLD_OVERLAND_WIDTH, floor0.width)
+        assertEquals(WORLD_OVERLAND_HEIGHT, floor0.height)
         assertEquals(DEFAULT_REGION_ID, floor0.regionId)
         assertEquals(WORLD_CHUNK_SIZE, floor0.chunkedGrid.chunkSize)
-        assertEquals(13, floor0.chunkedGrid.chunksX)
-        assertEquals(13, floor0.chunkedGrid.chunksY)
-        assertEquals(169, floor0.chunkedGrid.totalChunks)
+        assertEquals(50, floor0.chunkedGrid.chunksX)
+        assertEquals(38, floor0.chunkedGrid.chunksY)
+        assertEquals(1900, floor0.chunkedGrid.totalChunks)
 
-        // Rotated viewport culling on 400x400 must only cover a tiny subset of chunks per frame
+        // Rotated viewport culling on 1600x1200 must only cover a tiny subset of chunks per frame
         val cam = IsometricCamera()
         for (yaw in listOf(0f, 45f, 90f, 135f, 180f, 270f, 315f)) {
             cam.configure(
@@ -59,10 +66,18 @@ class RegionalWorldAndCamera360Test {
         val yawAngles = listOf(0f, 30f, 45f, 90f, 135f, 180f, 225f, 270f, 330f)
         val zooms = listOf(0.6f, 1.0f, 1.8f)
 
+        val ox = WorldMaps.ROOKVALE_ORIGIN_X
+        val oy = WorldMaps.ROOKVALE_ORIGIN_Y
         for (yaw in yawAngles) {
             for (zoom in zooms) {
-                cam.configure(1920f, 1080f, 196f, 192f, zoom, yaw)
-                val probes = listOf(196 to 192, 190 to 188, 202 to 198, 188 to 196, 204 to 186)
+                cam.configure(1920f, 1080f, (ox + 196).toFloat(), (oy + 192).toFloat(), zoom, yaw)
+                val probes = listOf(
+                    (ox + 196) to (oy + 192),
+                    (ox + 190) to (oy + 188),
+                    (ox + 202) to (oy + 198),
+                    (ox + 188) to (oy + 196),
+                    (ox + 204) to (oy + 186)
+                )
                 for ((tx, ty) in probes) {
                     val screen = cam.tileCenterToScreen(tx.toFloat(), ty.toFloat())
                     val (rx, ry) = cam.screenToWorldTile(screen.x, screen.y)
@@ -71,10 +86,10 @@ class RegionalWorldAndCamera360Test {
                 }
 
                 // Dynamic depth order must strictly match screen-Y ordering
-                val sA = cam.tileCenterToScreen(190f, 190f)
-                val sB = cam.tileCenterToScreen(202f, 196f)
-                val dA = cam.depthOf(190f, 190f)
-                val dB = cam.depthOf(202f, 196f)
+                val sA = cam.tileCenterToScreen((ox + 190).toFloat(), (oy + 190).toFloat())
+                val sB = cam.tileCenterToScreen((ox + 202).toFloat(), (oy + 196).toFloat())
+                val dA = cam.depthOf((ox + 190).toFloat(), (oy + 190).toFloat())
+                val dB = cam.depthOf((ox + 202).toFloat(), (oy + 196).toFloat())
                 if (abs(sA.y - sB.y) > 1f) {
                     assertEquals(sA.y < sB.y, dA < dB)
                 }
@@ -93,18 +108,20 @@ class RegionalWorldAndCamera360Test {
             val (cx, cy) = MinimapCoordinateMapper.screenTapToWorldTile(
                 tapX = 100f, tapY = 100f,
                 canvasW = 200f, canvasH = 200f,
-                playerX = 196, playerY = 192,
-                radius = 22, floorWidth = 400, floorHeight = 400,
+                playerX = WorldMaps.TEMPLE_SPAWN_X, playerY = WorldMaps.TEMPLE_SPAWN_Y,
+                radius = 22, floorWidth = WORLD_OVERLAND_WIDTH, floorHeight = WORLD_OVERLAND_HEIGHT,
                 cameraYawDeg = yaw
             )
-            assertEquals("Center tap must pick player X at yaw=$yaw", 196, cx)
-            assertEquals("Center tap must pick player Y at yaw=$yaw", 192, cy)
+            assertEquals("Center tap must pick player X at yaw=$yaw", WorldMaps.TEMPLE_SPAWN_X, cx)
+            assertEquals("Center tap must pick player Y at yaw=$yaw", WorldMaps.TEMPLE_SPAWN_Y, cy)
         }
     }
 
     @Test
     fun rookvaleCityDistrictsHighwaysAndAllDungeonPortalsAreReachable() {
         val floor0 = WorldMaps.getFloor(0)
+        val ox = WorldMaps.ROOKVALE_ORIGIN_X
+        val oy = WorldMaps.ROOKVALE_ORIGIN_Y
         assertTrue(
             "Temple spawn (${WorldMaps.TEMPLE_SPAWN_X}, ${WorldMaps.TEMPLE_SPAWN_Y}) must be walkable",
             floor0.tileAt(WorldMaps.TEMPLE_SPAWN_X, WorldMaps.TEMPLE_SPAWN_Y).walkable
@@ -114,63 +131,70 @@ class RegionalWorldAndCamera360Test {
             floor0.isProtectionZone(WorldMaps.TEMPLE_SPAWN_X, WorldMaps.TEMPLE_SPAWN_Y)
         )
 
-        // Full overland BFS from Temple Spawn (196, 192)
-        val visited = BooleanArray(floor0.width * floor0.height)
+        // Full 400x400 Rookvale Valley heartland BFS from Temple Spawn (1396, 592)
+        val size = OVERLAND_REGION_SIZE
+        val visited = BooleanArray(size * size)
         val queue = ArrayDeque<Int>()
-        val startKey = WorldMaps.TEMPLE_SPAWN_Y * floor0.width + WorldMaps.TEMPLE_SPAWN_X
+        val startLx = WorldMaps.TEMPLE_SPAWN_X - ox
+        val startLy = WorldMaps.TEMPLE_SPAWN_Y - oy
+        val startKey = startLy * size + startLx
         visited[startKey] = true
         queue.add(startKey)
 
         val dirs = arrayOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)
         while (queue.isNotEmpty()) {
             val cur = queue.removeFirst()
-            val x = cur % floor0.width
-            val y = cur / floor0.width
+            val lx = cur % size
+            val ly = cur / size
             for ((dx, dy) in dirs) {
-                val nx = x + dx
-                val ny = y + dy
-                if (nx !in 0 until floor0.width || ny !in 0 until floor0.height) continue
-                val nKey = ny * floor0.width + nx
+                val nlx = lx + dx
+                val nly = ly + dy
+                if (nlx !in 0 until size || nly !in 0 until size) continue
+                val nKey = nly * size + nlx
                 if (visited[nKey]) continue
-                if (!floor0.tileAt(nx, ny).walkable) continue
+                if (!floor0.tileAt(ox + nlx, oy + nly).walkable) continue
                 visited[nKey] = true
                 queue.add(nKey)
             }
         }
 
-        fun isReachable(x: Int, y: Int): Boolean = visited[y * floor0.width + x]
-        fun isAdjacentReachable(x: Int, y: Int): Boolean = dirs.any { (dx, dy) ->
-            val nx = x + dx
-            val ny = y + dy
-            nx in 0 until floor0.width && ny in 0 until floor0.height && isReachable(nx, ny)
+        fun isReachable(gx: Int, gy: Int): Boolean {
+            val lx = gx - ox
+            val ly = gy - oy
+            return lx in 0 until size && ly in 0 until size && visited[ly * size + lx]
+        }
+        fun isAdjacentReachable(gx: Int, gy: Int): Boolean = dirs.any { (dx, dy) ->
+            isReachable(gx + dx, gy + dy)
         }
 
-        // 1. All City NPCs reachable
-        WorldMaps.npcs.filter { it.floor == 0 }.forEach { npc ->
+        // 1. All Rookvale Valley NPCs reachable
+        WorldMaps.npcs.filter { it.floor == 0 && it.x in ox until (ox + size) && it.y in oy until (oy + size) }.forEach { npc ->
             assertTrue("NPC ${npc.name} at (${npc.x},${npc.y}) must be reachable", isAdjacentReachable(npc.x, npc.y))
         }
 
         // 2. All Key City Landmarks, Stations, Fountain, Orchard Trees & Harbor Fishing Piers
-        assertTrue("Town Square Fountain reachable", isAdjacentReachable(196, 198))
-        assertTrue("Depot Chest reachable", isAdjacentReachable(158, 182))
-        assertTrue("Runecrafting Altar reachable", isAdjacentReachable(225, 179))
-        assertTrue("Smelting Furnace reachable", isAdjacentReachable(219, 201))
-        assertTrue("Blacksmith Anvil reachable", isAdjacentReachable(223, 201))
-        assertTrue("Fletching Bench reachable", isAdjacentReachable(228, 201))
-        assertTrue("Logging Orchard tree reachable", isAdjacentReachable(245, 204))
-        assertTrue("West Harbor Fishing Pier reachable", isReachable(183, 231))
-        assertTrue("East Harbor Fishing Pier reachable", isReachable(211, 231))
+        assertTrue("Town Square Fountain reachable", isAdjacentReachable(ox + 196, oy + 198))
+        assertTrue("Depot Chest reachable", isAdjacentReachable(ox + 158, oy + 182))
+        assertTrue("Runecrafting Altar reachable", isAdjacentReachable(ox + 225, oy + 179))
+        assertTrue("Smelting Furnace reachable", isAdjacentReachable(ox + 219, oy + 201))
+        assertTrue("Blacksmith Anvil reachable", isAdjacentReachable(ox + 223, oy + 201))
+        assertTrue("Fletching Bench reachable", isAdjacentReachable(ox + 228, oy + 201))
+        assertTrue("Logging Orchard tree reachable", isAdjacentReachable(ox + 245, oy + 204))
+        assertTrue("West Harbor Fishing Pier reachable", isReachable(ox + 183, oy + 231))
+        assertTrue("East Harbor Fishing Pier reachable", isReachable(ox + 211, oy + 231))
 
         // 3. All Four 400x400 Regional Border Highways reachable
-        assertTrue("North Border Highway reachable", isReachable(196, 0))
-        assertTrue("West Border Highway reachable", isReachable(0, 192))
-        assertTrue("East Border Highway reachable", isReachable(399, 192))
-        assertTrue("South Frontier Road reachable", isReachable(196, 399))
+        assertTrue("North Border Highway reachable", isReachable(ox + 196, oy + 0))
+        assertTrue("West Border Highway reachable", isReachable(ox + 0, oy + 192))
+        assertTrue("East Border Highway reachable", isReachable(ox + 399, oy + 192))
+        assertTrue("South Frontier Road reachable", isReachable(ox + 196, oy + 399))
 
-        // 4. All Floor 0 Dungeon Entrances (including direct Floor -2 Deep Abyssal Cavern!) reachable
-        val floor0Portals = WorldMaps.portals.filter { it.fromFloor == 0 }
-        assertTrue("Direct Floor 0 -> Floor -2 portal must exist", floor0Portals.any { it.toFloor == -2 })
-        floor0Portals.forEach { p ->
+        // 4. All Rookvale Heartland Dungeon Entrances (including direct Floor -2 Deep Abyssal Cavern!) reachable
+        val heartlandPortals = WorldMaps.portals.filter {
+            it.fromFloor == 0 && it.fromX in ox until (ox + size) && it.fromY in oy until (oy + size)
+        }
+        assertTrue("Direct Floor 0 -> Floor -2 portal must exist", heartlandPortals.any { it.toFloor == -2 })
+        heartlandPortals.forEach { p ->
             assertTrue("Portal (${p.fromX},${p.fromY}) -> Floor ${p.toFloor} must be reachable", isReachable(p.fromX, p.fromY))
             val destMap = WorldMaps.getFloor(p.toFloor)
             assertTrue("Portal dest (${p.toX},${p.toY}) on Floor ${p.toFloor} must be walkable", destMap.tileAt(p.toX, p.toY).walkable)
@@ -184,7 +208,7 @@ class RegionalWorldAndCamera360Test {
 
         // 6. Cutaway building footprints exist for all major Rookvale landmarks
         assertTrue("Rookvale City should register building footprints for cutaway roofs", floor0.buildings.size >= 5)
-        assertEquals(TileType.FOUNTAIN, floor0.tileAt(196, 198))
+        assertEquals(TileType.FOUNTAIN, floor0.tileAt(ox + 196, oy + 198))
     }
 
     @Test
@@ -193,19 +217,28 @@ class RegionalWorldAndCamera360Test {
         assertEquals(DEFAULT_REGION_ID, base.regionId)
         assertEquals(CURRENT_MAP_VERSION, base.mapVersion)
 
-        // V2 save at old Temple (47, 46) migrates directly to new Temple (196, 192)
+        // V2 save at old Temple (47, 46) migrates directly to V4 Temple (1396, 592)
         val v2Save = base.copy(floor = 0, x = 47, y = 46, mapVersion = 2)
         val fromV2 = GameEngine.fromSaveData(v2Save)
         assertEquals(WorldMaps.TEMPLE_SPAWN_X, fromV2.playerX)
         assertEquals(WorldMaps.TEMPLE_SPAWN_Y, fromV2.playerY)
         assertEquals(DEFAULT_REGION_ID, fromV2.regionId)
 
-        // Blocked tile (Town Square Fountain at 196, 198) gently nudges onto adjacent walkable plaza tile
-        val blockedSave = base.copy(floor = 0, x = 196, y = 198, mapVersion = CURRENT_MAP_VERSION)
+        // V3 save at old 400x400 Temple (196, 192) migrates seamlessly by (+1200, +400) to (1396, 592)
+        val v3Save = base.copy(floor = 0, x = 196, y = 192, mapVersion = 3)
+        val fromV3 = GameEngine.fromSaveData(v3Save)
+        assertEquals(WorldMaps.TEMPLE_SPAWN_X, fromV3.playerX)
+        assertEquals(WorldMaps.TEMPLE_SPAWN_Y, fromV3.playerY)
+        assertEquals(DEFAULT_REGION_ID, fromV3.regionId)
+
+        // Blocked tile (Town Square Fountain at 1396, 598) gently nudges onto adjacent walkable plaza tile
+        val fx = WorldMaps.ROOKVALE_ORIGIN_X + 196
+        val fy = WorldMaps.ROOKVALE_ORIGIN_Y + 198
+        val blockedSave = base.copy(floor = 0, x = fx, y = fy, mapVersion = CURRENT_MAP_VERSION)
         val nudged = GameEngine.fromSaveData(blockedSave)
         val floor0 = WorldMaps.getFloor(0)
         assertTrue("Nudged tile must be walkable", floor0.tileAt(nudged.playerX, nudged.playerY).walkable)
-        assertTrue("Nudged tile should stay right beside original spot", abs(nudged.playerX - 196) <= 2 && abs(nudged.playerY - 198) <= 2)
+        assertTrue("Nudged tile should stay right beside original spot", abs(nudged.playerX - fx) <= 2 && abs(nudged.playerY - fy) <= 2)
 
         // CloudSavePayloadCodec round-trips regionId and safely defaults when missing in legacy JSON
         val encoded = CloudSavePayloadCodec.encode(base)

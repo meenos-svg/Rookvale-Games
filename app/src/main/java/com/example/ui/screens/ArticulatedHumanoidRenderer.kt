@@ -1287,6 +1287,52 @@ object ArticulatedHumanoidRenderer {
                     facing.lightScreenX, facing.lightScreenY, useSpecular = false
                 )
             }
+            NpcRole.HARBOR_CAPTAIN -> {
+                // Harbor Ferry Captain: Deep maritime navy coat, gold brass trim, sea boots & brass spyglass
+                val captainAppearance = PaperDollAppearance(
+                    vocation = Vocation.KNIGHT,
+                    tunicPalette = MaterialPalette(Color(0xFF1E3A63), Color(0xFF365E99), Color(0xFF0E1F38), Color(0xFFF0C451)),
+                    hairPalette = MaterialPalette(Color(0xFF4A3525), Color(0xFF78583E), Color(0xFF261A10)),
+                    weaponKind = WeaponVisualKind.NONE,
+                    offhandKind = OffhandVisualKind.NONE,
+                    armorKind = ArmorVisualKind.ROBE,
+                    armorPalette = MaterialPalette(Color(0xFF1E3A63), Color(0xFF365E99), Color(0xFF0E1F38), Color(0xFFF0C451)),
+                    helmetKind = HelmetVisualKind.LEATHER_CAP,
+                    helmetPalette = MaterialPalette(Color(0xFF152947), Color(0xFF2D4F82), Color(0xFF0B1629), Color(0xFFF0C451)),
+                    bootsKind = BootsVisualKind.TRAVELER
+                )
+                drawPlayer(this, cx, feetY, heightPx, captainAppearance, facing, 0f, 0f, nowMs, quality, path)
+                // Brass spyglass held in right hand
+                val glassPos = facing.project(cx, feetY, u, +8.0f, 4.4f, 21.0f + bobUp)
+                VolumetricShading.drawVolumetricEllipsoid(
+                    this, glassPos.x, glassPos.y, 3.6f * u, 1.8f * u,
+                    Color(0xFFD9A338), SPECULAR_WHITE, Color(0xFF7A5314), ow * 0.75f,
+                    facing.lightScreenX, facing.lightScreenY, useSpecular = true
+                )
+            }
+            NpcRole.REAPER_KEEPER -> {
+                // Mortis, Keeper of Reapers: Deep obsidian-violet hooded robes, silver-amethyst trim & glowing soul lantern
+                val reaperAppearance = PaperDollAppearance(
+                    vocation = Vocation.MAGE,
+                    tunicPalette = MaterialPalette(Color(0xFF1F162E), Color(0xFF3E2D5C), Color(0xFF0E0917), Color(0xFF9B6BFF)),
+                    hairPalette = MaterialPalette(Color(0xFF181420), Color(0xFF2E263D), Color(0xFF09070D)),
+                    weaponKind = WeaponVisualKind.STAFF,
+                    weaponPalette = MaterialPalette(Color(0xFF2B2438), Color(0xFF6B5B8A), Color(0xFF120E1A), Color(0xFFC39BFF)),
+                    offhandKind = OffhandVisualKind.NONE,
+                    armorKind = ArmorVisualKind.ROBE,
+                    armorPalette = MaterialPalette(Color(0xFF1F162E), Color(0xFF3E2D5C), Color(0xFF0E0917), Color(0xFF9B6BFF)),
+                    helmetKind = HelmetVisualKind.MAGE_HOOD,
+                    helmetPalette = MaterialPalette(Color(0xFF1A1226), Color(0xFF362752), Color(0xFF0B0712), Color(0xFF9B6BFF)),
+                    bootsKind = BootsVisualKind.TRAVELER
+                )
+                drawPlayer(this, cx, feetY, heightPx, reaperAppearance, facing, 0f, 0f, nowMs, quality, path)
+                // Glowing spectral soul lantern orbiting left hand
+                val pulse = 0.85f + 0.15f * sin(nowMs * 0.0045f)
+                val lanternPos = facing.project(cx, feetY, u, -8.4f, 3.6f, 22.5f + bobUp + sin(nowMs * 0.003f) * 1.1f)
+                drawCircle(Color(0xFF9B6BFF).copy(alpha = 0.28f * pulse), radius = 6.2f * u, center = lanternPos)
+                drawCircle(Color(0xFFD6B8FF).copy(alpha = 0.92f), radius = 2.6f * u, center = lanternPos)
+                drawCircle(Color.White.copy(alpha = 0.95f), radius = 1.2f * u, center = lanternPos)
+            }
         }
     }
 }

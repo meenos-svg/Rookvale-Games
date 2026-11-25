@@ -3,15 +3,37 @@ package com.example.game.model
 import com.example.game.multiplayer.LocalMonsterAttackEvent
 import com.example.game.multiplayer.LocalMonsterHitEvent
 import com.example.game.multiplayer.LocalPlayerActionFxEvent
+import com.example.game.world.WeatherType
 import com.squareup.moshi.JsonClass
 
-const val CURRENT_MAP_VERSION = 3
+const val CURRENT_MAP_VERSION = 4
 const val V1_SURFACE_OFFSET = 32
 const val V2_TO_V3_OFFSET_X = 149
 const val V2_TO_V3_OFFSET_Y = 146
+const val V3_TO_V4_OFFSET_X = 1200
+const val V3_TO_V4_OFFSET_Y = 400
 const val DEFAULT_REGION_ID = "rookvale_valley"
 const val WORLD_CHUNK_SIZE = 32
 const val OVERLAND_REGION_SIZE = 400
+const val WORLD_REGION_COLS = 4
+const val WORLD_REGION_ROWS = 3
+const val WORLD_OVERLAND_WIDTH = OVERLAND_REGION_SIZE * WORLD_REGION_COLS
+const val WORLD_OVERLAND_HEIGHT = OVERLAND_REGION_SIZE * WORLD_REGION_ROWS
+
+val CANONICAL_OVERLAND_REGION_IDS: Set<String> = setOf(
+    "caldera_peaks",
+    "frostbay_straits",
+    "blightwood_reach",
+    "frostcrest_highlands",
+    "writhing_marshes",
+    "alder_sea_plains",
+    "spirewood_west",
+    "rookvale_valley",
+    "sunspire_desert",
+    "maelstrom_jungle_west",
+    "emerald_jungle_east",
+    "ember_isles"
+)
 
 /**
  * Normalizes any legacy, blank, or mixed-case region identifier so online clients
@@ -21,10 +43,23 @@ fun normalizeRegionId(raw: String?): String {
     val cleaned = raw?.trim()?.lowercase()?.replace(' ', '_')
         ?.filter { it.isLetterOrDigit() || it == '_' || it == '-' }
         .orEmpty()
-    return when (cleaned) {
-        "", "rookvale", "rookvale_city", "rookvale_overland", "overland", "default", "main", "valley" -> DEFAULT_REGION_ID
+    return when {
+        cleaned in setOf("", "rookvale", "rookvale_city", "rookvale_overland", "overland", "default", "main", "valley") -> DEFAULT_REGION_ID
+        cleaned in CANONICAL_OVERLAND_REGION_IDS -> cleaned
         else -> cleaned
     }
+}
+
+/**
+ * Returns true when two players on the same floor should see each other across region borders:
+ * always true for matching normalized region IDs, and true on Floor 0 whenever both players
+ * occupy any of the 12 connected canonical overland regions of the 1600x1200 continent world.
+ */
+fun isRegionCompatible(floor: Int, localRegionId: String, remoteRegionId: String): Boolean {
+    val a = normalizeRegionId(localRegionId)
+    val b = normalizeRegionId(remoteRegionId)
+    if (a == b) return true
+    return floor == 0 && a in CANONICAL_OVERLAND_REGION_IDS && b in CANONICAL_OVERLAND_REGION_IDS
 }
 const val ORACLE_MIN_LEVEL = 20
 const val TOOL_BAG_WEIGHT_MULTIPLIER = 0.5
@@ -296,7 +331,17 @@ enum class ItemCategory {
     RAW_ORE,
     METAL_INGOT,
     CRAFT_MATERIAL,
-    LOOT_VALUABLE
+    LOOT_VALUABLE,
+    ADMIN_SCROLL
+}
+
+enum class AdminEquipmentClassification(val label: String, val subtitle: String) {
+    SWORD("Sword", "Cinderite Greatsword + Full Tier 5 Set"),
+    AXE("Axe", "Cinderite Greataxe + Full Tier 5 Set"),
+    CLUB("Club", "Cinderite Worldbreaker + Full Tier 5 Set"),
+    DISTANCE("Distance", "Cinderite Ashen Bow + Shafts & Tier 5 Set"),
+    MAGIC("Magic", "Cinderite Soulspire + Top Runes & Tier 5 Set"),
+    ALL("All Classes", "Every Tier 5 Cinderite Weapon, Armor & Jewelry")
 }
 
 enum class ProcTriggerType(val label: String) {
@@ -386,6 +431,7 @@ data class ItemDefinition(
     val procPowerBonusPct: Int = 0,
     val procExtraTargets: Int = 0,
     val bonusMaxHp: Int = 0,
+    val adminOnly: Boolean = false,
     val description: String = ""
 ) {
     val equipSlot: EquipmentSlot?
@@ -464,6 +510,7 @@ data class EquippedGear(
 
     // Ammo stays stacked inside backpack; ammoId points to the selected quiver stack
     fun nonAmmoIds(): List<String> = listOfNotNull(helmetId, amuletId, armorId, weaponId, shieldId, ringId, legsId, bootsId)
+    fun getAllEquippedIds(): List<String> = listOfNotNull(helmetId, amuletId, armorId, weaponId, shieldId, ringId, legsId, bootsId, ammoId)
 
     fun totalArmor(): Int = nonAmmoIds().sumOf { ItemCatalog.get(it).armor }
     fun totalDefense(): Int = nonAmmoIds().sumOf { ItemCatalog.get(it).defense }
@@ -567,7 +614,14 @@ enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
     MOORED_BOAT(false),
     WOOD_BED(false),
     STONE_BRIDGE(true),
-    IRON_BAR_GATE(true);
+    IRON_BAR_GATE(true),
+    SAND(true),
+    MARSH(true),
+    SNOW(true),
+    JUNGLE_FLOOR(true),
+    VOLCANIC_ASH(true),
+    BLIGHT_SOIL(true),
+    DEEP_WATER(false);
 
     fun oreVeinKind(): OreVeinKind? = when (this) {
         ORE_COPPER -> OreVeinKind.COPPER
@@ -952,6 +1006,7 @@ data class PlayerSaveData(
     val slotId: String,
     val name: String,
     val vocationName: String,
+    val isAdmin: Boolean = false,
     val level: Int,
     val xp: Long,
     val hp: Int,
@@ -966,13 +1021,14 @@ data class PlayerSaveData(
     val floor: Int,
     val x: Int,
     val y: Int,
-    val poisonTicks: Int,
-    val fireTicks: Int,
+    val poisonTicks: Int = 0,
+    val fireTicks: Int = 0,
     val skills: PlayerSkills = PlayerSkills(),
     val equipment: EquippedGear = EquippedGear(),
     val backpack: List<ItemStack> = emptyList(),
     val toolBag: List<ItemStack> = emptyList(),
     val depot: List<ItemStack> = emptyList(),
+    val reaperVault: List<ItemStack> = emptyList(),
     val playerCorpses: List<CorpseEntity> = emptyList(),
     val mapVersion: Int = 1,
     val tunicColorIndex: Int = 0,
@@ -983,6 +1039,45 @@ data class PlayerSaveData(
     val customHotbarSlots: List<String?> = listOf(null, null),
     val regionId: String = DEFAULT_REGION_ID,
     val facingName: String = Direction.SOUTH.name
+)
+
+/**
+ * Immutable fingerprint of ONLY permanent character progression, economy, items,
+ * preferences, and floor/region metadata. Deliberately excludes routine walking
+ * coordinates (x, y), combat HP/MP ticks, monsters, corpses, and ore nodes so
+ * routine gameplay never triggers spurious Postgres writes.
+ */
+data class PersistentCharacterFingerprint(
+    val playerName: String,
+    val vocation: Vocation,
+    val isAdmin: Boolean,
+    val level: Int,
+    val xp: Long,
+    val maxHp: Int,
+    val maxMp: Int,
+    val skills: PlayerSkills,
+    val gold: Int,
+    val bankGold: Long,
+    val equipment: EquippedGear,
+    val backpack: List<ItemStack>,
+    val toolBag: List<ItemStack>,
+    val depot: List<ItemStack>,
+    val reaperVault: List<ItemStack>,
+    val floor: Int,
+    val regionId: String,
+    val tunicColorIndex: Int,
+    val hairColorIndex: Int,
+    val boundAttackRuneId: String?,
+    val boundHealRuneId: String?,
+    val customHotbarSlots: List<String?>,
+    val questFlags: Map<String, Boolean>
+)
+
+data class CharacterLocationSnapshot(
+    val floor: Int,
+    val regionId: String,
+    val x: Int,
+    val y: Int
 )
 
 enum class LightingDetailMode {
@@ -1148,8 +1243,32 @@ enum class GraphicsQuality(
 data class DisplaySettings(
     val graphicsQuality: GraphicsQuality = GraphicsQuality.DEFAULT,
     val showMinimap: Boolean = true,
-    val showFpsCounter: Boolean = false
-)
+    val showFpsCounter: Boolean = false,
+    val showWeatherEffects: Boolean = true,
+    val showDamageNumbers: Boolean = true,
+    val showHealingTicks: Boolean = true,
+    val showProcNames: Boolean = true,
+    val showStatusAndBlockTicks: Boolean = true,
+    val showXpAndSkillGains: Boolean = true
+) {
+    /**
+     * Determines whether a floating text popup should be drawn on the 2.5D viewport.
+     * System INFO notices always remain visible so important non-combat alerts are never hidden.
+     */
+    fun shouldRenderFloatingText(kind: FloatingTextKind): Boolean = when (kind) {
+        FloatingTextKind.DAMAGE_MONSTER,
+        FloatingTextKind.DAMAGE_PLAYER -> showDamageNumbers
+        FloatingTextKind.HEAL,
+        FloatingTextKind.MANA -> showHealingTicks
+        FloatingTextKind.PROC_CALLOUT -> showProcNames
+        FloatingTextKind.POISON,
+        FloatingTextKind.FIRE,
+        FloatingTextKind.BLOCK -> showStatusAndBlockTicks
+        FloatingTextKind.XP,
+        FloatingTextKind.SKILL_UP -> showXpAndSkillGains
+        FloatingTextKind.INFO -> true
+    }
+}
 
 enum class ActivePanel {
     NONE,
@@ -1165,13 +1284,23 @@ enum class ActivePanel {
     LOOT_CORPSE,
     ORACLE,
     WORLD_MAP,
+    HARBOR_FERRY,
+    REAPER_TEMPLE,
+    ADMIN_SCROLL,
     SETTINGS
 }
+
+const val DEFAULT_TIME_OF_DAY_HOURS: Float = 19.5f
 
 data class GameWorldState(
     val saveId: String = "",
     val playerName: String = "Aldric",
     val vocation: Vocation = Vocation.ADVENTURER,
+    val isAdmin: Boolean = false,
+    val infiniteHealth: Boolean = false,
+    val isSpectator: Boolean = false,
+    val timeOfDayHours: Float = DEFAULT_TIME_OF_DAY_HOURS,
+    val adminWeatherOverride: WeatherType? = null,
     val tunicColorIndex: Int = 0,
     val hairColorIndex: Int = 0,
     val level: Int = 1,
@@ -1187,13 +1316,16 @@ data class GameWorldState(
     val bankGold: Long = 0L,
     val regionId: String = DEFAULT_REGION_ID,
     val floor: Int = 0,
-    val playerX: Int = 196,
-    val playerY: Int = 192,
-    val prevPlayerX: Int = 196,
-    val prevPlayerY: Int = 192,
+    val playerX: Int = 1396,
+    val playerY: Int = 592,
+    val prevPlayerX: Int = 1396,
+    val prevPlayerY: Int = 592,
     val lastPlayerMoveMs: Long = 0L,
     val playerFacing: Direction = Direction.SOUTH,
     val walkPath: List<Pair<Int, Int>> = emptyList(),
+    val longRangeGoal: Pair<Int, Int>? = null,
+    val longRangeWaypoints: List<Pair<Int, Int>> = emptyList(),
+    val activeHarborPortId: String? = null,
     val poisonTicks: Int = 0,
     val fireTicks: Int = 0,
     val skills: PlayerSkills = PlayerSkills(),
@@ -1201,6 +1333,7 @@ data class GameWorldState(
     val backpack: List<ItemStack> = emptyList(),
     val toolBag: List<ItemStack> = emptyList(),
     val depot: List<ItemStack> = emptyList(),
+    val reaperVault: List<ItemStack> = emptyList(),
     val monsters: List<MonsterEntity> = emptyList(),
     val pendingRespawns: List<PendingRespawn> = emptyList(),
     val oreNodes: Map<Triple<Int, Int, Int>, OreNodeState> = emptyMap(),
@@ -1237,6 +1370,42 @@ data class GameWorldState(
     val boundHealRuneId: String? = "healing_rune",
     val customHotbarSlots: List<String?> = listOf(null, null)
 ) {
+    val isInvulnerable: Boolean
+        get() = isAdmin || infiniteHealth
+
+    fun persistentSaveFingerprint(): PersistentCharacterFingerprint = PersistentCharacterFingerprint(
+        playerName = playerName,
+        vocation = vocation,
+        isAdmin = isAdmin,
+        level = level,
+        xp = xp,
+        maxHp = maxHp,
+        maxMp = maxMp,
+        skills = skills,
+        gold = gold,
+        bankGold = bankGold,
+        equipment = equipment,
+        backpack = backpack,
+        toolBag = toolBag,
+        depot = depot,
+        reaperVault = reaperVault,
+        floor = floor,
+        regionId = normalizeRegionId(regionId),
+        tunicColorIndex = tunicColorIndex,
+        hairColorIndex = hairColorIndex,
+        boundAttackRuneId = boundAttackRuneId,
+        boundHealRuneId = boundHealRuneId,
+        customHotbarSlots = customHotbarSlots,
+        questFlags = questFlags
+    )
+
+    fun locationSnapshot(): CharacterLocationSnapshot = CharacterLocationSnapshot(
+        floor = floor,
+        regionId = normalizeRegionId(regionId),
+        x = playerX,
+        y = playerY
+    )
+
     fun effectiveMaxHp(): Int = maxHp + equipment.totalBonusMaxHp()
 
     fun unmetEquipRequirements(def: ItemDefinition): List<String> {

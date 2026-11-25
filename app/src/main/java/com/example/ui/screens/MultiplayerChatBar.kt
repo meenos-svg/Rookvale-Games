@@ -379,23 +379,54 @@ private fun ChatLineText(
         ChatChannel.WORLD -> Color(0xFF67E8F9)
         ChatChannel.FLOOR -> ExpEmerald
     }
-    val prefix = when (msg.channel) {
-        ChatChannel.SYSTEM -> "[!] "
-        ChatChannel.WORLD -> "[W] ${msg.senderName}: "
-        ChatChannel.FLOOR -> "[F] ${msg.senderName}: "
+    if (msg.senderIsAdmin && msg.channel != ChatChannel.SYSTEM) {
+        val channelTag = if (msg.channel == ChatChannel.WORLD) "[W] " else "[F] "
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = modifier
+        ) {
+            Text(
+                text = channelTag,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = tagColor,
+                maxLines = 1
+            )
+            AdminGoldenCrownIcon(sizeDp = 12.dp)
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(SpanStyle(color = TorchGold, fontWeight = FontWeight.ExtraBold)) {
+                        append("${msg.senderName}: ")
+                    }
+                    withStyle(SpanStyle(color = ParchmentLight)) {
+                        append(msg.text)
+                    }
+                },
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = maxLines,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    } else {
+        val prefix = when (msg.channel) {
+            ChatChannel.SYSTEM -> "[!] "
+            ChatChannel.WORLD -> "[W] ${msg.senderName}: "
+            ChatChannel.FLOOR -> "[F] ${msg.senderName}: "
+        }
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(color = tagColor, fontWeight = FontWeight.Bold)) {
+                    append(prefix)
+                }
+                withStyle(SpanStyle(color = if (msg.channel == ChatChannel.SYSTEM) TorchGold else ParchmentLight)) {
+                    append(msg.text)
+                }
+            },
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis,
+            modifier = modifier
+        )
     }
-    Text(
-        text = buildAnnotatedString {
-            withStyle(SpanStyle(color = tagColor, fontWeight = FontWeight.Bold)) {
-                append(prefix)
-            }
-            withStyle(SpanStyle(color = if (msg.channel == ChatChannel.SYSTEM) TorchGold else ParchmentLight)) {
-                append(msg.text)
-            }
-        },
-        style = MaterialTheme.typography.labelSmall,
-        maxLines = maxLines,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier
-    )
 }

@@ -22,11 +22,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,9 +60,12 @@ import com.example.game.model.DisplaySettings
 import com.example.game.model.GraphicsQuality
 import com.example.ui.theme.BasaltDark
 import com.example.ui.theme.ExpEmerald
+import com.example.ui.theme.HealthCrimson
 import com.example.ui.theme.ObsidianVoid
 import com.example.ui.theme.ParchmentLight
 import com.example.ui.theme.ParchmentMuted
+import com.example.ui.theme.PoisonGreen
+import com.example.ui.theme.SoulViolet
 import com.example.ui.theme.StoneBorderDark
 import com.example.ui.theme.StoneBorderLight
 import com.example.ui.theme.StoneElevated
@@ -75,6 +84,13 @@ fun SettingsPanelContent(
     onSelectGraphicsQuality: (GraphicsQuality) -> Unit,
     onToggleMinimap: (Boolean) -> Unit,
     onToggleFpsCounter: (Boolean) -> Unit,
+    onToggleWeatherEffects: (Boolean) -> Unit = {},
+    showCombatTextSection: Boolean = false,
+    onToggleDamageNumbers: (Boolean) -> Unit = {},
+    onToggleHealingTicks: (Boolean) -> Unit = {},
+    onToggleProcNames: (Boolean) -> Unit = {},
+    onToggleStatusAndBlockTicks: (Boolean) -> Unit = {},
+    onToggleXpAndSkillGains: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val activeQuality = displaySettings.graphicsQuality
@@ -232,6 +248,104 @@ fun SettingsPanelContent(
             onCheckedChange = onToggleFpsCounter,
             testTag = "settings_toggle_fps"
         )
+
+        SettingsToggleRow(
+            icon = Icons.Default.WaterDrop,
+            title = stringResource(R.string.settings_weather_title),
+            subtitle = stringResource(R.string.settings_weather_subtitle),
+            checked = displaySettings.showWeatherEffects,
+            onCheckedChange = onToggleWeatherEffects,
+            testTag = "settings_toggle_weather"
+        )
+
+        if (showCombatTextSection) {
+            HorizontalDivider(color = StoneBorderDark, thickness = 1.dp)
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("settings_combat_text_section"),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = null,
+                            tint = TorchGold,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_floating_combat_text).uppercase(),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                            color = TorchGold
+                        )
+                    }
+                    Text(
+                        text = "Applies instantly",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = ExpEmerald
+                    )
+                }
+
+                SettingsToggleRow(
+                    icon = Icons.Default.Bolt,
+                    activeIconTint = HealthCrimson,
+                    title = stringResource(R.string.settings_fct_damage_title),
+                    subtitle = stringResource(R.string.settings_fct_damage_subtitle),
+                    checked = displaySettings.showDamageNumbers,
+                    onCheckedChange = onToggleDamageNumbers,
+                    testTag = "settings_toggle_damage_numbers"
+                )
+
+                SettingsToggleRow(
+                    icon = Icons.Default.Favorite,
+                    activeIconTint = ExpEmerald,
+                    title = stringResource(R.string.settings_fct_healing_title),
+                    subtitle = stringResource(R.string.settings_fct_healing_subtitle),
+                    checked = displaySettings.showHealingTicks,
+                    onCheckedChange = onToggleHealingTicks,
+                    testTag = "settings_toggle_healing_ticks"
+                )
+
+                SettingsToggleRow(
+                    icon = Icons.Default.AutoAwesome,
+                    activeIconTint = SoulViolet,
+                    title = stringResource(R.string.settings_fct_procs_title),
+                    subtitle = stringResource(R.string.settings_fct_procs_subtitle),
+                    checked = displaySettings.showProcNames,
+                    onCheckedChange = onToggleProcNames,
+                    testTag = "settings_toggle_proc_names"
+                )
+
+                SettingsToggleRow(
+                    icon = Icons.Default.Shield,
+                    activeIconTint = PoisonGreen,
+                    title = stringResource(R.string.settings_fct_status_title),
+                    subtitle = stringResource(R.string.settings_fct_status_subtitle),
+                    checked = displaySettings.showStatusAndBlockTicks,
+                    onCheckedChange = onToggleStatusAndBlockTicks,
+                    testTag = "settings_toggle_status_blocks"
+                )
+
+                SettingsToggleRow(
+                    icon = Icons.Default.Stars,
+                    activeIconTint = TorchGold,
+                    title = stringResource(R.string.settings_fct_xp_title),
+                    subtitle = stringResource(R.string.settings_fct_xp_subtitle),
+                    checked = displaySettings.showXpAndSkillGains,
+                    onCheckedChange = onToggleXpAndSkillGains,
+                    testTag = "settings_toggle_xp_gains"
+                )
+            }
+        }
     }
 }
 
@@ -242,7 +356,8 @@ private fun SettingsToggleRow(
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    testTag: String
+    testTag: String,
+    activeIconTint: Color = TorchGold
 ) {
     Surface(
         color = StoneSurface,
@@ -265,7 +380,7 @@ private fun SettingsToggleRow(
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = if (checked) TorchGold else ParchmentMuted,
+                tint = if (checked) activeIconTint else ParchmentMuted,
                 modifier = Modifier.size(20.dp)
             )
             Column(
@@ -311,6 +426,7 @@ fun TitleSettingsDialog(
     onSelectGraphicsQuality: (GraphicsQuality) -> Unit,
     onToggleMinimap: (Boolean) -> Unit,
     onToggleFpsCounter: (Boolean) -> Unit,
+    onToggleWeatherEffects: (Boolean) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     Dialog(
@@ -365,7 +481,8 @@ fun TitleSettingsDialog(
                     displaySettings = displaySettings,
                     onSelectGraphicsQuality = onSelectGraphicsQuality,
                     onToggleMinimap = onToggleMinimap,
-                    onToggleFpsCounter = onToggleFpsCounter
+                    onToggleFpsCounter = onToggleFpsCounter,
+                    onToggleWeatherEffects = onToggleWeatherEffects
                 )
             }
         }

@@ -27,6 +27,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -125,6 +126,48 @@ object PinHasher {
 }
 
 /**
+ * Dedicated policy for Rookvale's playable Admin account (`Admin` + passcode `1119`).
+ * Uses constant-time PBKDF2 hash comparison so raw passcodes are never persisted or logged,
+ * prevents standard accounts from spoofing `isAdmin = true`, and reserves `"Admin"` against hijacking.
+ */
+object AdminAccountPolicy {
+    const val ADMIN_CANONICAL_NAME = "Admin"
+    private const val ADMIN_PASSCODE = "1119"
+
+    private val expectedAdminPinHash: String by lazy {
+        PinHasher.hashPin(ADMIN_CANONICAL_NAME, ADMIN_PASSCODE)
+    }
+
+    fun isAdminName(rawName: String): Boolean =
+        PinHasher.normalizeNameKey(rawName) == "admin"
+
+    fun verifyAdminPin(pin: String): Boolean {
+        if (!PinHasher.isValidPin(pin)) return false
+        val candidate = PinHasher.hashPin(ADMIN_CANONICAL_NAME, pin)
+        return MessageDigest.isEqual(
+            candidate.toByteArray(Charsets.UTF_8),
+            expectedAdminPinHash.toByteArray(Charsets.UTF_8)
+        )
+    }
+
+    fun verifyAdminSession(characterName: String, pinHash: String): Boolean {
+        if (!isAdminName(characterName) || pinHash.isBlank()) return false
+        return MessageDigest.isEqual(
+            pinHash.toByteArray(Charsets.UTF_8),
+            expectedAdminPinHash.toByteArray(Charsets.UTF_8)
+        )
+    }
+
+    fun enforceAdminFlag(session: CloudSession, saveData: PlayerSaveData): PlayerSaveData {
+        val verified = verifyAdminSession(session.characterName, session.pinHash)
+        return saveData.copy(
+            name = if (verified) ADMIN_CANONICAL_NAME else saveData.name,
+            isAdmin = verified
+        )
+    }
+}
+
+/**
  * API 24+ compatible ISO-8601 UTC formatter & Postgres timestamptz parser.
  */
 object IsoTimestampUtil {
@@ -174,11 +217,17 @@ object IsoTimestampUtil {
  * in `public.players` and the offline SharedPreferences backup.
  */
 object CloudSavePayloadCodec {
+    /**
+     * Serializes ONLY permanent character data for Supabase `public.players.save_data`.
+     * Strictly excludes world entities (monsters, bosses, corpses, ground loot, ore node
+     * cooldowns, map chunks) and ephemeral combat/status timers (poisonTicks, fireTicks).
+     */
     fun encode(data: PlayerSaveData): JSONObject {
         return JSONObject().apply {
             put("slotId", data.slotId)
             put("name", data.name)
             put("vocationName", data.vocationName)
+            put("isAdmin", data.isAdmin)
             put("level", data.level)
             put("xp", data.xp)
             put("hp", data.hp)
@@ -192,12 +241,9 @@ object CloudSavePayloadCodec {
             put("gold", data.gold)
             put("bankGold", data.bankGold.coerceAtLeast(0L))
             put("regionId", normalizeRegionId(data.regionId))
-            put("floor", data.floor)
+            put("floor", data.floor.coerceIn(-6, 0))
             put("x", data.x)
             put("y", data.y)
-            put("facing", data.facingName.ifBlank { Direction.SOUTH.name })
-            put("poisonTicks", data.poisonTicks)
-            put("fireTicks", data.fireTicks)
             put("mapVersion", data.mapVersion)
             put("tunicColorIndex", data.tunicColorIndex)
             put("hairColorIndex", data.hairColorIndex)
@@ -239,11 +285,15 @@ object CloudSavePayloadCodec {
             put("backpackItems", encodeItemList(data.backpack))
             put("toolBagItems", encodeItemList(data.toolBag))
             put("depotItems", encodeItemList(data.depot))
-            put("playerCorpses", encodeCorpses(data.playerCorpses))
+            if (data.reaperVault.isNotEmpty()) {
+                put("reaperVaultItems", encodeItemList(data.reaperVault))
+            }
 
-            put("questFlags", JSONObject().apply {
-                data.questFlags.forEach { (k, v) -> put(k, v) }
-            })
+            if (data.questFlags.isNotEmpty()) {
+                put("questFlags", JSONObject().apply {
+                    data.questFlags.forEach { (k, v) -> put(k, v) }
+                })
+            }
         }
     }
 
@@ -301,7 +351,10 @@ object CloudSavePayloadCodec {
         val backpackArr = json.optJSONArray("backpackItems") ?: json.optJSONArray("backpack")
         val toolBagArr = json.optJSONArray("toolBagItems") ?: json.optJSONArray("toolBag")
         val depotArr = json.optJSONArray("depotItems") ?: json.optJSONArray("depot")
-        val corpsesArr = json.optJSONArray("playerCorpses")
+        val reaperVaultArr = json.optJSONArray("reaperVaultItems") ?: json.optJSONArray("reaperVault")
+        // Legacy migration: rescue items from any old cloud-persisted playerCorpses into reaperVault
+        val legacyCorpseItems = decodeLegacyCorpseItems(json.optJSONArray("playerCorpses"))
+        val decodedReaperVault = mergeItemStacks(decodeItemList(reaperVaultArr), legacyCorpseItems)
 
         val flagsObj = json.optJSONObject("questFlags")
         val questFlags = buildMap {
@@ -329,6 +382,7 @@ object CloudSavePayloadCodec {
             slotId = json.optNullableString("slotId") ?: fallbackPlayerId,
             name = PinHasher.sanitizeName(json.optNullableString("name") ?: fallbackName).ifBlank { fallbackName },
             vocationName = parsedVocationName,
+            isAdmin = json.optBoolean("isAdmin", false),
             level = parsedLevel,
             xp = json.optLong("xp", 0L).coerceAtLeast(0L),
             hp = json.optInt("hp", maxHp).coerceIn(1, maxHp),
@@ -340,17 +394,18 @@ object CloudSavePayloadCodec {
             maxCapOz = hydratedMaxCap,
             gold = json.optInt("gold", 0).coerceAtLeast(0),
             bankGold = json.optLong("bankGold", 0L).coerceAtLeast(0L),
-            floor = json.optInt("floor", 0).coerceIn(-4, 0),
+            floor = json.optInt("floor", 0).coerceIn(-6, 0),
             x = json.optInt("x", WorldMaps.TEMPLE_SPAWN_X),
             y = json.optInt("y", WorldMaps.TEMPLE_SPAWN_Y),
-            poisonTicks = json.optInt("poisonTicks", 0).coerceAtLeast(0),
-            fireTicks = json.optInt("fireTicks", 0).coerceAtLeast(0),
+            poisonTicks = 0,
+            fireTicks = 0,
             skills = skills,
             equipment = equipment,
             backpack = decodeItemList(backpackArr),
             toolBag = decodeItemList(toolBagArr),
             depot = decodeItemList(depotArr),
-            playerCorpses = decodeCorpses(corpsesArr),
+            reaperVault = decodedReaperVault,
+            playerCorpses = emptyList(),
             mapVersion = json.optInt("mapVersion", CURRENT_MAP_VERSION),
             tunicColorIndex = json.optInt("tunicColorIndex", 0).coerceAtLeast(0),
             hairColorIndex = json.optInt("hairColorIndex", 0).coerceAtLeast(0),
@@ -366,9 +421,7 @@ object CloudSavePayloadCodec {
                 }
             },
             regionId = normalizeRegionId(json.optNullableString("regionId")),
-            facingName = MultiplayerSanitizer.safeDirection(
-                json.optNullableString("facing") ?: json.optNullableString("direction")
-            ).name
+            facingName = Direction.SOUTH.name
         )
     }
 
@@ -412,41 +465,29 @@ object CloudSavePayloadCodec {
         return out.toList()
     }
 
-    private fun encodeCorpses(corpses: List<CorpseEntity>): JSONArray = JSONArray().apply {
-        corpses.takeLast(12).forEach { c ->
-            put(JSONObject().apply {
-                put("id", c.id)
-                put("floor", c.floor)
-                put("x", c.x)
-                put("y", c.y)
-                put("label", c.label)
-                put("isPlayerCorpse", c.isPlayerCorpse)
-                c.monsterTypeName?.let { put("monsterTypeName", it) }
-                put("gold", c.gold)
-                put("items", encodeItemList(c.items))
-            })
-        }
-    }
-
-    private fun decodeCorpses(arr: JSONArray?): List<CorpseEntity> {
-        if (arr == null) return emptyList()
-        val out = mutableListOf<CorpseEntity>()
+    /**
+     * One-time legacy compatibility helper: extracts carried items from any pre-refactor
+     * `playerCorpses` array in older cloud saves so they migrate safely into `reaperVault`.
+     */
+    private fun decodeLegacyCorpseItems(arr: JSONArray?): List<ItemStack> {
+        if (arr == null || arr.length() <= 0) return emptyList()
+        val out = mutableListOf<ItemStack>()
         for (i in 0 until arr.length().coerceAtMost(20)) {
             val obj = arr.optJSONObject(i) ?: continue
-            val id = obj.optNullableString("id") ?: continue
-            out += CorpseEntity(
-                id = id,
-                floor = obj.optInt("floor", 0).coerceIn(-4, 0),
-                x = obj.optInt("x", 47),
-                y = obj.optInt("y", 46),
-                label = obj.optNullableString("label") ?: "Fallen Backpack",
-                isPlayerCorpse = obj.optBoolean("isPlayerCorpse", true),
-                monsterTypeName = obj.optNullableString("monsterTypeName"),
-                gold = obj.optInt("gold", 0).coerceAtLeast(0),
-                items = decodeItemList(obj.optJSONArray("items"))
-            )
+            out += decodeItemList(obj.optJSONArray("items"))
         }
         return out
+    }
+
+    private fun mergeItemStacks(base: List<ItemStack>, extra: List<ItemStack>): List<ItemStack> {
+        if (extra.isEmpty()) return base
+        val counts = LinkedHashMap<String, Int>()
+        for (stack in base + extra) {
+            if (stack.itemId.isNotBlank() && stack.count > 0) {
+                counts[stack.itemId] = ((counts[stack.itemId] ?: 0) + stack.count).coerceAtMost(999_999)
+            }
+        }
+        return counts.entries.map { (id, cnt) -> ItemStack(id, cnt) }
     }
 
     private fun JSONObject.optNullableString(key: String): String? {
@@ -634,6 +675,20 @@ class SupabaseCloudSaveRepository(
             return@withContext CloudAuthResult.Failure("Please enter a 4-digit numeric PIN.")
         }
 
+        // Reserve "Admin" against standard creation; valid Admin passcode routes seamlessly to load-or-init
+        if (AdminAccountPolicy.isAdminName(cleanName)) {
+            if (!AdminAccountPolicy.verifyAdminPin(pin)) {
+                return@withContext CloudAuthResult.Failure(
+                    "The name \"Admin\" is reserved. Enter the valid Admin passcode on Load Character or choose another name."
+                )
+            }
+            return@withContext loginAndRecover(
+                rawName = AdminAccountPolicy.ADMIN_CANONICAL_NAME,
+                pin = pin,
+                adminSaveBuilder = initialSaveBuilder
+            )
+        }
+
         val pinHash = PinHasher.hashPin(cleanName, pin)
 
         // Check if hero name is already claimed in Supabase when online
@@ -646,7 +701,7 @@ class SupabaseCloudSaveRepository(
             }
         }
 
-        val initialSave = initialSaveBuilder(cleanName)
+        val initialSave = initialSaveBuilder(cleanName).copy(isAdmin = false)
         val session = CloudSession(
             playerId = initialSave.slotId,
             characterName = cleanName,
@@ -677,29 +732,72 @@ class SupabaseCloudSaveRepository(
 
     /**
      * Loads/recovers an existing character using Name + 4-digit PIN from Supabase `public.players`.
-     * Compares `updated_at` against any local backup so newer offline progress is never overwritten.
+     * When logging in as `Admin` with the verified passcode (`1119`), automatically initializes a
+     * Level 1 Admin adventurer if no cloud/local save exists yet.
      */
-    suspend fun loginAndRecover(rawName: String, pin: String): CloudAuthResult = withContext(Dispatchers.IO) {
-        val cleanName = PinHasher.sanitizeName(rawName)
-        if (!PinHasher.isValidCharacterName(cleanName)) {
+    suspend fun loginAndRecover(
+        rawName: String,
+        pin: String,
+        adminSaveBuilder: ((cleanName: String) -> PlayerSaveData)? = null
+    ): CloudAuthResult = withContext(Dispatchers.IO) {
+        val rawCleanName = PinHasher.sanitizeName(rawName)
+        if (!PinHasher.isValidCharacterName(rawCleanName)) {
             return@withContext CloudAuthResult.Failure("Enter a valid character name (2-18 characters).")
         }
-        if (!PinHasher.isValidPin(pin)) {
+        val isAdminLogin = AdminAccountPolicy.isAdminName(rawCleanName)
+        if (isAdminLogin) {
+            if (!AdminAccountPolicy.verifyAdminPin(pin)) {
+                return@withContext CloudAuthResult.Failure("Invalid Admin passcode. Please verify your credentials.")
+            }
+        } else if (!PinHasher.isValidPin(pin)) {
             return@withContext CloudAuthResult.Failure("Enter your 4-digit numeric PIN.")
         }
 
+        val cleanName = if (isAdminLogin) AdminAccountPolicy.ADMIN_CANONICAL_NAME else rawCleanName
         val pinHash = PinHasher.hashPin(cleanName, pin)
         val localMatch = localStore.getLocalBackupByNameAndPin(cleanName, pinHash)
+
+        fun provisionFreshAdminAccount(): CloudAuthResult {
+            val builder = adminSaveBuilder
+                ?: return CloudAuthResult.Failure("Unable to initialize Admin account.")
+            val freshAdminSave = builder(AdminAccountPolicy.ADMIN_CANONICAL_NAME).copy(
+                name = AdminAccountPolicy.ADMIN_CANONICAL_NAME,
+                isAdmin = true
+            )
+            val session = CloudSession(
+                playerId = freshAdminSave.slotId,
+                characterName = AdminAccountPolicy.ADMIN_CANONICAL_NAME,
+                pinHash = pinHash
+            )
+            val now = nowProvider()
+            localStore.saveCachedSession(session)
+            localStore.saveLocalBackup(session, freshAdminSave, now, pendingCloudSync = true)
+            val pushed = if (isCloudConfigured()) upsertPlayerRow(session, freshAdminSave, now) else false
+            if (pushed) localStore.markCloudSynced(session.playerId, now)
+            return CloudAuthResult.Success(
+                session = session,
+                saveData = freshAdminSave,
+                syncedFromCloud = pushed,
+                notice = if (pushed) {
+                    "Admin initialized and synced to cloud. Infinite Health & Sovereign's Scroll active."
+                } else {
+                    "Admin initialized locally. Infinite Health & Sovereign's Scroll active."
+                }
+            )
+        }
 
         if (!isCloudConfigured()) {
             return@withContext if (localMatch != null) {
                 localStore.saveCachedSession(localMatch.session)
+                val enforced = AdminAccountPolicy.enforceAdminFlag(localMatch.session, localMatch.saveData)
                 CloudAuthResult.Success(
                     session = localMatch.session,
-                    saveData = localMatch.saveData,
+                    saveData = enforced,
                     syncedFromCloud = false,
                     notice = "Loaded local backup for ${localMatch.session.characterName} (cloud offline)."
                 )
+            } else if (isAdminLogin && adminSaveBuilder != null) {
+                provisionFreshAdminAccount()
             } else {
                 CloudAuthResult.Failure("Cloud save unavailable offline and no local backup matched that Name + PIN.")
             }
@@ -709,23 +807,25 @@ class SupabaseCloudSaveRepository(
         when (fetchResult) {
             is FetchOutcome.Found -> {
                 val remote = fetchResult.row
-                val session = CloudSession(remote.playerId, remote.characterName, pinHash)
+                val session = CloudSession(remote.playerId, cleanName, pinHash)
                 val existingLocal = localStore.getLocalBackupByPlayerId(remote.playerId) ?: localMatch
                 reconcileAndCache(session, remote, existingLocal)
             }
             FetchOutcome.NotFound -> {
-                // If created offline earlier on this device and never yet uploaded, sync it now!
-                if (localMatch != null && localMatch.pendingCloudSync) {
+                if (localMatch != null && (localMatch.pendingCloudSync || isAdminLogin)) {
                     val now = nowProvider()
+                    val enforced = AdminAccountPolicy.enforceAdminFlag(localMatch.session, localMatch.saveData)
                     localStore.saveCachedSession(localMatch.session)
-                    val pushed = upsertPlayerRow(localMatch.session, localMatch.saveData, localMatch.updatedAtMs.coerceAtLeast(now))
+                    val pushed = upsertPlayerRow(localMatch.session, enforced, localMatch.updatedAtMs.coerceAtLeast(now))
                     if (pushed) localStore.markCloudSynced(localMatch.session.playerId, localMatch.updatedAtMs.coerceAtLeast(now))
                     CloudAuthResult.Success(
                         session = localMatch.session,
-                        saveData = localMatch.saveData,
+                        saveData = enforced,
                         syncedFromCloud = pushed,
-                        notice = if (pushed) "Recovered local hero and synced to cloud." else "Loaded local hero backup."
+                        notice = if (pushed) "Recovered ${localMatch.session.characterName} and synced to cloud." else "Loaded local hero backup."
                     )
+                } else if (isAdminLogin && adminSaveBuilder != null) {
+                    provisionFreshAdminAccount()
                 } else {
                     CloudAuthResult.Failure("No character found matching \"$cleanName\" and that PIN.")
                 }
@@ -733,12 +833,15 @@ class SupabaseCloudSaveRepository(
             FetchOutcome.NetworkError -> {
                 if (localMatch != null) {
                     localStore.saveCachedSession(localMatch.session)
+                    val enforced = AdminAccountPolicy.enforceAdminFlag(localMatch.session, localMatch.saveData)
                     CloudAuthResult.Success(
                         session = localMatch.session,
-                        saveData = localMatch.saveData,
+                        saveData = enforced,
                         syncedFromCloud = false,
                         notice = "Offline mode: loaded cached backup for ${localMatch.session.characterName}."
                     )
+                } else if (isAdminLogin && adminSaveBuilder != null) {
+                    provisionFreshAdminAccount()
                 } else {
                     CloudAuthResult.Failure("Unable to reach Rookvale cloud. Check your internet connection and try again.")
                 }
@@ -759,7 +862,7 @@ class SupabaseCloudSaveRepository(
             return@withContext localBackup?.let {
                 CloudAuthResult.Success(
                     session = it.session,
-                    saveData = it.saveData,
+                    saveData = AdminAccountPolicy.enforceAdminFlag(it.session, it.saveData),
                     syncedFromCloud = false,
                     notice = "Resumed ${it.session.characterName} from local backup."
                 )
@@ -781,11 +884,12 @@ class SupabaseCloudSaveRepository(
             FetchOutcome.NotFound -> {
                 if (localBackup != null) {
                     val pushTs = localBackup.updatedAtMs.coerceAtLeast(nowProvider())
-                    val pushed = upsertPlayerRow(cached, localBackup.saveData, pushTs)
+                    val enforced = AdminAccountPolicy.enforceAdminFlag(cached, localBackup.saveData)
+                    val pushed = upsertPlayerRow(cached, enforced, pushTs)
                     if (pushed) localStore.markCloudSynced(cached.playerId, pushTs)
                     CloudAuthResult.Success(
                         session = cached,
-                        saveData = localBackup.saveData,
+                        saveData = enforced,
                         syncedFromCloud = pushed,
                         notice = if (pushed) "Restored ${cached.characterName} and backed up to cloud."
                         else "Resumed ${cached.characterName} from local backup."
@@ -799,7 +903,7 @@ class SupabaseCloudSaveRepository(
                 localBackup?.let {
                     CloudAuthResult.Success(
                         session = cached,
-                        saveData = it.saveData,
+                        saveData = AdminAccountPolicy.enforceAdminFlag(cached, it.saveData),
                         syncedFromCloud = false,
                         notice = "Offline backup loaded for ${cached.characterName} — will sync when online."
                     )
@@ -879,32 +983,34 @@ class SupabaseCloudSaveRepository(
         localStore.saveCachedSession(session)
         return if (localBackup != null && localBackup.updatedAtMs > remote.updatedAtMs) {
             // Local backup is newer than cloud (e.g., offline play) — keep local and push to cloud!
-            val pushed = upsertPlayerRow(session, localBackup.saveData, localBackup.updatedAtMs)
+            val enforcedLocal = AdminAccountPolicy.enforceAdminFlag(session, localBackup.saveData)
+            val pushed = upsertPlayerRow(session, enforcedLocal, localBackup.updatedAtMs)
             localStore.saveLocalBackup(
                 session = session,
-                saveData = localBackup.saveData,
+                saveData = enforcedLocal,
                 updatedAtMs = localBackup.updatedAtMs,
                 pendingCloudSync = !pushed
             )
             CloudAuthResult.Success(
                 session = session,
-                saveData = localBackup.saveData,
+                saveData = enforcedLocal,
                 syncedFromCloud = pushed,
                 notice = if (pushed) "Synced newer local progress for ${session.characterName} to cloud."
                 else "Loaded newer local progress for ${session.characterName}."
             )
         } else {
+            val enforcedRemote = AdminAccountPolicy.enforceAdminFlag(session, remote.saveData)
             localStore.saveLocalBackup(
                 session = session,
-                saveData = remote.saveData,
+                saveData = enforcedRemote,
                 updatedAtMs = remote.updatedAtMs.coerceAtLeast(1L),
                 pendingCloudSync = false
             )
             CloudAuthResult.Success(
                 session = session,
-                saveData = remote.saveData,
+                saveData = enforcedRemote,
                 syncedFromCloud = true,
-                notice = "Loaded ${session.characterName} (Lvl ${remote.saveData.level}) from Rookvale cloud."
+                notice = "Loaded ${session.characterName} (Lvl ${enforcedRemote.level}) from Rookvale cloud."
             )
         }
     }

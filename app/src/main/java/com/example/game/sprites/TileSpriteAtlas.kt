@@ -107,6 +107,13 @@ object TileSpriteAtlas {
         TileType.WOOD_BED -> drawShopCounter()
         TileType.STONE_BRIDGE -> drawCryptFloor()
         TileType.IRON_BAR_GATE -> drawObliqueWall(0xFF5D626B.toInt(), 0xFF3A3E45.toInt(), 0xFF1F2227.toInt(), 0xFF2A2E34.toInt())
+        TileType.SAND -> drawDirtFloor()
+        TileType.MARSH -> drawDarkGrass()
+        TileType.SNOW -> drawTempleFloor()
+        TileType.JUNGLE_FLOOR -> drawDarkGrass()
+        TileType.VOLCANIC_ASH -> drawObsidianFloor()
+        TileType.BLIGHT_SOIL -> drawObsidianFloor()
+        TileType.DEEP_WATER -> drawWater(frame)
     }
 
     private fun drawGrass(): ImageBitmap {

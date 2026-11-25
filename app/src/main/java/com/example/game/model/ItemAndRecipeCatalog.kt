@@ -602,6 +602,17 @@ object ItemCatalog {
                 summary = "Detonates a blazing Cinderite flare scorching up to 5 enemies with burn DoT."
             ),
             description = "Tier 5 obsidian-and-gold signet granting +8 ATK, +8% Proc Chance, +25% Proc Power, and +1 AOE Target."
+        ),
+        ItemDefinition(
+            id = "admin_sovereign_scroll",
+            name = "Sovereign's Scroll",
+            category = ItemCategory.ADMIN_SCROLL,
+            weightOz = 0.0,
+            buyPrice = 0,
+            sellPrice = 0,
+            equipmentTier = 5,
+            adminOnly = true,
+            description = "Admin-only gilded edict: set any level (1-999), claim top Tier 5 gear across all classifications, or toggle Spectator Mode."
         )
     ).associateBy { it.id }
 

@@ -35,7 +35,8 @@ data class ChatMessage(
     val channel: ChatChannel,
     val floor: Int,
     val timestampMs: Long,
-    val isLocal: Boolean = false
+    val isLocal: Boolean = false,
+    val senderIsAdmin: Boolean = false
 )
 
 data class RemotePlayerState(
@@ -68,7 +69,9 @@ data class RemotePlayerState(
     val bootsId: String? = null,
     val targetX: Int = x,
     val targetY: Int = y,
-    val networkReceivedMs: Long = lastMoveMs
+    val networkReceivedMs: Long = lastMoveMs,
+    val isAdmin: Boolean = false,
+    val isSpectator: Boolean = false
 )
 
 data class LocalPlayerPresencePayload(
@@ -96,7 +99,9 @@ data class LocalPlayerPresencePayload(
     val helmetId: String? = null,
     val bootsId: String? = null,
     val targetX: Int = x,
-    val targetY: Int = y
+    val targetY: Int = y,
+    val isAdmin: Boolean = false,
+    val isSpectator: Boolean = false
 )
 
 data class SyncedMonsterSnapshot(

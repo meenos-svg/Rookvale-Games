@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import com.example.game.model.DEFAULT_TIME_OF_DAY_HOURS
 import com.example.game.model.GraphicsQuality
 import com.example.game.model.LightingDetailMode
 import com.example.game.model.ProjectileKind
@@ -36,6 +37,20 @@ data class ScenePointLight(
     val intensity: Float,
     val flickerSeed: Float,
     val isArcane: Boolean = false
+)
+
+/**
+ * Smoothly interpolated local 24-hour atmospheric lighting grade for overland rendering.
+ */
+data class TimeOfDayLightingProfile(
+    val normalizedHours: Float,
+    val phaseLabel: String,
+    val ambientOverlay: Color,
+    val horizonStartColor: Color,
+    val horizonEndColor: Color,
+    val pointLightBoost: Float,
+    val hdVignetteScale: Float,
+    val darknessFactor: Float
 )
 
 /**
@@ -477,50 +492,182 @@ object IsometricLightingEngine {
         }
     }
 
+    private data class TimeKeyframe(
+        val hour: Float,
+        val ambientR: Float,
+        val ambientG: Float,
+        val ambientB: Float,
+        val ambientA: Float,
+        val horizonStartR: Float,
+        val horizonStartG: Float,
+        val horizonStartB: Float,
+        val horizonStartA: Float,
+        val horizonEndR: Float,
+        val horizonEndG: Float,
+        val horizonEndB: Float,
+        val horizonEndA: Float,
+        val pointLightBoost: Float,
+        val hdVignetteScale: Float,
+        val darknessFactor: Float
+    )
+
+    private val timeKeyframes = listOf(
+        // 00:00 Midnight — deep moonlit obsidian-indigo canopy, bright flickering torches/lanterns
+        TimeKeyframe(
+            hour = 0.0f,
+            ambientR = 0.03f, ambientG = 0.06f, ambientB = 0.16f, ambientA = 0.44f,
+            horizonStartR = 0.34f, horizonStartG = 0.50f, horizonStartB = 0.95f, horizonStartA = 0.16f,
+            horizonEndR = 0.02f, horizonEndG = 0.03f, horizonEndB = 0.09f, horizonEndA = 0.30f,
+            pointLightBoost = 1.38f, hdVignetteScale = 1.22f, darknessFactor = 1.0f
+        ),
+        // 06:00 Dawn — warm rose-amber morning horizon lift, gentle cool shadows
+        TimeKeyframe(
+            hour = 6.0f,
+            ambientR = 0.96f, ambientG = 0.62f, ambientB = 0.42f, ambientA = 0.14f,
+            horizonStartR = 1.00f, horizonStartG = 0.72f, horizonStartB = 0.46f, horizonStartA = 0.22f,
+            horizonEndR = 0.22f, horizonEndG = 0.26f, horizonEndB = 0.44f, horizonEndA = 0.14f,
+            pointLightBoost = 0.72f, hdVignetteScale = 0.68f, darknessFactor = 0.35f
+        ),
+        // 12:00 Noon — bright sunlit overland daylight, subtle warm sunlight glaze, subdued lamps
+        TimeKeyframe(
+            hour = 12.0f,
+            ambientR = 1.00f, ambientG = 0.97f, ambientB = 0.86f, ambientA = 0.06f,
+            horizonStartR = 1.00f, horizonStartG = 0.96f, horizonStartB = 0.78f, horizonStartA = 0.14f,
+            horizonEndR = 0.92f, horizonEndG = 0.96f, horizonEndB = 1.00f, horizonEndA = 0.03f,
+            pointLightBoost = 0.35f, hdVignetteScale = 0.42f, darknessFactor = 0.0f
+        ),
+        // 17:30 Golden Hour — rich sunset amber glow ahead of dusk
+        TimeKeyframe(
+            hour = 17.5f,
+            ambientR = 0.95f, ambientG = 0.54f, ambientB = 0.26f, ambientA = 0.16f,
+            horizonStartR = 1.00f, horizonStartG = 0.64f, horizonStartB = 0.28f, horizonStartA = 0.24f,
+            horizonEndR = 0.18f, horizonEndG = 0.14f, horizonEndB = 0.32f, horizonEndA = 0.16f,
+            pointLightBoost = 0.84f, hdVignetteScale = 0.82f, darknessFactor = 0.45f
+        ),
+        // 19:30 Dusk (Rookvale signature default twilight)
+        TimeKeyframe(
+            hour = 19.5f,
+            ambientR = 0.05f, ambientG = 0.09f, ambientB = 0.18f, ambientA = 0.25f,
+            horizonStartR = 0.43f, horizonStartG = 0.56f, horizonStartB = 1.00f, horizonStartA = 0.11f,
+            horizonEndR = 0.02f, horizonEndG = 0.04f, horizonEndB = 0.10f, horizonEndA = 0.16f,
+            pointLightBoost = 1.00f, hdVignetteScale = 1.00f, darknessFactor = 0.72f
+        ),
+        // 24:00 Midnight (seamless wrap back to 00:00)
+        TimeKeyframe(
+            hour = 24.0f,
+            ambientR = 0.03f, ambientG = 0.06f, ambientB = 0.16f, ambientA = 0.44f,
+            horizonStartR = 0.34f, horizonStartG = 0.50f, horizonStartB = 0.95f, horizonStartA = 0.16f,
+            horizonEndR = 0.02f, horizonEndG = 0.03f, horizonEndB = 0.09f, horizonEndA = 0.30f,
+            pointLightBoost = 1.38f, hdVignetteScale = 1.22f, darknessFactor = 1.0f
+        )
+    )
+
+    private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
+
+    fun labelForTimeOfDay(hours: Float): String {
+        val h = ((hours % 24f) + 24f) % 24f
+        return when {
+            h < 4.5f || h >= 21.5f -> "Midnight"
+            h < 8.5f -> "Dawn"
+            h < 16.5f -> "Noon"
+            h < 18.5f -> "Golden Hour"
+            else -> "Dusk"
+        }
+    }
+
+    fun formatTimeOfDay(hours: Float): String {
+        val wrapped = ((hours % 24f) + 24f) % 24f
+        val totalMinutes = (wrapped * 60f).toInt().coerceIn(0, 23 * 60 + 59)
+        val hh = totalMinutes / 60
+        val mm = totalMinutes % 60
+        return String.format(java.util.Locale.US, "%02d:%02d", hh, mm)
+    }
+
+    fun computeTimeOfDayProfile(hours: Float): TimeOfDayLightingProfile {
+        val h = if (hours.isNaN() || hours.isInfinite()) DEFAULT_TIME_OF_DAY_HOURS else hours.coerceIn(0f, 24f)
+        var left = timeKeyframes.first()
+        var right = timeKeyframes.last()
+        for (i in 0 until timeKeyframes.lastIndex) {
+            val a = timeKeyframes[i]
+            val b = timeKeyframes[i + 1]
+            if (h in a.hour..b.hour) {
+                left = a
+                right = b
+                break
+            }
+        }
+        val span = (right.hour - left.hour).coerceAtLeast(0.001f)
+        val t = ((h - left.hour) / span).coerceIn(0f, 1f)
+        return TimeOfDayLightingProfile(
+            normalizedHours = h,
+            phaseLabel = labelForTimeOfDay(h),
+            ambientOverlay = Color(
+                red = lerp(left.ambientR, right.ambientR, t).coerceIn(0f, 1f),
+                green = lerp(left.ambientG, right.ambientG, t).coerceIn(0f, 1f),
+                blue = lerp(left.ambientB, right.ambientB, t).coerceIn(0f, 1f),
+                alpha = lerp(left.ambientA, right.ambientA, t).coerceIn(0f, 1f)
+            ),
+            horizonStartColor = Color(
+                red = lerp(left.horizonStartR, right.horizonStartR, t).coerceIn(0f, 1f),
+                green = lerp(left.horizonStartG, right.horizonStartG, t).coerceIn(0f, 1f),
+                blue = lerp(left.horizonStartB, right.horizonStartB, t).coerceIn(0f, 1f),
+                alpha = lerp(left.horizonStartA, right.horizonStartA, t).coerceIn(0f, 1f)
+            ),
+            horizonEndColor = Color(
+                red = lerp(left.horizonEndR, right.horizonEndR, t).coerceIn(0f, 1f),
+                green = lerp(left.horizonEndG, right.horizonEndG, t).coerceIn(0f, 1f),
+                blue = lerp(left.horizonEndB, right.horizonEndB, t).coerceIn(0f, 1f),
+                alpha = lerp(left.horizonEndA, right.horizonEndA, t).coerceIn(0f, 1f)
+            ),
+            pointLightBoost = lerp(left.pointLightBoost, right.pointLightBoost, t),
+            hdVignetteScale = lerp(left.hdVignetteScale, right.hdVignetteScale, t),
+            darknessFactor = lerp(left.darknessFactor, right.darknessFactor, t)
+        )
+    }
+
     /**
-     * Renders the Moody Twilight atmospheric grade and composites all visible flickering warm amber
-     * and cool cyan/arcane point-light pools over the terrain, architecture, and characters.
+     * Renders the time-of-day atmospheric grade (defaulting to Rookvale's signature Moody Twilight
+     * at 19:30) and composites all visible flickering warm amber and cool cyan/arcane point-light
+     * pools over the terrain, architecture, and characters.
      */
     fun drawTwilightAndPointLightPass(
         scope: DrawScope,
         floorId: Int,
         nowMs: Long,
         quality: GraphicsQuality,
-        lights: List<ScenePointLight>
+        lights: List<ScenePointLight>,
+        timeOfDayHours: Float = DEFAULT_TIME_OF_DAY_HOURS
     ) {
         val isUnderground = floorId < 0
+        val isCustomTime = abs(timeOfDayHours - DEFAULT_TIME_OF_DAY_HOURS) > 0.01f
         val drawDungeonMood = isUnderground && quality != GraphicsQuality.LOW
-        if (!quality.drawTwilightAtmosphere && !quality.drawPointLightPools && !drawDungeonMood) return
+        if (!quality.drawTwilightAtmosphere && !quality.drawPointLightPools && !drawDungeonMood && !isCustomTime) return
         val w = scope.size.width
         val h = scope.size.height
         if (w <= 0f || h <= 0f) return
 
         val isOverland = floorId == 0
         val isHd = quality.lightingMode == LightingDetailMode.HD_MULTI_LAYER
+        val tod = computeTimeOfDayProfile(timeOfDayHours)
 
-        // 1. Moody Twilight on overland; tighter moody torchlit shadow veil in underground dungeons
-        if (quality.drawTwilightAtmosphere || drawDungeonMood) {
-            val duskTint = when {
-                isOverland && isHd -> Color(0x420D162E)
-                isOverland -> Color(0x38101A33)
-                isHd -> Color(0x66060812)
-                quality == GraphicsQuality.HIGH -> Color(0x58070914)
-                else -> Color(0x44080A14)
-            }
-            scope.drawRect(
-                color = duskTint,
-                topLeft = Offset.Zero,
-                size = scope.size
-            )
-            // Subtle cool moonlit twilight top-left horizon gradient on overland,
-            // or moody subterranean edge vignette on underground floors
+        // 1. Dynamic 24-hour atmospheric grade on overland; moody torchlit cavern veil underground
+        if (quality.drawTwilightAtmosphere || drawDungeonMood || isCustomTime) {
             if (isOverland) {
+                val hdAlphaScale = if (isHd) 1.04f else 0.92f
+                val ambientColor = tod.ambientOverlay.copy(
+                    alpha = (tod.ambientOverlay.alpha * hdAlphaScale).coerceIn(0f, 0.56f)
+                )
+                scope.drawRect(
+                    color = ambientColor,
+                    topLeft = Offset.Zero,
+                    size = scope.size
+                )
                 scope.drawRect(
                     brush = Brush.linearGradient(
                         colors = listOf(
-                            Color(0x1C6E8FFF),
+                            tod.horizonStartColor,
                             Color.Transparent,
-                            Color(0x28060B1A)
+                            tod.horizonEndColor
                         ),
                         start = Offset(0f, 0f),
                         end = Offset(w, h)
@@ -529,6 +676,16 @@ object IsometricLightingEngine {
                     size = scope.size
                 )
             } else {
+                val dungeonTint = when {
+                    isHd -> Color(0x66060812)
+                    quality == GraphicsQuality.HIGH -> Color(0x58070914)
+                    else -> Color(0x44080A14)
+                }
+                scope.drawRect(
+                    color = dungeonTint,
+                    topLeft = Offset.Zero,
+                    size = scope.size
+                )
                 val vigR = maxOf(w, h) * 0.68f
                 scope.drawRect(
                     brush = Brush.radialGradient(
@@ -547,7 +704,8 @@ object IsometricLightingEngine {
         }
 
         // 2. Dynamic flickering warm amber & cool cyan/arcane radial point-light pools
-        if ((quality.drawPointLightPools || drawDungeonMood) && lights.isNotEmpty()) {
+        val lightMultiplier = if (isOverland) tod.pointLightBoost else 1.0f
+        if ((quality.drawPointLightPools || drawDungeonMood || (isOverland && isCustomTime)) && lights.isNotEmpty() && lightMultiplier > 0.05f) {
             val timeSec = nowMs * 0.001
             for (light in lights) {
                 val r = light.radiusPx
@@ -558,17 +716,18 @@ object IsometricLightingEngine {
                 val waveA = sin(timeSec * (if (light.isArcane) 3.8 else 7.2) + light.flickerSeed).toFloat()
                 val waveB = cos(timeSec * (if (light.isArcane) 2.1 else 11.3) + light.flickerSeed * 1.7).toFloat()
                 val flicker = (0.91f + 0.06f * waveA + 0.03f * waveB).coerceIn(0.80f, 1.04f)
+                val effIntensity = (light.intensity * lightMultiplier).coerceIn(0.08f, 1.5f)
                 val center = Offset(light.screenX, light.screenY)
                 val scaledR = (r * flicker).coerceAtLeast(16f)
 
                 if (isHd) {
-                    // HD Layer 1: Wide atmospheric twilight light pool with additive/screen radiance
+                    // HD Layer 1: Wide atmospheric light pool with additive/screen radiance
                     val wideR = scaledR * 1.32f
                     scope.drawCircle(
                         brush = Brush.radialGradient(
                             colorStops = arrayOf(
-                                0.0f to light.outerColor.copy(alpha = (0.28f * light.intensity * flicker).coerceIn(0f, 0.55f)),
-                                0.48f to light.outerColor.copy(alpha = (0.12f * light.intensity * flicker).coerceIn(0f, 0.30f)),
+                                0.0f to light.outerColor.copy(alpha = (0.28f * effIntensity * flicker).coerceIn(0f, 0.62f)),
+                                0.48f to light.outerColor.copy(alpha = (0.12f * effIntensity * flicker).coerceIn(0f, 0.34f)),
                                 1.0f to Color.Transparent
                             ),
                             center = center,
@@ -582,8 +741,8 @@ object IsometricLightingEngine {
                     scope.drawCircle(
                         brush = Brush.radialGradient(
                             colorStops = arrayOf(
-                                0.0f to light.coreColor.copy(alpha = (0.44f * light.intensity * flicker).coerceIn(0f, 0.65f)),
-                                0.42f to light.outerColor.copy(alpha = (0.20f * light.intensity * flicker).coerceIn(0f, 0.40f)),
+                                0.0f to light.coreColor.copy(alpha = (0.44f * effIntensity * flicker).coerceIn(0f, 0.72f)),
+                                0.42f to light.outerColor.copy(alpha = (0.20f * effIntensity * flicker).coerceIn(0f, 0.44f)),
                                 1.0f to Color.Transparent
                             ),
                             center = center,
@@ -594,12 +753,12 @@ object IsometricLightingEngine {
                         blendMode = BlendMode.Plus
                     )
                 } else {
-                    // High tier: Single balanced glowing twilight light pool
+                    // High / Custom Time tier: Single balanced glowing light pool
                     scope.drawCircle(
                         brush = Brush.radialGradient(
                             colorStops = arrayOf(
-                                0.0f to light.coreColor.copy(alpha = (0.34f * light.intensity * flicker).coerceIn(0f, 0.52f)),
-                                0.46f to light.outerColor.copy(alpha = (0.16f * light.intensity * flicker).coerceIn(0f, 0.30f)),
+                                0.0f to light.coreColor.copy(alpha = (0.34f * effIntensity * flicker).coerceIn(0f, 0.58f)),
+                                0.46f to light.outerColor.copy(alpha = (0.16f * effIntensity * flicker).coerceIn(0f, 0.34f)),
                                 1.0f to Color.Transparent
                             ),
                             center = center,
@@ -642,12 +801,16 @@ class HdPostProcessRenderer {
         scope: DrawScope,
         quality: GraphicsQuality,
         floorId: Int,
-        nowMs: Long
+        nowMs: Long,
+        timeOfDayHours: Float = DEFAULT_TIME_OF_DAY_HOURS
     ) {
         if (!quality.drawHdVignette) return
         val w = scope.size.width
         val h = scope.size.height
         if (w <= 0f || h <= 0f) return
+
+        val tod = IsometricLightingEngine.computeTimeOfDayProfile(timeOfDayHours)
+        val vignetteScale = if (floorId == 0) tod.hdVignetteScale else 1.0f
 
         val shader = if (quality.useHdPostProcessShader) getOrInitShader() else null
         if (shader != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -655,6 +818,7 @@ class HdPostProcessRenderer {
                 shader.setFloatUniform("uResolution", w, h)
                 shader.setFloatUniform("uTime", ((nowMs % 60_000L) / 1000f))
                 shader.setFloatUniform("uIsOverland", if (floorId == 0) 1f else 0f)
+                shader.setFloatUniform("uVignetteScale", vignetteScale)
                 scope.drawRect(
                     brush = ShaderBrush(shader),
                     topLeft = Offset.Zero,
@@ -664,16 +828,18 @@ class HdPostProcessRenderer {
             }
         }
 
-        // Clean API 24-32 (or fallback) layered radial twilight depth contrast & vignette
+        // Clean API 24-32 (or fallback) layered radial depth contrast & vignette
         val radius = maxOf(w, h) * 0.74f
         val center = Offset(w * 0.5f, h * 0.5f)
+        val midAlpha = (0.16f * vignetteScale).coerceIn(0.03f, 0.28f)
+        val edgeAlpha = (0.35f * vignetteScale).coerceIn(0.08f, 0.48f)
         scope.drawRect(
             brush = Brush.radialGradient(
                 colorStops = arrayOf(
-                    0.0f to if (floorId == 0) Color(0x0D9CC4FF) else Color.Transparent,
+                    0.0f to if (floorId == 0) Color(0xFF9CC4FF).copy(alpha = (0.05f * vignetteScale).coerceIn(0.01f, 0.08f)) else Color.Transparent,
                     0.52f to Color.Transparent,
-                    0.82f to Color(0x2A080C1A),
-                    1.0f to Color(0x5A050712)
+                    0.82f to Color(0xFF080C1A).copy(alpha = midAlpha),
+                    1.0f to Color(0xFF050712).copy(alpha = edgeAlpha)
                 ),
                 center = center,
                 radius = radius
@@ -684,28 +850,29 @@ class HdPostProcessRenderer {
     }
 
     companion object {
-        // Android 13+ AGSL shader: moody twilight edge depth vignette + subtle animated air shimmer
+        // Android 13+ AGSL shader: time-of-day responsive edge depth vignette + subtle animated air shimmer
         private const val HD_TWILIGHT_AGSL = """
             uniform float2 uResolution;
             uniform float uTime;
             uniform float uIsOverland;
+            uniform float uVignetteScale;
 
             half4 main(float2 fragCoord) {
                 float2 uv = fragCoord / max(uResolution, float2(1.0, 1.0));
                 float2 centered = (uv - 0.5) * float2(1.18, 1.0);
                 float dist = length(centered);
 
-                // Smooth twilight obsidian-indigo edge depth contrast
+                // Smooth obsidian-indigo edge depth contrast scaled by time of day
                 float vignette = smoothstep(0.46, 0.96, dist);
                 float shimmer = 0.5 + 0.5 * sin(uv.x * 9.0 + uv.y * 6.0 + uTime * 1.15);
 
                 float3 edgeTint = mix(float3(0.03, 0.04, 0.09), float3(0.04, 0.06, 0.14), uIsOverland);
-                float alpha = vignette * (0.34 + 0.03 * shimmer);
+                float alpha = vignette * (0.34 + 0.03 * shimmer) * uVignetteScale;
 
-                // Very subtle cool moonlit rim lift near center on overland
-                float centerLift = (1.0 - smoothstep(0.0, 0.52, dist)) * uIsOverland * 0.045;
+                // Subtle rim lift near center on overland
+                float centerLift = (1.0 - smoothstep(0.0, 0.52, dist)) * uIsOverland * 0.045 * uVignetteScale;
                 float3 outColor = mix(edgeTint, float3(0.55, 0.72, 1.0), centerLift / max(alpha + centerLift, 0.001));
-                float outAlpha = clamp(alpha + centerLift, 0.0, 0.42);
+                float outAlpha = clamp(alpha + centerLift, 0.0, 0.48);
                 return half4(outColor * outAlpha, outAlpha);
             }
         """

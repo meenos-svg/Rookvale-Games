@@ -35,7 +35,14 @@ object ProceduralTileTextureAtlas {
         WOOD_BRIDGE,
         ARCANE_FLOOR,
         CRYPT_FLOOR,
-        OBSIDIAN_FLOOR
+        OBSIDIAN_FLOOR,
+        SAND,
+        MARSH,
+        SNOW,
+        JUNGLE_FLOOR,
+        VOLCANIC_ASH,
+        BLIGHT_SOIL,
+        ABYSS_WATER
     }
 
     private data class CacheKey(val family: SurfaceFamily, val variant: Int)
@@ -73,6 +80,13 @@ object ProceduralTileTextureAtlas {
         TileType.CRYPT_FLOOR, TileType.STAIRS_DOWN, TileType.STAIRS_UP,
         TileType.STONE_BRIDGE, TileType.IRON_BAR_GATE -> SurfaceFamily.CRYPT_FLOOR
         TileType.OBSIDIAN_FLOOR -> SurfaceFamily.OBSIDIAN_FLOOR
+        TileType.SAND -> SurfaceFamily.SAND
+        TileType.MARSH -> SurfaceFamily.MARSH
+        TileType.SNOW -> SurfaceFamily.SNOW
+        TileType.JUNGLE_FLOOR -> SurfaceFamily.JUNGLE_FLOOR
+        TileType.VOLCANIC_ASH -> SurfaceFamily.VOLCANIC_ASH
+        TileType.BLIGHT_SOIL -> SurfaceFamily.BLIGHT_SOIL
+        TileType.DEEP_WATER -> SurfaceFamily.ABYSS_WATER
         else -> null
     }
 
@@ -120,7 +134,7 @@ object ProceduralTileTextureAtlas {
     ): Boolean {
         val family = resolveSurfaceFamily(baseTile, isShallowWater) ?: return false
         val variant = when (family) {
-            SurfaceFamily.WATER_DEEP, SurfaceFamily.WATER_SHALLOW, SurfaceFamily.LAVA ->
+            SurfaceFamily.WATER_DEEP, SurfaceFamily.WATER_SHALLOW, SurfaceFamily.ABYSS_WATER, SurfaceFamily.LAVA ->
                 ((waterFrame + ((tx + ty) and 1)) % WATER_FRAMES + WATER_FRAMES) % WATER_FRAMES
             SurfaceFamily.TEMPLE_FLOOR -> (tx + ty) and 1
             else -> variantIndex(tx, ty, VARIANT_COUNT)
@@ -155,6 +169,13 @@ object ProceduralTileTextureAtlas {
             SurfaceFamily.ARCANE_FLOOR -> bakeArcaneRunestone(pixels, variant)
             SurfaceFamily.CRYPT_FLOOR -> bakeCryptFlagstone(pixels, variant)
             SurfaceFamily.OBSIDIAN_FLOOR -> bakeObsidianFloor(pixels, variant)
+            SurfaceFamily.SAND -> bakeBiomeNoise(pixels, variant, 0xFFD2B06B.toInt(), 0xFFE3C685.toInt(), 0xFFB89452.toInt(), seed = 401, ripple = true)
+            SurfaceFamily.MARSH -> bakeBiomeNoise(pixels, variant, 0xFF3E4E33.toInt(), 0xFF546944.toInt(), 0xFF283522.toInt(), seed = 419, puddle = 0xFF2B4A4A.toInt())
+            SurfaceFamily.SNOW -> bakeBiomeNoise(pixels, variant, 0xFFE5EDF5.toInt(), 0xFFF7FAFF.toInt(), 0xFFC5D4E3.toInt(), seed = 433)
+            SurfaceFamily.JUNGLE_FLOOR -> bakeBiomeNoise(pixels, variant, 0xFF245E2B.toInt(), 0xFF347D3A.toInt(), 0xFF17421D.toInt(), seed = 449)
+            SurfaceFamily.VOLCANIC_ASH -> bakeBiomeNoise(pixels, variant, 0xFF423B3A.toInt(), 0xFF5A4E4B.toInt(), 0xFF292424.toInt(), seed = 461, ember = 0xFFD95B26.toInt())
+            SurfaceFamily.BLIGHT_SOIL -> bakeBiomeNoise(pixels, variant, 0xFF3D2A4A.toInt(), 0xFF563B69.toInt(), 0xFF261930.toInt(), seed = 479)
+            SurfaceFamily.ABYSS_WATER -> bakeAbyssWater(pixels, variant)
         }
         return Bitmap.createBitmap(pixels, TILE_PX, TILE_PX, Bitmap.Config.ARGB_8888)
     }
@@ -540,6 +561,56 @@ object ProceduralTileTextureAtlas {
                 // Subtle glowing volcanic fissure pixel line on variant 0/2
                 if ((variant and 1) == 0 && abs(x - y) == 1 && x in 6..13) {
                     col = 0xFF9C4DFF.toInt()
+                }
+                pixels[y * TILE_PX + x] = col
+            }
+        }
+    }
+
+    private fun bakeBiomeNoise(
+        pixels: IntArray,
+        variant: Int,
+        base: Int,
+        light: Int,
+        dark: Int,
+        seed: Int,
+        ripple: Boolean = false,
+        puddle: Int? = null,
+        ember: Int? = null
+    ) {
+        for (y in 0 until TILE_PX) {
+            for (x in 0 until TILE_PX) {
+                val n = pxNoise(x, y, variant * 19 + seed)
+                var col = when {
+                    n < 46 -> dark
+                    n > 208 -> light
+                    else -> base
+                }
+                if (ripple && ((y + (x / 4) + variant * 2) % 7 == 0)) {
+                    col = shiftRgb(col, 10, 8, 4)
+                }
+                if (puddle != null && (x - 16) * (x - 16) + (y - 16) * (y - 16) < 28 && (variant and 1) == 0) {
+                    col = puddle
+                }
+                if (ember != null && n > 250) {
+                    col = ember
+                }
+                pixels[y * TILE_PX + x] = col
+            }
+        }
+    }
+
+    private fun bakeAbyssWater(pixels: IntArray, frame: Int) {
+        val base = 0xFF103052.toInt()
+        for (y in 0 until TILE_PX) {
+            for (x in 0 until TILE_PX) {
+                val wave = ((x + y * 2 + frame * 5) and 15)
+                val n = (pxNoise(x, y, 503 + frame) % 9) - 4
+                var col = shiftRgb(base, n, n + 4, n + 8)
+                if (wave == 0 || wave == 1) {
+                    col = shiftRgb(col, 14, 24, 34)
+                } else if (wave == 8) {
+                    col = shiftRgb(col, -6, -8, -6)
                 }
                 pixels[y * TILE_PX + x] = col
             }

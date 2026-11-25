@@ -7,11 +7,13 @@ import android.graphics.Typeface
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -93,7 +95,12 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.game.world.WorldBiomeBlueprint
+import com.example.game.world.WorldPinCategory
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -191,7 +198,7 @@ object MinimapCoordinateMapper {
     }
 }
 
-private fun minimapTileColor(tile: TileType): Color = when (tile) {
+internal fun minimapTileColor(tile: TileType): Color = when (tile) {
     TileType.GRASS -> Color(0xFF3E6E33)
     TileType.FLOWER_GRASS -> Color(0xFF538A3E)
     TileType.DARK_GRASS -> Color(0xFF1F4023)
@@ -206,6 +213,13 @@ private fun minimapTileColor(tile: TileType): Color = when (tile) {
     TileType.CRYPT_FLOOR -> Color(0xFF4F545E)
     TileType.OBSIDIAN_FLOOR -> Color(0xFF3A3142)
     TileType.WATER -> Color(0xFF23669E)
+    TileType.DEEP_WATER -> Color(0xFF103052)
+    TileType.SAND -> Color(0xFFD6B36D)
+    TileType.MARSH -> Color(0xFF3E5234)
+    TileType.SNOW -> Color(0xFFE6EEF7)
+    TileType.JUNGLE_FLOOR -> Color(0xFF235E2A)
+    TileType.VOLCANIC_ASH -> Color(0xFF453D3B)
+    TileType.BLIGHT_SOIL -> Color(0xFF422C52)
     TileType.FOUNTAIN -> Color(0xFF4FC3F7)
     TileType.MOORED_BOAT -> Color(0xFF8D5E34)
     TileType.LAVA -> Color(0xFFD94A1E)
@@ -251,6 +265,7 @@ fun TopLeftHudCluster(
     onWalkToTile: (Int, Int) -> Unit,
     onExpandWorldMap: () -> Unit,
     onMultiplayerStatusTapped: () -> Unit,
+    onOpenAdminScroll: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val zoomRadii = remember { listOf(14, 22, 34) }
@@ -284,7 +299,8 @@ fun TopLeftHudCluster(
             state = state,
             multiplayerState = multiplayerState,
             saveBanner = saveBanner,
-            onMultiplayerStatusTapped = onMultiplayerStatusTapped
+            onMultiplayerStatusTapped = onMultiplayerStatusTapped,
+            onOpenAdminScroll = onOpenAdminScroll
         )
     }
 }
@@ -417,7 +433,7 @@ private fun IsometricMinimapCard(
                 // Remote players: distinct cyan/gold dots + crisp name tooltips (plus edge pips if outside zoom)
                 val localRegionId = normalizeRegionId(state.regionId)
                 remotePlayers.forEach { rp ->
-                    if (rp.floor == state.floor && normalizeRegionId(rp.regionId) == localRegionId) {
+                    if (!rp.isSpectator && rp.floor == state.floor && com.example.game.model.isRegionCompatible(state.floor, localRegionId, rp.regionId)) {
                         val dx = rp.x - state.playerX
                         val dy = rp.y - state.playerY
                         val sx = cx + dx * cosY - dy * sinY
@@ -583,7 +599,8 @@ private fun CharacterVitalsHudCard(
     state: GameWorldState,
     multiplayerState: MultiplayerUiState,
     saveBanner: String?,
-    onMultiplayerStatusTapped: () -> Unit
+    onMultiplayerStatusTapped: () -> Unit,
+    onOpenAdminScroll: () -> Unit = {}
 ) {
     val portraitAppearance = remember(state.vocation, state.tunicColorIndex, state.hairColorIndex, state.equipment) {
         PaperDollAppearance.fromEquipment(
@@ -643,12 +660,15 @@ private fun CharacterVitalsHudCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                // Name + Online Status Pill
+                // Name + Admin Golden Crown + Online Status Pill
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
+                    if (state.isAdmin) {
+                        AdminGoldenCrownIcon(sizeDp = 14.dp)
+                    }
                     Text(
                         text = state.playerName,
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold, fontSize = 13.sp),
@@ -673,13 +693,13 @@ private fun CharacterVitalsHudCard(
                     heightDp = 7
                 )
 
-                // Red HP Bar
+                // Red HP Bar (with ∞ Immortal indicator for Admin)
                 val effMaxHp = state.effectiveMaxHp()
                 CompactMeterBar(
                     label = "HP",
-                    valueText = "${state.hp}/$effMaxHp",
-                    fraction = (state.hp.toFloat() / effMaxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
-                    fillColor = HealthCrimson,
+                    valueText = if (state.isInvulnerable) "∞ / $effMaxHp" else "${state.hp}/$effMaxHp",
+                    fraction = if (state.isInvulnerable) 1f else (state.hp.toFloat() / effMaxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
+                    fillColor = if (state.isInvulnerable) TorchGold else HealthCrimson,
                     trackColor = HealthCrimsonDark,
                     heightDp = 11
                 )
@@ -723,6 +743,24 @@ private fun CharacterVitalsHudCard(
                     if (weaponNeedsAmmo) {
                         val ammoQty = state.activeAmmoCount()
                         HudMiniPill("A:$ammoQty", if (ammoQty > 0) TorchAmber else HealthCrimson)
+                    }
+                    if (state.isSpectator) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF281E44))
+                                .border(0.8.dp, Color(0xFFA78BFA), RoundedCornerShape(4.dp))
+                                .clickable(onClick = onOpenAdminScroll)
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                .testTag("hud_spectator_pill")
+                        ) {
+                            Text(
+                                text = "SPECTATOR",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp, fontWeight = FontWeight.ExtraBold),
+                                color = Color(0xFFC4B5FD),
+                                maxLines = 1
+                            )
+                        }
                     }
                     if (inPz) HudMiniPill("PZ", ExpEmerald)
                     if (state.poisonTicks > 0) HudMiniPill("PSN", PoisonGreen)
@@ -946,7 +984,7 @@ fun TopRightUtilityAndBattleCluster(
     val onlineAllies = remember(remotePlayers, state.floor, localRegionId, state.playerX, state.playerY) {
         remotePlayers
             .filter { rp ->
-                rp.floor == state.floor && normalizeRegionId(rp.regionId) == localRegionId
+                !rp.isSpectator && rp.floor == state.floor && normalizeRegionId(rp.regionId) == localRegionId
             }
             .sortedBy { rp -> max(abs(rp.x - state.playerX), abs(rp.y - state.playerY)) }
     }
@@ -1234,14 +1272,22 @@ private fun BattleAllyRow(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "${ally.name} L${ally.level}",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Bold),
-                        color = Color(0xFF7BE8FF),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
                         modifier = Modifier.weight(1f)
-                    )
+                    ) {
+                        if (ally.isAdmin) {
+                            AdminGoldenCrownIcon(sizeDp = 11.dp)
+                        }
+                        Text(
+                            text = "${ally.name} L${ally.level}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Bold),
+                            color = if (ally.isAdmin) TorchGold else Color(0xFF7BE8FF),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Text(
                         text = "(${ally.x},${ally.y}) ${distanceTiles}t",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
@@ -1508,20 +1554,49 @@ private fun ConsoleChatLine(msg: ChatMessage) {
         ChatChannel.WORLD -> Color(0xFF67E8F9)
         ChatChannel.FLOOR -> ExpEmerald
     }
-    val prefix = when (msg.channel) {
-        ChatChannel.SYSTEM -> "[!] "
-        ChatChannel.WORLD -> "[W] ${msg.senderName}: "
-        ChatChannel.FLOOR -> "[F] ${msg.senderName}: "
+    if (msg.senderIsAdmin && msg.channel != ChatChannel.SYSTEM) {
+        val channelTag = if (msg.channel == ChatChannel.WORLD) "[W] " else "[F] "
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = channelTag,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Bold),
+                color = tagColor,
+                maxLines = 1
+            )
+            AdminGoldenCrownIcon(sizeDp = 11.dp)
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(SpanStyle(color = TorchGold, fontWeight = FontWeight.ExtraBold)) {
+                        append("${msg.senderName}: ")
+                    }
+                    withStyle(SpanStyle(color = ParchmentLight)) { append(msg.text) }
+                },
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    } else {
+        val prefix = when (msg.channel) {
+            ChatChannel.SYSTEM -> "[!] "
+            ChatChannel.WORLD -> "[W] ${msg.senderName}: "
+            ChatChannel.FLOOR -> "[F] ${msg.senderName}: "
+        }
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(color = tagColor, fontWeight = FontWeight.Bold)) { append(prefix) }
+                withStyle(SpanStyle(color = if (msg.channel == ChatChannel.SYSTEM) TorchGold else ParchmentLight)) { append(msg.text) }
+            },
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
-    Text(
-        text = buildAnnotatedString {
-            withStyle(SpanStyle(color = tagColor, fontWeight = FontWeight.Bold)) { append(prefix) }
-            withStyle(SpanStyle(color = if (msg.channel == ChatChannel.SYSTEM) TorchGold else ParchmentLight)) { append(msg.text) }
-        },
-        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis
-    )
 }
 
 /**
@@ -1830,8 +1905,11 @@ private fun CustomHotbarBindDialog(
 }
 
 /**
- * REGIONAL WORLD MAP PANEL CONTENT:
- * Full interactive floor overview with landmarks, stairs/rope holes, allies, foes, and tap-to-A*-walk.
+ * REGIONAL & FULL WORLD MAP PANEL CONTENT:
+ * - On Floor 0: Painted parchment 1600x1200 continent map (`R.drawable.world_map_parchment`)
+ *   with live pulsing player beacon, dashed auto-walk route, filterable Cities / Ferries / Dungeons / Allies pins,
+ *   and tap-to-auto-walk via hierarchical regional routing.
+ * - On Dungeon Floors (< 0): Cached crisp pixel dungeon overview with landmarks, foes, allies, and tap-to-A*-walk.
  */
 @Composable
 fun RegionalWorldMapContent(
@@ -1839,264 +1917,11 @@ fun RegionalWorldMapContent(
     remotePlayers: List<RemotePlayerState>,
     onWalkToTile: (Int, Int) -> Unit
 ) {
-    val floorMap = remember(state.floor) { WorldMaps.getFloor(state.floor) }
-    val floorLandmarks = remember(state.floor) { WorldMaps.landmarks.filter { it.floor == state.floor } }
-    val localRegionId = remember(state.regionId) { normalizeRegionId(state.regionId) }
-    val floorRemotePlayers = remember(remotePlayers, state.floor, localRegionId, state.playerX, state.playerY) {
-        remotePlayers
-            .filter { it.floor == state.floor && normalizeRegionId(it.regionId) == localRegionId }
-            .sortedBy { max(abs(it.x - state.playerX), abs(it.y - state.playerY)) }
-    }
-    val mapTooltipTextPaint = remember {
-        Paint().apply {
-            isAntiAlias = true
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.MONOSPACE
-            isFakeBoldText = true
-            textSize = 20f
-            color = android.graphics.Color.parseColor("#8CF0FF")
-        }
-    }
-    val mapTooltipBgPaint = remember {
-        Paint().apply {
-            isAntiAlias = true
-            style = Paint.Style.FILL
-            color = android.graphics.Color.argb(215, 13, 17, 23)
-        }
-    }
-    val mapTooltipBorderPaint = remember {
-        Paint().apply {
-            isAntiAlias = true
-            style = Paint.Style.STROKE
-            strokeWidth = 2f
-            color = android.graphics.Color.parseColor("#E8B949")
-        }
-    }
-    val tooltipRect = remember { RectF() }
-
-    // Cache entire 400x400 floor overview into a single ImageBitmap once per floor for locked 60 FPS!
-    val cachedMapBitmap: ImageBitmap = remember(state.floor, floorMap.regionId) {
-        val w = floorMap.width
-        val h = floorMap.height
-        val pixels = IntArray(w * h)
-        for (ty in 0 until h) {
-            val rowOff = ty * w
-            for (tx in 0 until w) {
-                pixels[rowOff + tx] = minimapTileColor(floorMap.tileAt(tx, ty)).toArgb()
-            }
-        }
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        bmp.setPixels(pixels, 0, w, 0, 0, w, h)
-        bmp.asImageBitmap()
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(258.dp)
-            .padding(10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        // Interactive full-region 400x400 map canvas
-        Surface(
-            color = ObsidianVoid,
-            shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(1.2.dp, StoneBorderLight),
-            modifier = Modifier
-                .weight(1.4f)
-                .fillMaxHeight()
-        ) {
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(4.dp)
-                    .pointerInput(state.floor, floorRemotePlayers) {
-                        detectTapGestures { tap ->
-                            val w = size.width.coerceAtLeast(1).toFloat()
-                            val h = size.height.coerceAtLeast(1).toFloat()
-                            val cellW = w / floorMap.width.toFloat()
-                            val cellH = h / floorMap.height.toFloat()
-                            // Snap to an online player marker if tapped near one so auto-walk goes right to them
-                            val tappedAlly = floorRemotePlayers.minByOrNull { rp ->
-                                val ax = (rp.x + 0.5f) * cellW
-                                val ay = (rp.y + 0.5f) * cellH
-                                hypot(tap.x - ax, tap.y - ay)
-                            }?.takeIf { rp ->
-                                val ax = (rp.x + 0.5f) * cellW
-                                val ay = (rp.y + 0.5f) * cellH
-                                hypot(tap.x - ax, tap.y - ay) <= 24f
-                            }
-                            if (tappedAlly != null) {
-                                onWalkToTile(tappedAlly.x, tappedAlly.y)
-                            } else {
-                                val tx = ((tap.x / w) * floorMap.width).toInt()
-                                    .coerceIn(0, floorMap.width - 1)
-                                val ty = ((tap.y / h) * floorMap.height).toInt()
-                                    .coerceIn(0, floorMap.height - 1)
-                                onWalkToTile(tx, ty)
-                            }
-                        }
-                    }
-                    .testTag("regional_world_map_canvas")
-            ) {
-                val cellW = size.width / floorMap.width.toFloat()
-                val cellH = size.height / floorMap.height.toFloat()
-                drawImage(
-                    image = cachedMapBitmap,
-                    dstOffset = IntOffset.Zero,
-                    dstSize = IntSize(size.width.roundToInt().coerceAtLeast(1), size.height.roundToInt().coerceAtLeast(1)),
-                    filterQuality = FilterQuality.None
-                )
-                // Walk path line
-                state.walkPath.forEach { (wx, wy) ->
-                    drawRect(TorchGold, Offset(wx * cellW, wy * cellH), Size(max(cellW, 2.5f), max(cellH, 2.5f)))
-                }
-                // Monsters
-                state.monsters.forEach { m ->
-                    if (m.floor == state.floor) {
-                        drawCircle(TargetRed, radius = max(cellW * 1.4f, 2.2f), center = Offset((m.x + 0.5f) * cellW, (m.y + 0.5f) * cellH))
-                    }
-                }
-                // Online allies: distinct cyan/gold markers with crisp name tooltips
-                floorRemotePlayers.forEach { rp ->
-                    val ax = (rp.x + 0.5f) * cellW
-                    val ay = (rp.y + 0.5f) * cellH
-                    drawCircle(Color.Black, radius = max(cellW * 2.4f, 6.0f), center = Offset(ax, ay))
-                    drawCircle(TorchGold, radius = max(cellW * 2.0f, 4.8f), center = Offset(ax, ay))
-                    drawCircle(Color(0xFF47D7FF), radius = max(cellW * 1.4f, 3.2f), center = Offset(ax, ay))
-
-                    val label = rp.name.take(12)
-                    val tw = mapTooltipTextPaint.measureText(label)
-                    val padH = 8f
-                    val boxW = tw + padH * 2f
-                    val boxH = 24f
-                    val centerX = ax.coerceIn(boxW * 0.5f + 2f, (size.width - boxW * 0.5f - 2f).coerceAtLeast(boxW * 0.5f + 2f))
-                    val bottomY = (ay - 9f).coerceIn(boxH + 2f, (size.height - 2f).coerceAtLeast(boxH + 2f))
-                    tooltipRect.set(centerX - boxW * 0.5f, bottomY - boxH, centerX + boxW * 0.5f, bottomY)
-                    drawContext.canvas.nativeCanvas.apply {
-                        drawRoundRect(tooltipRect, 6f, 6f, mapTooltipBgPaint)
-                        drawRoundRect(tooltipRect, 6f, 6f, mapTooltipBorderPaint)
-                        drawText(label, centerX, bottomY - 6f, mapTooltipTextPaint)
-                    }
-                }
-                // Player bright marker
-                val px = (state.playerX + 0.5f) * cellW
-                val py = (state.playerY + 0.5f) * cellH
-                drawCircle(Color.Black, radius = 5.5f, center = Offset(px, py))
-                drawCircle(Color.White, radius = 3.8f, center = Offset(px, py))
-            }
-        }
-
-        // Online Players & Landmarks quick-travel list (runs A* auto-walk to any player or landmark!)
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight(),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = "${floorMap.name} (Floor ${state.floor})",
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                color = TorchGold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = "Tap any player, landmark, or tile to A* auto-walk:",
-                style = MaterialTheme.typography.labelSmall,
-                color = ParchmentMuted
-            )
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                if (floorRemotePlayers.isNotEmpty()) {
-                    item(key = "world_map_online_header") {
-                        Text(
-                            text = "ONLINE PLAYERS (${floorRemotePlayers.size})",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold),
-                            color = Color(0xFF7BE8FF),
-                            modifier = Modifier.padding(top = 2.dp, bottom = 1.dp)
-                        )
-                    }
-                    items(floorRemotePlayers, key = { "wm_ally_${it.playerId}" }) { rp ->
-                        val dist = max(abs(rp.x - state.playerX), abs(rp.y - state.playerY))
-                        Surface(
-                            color = Color(0xFF142834),
-                            shape = RoundedCornerShape(6.dp),
-                            border = BorderStroke(1.dp, Color(0xFF47D7FF).copy(alpha = 0.7f)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onWalkToTile(rp.x, rp.y) }
-                                .testTag("world_map_ally_${rp.playerId}")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF47D7FF))
-                                            .border(1.dp, TorchGold, CircleShape)
-                                    )
-                                    Text(
-                                        text = "${rp.name} (L${rp.level})",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = Color(0xFF8CF0FF),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                Text(
-                                    text = "(${rp.x},${rp.y}) ${dist}t",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TorchGold
-                                )
-                            }
-                        }
-                    }
-                }
-                items(floorLandmarks, key = { "${it.floor}_${it.x}_${it.y}_${it.label}" }) { lm ->
-                    Surface(
-                        color = StoneSurface,
-                        shape = RoundedCornerShape(6.dp),
-                        border = BorderStroke(1.dp, StoneBorderDark),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onWalkToTile(lm.x, lm.y) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = lm.label,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = ParchmentLight,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                text = "(${lm.x},${lm.y})",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TorchGold
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
+    EnhancedRegionalWorldMapContent(
+        state = state,
+        remotePlayers = remotePlayers,
+        onWalkToTile = onWalkToTile
+    )
 }
 
 /**

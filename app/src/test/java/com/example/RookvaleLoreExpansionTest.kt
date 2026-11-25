@@ -163,26 +163,30 @@ class RookvaleLoreExpansionTest {
         )
 
         // Overworld camps exist far from Rookvale's main starting city (distance > 110 tiles)
+        val ox = WorldMaps.ROOKVALE_ORIGIN_X
+        val oy = WorldMaps.ROOKVALE_ORIGIN_Y
         val overworldGrimmaw = spawns.filter { it.floor == 0 && it.type in grimmawTypes }
         val overworldGorek = spawns.filter { it.floor == 0 && it.type in gorekTypes }
+        val heartlandGrimmaw = overworldGrimmaw.filter { it.x in ox until (ox + 400) && it.y in oy until (oy + 400) }
+        val heartlandGorek = overworldGorek.filter { it.x in ox until (ox + 400) && it.y in oy until (oy + 400) }
         val dungeonGrimmaw = spawns.filter { it.floor == -5 && it.type in grimmawTypes }
         val dungeonGorek = spawns.filter { it.floor == -6 && it.type in gorekTypes }
-        assertTrue("Grimmaw frontier camp must have surface defenders", overworldGrimmaw.size >= 6)
-        assertTrue("Gorek frontier war-camp must have surface defenders", overworldGorek.size >= 6)
+        assertTrue("Grimmaw frontier camp must have surface defenders", heartlandGrimmaw.size >= 6)
+        assertTrue("Gorek frontier war-camp must have surface defenders", heartlandGorek.size >= 6)
         assertTrue("Grimmaw Quarry must have interior monsters + boss", dungeonGrimmaw.size >= 6)
         assertTrue("Gorek Labyrinth must have interior monsters + boss", dungeonGorek.size >= 6)
 
         val surfaceFloor = WorldMaps.getFloor(0)
-        for (m in overworldGrimmaw) {
+        for (m in heartlandGrimmaw) {
             val dCity = hypot((m.x - WorldMaps.TEMPLE_SPAWN_X).toDouble(), (m.y - WorldMaps.TEMPLE_SPAWN_Y).toDouble())
             assertTrue("Grimmaw camp spawn (${m.x},${m.y}) must be far off from Rookvale City (d=$dCity)", dCity >= 110.0)
-            assertTrue("Grimmaw camp must lie in SW wilderness", m.x < 150 && m.y > 270)
+            assertTrue("Grimmaw camp must lie in SW wilderness", (m.x - ox) < 150 && (m.y - oy) > 270)
             assertTrue("Grimmaw camp spawn (${m.x},${m.y}) must be walkable", surfaceFloor.tileAt(m.x, m.y).walkable)
         }
-        for (m in overworldGorek) {
+        for (m in heartlandGorek) {
             val dCity = hypot((m.x - WorldMaps.TEMPLE_SPAWN_X).toDouble(), (m.y - WorldMaps.TEMPLE_SPAWN_Y).toDouble())
             assertTrue("Gorek war-camp spawn (${m.x},${m.y}) must be far off from Rookvale City (d=$dCity)", dCity >= 110.0)
-            assertTrue("Gorek war-camp must lie in SE wilderness", m.x > 250 && m.y > 270)
+            assertTrue("Gorek war-camp must lie in SE wilderness", (m.x - ox) > 250 && (m.y - oy) > 270)
             assertTrue("Gorek war-camp spawn (${m.x},${m.y}) must be walkable", surfaceFloor.tileAt(m.x, m.y).walkable)
         }
 

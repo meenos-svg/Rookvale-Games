@@ -617,6 +617,16 @@ object EntitySpriteAtlas {
                 px(buf, S, 15, 1, 0xFF5CE1FF.toInt()); px(buf, S, 16, 1, 0xFF5CE1FF.toInt())
                 rect(buf, S, 13, 6, 2, 1, 0xFF5CE1FF.toInt()); rect(buf, S, 17, 6, 2, 1, 0xFF5CE1FF.toInt())
             }
+            NpcRole.HARBOR_CAPTAIN -> {
+                rect(buf, S, 9, 11, 14, 15, 0xFF1E3A63.toInt()); rect(buf, S, 14, 12, 4, 13, 0xFFF0C451.toInt())
+                rect(buf, S, 11, 4, 10, 8, skin); rect(buf, S, 9, 2, 14, 3, 0xFF152947.toInt())
+                rect(buf, S, 10, 4, 12, 1, 0xFFF0C451.toInt())
+            }
+            NpcRole.REAPER_KEEPER -> {
+                rect(buf, S, 9, 10, 14, 17, 0xFF1F162E.toInt()); rect(buf, S, 14, 11, 4, 15, 0xFF9B6BFF.toInt())
+                rect(buf, S, 10, 3, 12, 8, 0xFF140D20.toInt())
+                px(buf, S, 13, 7, 0xFFD6B8FF.toInt()); px(buf, S, 18, 7, 0xFFD6B8FF.toInt())
+            }
         }
         return toBmp(buf, S)
     }
@@ -906,6 +916,24 @@ object EntitySpriteAtlas {
                 rect(buf, ITEM_S, 11, 7, 2, 6, bandCol)
                 rect(buf, ITEM_S, 6, 3, 4, 4, gemCol)
                 px(buf, ITEM_S, 7, 4, 0xFFFFFFFF.toInt())
+            }
+            ItemCategory.ADMIN_SCROLL -> {
+                // Ornate gilded parchment scroll with gold rollers, royal crimson seal & jewel glint
+                val goldRoller = 0xFFF5C542.toInt()
+                val goldHi = 0xFFFFF0A6.toInt()
+                val parchment = 0xFFF2DFB3.toInt()
+                val parchmentShade = 0xFFD4B577.toInt()
+                val rubySeal = 0xFFE53935.toInt()
+                rect(buf, ITEM_S, 2, 2, 12, 2, goldRoller)
+                rect(buf, ITEM_S, 3, 2, 10, 1, goldHi)
+                rect(buf, ITEM_S, 3, 4, 10, 8, parchment)
+                rect(buf, ITEM_S, 3, 10, 10, 2, parchmentShade)
+                rect(buf, ITEM_S, 2, 12, 12, 2, goldRoller)
+                rect(buf, ITEM_S, 3, 12, 10, 1, goldHi)
+                // Royal crimson ribbon & ruby crest
+                rect(buf, ITEM_S, 6, 6, 4, 4, rubySeal)
+                px(buf, ITEM_S, 7, 7, 0xFFFFD54F.toInt())
+                px(buf, ITEM_S, 8, 7, 0xFFFFFFFF.toInt())
             }
         }
         return toBmp(buf, ITEM_S)

@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.WarningAmber
@@ -60,7 +61,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.R
+import com.example.game.engine.GameEngine
 import com.example.game.model.ActivePanel
+import com.example.game.model.AdminEquipmentClassification
 import com.example.game.model.CorpseEntity
 import com.example.game.model.DeathReport
 import com.example.game.model.DisplaySettings
@@ -120,9 +123,22 @@ fun SlideUpGamePanel(
     onCraftRecipe: (String) -> Unit,
     onBindRune: (String) -> Unit = {},
     onWalkToTile: (Int, Int) -> Unit = { _, _ -> },
+    onBoardHarborFerry: (String) -> Unit = {},
+    onBuyBackReaperItem: (String) -> Unit = {},
+    onBuyBackAllReaperItems: () -> Unit = {},
+    onDiscardReaperItem: (String) -> Unit = {},
     onSelectGraphicsQuality: (GraphicsQuality) -> Unit = {},
     onToggleMinimapSetting: (Boolean) -> Unit = {},
     onToggleFpsCounter: (Boolean) -> Unit = {},
+    onToggleWeatherEffects: (Boolean) -> Unit = {},
+    onToggleDamageNumbers: (Boolean) -> Unit = {},
+    onToggleHealingTicks: (Boolean) -> Unit = {},
+    onToggleProcNames: (Boolean) -> Unit = {},
+    onToggleStatusAndBlockTicks: (Boolean) -> Unit = {},
+    onToggleXpAndSkillGains: (Boolean) -> Unit = {},
+    onAdminSetLevel: (Int) -> Unit = {},
+    onAdminGrantEquipment: (AdminEquipmentClassification) -> Unit = {},
+    onToggleAdminSpectator: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val title = when (state.activePanel) {
@@ -137,12 +153,21 @@ fun SlideUpGamePanel(
         ActivePanel.RUNECRAFTING_TABLE -> stringResource(R.string.panel_runecrafting)
         ActivePanel.LOOT_CORPSE -> state.corpses.firstOrNull { it.id == state.inspectingCorpseId }?.label ?: "Corpse"
         ActivePanel.ORACLE -> "The Oracle"
-        ActivePanel.WORLD_MAP -> "Regional World Map"
+        ActivePanel.WORLD_MAP -> if (state.floor == 0) "Rookvale World Map" else "Dungeon Map"
+        ActivePanel.HARBOR_FERRY -> "Harbor Ferry Passage"
+        ActivePanel.REAPER_TEMPLE -> stringResource(R.string.panel_reaper_temple)
         ActivePanel.SETTINGS -> stringResource(R.string.panel_settings)
+        ActivePanel.ADMIN_SCROLL -> stringResource(R.string.panel_admin_scroll)
         ActivePanel.NONE -> ""
     }
 
     var inspectedItem by remember { mutableStateOf<InspectedItemRequest?>(null) }
+    val maxPanelHeight = when (state.activePanel) {
+        ActivePanel.WORLD_MAP -> 380.dp
+        ActivePanel.ADMIN_SCROLL -> 370.dp
+        ActivePanel.SETTINGS -> 360.dp
+        else -> 330.dp
+    }
 
     Surface(
         color = BasaltDark.copy(alpha = 0.96f),
@@ -150,7 +175,7 @@ fun SlideUpGamePanel(
         border = BorderStroke(1.5.dp, StoneBorderLight),
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 210.dp, max = 330.dp)
+            .heightIn(min = 210.dp, max = maxPanelHeight)
             .pointerInput(Unit) { detectTapGestures { /* Consume taps on panel surface so background map doesn't walk */ } }
             .testTag("slide_up_panel_${state.activePanel.name.lowercase()}")
     ) {
@@ -253,11 +278,35 @@ fun SlideUpGamePanel(
                         onInspectItem = { inspectedItem = it }
                     )
                     ActivePanel.WORLD_MAP -> RegionalWorldMapContent(state, remotePlayers, onWalkToTile)
+                    ActivePanel.HARBOR_FERRY -> HarborFerryPanelContent(
+                        state = state,
+                        onBoardFerry = onBoardHarborFerry
+                    )
+                    ActivePanel.REAPER_TEMPLE -> ReaperTemplePanelContent(
+                        state = state,
+                        onBuyBackItem = onBuyBackReaperItem,
+                        onBuyBackAll = onBuyBackAllReaperItems,
+                        onDiscardItem = onDiscardReaperItem,
+                        onInspectItem = { inspectedItem = it }
+                    )
                     ActivePanel.SETTINGS -> SettingsPanelContent(
                         displaySettings = displaySettings,
                         onSelectGraphicsQuality = onSelectGraphicsQuality,
                         onToggleMinimap = onToggleMinimapSetting,
-                        onToggleFpsCounter = onToggleFpsCounter
+                        onToggleFpsCounter = onToggleFpsCounter,
+                        onToggleWeatherEffects = onToggleWeatherEffects,
+                        showCombatTextSection = true,
+                        onToggleDamageNumbers = onToggleDamageNumbers,
+                        onToggleHealingTicks = onToggleHealingTicks,
+                        onToggleProcNames = onToggleProcNames,
+                        onToggleStatusAndBlockTicks = onToggleStatusAndBlockTicks,
+                        onToggleXpAndSkillGains = onToggleXpAndSkillGains
+                    )
+                    ActivePanel.ADMIN_SCROLL -> AdminScrollPanelContent(
+                        state = state,
+                        onSetLevel = onAdminSetLevel,
+                        onGrantEquipment = onAdminGrantEquipment,
+                        onToggleSpectator = onToggleAdminSpectator
                     )
                     ActivePanel.ORACLE, ActivePanel.NONE -> Unit
                 }
@@ -564,7 +613,9 @@ private fun BackpackPanelContent(
                         val isCastableRune = def.category == ItemCategory.RUNE_ATTACK || def.category == ItemCategory.RUNE_HEAL
                         val isBound = (def.category == ItemCategory.RUNE_ATTACK && state.boundAttackRuneId == def.id) ||
                             (def.category == ItemCategory.RUNE_HEAL && state.boundHealRuneId == def.id)
+                        val isAdminScroll = def.category == ItemCategory.ADMIN_SCROLL
                         val actionLabel = when {
+                            isAdminScroll -> "Unseal"
                             isCastableRune -> "Cast"
                             def.category == ItemCategory.AMMO -> "Load"
                             def.equipSlot != null -> "Equip"
@@ -573,6 +624,9 @@ private fun BackpackPanelContent(
                         val unmet = state.unmetEquipRequirements(def)
                         val meetsReqs = unmet.isEmpty()
                         val sub = buildString {
+                            if (isAdminScroll) {
+                                append("Admin Relic • Level, Tier 5 Armory & Spectator • ")
+                            }
                             if (def.equipmentTier > 0) append("T${def.equipmentTier} • ")
                             if (def.equipSlot != null) {
                                 append("Req Lv ${def.requiredLevel}")
@@ -599,18 +653,35 @@ private fun BackpackPanelContent(
                         ItemActionRow(
                             stack = stack,
                             subtitleOverride = sub,
-                            subtitleColor = if (!meetsReqs && def.equipSlot != null) HealthCrimson else ParchmentMuted,
+                            subtitleColor = when {
+                                isAdminScroll -> TorchGold
+                                !meetsReqs && def.equipSlot != null -> HealthCrimson
+                                else -> ParchmentMuted
+                            },
                             accentBorderColor = when {
+                                isAdminScroll -> TorchGold.copy(alpha = 0.85f)
                                 !meetsReqs && def.equipSlot != null -> HealthCrimson.copy(alpha = 0.65f)
                                 def.proc != null -> Color(def.proc.elementColor).copy(alpha = 0.65f)
                                 else -> null
                             },
                             primaryLabel = actionLabel,
-                            primaryContainerColor = if (!meetsReqs && def.equipSlot != null) HealthCrimson.copy(alpha = 0.78f) else TorchAmber,
+                            primaryContainerColor = when {
+                                isAdminScroll -> TorchGold
+                                !meetsReqs && def.equipSlot != null -> HealthCrimson.copy(alpha = 0.78f)
+                                else -> TorchAmber
+                            },
                             primaryContentColor = if (!meetsReqs && def.equipSlot != null) ParchmentLight else ObsidianVoid,
                             onPrimary = { onUseItem(stack.itemId) },
-                            secondaryLabel = if (isCastableRune) (if (isBound) "Bound" else "Bind") else "Drop",
-                            onSecondary = if (isCastableRune) ({ onBindRune(stack.itemId) }) else ({ onDropItem(stack.itemId) }),
+                            secondaryLabel = when {
+                                def.adminOnly -> null
+                                isCastableRune -> if (isBound) "Bound" else "Bind"
+                                else -> "Drop"
+                            },
+                            onSecondary = when {
+                                def.adminOnly -> null
+                                isCastableRune -> ({ onBindRune(stack.itemId) })
+                                else -> ({ onDropItem(stack.itemId) })
+                            },
                             onInspect = {
                                 onInspectItem(
                                     InspectedItemRequest(
@@ -1321,12 +1392,26 @@ fun DeathPenaltyDialog(report: DeathReport, onDismiss: () -> Unit) {
                 Surface(color = StoneSurface, shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, StoneBorderLight), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("• Penalty: -10% XP (-${report.xpLost} XP) & -10% skill progress", style = MaterialTheme.typography.labelMedium, color = HealthCrimson)
-                        val goldDropText = if (report.droppedGold > 0) " & ${report.droppedGold} gp" else ""
-                        Text("• Dropped Main Bag (${report.droppedItemsCount} items$goldDropText) left at Floor ${report.floorDropped} (${report.corpseX}, ${report.corpseY})", style = MaterialTheme.typography.labelMedium, color = TorchGold)
-                        if (report.safeBankGold > 0L) {
-                            Text("• Your ${String.format(Locale.US, "%,d", report.safeBankGold)} gp in the Bank Vault stayed completely safe.", style = MaterialTheme.typography.labelSmall, color = ExpEmerald)
+                        if (report.droppedItemsCount > 0) {
+                            Text(
+                                "• ${report.droppedItemsCount} lost backpack item(s) were claimed by Mortis at the Temple of Reapers (NW of Sanctuary Plaza). Buy them back for gold anytime.",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TorchGold
+                            )
+                        } else {
+                            Text(
+                                "• Your backpack was empty — no items were lost to the Reapers.",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TorchGold
+                            )
                         }
-                        Text("• Your strapped Tool Bag (Rope, Pickaxes, Hatchet, Rod) remained safe with you so you can retrieve your corpse.", style = MaterialTheme.typography.labelSmall, color = ParchmentMuted)
+                        if (report.droppedGold > 0) {
+                            Text("• Carried purse gold lost: ${String.format(Locale.US, "%,d", report.droppedGold)} gp", style = MaterialTheme.typography.labelSmall, color = HealthCrimson)
+                        }
+                        if (report.safeBankGold > 0L) {
+                            Text("• Your ${String.format(Locale.US, "%,d", report.safeBankGold)} gp in the Bank Vault stayed completely safe and can pay Mortis directly.", style = MaterialTheme.typography.labelSmall, color = ExpEmerald)
+                        }
+                        Text("• Your equipped gear & strapped Tool Bag (Rope, Pickaxes, Hatchet, Rod) remained safe with you.", style = MaterialTheme.typography.labelSmall, color = ParchmentMuted)
                     }
                 }
                 Button(
@@ -1365,3 +1450,338 @@ internal fun List<ItemStack>.withStableKeys(prefix: String): List<KeyedItemStack
 }
 
 fun formatOz(value: Double): String = String.format(Locale.US, "%.1f", value)
+
+@Composable
+private fun HarborFerryPanelContent(
+    state: GameWorldState,
+    onBoardFerry: (String) -> Unit
+) {
+    val currentPort = state.activeHarborPortId?.let { com.example.game.world.WorldMaps.harborPortById(it) }
+    val ports = remember { com.example.game.world.WorldMaps.harborPorts }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = currentPort?.let { "Docked at ${it.name} (${it.captainName}) — Free coastal passage across all continents:" }
+                ?: "Select any coastal harbor port across Rookvale's oceans:",
+            style = MaterialTheme.typography.labelMedium,
+            color = ParchmentMuted
+        )
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 228.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            items(ports, key = { it.id }) { port ->
+                val isCurrent = port.id == currentPort?.id
+                val region = com.example.game.world.WorldMaps.regions[port.regionId]
+                val dangerColor = when {
+                    port.dangerSeverity <= 1 -> ExpEmerald
+                    port.dangerSeverity == 2 -> TorchGold
+                    port.dangerSeverity == 3 -> Color(0xFFFF8A3D)
+                    else -> HealthCrimson
+                }
+                Surface(
+                    color = if (isCurrent) StoneElevated else StoneSurface,
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, if (isCurrent) TorchGold else StoneBorderDark),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = port.name,
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = if (isCurrent) TorchGold else ParchmentLight,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = port.recommendedLevel,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = dangerColor
+                                )
+                            }
+                            Text(
+                                text = "${region?.displayName ?: port.regionId} • ${port.description}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ParchmentMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        if (isCurrent) {
+                            Text(
+                                text = "DOCKED",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                color = TorchGold,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                        } else {
+                            Button(
+                                onClick = { onBoardFerry(port.id) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = ManaSapphire,
+                                    contentColor = ParchmentLight
+                                ),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                                modifier = Modifier
+                                    .heightIn(min = 40.dp)
+                                    .testTag("ferry_sail_${port.id}")
+                            ) {
+                                Text("SAIL", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReaperTemplePanelContent(
+    state: GameWorldState,
+    onBuyBackItem: (String) -> Unit,
+    onBuyBackAll: () -> Unit,
+    onDiscardItem: (String) -> Unit,
+    onInspectItem: (InspectedItemRequest) -> Unit
+) {
+    val reaperAccent = Color(0xFFB388FF)
+    val reaperSurface = Color(0xFF181426)
+    val reaperBorder = Color(0xFF4A3770)
+    val vault = state.reaperVault
+    val totalFee = remember(vault) { GameEngine.reaperTotalReclaimFee(vault) }
+    val combinedGold = state.gold.toLong().coerceAtLeast(0L) + state.bankGold.coerceAtLeast(0L)
+    val keyedVault = remember(vault) { vault.withStableKeys("reaper") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Header flavor & gold summary bar (Carried + Bank Vault — Mortis draws seamlessly from both)
+        Surface(
+            color = reaperSurface,
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, reaperBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "Mortis, Keeper of Reapers — \"Death claims what falls, yet gold restores all.\"",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = reaperAccent
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MonetizationOn,
+                                contentDescription = "Carried Gold",
+                                tint = TorchGold,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Purse: ${String.format(Locale.US, "%,d", state.gold)} gp",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = TorchGold
+                            )
+                        }
+                        Text(
+                            text = "Bank: ${String.format(Locale.US, "%,d", state.bankGold)} gp",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = ExpEmerald
+                        )
+                    }
+                    if (vault.isNotEmpty()) {
+                        val canAffordAll = combinedGold >= totalFee.toLong()
+                        Button(
+                            onClick = onBuyBackAll,
+                            enabled = canAffordAll,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = reaperAccent,
+                                contentColor = ObsidianVoid,
+                                disabledContainerColor = StoneElevated,
+                                disabledContentColor = ParchmentMuted
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("reaper_buy_all_button")
+                        ) {
+                            Text(
+                                text = "RECLAIM ALL (${String.format(Locale.US, "%,d", totalFee)} gp)",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (keyedVault.isEmpty()) {
+            Surface(
+                color = StoneSurface,
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, StoneBorderDark),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("reaper_vault_empty_state")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Inventory2,
+                        contentDescription = "Empty Reaper Vault",
+                        tint = reaperAccent.copy(alpha = 0.7f),
+                        modifier = Modifier.size(30.dp)
+                    )
+                    Text(
+                        text = "The Soul Basin is empty",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = ParchmentLight
+                    )
+                    Text(
+                        text = "Items lost upon death are safely stored here across sessions for gold buyback.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = ParchmentMuted
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 196.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(keyedVault, key = { it.key }) { entry ->
+                    val stack = entry.stack
+                    val def = ItemCatalog.get(stack.itemId)
+                    val fee = GameEngine.reaperReclaimFeeForStack(stack)
+                    val icon = remember(def.id) { EntitySpriteAtlas.itemIcon(def.id) }
+                    val canAfford = combinedGold >= fee.toLong()
+                    val weightOz = def.weightOz * stack.count
+
+                    Surface(
+                        color = StoneSurface,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, reaperBorder.copy(alpha = 0.75f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onInspectItem(
+                                        InspectedItemRequest(
+                                            itemId = stack.itemId,
+                                            primaryActionLabel = "Buy Back (${String.format(Locale.US, "%,d", fee)} gp)",
+                                            onPrimaryAction = { onBuyBackItem(stack.itemId) }
+                                        )
+                                    )
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            PixelSpritePreview(
+                                bitmap = icon,
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .background(ObsidianVoid, RoundedCornerShape(4.dp))
+                                    .border(1.dp, reaperAccent.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                            )
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = if (stack.count > 1) "${def.name} x${stack.count}" else def.name,
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = ParchmentLight,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "${formatOz(weightOz)} oz • Fee: ${String.format(Locale.US, "%,d", fee)} gp",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (canAfford) TorchGold else HealthCrimson,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Button(
+                                onClick = { onBuyBackItem(stack.itemId) },
+                                enabled = canAfford,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TorchGold,
+                                    contentColor = ObsidianVoid,
+                                    disabledContainerColor = StoneElevated,
+                                    disabledContentColor = ParchmentMuted
+                                ),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier
+                                    .heightIn(min = 48.dp)
+                                    .testTag("reaper_buy_${stack.itemId}")
+                            ) {
+                                Text(
+                                    text = "${String.format(Locale.US, "%,d", fee)} gp",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold)
+                                )
+                            }
+                            IconButton(
+                                onClick = { onDiscardItem(stack.itemId) },
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("reaper_discard_${stack.itemId}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Discard ${def.name}",
+                                    tint = ParchmentMuted
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+

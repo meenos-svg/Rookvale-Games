@@ -7,6 +7,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -26,9 +28,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -39,15 +43,21 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.game.cloud.AdminAuditAction
+import com.example.game.cloud.AdminAuditUiState
 import com.example.game.model.ActivePanel
+import com.example.game.model.AdminEquipmentClassification
 import com.example.game.model.DisplaySettings
 import com.example.game.model.EquipmentSlot
 import com.example.game.model.FloorWarningBanner
 import com.example.game.model.GameWorldState
 import com.example.game.model.GraphicsQuality
 import com.example.game.model.Vocation
+import com.example.game.model.normalizeRegionId
 import com.example.game.multiplayer.ChatChannel
 import com.example.game.multiplayer.MultiplayerUiState
+import com.example.game.world.BiomeWeatherSystem
+import com.example.game.world.WeatherType
 import com.example.ui.theme.BasaltDark
 import com.example.ui.theme.ExpEmerald
 import com.example.ui.theme.FireOrange
@@ -55,6 +65,7 @@ import com.example.ui.theme.ObsidianVoid
 import com.example.ui.theme.ParchmentLight
 import com.example.ui.theme.TargetRed
 import com.example.ui.theme.TorchGold
+import kotlinx.coroutines.delay
 
 /**
  * Fullscreen Landscape 2.5D Isometric RPG Screen:
@@ -68,6 +79,10 @@ fun GameScreen(
     saveBanner: String?,
     onTileTapped: (Int, Int) -> Unit,
     onWalkToTile: (Int, Int) -> Unit = onTileTapped,
+    onBoardHarborFerry: (String) -> Unit = {},
+    onBuyBackReaperItem: (String) -> Unit = {},
+    onBuyBackAllReaperItems: () -> Unit = {},
+    onDiscardReaperItem: (String) -> Unit = {},
     onTargetMonster: (Int) -> Unit = {},
     onInspectAlly: (String) -> Unit = {},
     onHotkeyHp: () -> Unit,
@@ -81,6 +96,12 @@ fun GameScreen(
     onSelectGraphicsQuality: (GraphicsQuality) -> Unit = {},
     onToggleMinimapSetting: (Boolean) -> Unit = {},
     onToggleFpsCounter: (Boolean) -> Unit = {},
+    onToggleWeatherEffects: (Boolean) -> Unit = {},
+    onToggleDamageNumbers: (Boolean) -> Unit = {},
+    onToggleHealingTicks: (Boolean) -> Unit = {},
+    onToggleProcNames: (Boolean) -> Unit = {},
+    onToggleStatusAndBlockTicks: (Boolean) -> Unit = {},
+    onToggleXpAndSkillGains: (Boolean) -> Unit = {},
     onOpenPanel: (ActivePanel) -> Unit,
     onClosePanel: () -> Unit,
     onUseItem: (String) -> Unit,
@@ -106,11 +127,34 @@ fun GameScreen(
     onSendChat: (String) -> Unit = {},
     onSaveManual: () -> Unit,
     onReturnTitle: () -> Unit,
-    onDismissDeath: () -> Unit
+    onDismissDeath: () -> Unit,
+    adminAuditState: AdminAuditUiState = AdminAuditUiState(),
+    onAdminSetLevel: (Int) -> Unit = {},
+    onAdminGrantEquipment: (AdminEquipmentClassification) -> Unit = {},
+    onToggleAdminSpectator: (Boolean) -> Unit = {},
+    onAdminSetTimeOfDay: (Float, Boolean) -> Unit = { _, _ -> },
+    onAdminSetWeatherOverride: (WeatherType?) -> Unit = {},
+    onAdminTeleport: (Int, Int, Int, String?) -> Unit = { _, _, _, _ -> },
+    onSelectAdminAuditFilter: (AdminAuditAction?) -> Unit = {},
+    onRefreshAdminAuditLog: () -> Unit = {}
 ) {
     var cameraYawDeg by rememberSaveable { mutableFloatStateOf(IsometricCamera.DEFAULT_YAW_DEG) }
     var rotateDragMode by rememberSaveable { mutableStateOf(false) }
     var liveFps by remember { mutableIntStateOf(60) }
+    var adminControlExpanded by rememberSaveable(state.isAdmin) { mutableStateOf(false) }
+    var weatherClockMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(displaySettings.showWeatherEffects, state.floor) {
+        if (!displaySettings.showWeatherEffects || state.floor != 0) return@LaunchedEffect
+        while (true) {
+            weatherClockMs = System.currentTimeMillis()
+            delay(2_000L)
+        }
+    }
+
+    BackHandler(enabled = state.isAdmin && adminControlExpanded) {
+        adminControlExpanded = false
+    }
 
     Box(
         modifier = Modifier
@@ -122,6 +166,7 @@ fun GameScreen(
             state = state,
             remotePlayers = multiplayerState.remotePlayers,
             graphicsQuality = displaySettings.graphicsQuality,
+            displaySettings = displaySettings,
             measureFps = displaySettings.showFpsCounter,
             onFpsUpdated = { liveFps = it },
             cameraYawDeg = cameraYawDeg,
@@ -152,6 +197,7 @@ fun GameScreen(
                 onWalkToTile = onWalkToTile,
                 onExpandWorldMap = { onOpenPanel(ActivePanel.WORLD_MAP) },
                 onMultiplayerStatusTapped = onMultiplayerStatusTapped,
+                onOpenAdminScroll = { if (state.isAdmin) adminControlExpanded = true },
                 modifier = Modifier.align(Alignment.TopStart)
             )
 
@@ -181,11 +227,39 @@ fun GameScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                if (displaySettings.showFpsCounter) {
-                    LiveFpsHudBadge(
-                        fps = liveFps,
-                        quality = displaySettings.graphicsQuality
-                    )
+                val resolvedHudWeather = remember(
+                    state.regionId,
+                    state.floor,
+                    state.adminWeatherOverride,
+                    weatherClockMs,
+                    displaySettings.showWeatherEffects
+                ) {
+                    if (!displaySettings.showWeatherEffects || state.floor != 0) {
+                        null
+                    } else {
+                        BiomeWeatherSystem.resolveWeather(
+                            regionId = normalizeRegionId(state.regionId),
+                            floor = state.floor,
+                            utcMillis = weatherClockMs,
+                            adminOverride = state.adminWeatherOverride
+                        )
+                    }
+                }
+                if (displaySettings.showFpsCounter || resolvedHudWeather != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (displaySettings.showFpsCounter) {
+                            LiveFpsHudBadge(
+                                fps = liveFps,
+                                quality = displaySettings.graphicsQuality
+                            )
+                        }
+                        resolvedHudWeather?.let { weather ->
+                            LiveWeatherHudBadge(weather = weather)
+                        }
+                    }
                 }
                 AnimatedVisibility(
                     visible = activeBoss != null && state.activePanel == ActivePanel.NONE,
@@ -246,15 +320,37 @@ fun GameScreen(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
 
+            // BOTTOM-RIGHT COLLAPSIBLE ADMIN CONTROL OVERLAY (strictly visible only when isAdmin == true)
+            if (state.isAdmin) {
+                AdminControlHudOverlay(
+                    state = state,
+                    adminAuditState = adminAuditState,
+                    expanded = adminControlExpanded,
+                    onToggleExpanded = { adminControlExpanded = it },
+                    onToggleSpectator = onToggleAdminSpectator,
+                    onSetTimeOfDay = onAdminSetTimeOfDay,
+                    onSetWeatherOverride = onAdminSetWeatherOverride,
+                    onSetLevel = onAdminSetLevel,
+                    onGrantEquipment = onAdminGrantEquipment,
+                    onTeleport = onAdminTeleport,
+                    onSelectAuditFilter = onSelectAdminAuditFilter,
+                    onRefreshAuditLog = onRefreshAdminAuditLog,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                )
+            }
+
             // CENTERED COMPACT MODAL OVERLAY (Tapping outside on isometric ground auto-closes & walks!)
+            val modalMaxWidth = if (state.activePanel == ActivePanel.WORLD_MAP) 650.dp else 560.dp
             AnimatedVisibility(
                 visible = state.activePanel != ActivePanel.NONE && state.activePanel != ActivePanel.ORACLE,
                 enter = fadeIn() + scaleIn(initialScale = 0.94f),
                 exit = fadeOut() + scaleOut(targetScale = 0.94f),
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .widthIn(min = 340.dp, max = 560.dp)
-                    .padding(horizontal = 24.dp, vertical = 14.dp)
+                    .widthIn(min = 340.dp, max = modalMaxWidth)
+                    .padding(horizontal = 18.dp, vertical = 10.dp)
             ) {
                 SlideUpGamePanel(
                     state = state,
@@ -278,9 +374,22 @@ fun GameScreen(
                     onCraftRecipe = onCraftRecipe,
                     onBindRune = onBindRune,
                     onWalkToTile = onWalkToTile,
+                    onBoardHarborFerry = onBoardHarborFerry,
+                    onBuyBackReaperItem = onBuyBackReaperItem,
+                    onBuyBackAllReaperItems = onBuyBackAllReaperItems,
+                    onDiscardReaperItem = onDiscardReaperItem,
                     onSelectGraphicsQuality = onSelectGraphicsQuality,
                     onToggleMinimapSetting = onToggleMinimapSetting,
-                    onToggleFpsCounter = onToggleFpsCounter
+                    onToggleFpsCounter = onToggleFpsCounter,
+                    onToggleWeatherEffects = onToggleWeatherEffects,
+                    onToggleDamageNumbers = onToggleDamageNumbers,
+                    onToggleHealingTicks = onToggleHealingTicks,
+                    onToggleProcNames = onToggleProcNames,
+                    onToggleStatusAndBlockTicks = onToggleStatusAndBlockTicks,
+                    onToggleXpAndSkillGains = onToggleXpAndSkillGains,
+                    onAdminSetLevel = onAdminSetLevel,
+                    onAdminGrantEquipment = onAdminGrantEquipment,
+                    onToggleAdminSpectator = onToggleAdminSpectator
                 )
             }
         }
@@ -326,7 +435,7 @@ private fun FloorDescentWarningBanner(banner: FloorWarningBanner) {
             )
             Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
-                    text = "Floor ${banner.floorId}: ${banner.floorName}",
+                    text = if (banner.floorId == 0) banner.floorName else "Floor ${banner.floorId}: ${banner.floorName}",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = ParchmentLight,
                     maxLines = 1,

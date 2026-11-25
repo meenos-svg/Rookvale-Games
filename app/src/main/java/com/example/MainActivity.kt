@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
                 val updateState by gameViewModel.updateState.collectAsStateWithLifecycle()
                 val cloudAuthState by gameViewModel.cloudAuthState.collectAsStateWithLifecycle()
                 val displaySettings by gameViewModel.displaySettings.collectAsStateWithLifecycle()
+                val adminAuditState by gameViewModel.adminAuditState.collectAsStateWithLifecycle()
 
                 when (screen) {
                     AppScreen.TITLE_AND_CREATE -> {
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity() {
                             onSelectGraphicsQuality = gameViewModel::setGraphicsQuality,
                             onToggleMinimapSetting = gameViewModel::setShowMinimap,
                             onToggleFpsCounter = gameViewModel::setShowFpsCounter,
+                            onToggleWeatherEffects = gameViewModel::setShowWeatherEffects,
                             onDownloadUpdate = { url -> openReleaseInBrowser(url) },
                             onDismissUpdate = gameViewModel::dismissUpdateBanner,
                             onCreateCloudCharacter = { name, pin, tunicIdx, hairIdx ->
@@ -83,6 +85,10 @@ class MainActivity : ComponentActivity() {
                             saveBanner = saveBanner,
                             onTileTapped = gameViewModel::onTileTapped,
                             onWalkToTile = gameViewModel::onWalkToTile,
+                            onBoardHarborFerry = gameViewModel::onBoardHarborFerry,
+                            onBuyBackReaperItem = gameViewModel::onBuyBackReaperItem,
+                            onBuyBackAllReaperItems = gameViewModel::onBuyBackAllReaperItems,
+                            onDiscardReaperItem = gameViewModel::onDiscardReaperItem,
                             onTargetMonster = gameViewModel::onTargetMonster,
                             onInspectAlly = gameViewModel::onInspectAlly,
                             onHotkeyHp = gameViewModel::onHotkeyHealthPotion,
@@ -96,6 +102,12 @@ class MainActivity : ComponentActivity() {
                             onSelectGraphicsQuality = gameViewModel::setGraphicsQuality,
                             onToggleMinimapSetting = gameViewModel::setShowMinimap,
                             onToggleFpsCounter = gameViewModel::setShowFpsCounter,
+                            onToggleWeatherEffects = gameViewModel::setShowWeatherEffects,
+                            onToggleDamageNumbers = gameViewModel::setShowDamageNumbers,
+                            onToggleHealingTicks = gameViewModel::setShowHealingTicks,
+                            onToggleProcNames = gameViewModel::setShowProcNames,
+                            onToggleStatusAndBlockTicks = gameViewModel::setShowStatusAndBlockTicks,
+                            onToggleXpAndSkillGains = gameViewModel::setShowXpAndSkillGains,
                             onOpenPanel = gameViewModel::openPanel,
                             onClosePanel = gameViewModel::closePanel,
                             onUseItem = gameViewModel::useBackpackItem,
@@ -121,7 +133,16 @@ class MainActivity : ComponentActivity() {
                             onSendChat = gameViewModel::sendChatMessage,
                             onSaveManual = gameViewModel::onManualCloudSave,
                             onReturnTitle = gameViewModel::returnToTitle,
-                            onDismissDeath = gameViewModel::dismissDeathReport
+                            onDismissDeath = gameViewModel::dismissDeathReport,
+                            adminAuditState = adminAuditState,
+                            onAdminSetLevel = { lvl -> gameViewModel.onAdminSetLevel(lvl) },
+                            onAdminGrantEquipment = gameViewModel::onAdminGrantEquipment,
+                            onToggleAdminSpectator = gameViewModel::onToggleAdminSpectator,
+                            onAdminSetTimeOfDay = gameViewModel::onAdminSetTimeOfDay,
+                            onAdminSetWeatherOverride = gameViewModel::onAdminSetWeatherOverride,
+                            onAdminTeleport = gameViewModel::onAdminTeleport,
+                            onSelectAdminAuditFilter = gameViewModel::onSelectAdminAuditFilter,
+                            onRefreshAdminAuditLog = gameViewModel::onRefreshAdminAuditLog
                         )
                     }
                 }

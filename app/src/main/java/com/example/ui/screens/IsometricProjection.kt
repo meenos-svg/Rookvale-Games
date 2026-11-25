@@ -506,20 +506,26 @@ object IsometricTileDrawer {
 
         // Ground base underneath props/walls matches local setting cleanly
         val baseTile = when (tile) {
-            TileType.TREE, TileType.TREE_STUMP, TileType.HEDGE, TileType.WOOD_FENCE ->
-                if (tx >= 272 && floorMap.floorId == 0) TileType.DARK_GRASS else TileType.GRASS
+            TileType.TREE, TileType.TREE_STUMP, TileType.HEDGE, TileType.WOOD_FENCE -> when {
+                floorMap.floorId == 0 && tx >= 1472 && ty in 400..799 -> TileType.DARK_GRASS
+                floorMap.floorId == 0 && ty < 265 && tx >= 1145 -> TileType.SNOW
+                floorMap.floorId == 0 && tx in 925..1145 && ty < 290 -> TileType.BLIGHT_SOIL
+                floorMap.floorId == 0 && tx < 445 && ty in 355..670 -> TileType.MARSH
+                floorMap.floorId == 0 && tx in 540..1240 && ty >= 870 -> TileType.JUNGLE_FLOOR
+                else -> TileType.GRASS
+            }
             TileType.MOORED_BOAT -> TileType.WATER
             TileType.DEPOT_CHEST, TileType.SHOP_COUNTER, TileType.CRATE_BARREL, TileType.WEAPON_RACK ->
                 if (floorMap.floorId == 0) TileType.WOOD_PLANK_FLOOR else TileType.COBBLESTONE
             TileType.WOOD_BED -> when {
-                tx in 188..204 && ty in 174..187 -> TileType.TEMPLE_FLOOR
-                tx in 216..234 && ty in 174..187 -> TileType.ARCANE_FLOOR
+                tx in 1388..1404 && ty in 574..587 -> TileType.TEMPLE_FLOOR
+                tx in 1416..1434 && ty in 574..587 -> TileType.ARCANE_FLOOR
                 else -> TileType.WOOD_PLANK_FLOOR
             }
             TileType.TEMPLE_ALTAR, TileType.TEMPLE_PEW, TileType.TEMPLE_WALL -> TileType.TEMPLE_FLOOR
             TileType.RUNECRAFTING_TABLE, TileType.BOOKSHELF, TileType.CRYSTAL_PILLAR -> when {
-                tx in 216..234 && ty in 174..187 -> TileType.ARCANE_FLOOR
-                tx in 188..204 && ty in 174..187 -> TileType.TEMPLE_FLOOR
+                tx in 1416..1434 && ty in 574..587 -> TileType.ARCANE_FLOOR
+                tx in 1388..1404 && ty in 574..587 -> TileType.TEMPLE_FLOOR
                 else -> TileType.WOOD_PLANK_FLOOR
             }
             TileType.FOUNTAIN, TileType.MARKET_AWNING, TileType.SMELTING_FURNACE, TileType.BLACKSMITH_ANVIL,
@@ -535,7 +541,7 @@ object IsometricTileDrawer {
             val w = floorMap.tileAt(tx - 1, ty)
             val e = floorMap.tileAt(tx + 1, ty)
             listOf(n, s, w, e).any { nt ->
-                nt != TileType.WATER && nt != TileType.MOORED_BOAT && nt != TileType.WOOD_PIER && nt != TileType.WOOD_BRIDGE
+                nt != TileType.WATER && nt != TileType.DEEP_WATER && nt != TileType.MOORED_BOAT && nt != TileType.WOOD_PIER && nt != TileType.WOOD_BRIDGE
             }
         } else {
             false
@@ -586,6 +592,17 @@ object IsometricTileDrawer {
                     green = (0.41f + shimmer * 0.045f).coerceIn(0f, 1f),
                     blue = (0.63f + shimmer * 0.04f).coerceIn(0f, 1f)
                 )
+                TileType.DEEP_WATER -> Color(
+                    red = (0.06f + shimmer * 0.015f).coerceIn(0f, 1f),
+                    green = (0.19f + shimmer * 0.025f).coerceIn(0f, 1f),
+                    blue = (0.34f + shimmer * 0.03f).coerceIn(0f, 1f)
+                )
+                TileType.SAND -> if (h < 6) Color(0xFFD2B06B) else Color(0xFFDFBE79)
+                TileType.MARSH -> if (h < 6) Color(0xFF3A4B30) else Color(0xFF475C3A)
+                TileType.SNOW -> if (h < 6) Color(0xFFE3ECF5) else Color(0xFFF1F7FC)
+                TileType.JUNGLE_FLOOR -> if (h < 6) Color(0xFF215A28) else Color(0xFF2B6E33)
+                TileType.VOLCANIC_ASH -> if (h < 6) Color(0xFF3E3736) else Color(0xFF4D4442)
+                TileType.BLIGHT_SOIL -> if (h < 6) Color(0xFF3C294A) else Color(0xFF4A335C)
                 TileType.LAVA -> Color(
                     red = (0.88f + shimmer * 0.09f).coerceIn(0f, 1f),
                     green = (0.31f + shimmer * 0.08f).coerceIn(0f, 1f),
@@ -604,7 +621,7 @@ object IsometricTileDrawer {
                     TileType.TEMPLE_FLOOR -> Color(0x45B09658)
                     TileType.WOOD_PLANK_FLOOR, TileType.WOOD_PIER, TileType.WOOD_BRIDGE -> Color(0x422A1B0E)
                     TileType.ARCANE_FLOOR -> Color(0x3C8A6BFF)
-                    TileType.WATER, TileType.LAVA -> null
+                    TileType.WATER, TileType.DEEP_WATER, TileType.LAVA -> null
                     else -> Color(0x18000000)
                 }
             }

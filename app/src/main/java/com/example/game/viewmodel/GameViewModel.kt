@@ -4,11 +4,15 @@ import android.app.Application
 import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.game.cloud.AdminAuditAction
+import com.example.game.cloud.AdminAuditLogRepository
+import com.example.game.cloud.AdminAuditUiState
 import com.example.game.cloud.CloudAuthResult
 import com.example.game.cloud.CloudAuthUiState
 import com.example.game.cloud.CloudSaveOutcome
 import com.example.game.cloud.CloudSavePayloadCodec
 import com.example.game.cloud.CloudSession
+import com.example.game.cloud.EventDrivenCloudSaveController
 import com.example.game.cloud.SupabaseCloudSaveRepository
 import com.example.game.data.DisplaySettingsStore
 import com.example.game.data.GameSaveRepository
@@ -17,6 +21,8 @@ import com.example.game.data.SaveSlotEntity
 import com.example.game.engine.CraftingAndMiningEngine
 import com.example.game.engine.GameEngine
 import com.example.game.model.ActivePanel
+import com.example.game.model.AdminEquipmentClassification
+import com.example.game.model.DEFAULT_TIME_OF_DAY_HOURS
 import com.example.game.model.Direction
 import com.example.game.model.DisplaySettings
 import com.example.game.model.EquipmentSlot
@@ -35,6 +41,7 @@ import com.example.game.sprites.EntitySpriteAtlas
 import com.example.game.sprites.TileSpriteAtlas
 import com.example.game.update.GitHubUpdateChecker
 import com.example.game.update.UpdateCheckState
+import com.example.game.world.WeatherType
 import com.example.game.world.WorldMaps
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -59,6 +66,7 @@ enum class AppScreen {
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = GameSaveRepository(RookvaleDatabase.getInstance(application).saveSlotDao())
     private val cloudRepository = SupabaseCloudSaveRepository(application)
+    private val adminAuditRepository = AdminAuditLogRepository(application)
     private val displaySettingsStore = DisplaySettingsStore(application)
     private val multiplayerManager = RealtimeMultiplayerManager(
         scope = viewModelScope,
@@ -94,15 +102,24 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _saveBanner = MutableStateFlow<String?>(null)
     val saveBanner: StateFlow<String?> = _saveBanner.asStateFlow()
 
+    private val _adminAuditState = MutableStateFlow(AdminAuditUiState())
+    val adminAuditState: StateFlow<AdminAuditUiState> = _adminAuditState.asStateFlow()
+
     private var activeCloudSession: CloudSession? = null
     private val persistMutex = Mutex()
+    private val cloudSaveController = EventDrivenCloudSaveController(
+        scope = viewModelScope,
+        debounceMs = EventDrivenCloudSaveController.DEFAULT_DEBOUNCE_MS,
+        stateProvider = { _world.value },
+        onFlush = { snapshot, logFeedback ->
+            executeCloudPersist(snapshot, silent = !logFeedback, logConsoleFeedback = logFeedback)
+        }
+    )
     private var worldTickJob: Job? = null
     private var attackSubTickJob: Job? = null
     private var walkLoopJob: Job? = null
     private var movementBroadcastJob: Job? = null
-    private var cloudAutoSaveJob: Job? = null
     private var onlinePresenceSyncJob: Job? = null
-    private var skillDebounceSaveJob: Job? = null
     private var lastStepMs: Long = 0L
     @Volatile
     private var lastLocalMoveUptimeMs: Long = 0L
@@ -137,6 +154,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 if (multiplayerManager.uiState.value.isFloorHost) return@collect
                 val now = SystemClock.uptimeMillis()
                 var leveledUp = false
+                var xpChanged = false
                 var newLevel = 1
                 var playerName = ""
                 _world.update { prev ->
@@ -146,10 +164,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         newLevel = next.level
                         playerName = next.playerName
                     }
+                    if (next.xp != prev.xp) xpChanged = true
                     next
                 }
                 if (leveledUp) {
                     multiplayerManager.broadcastSystemCallout("$playerName advanced to Level $newLevel!", floor)
+                    persistCurrentState(silent = true)
+                } else if (xpChanged) {
                     persistCurrentState(silent = true)
                 }
             }
@@ -162,6 +183,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 val now = SystemClock.uptimeMillis()
                 val isHost = multiplayerManager.uiState.value.isFloorHost
                 var leveledUp = false
+                var xpChanged = false
                 var newLevel = 1
                 var playerName = ""
                 var curFloor = 0
@@ -173,11 +195,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         playerName = next.playerName
                         curFloor = next.floor
                     }
+                    if (next.xp != prev.xp) xpChanged = true
                     next
                 }
                 if (leveledUp) {
                     multiplayerManager.broadcastSystemCallout("$playerName advanced to Level $newLevel!", curFloor)
                     broadcastCurrentState()
+                    persistCurrentState(silent = true)
+                } else if (xpChanged) {
                     persistCurrentState(silent = true)
                 }
             }
@@ -274,7 +299,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (_cloudAuthState.value.isBusy) return
         _cloudAuthState.update { it.copy(isBusy = true, errorMessage = null, infoMessage = "Loading hero from cloud...") }
         viewModelScope.launch {
-            val result = cloudRepository.loginAndRecover(name, pin)
+            val result = cloudRepository.loginAndRecover(
+                rawName = name,
+                pin = pin,
+                adminSaveBuilder = { adminName ->
+                    val freshAdmin = GameEngine.createNewWorld(
+                        name = adminName,
+                        vocation = Vocation.ADVENTURER,
+                        isAdmin = true
+                    )
+                    GameEngine.toSaveData(freshAdmin)
+                }
+            )
             when (result) {
                 is CloudAuthResult.Success -> enterGameWithCloudResult(result)
                 is CloudAuthResult.Failure -> _cloudAuthState.update {
@@ -310,6 +346,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun signOutCachedSession() {
         cloudRepository.clearCachedSession()
         activeCloudSession = null
+        _adminAuditState.value = AdminAuditUiState()
+        _world.update {
+            it.copy(
+                isAdmin = false,
+                infiniteHealth = false,
+                isSpectator = false,
+                timeOfDayHours = DEFAULT_TIME_OF_DAY_HOURS,
+                activePanel = ActivePanel.NONE
+            )
+        }
         _cloudAuthState.update {
             it.copy(cachedSession = null, errorMessage = null, infoMessage = "Cleared cached login on this device.")
         }
@@ -329,6 +375,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         // Keep Room local slot list in sync as well
         repository.saveGame(result.saveData)
         _world.value = withNotice
+        cloudSaveController.markSynced(withNotice)
         _screen.value = AppScreen.PLAYING
         _cloudAuthState.update {
             it.copy(
@@ -338,6 +385,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 errorMessage = null,
                 infoMessage = null
             )
+        }
+        if (withNotice.isAdmin) {
+            hydrateAndSyncAdminAuditLog()
+        } else {
+            _adminAuditState.value = AdminAuditUiState()
         }
         multiplayerManager.connect(withNotice.toPresencePayload())
         startGameLoops()
@@ -355,7 +407,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _screen.value = AppScreen.PLAYING
         multiplayerManager.connect(fresh.toPresencePayload())
         startGameLoops()
-        persistCurrentState(silent = true)
+        cloudSaveController.flushNow(fresh, force = true, logConsoleFeedback = false)
     }
 
     fun chooseVocationAtOracle(vocation: Vocation) {
@@ -390,6 +442,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 _cloudAuthState.update { it.copy(cachedSession = backup.session) }
             }
             _world.value = state
+            cloudSaveController.markSynced(state)
+            if (state.isAdmin) {
+                hydrateAndSyncAdminAuditLog()
+            } else {
+                _adminAuditState.value = AdminAuditUiState()
+            }
             _screen.value = AppScreen.PLAYING
             multiplayerManager.connect(state.toPresencePayload())
             startGameLoops()
@@ -401,9 +459,21 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun returnToTitle() {
-        persistCurrentState(silent = true)
+        cloudSaveController.flushNow(_world.value, force = false, logConsoleFeedback = false)
+        cloudSaveController.reset()
         multiplayerManager.disconnect()
         stopGameLoops()
+        // Explicitly clear all elevated session flags & audit memory on logout / character switch
+        _adminAuditState.value = AdminAuditUiState()
+        _world.update {
+            it.copy(
+                isAdmin = false,
+                infiniteHealth = false,
+                isSpectator = false,
+                timeOfDayHours = DEFAULT_TIME_OF_DAY_HOURS,
+                activePanel = ActivePanel.NONE
+            )
+        }
         _cloudAuthState.update {
             it.copy(
                 isBusy = false,
@@ -417,7 +487,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onManualCloudSave() {
-        persistCurrentState(silent = false, logConsoleFeedback = true)
+        if (_world.value.saveId.isBlank() || _screen.value != AppScreen.PLAYING) return
+        cloudSaveController.flushNow(_world.value, force = true, logConsoleFeedback = true)
     }
 
     fun onAppBackgrounded() {
@@ -425,7 +496,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (snapshot.saveId.isBlank() || _screen.value != AppScreen.PLAYING) return
         val now = SystemClock.uptimeMillis()
         val saveData = GameEngine.toSaveData(snapshot)
-        // Snapshot save_data JSON synchronously on the main thread before any background IO
+        // Snapshot slim character-only save_data JSON synchronously on the main thread
         val preEncodedJson = runCatching { CloudSavePayloadCodec.encode(saveData) }.getOrNull()
         val session = activeCloudSession
         // Synchronous SharedPreferences write so progress is safe even if OS kills process immediately
@@ -441,8 +512,42 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (now - lastBackgroundSaveMs < 1500L) return
         lastBackgroundSaveMs = now
+        val flushedCloud = cloudSaveController.flushNow(snapshot, force = false, logConsoleFeedback = false)
+        if (!flushedCloud) {
+            viewModelScope.launch {
+                withContext(NonCancellable) {
+                    persistMutex.withLock { runCatching { repository.saveGame(saveData) } }
+                }
+            }
+        }
+    }
+
+    /**
+     * Event-driven entry point for gameplay mutations: compares permanent character state
+     * and schedules a single coalesced cloud upsert debounced by 5 seconds.
+     * Routine walking steps, monster attacks, and respawns trigger ZERO Postgres writes.
+     */
+    fun persistCurrentState(silent: Boolean = false, logConsoleFeedback: Boolean = false) {
+        val snapshot = _world.value
+        if (snapshot.saveId.isBlank() || _screen.value != AppScreen.PLAYING) return
+        if (logConsoleFeedback || !silent) {
+            cloudSaveController.flushNow(snapshot, force = true, logConsoleFeedback = logConsoleFeedback)
+        } else {
+            cloudSaveController.onStateMutated(snapshot)
+        }
+    }
+
+    private fun executeCloudPersist(
+        snapshot: GameWorldState,
+        silent: Boolean,
+        logConsoleFeedback: Boolean
+    ) {
+        if (snapshot.saveId.isBlank()) return
+        val saveData = GameEngine.toSaveData(snapshot)
+        val preEncodedJson = runCatching { CloudSavePayloadCodec.encode(saveData) }.getOrNull()
+        val session = activeCloudSession
         viewModelScope.launch {
-            withContext(NonCancellable) {
+            val outcome = withContext(NonCancellable) {
                 persistMutex.withLock {
                     runCatching { repository.saveGame(saveData) }
                     if (session != null) {
@@ -452,34 +557,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                                 saveData = saveData,
                                 preEncodedSaveJson = preEncodedJson
                             )
-                        }
+                        }.getOrDefault(CloudSaveOutcome.SAVED_LOCAL_OFFLINE)
+                    } else {
+                        CloudSaveOutcome.SAVED_LOCAL_OFFLINE
                     }
-                }
-            }
-        }
-    }
-
-    fun persistCurrentState(silent: Boolean = false, logConsoleFeedback: Boolean = false) {
-        val snapshot = _world.value
-        if (snapshot.saveId.isBlank() || _screen.value != AppScreen.PLAYING) return
-        // Snapshot immutable save data + encoded JSON synchronously on the main thread
-        // before launching the background coroutine to avoid races during rapid depot taps.
-        val saveData = GameEngine.toSaveData(snapshot)
-        val preEncodedJson = runCatching { CloudSavePayloadCodec.encode(saveData) }.getOrNull()
-        val session = activeCloudSession
-        viewModelScope.launch {
-            val outcome = persistMutex.withLock {
-                runCatching { repository.saveGame(saveData) }
-                if (session != null) {
-                    runCatching {
-                        cloudRepository.saveProgress(
-                            session = session,
-                            saveData = saveData,
-                            preEncodedSaveJson = preEncodedJson
-                        )
-                    }.getOrDefault(CloudSaveOutcome.SAVED_LOCAL_OFFLINE)
-                } else {
-                    CloudSaveOutcome.SAVED_LOCAL_OFFLINE
                 }
             }
 
@@ -504,11 +585,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun scheduleDebouncedSkillSave() {
-        skillDebounceSaveJob?.cancel()
-        skillDebounceSaveJob = viewModelScope.launch {
-            delay(3000L)
-            persistCurrentState(silent = true)
-        }
+        cloudSaveController.onStateMutated(_world.value)
     }
 
     private fun syncPendingOfflineBackupIfNeeded() {
@@ -519,6 +596,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 _world.update { st ->
                     st.copy(statusLog = (st.statusLog + "Synced offline progress to cloud.").takeLast(6))
                 }
+            }
+            if (_world.value.isAdmin) {
+                flushAdminAuditQueueIfNeeded()
             }
         }
     }
@@ -532,6 +612,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 delay(200L)
                 val now = SystemClock.uptimeMillis()
                 var leveledUp = false
+                var xpGained = false
                 var skillLevelUp = false
                 var skillPointsGained = false
                 var attackedAction: PlayerActionState? = null
@@ -549,6 +630,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                             floor = next.floor
                             name = next.playerName
                         }
+                        if (next.xp != prev.xp) xpGained = true
                         if (totalSkillLevels(next.skills) > totalSkillLevels(prev.skills)) {
                             skillLevelUp = true
                         } else if (next.skills != prev.skills) {
@@ -571,10 +653,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     if (attackedAction != null || facingChanged) {
                         broadcastCurrentState(attackedAction ?: PlayerActionState.IDLE)
                     }
-                    if (skillLevelUp) {
+                    if (xpGained || skillLevelUp || skillPointsGained) {
                         persistCurrentState(silent = true)
-                    } else if (skillPointsGained) {
-                        scheduleDebouncedSkillSave()
                     }
                 }
             }
@@ -679,13 +759,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 val now = SystemClock.uptimeMillis()
                 val remotes = multiplayerManager.uiState.value.remotePlayers
                 var changedFloor = false
+                var changedRegion = false
                 var movedTile = false
                 var facingChanged = false
                 _world.update { prev ->
-                    if (prev.walkPath.isEmpty() && !prev.autoFollowTarget) prev
+                    if (prev.walkPath.isEmpty() && prev.longRangeWaypoints.isEmpty() && prev.longRangeGoal == null && !prev.autoFollowTarget) prev
                     else {
                         val next = GameEngine.stepAutoFollowOrPath(prev, now, remotes)
                         if (next.floor != prev.floor) changedFloor = true
+                        if (next.regionId != prev.regionId) changedRegion = true
                         if (next.playerX != prev.playerX || next.playerY != prev.playerY) movedTile = true
                         if (next.playerFacing != prev.playerFacing) facingChanged = true
                         next
@@ -695,9 +777,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     val cur = _world.value
                     multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
                     persistCurrentState(silent = true)
-                } else if (movedTile) {
+                } else if (movedTile || changedRegion) {
                     lastLocalMoveUptimeMs = now
                     broadcastMovement(PlayerActionState.WALKING, now)
+                    if (changedRegion) persistCurrentState(silent = true)
                 } else if (facingChanged) {
                     broadcastMovement(PlayerActionState.IDLE, now)
                 }
@@ -717,6 +800,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 if (cur.saveId.isBlank()) continue
                 val nowUptime = SystemClock.uptimeMillis()
                 val isMoving = cur.walkPath.isNotEmpty() ||
+                    cur.longRangeGoal != null ||
                     (cur.autoFollowTarget && cur.targetMonsterId != null) ||
                     (nowUptime - lastLocalMoveUptimeMs) <= 260L
                 if (isMoving) {
@@ -731,53 +815,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Periodic 20-second cloud autosave to public.players (decoupled from live movement)
-        cloudAutoSaveJob = viewModelScope.launch {
-            while (true) {
-                delay(20_000L)
-                if (_screen.value == AppScreen.PLAYING) {
-                    persistCurrentState(silent = true)
-                }
-            }
-        }
-
-        // Realtime idle heartbeat + lightweight public.players fallback discovery poll (no per-step DB writes)
+        // Pure Supabase Realtime Presence & Broadcast heartbeat (ZERO Postgres reads or writes!)
         onlinePresenceSyncJob = viewModelScope.launch(Dispatchers.IO) {
-            var lastBroadcastHeartbeatMs = 0L
             while (true) {
-                if (_screen.value == AppScreen.PLAYING && cloudRepository.isCloudConfigured()) {
+                delay(4_000L)
+                if (_screen.value == AppScreen.PLAYING &&
+                    multiplayerManager.uiState.value.status == ConnectionStatus.ONLINE
+                ) {
                     val cur = _world.value
                     if (cur.saveId.isNotBlank()) {
-                        val nowMs = System.currentTimeMillis()
-                        val normalizedRegion = normalizeRegionId(cur.regionId)
-
-                        // Periodic Realtime broadcast heartbeat so late joiners self-heal without touching Postgres
-                        if (nowMs - lastBroadcastHeartbeatMs >= 4_000L) {
-                            lastBroadcastHeartbeatMs = nowMs
-                            if (multiplayerManager.uiState.value.status == ConnectionStatus.ONLINE) {
-                                multiplayerManager.broadcastLocalState(cur.toPresencePayload())
-                            }
-                        }
-
-                        // Lightweight fallback discovery poll on public.players (never overwrites active Realtime peers)
-                        val polled = runCatching {
-                            cloudRepository.fetchRecentOnlinePlayers(
-                                sinceEpochMs = nowMs - 60_000L,
-                                excludePlayerId = cur.saveId,
-                                excludeCharacterName = cur.playerName
-                            )
-                        }.getOrDefault(emptyList())
-
-                        multiplayerManager.mergePolledPlayers(
-                            polled = polled,
-                            localFloor = cur.floor,
-                            localRegionId = normalizedRegion,
-                            localPlayerId = cur.saveId,
-                            localPlayerName = cur.playerName
-                        )
+                        multiplayerManager.broadcastLocalState(cur.toPresencePayload())
                     }
                 }
-                delay(5_000L)
             }
         }
     }
@@ -787,16 +836,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         worldTickJob?.cancel()
         walkLoopJob?.cancel()
         movementBroadcastJob?.cancel()
-        cloudAutoSaveJob?.cancel()
         onlinePresenceSyncJob?.cancel()
-        skillDebounceSaveJob?.cancel()
         attackSubTickJob = null
         worldTickJob = null
         walkLoopJob = null
         movementBroadcastJob = null
-        cloudAutoSaveJob = null
         onlinePresenceSyncJob = null
-        skillDebounceSaveJob = null
     }
 
     private fun totalSkillLevels(skills: PlayerSkills): Int =
@@ -914,7 +959,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             offhandId = equipment.shieldId,
             armorId = equipment.armorId,
             helmetId = equipment.helmetId,
-            bootsId = equipment.bootsId
+            bootsId = equipment.bootsId,
+            isAdmin = isAdmin,
+            isSpectator = isSpectator
         )
     }
 
@@ -971,7 +1018,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             rawText = text,
             channel = ch,
             senderName = cur.playerName,
-            floor = cur.floor
+            floor = cur.floor,
+            senderIsAdmin = cur.isAdmin
         )
     }
 
@@ -1155,12 +1203,27 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var startedPath = false
         _world.update { prev ->
             val next = GameEngine.walkToCoordinate(prev, x, y)
-            if (next.walkPath.isNotEmpty()) startedPath = true
+            if (next.walkPath.isNotEmpty() || next.longRangeGoal != null) startedPath = true
             next
         }
         if (startedPath) {
             lastLocalMoveUptimeMs = now
             broadcastMovement(PlayerActionState.WALKING, now)
+        }
+    }
+
+    fun onBoardHarborFerry(destinationPortId: String) {
+        val now = SystemClock.uptimeMillis()
+        var sailed = false
+        _world.update { prev ->
+            val next = GameEngine.boardHarborFerry(prev, destinationPortId, now)
+            if (next.playerX != prev.playerX || next.playerY != prev.playerY) sailed = true
+            next
+        }
+        if (sailed) {
+            lastLocalMoveUptimeMs = now
+            broadcastCurrentState(PlayerActionState.IDLE)
+            persistCurrentState(silent = true)
         }
     }
 
@@ -1241,6 +1304,36 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun setShowFpsCounter(show: Boolean) {
         displaySettingsStore.saveShowFpsCounter(show)
         _displaySettings.update { it.copy(showFpsCounter = show) }
+    }
+
+    fun setShowWeatherEffects(show: Boolean) {
+        displaySettingsStore.saveShowWeatherEffects(show)
+        _displaySettings.update { it.copy(showWeatherEffects = show) }
+    }
+
+    fun setShowDamageNumbers(show: Boolean) {
+        displaySettingsStore.saveShowDamageNumbers(show)
+        _displaySettings.update { it.copy(showDamageNumbers = show) }
+    }
+
+    fun setShowHealingTicks(show: Boolean) {
+        displaySettingsStore.saveShowHealingTicks(show)
+        _displaySettings.update { it.copy(showHealingTicks = show) }
+    }
+
+    fun setShowProcNames(show: Boolean) {
+        displaySettingsStore.saveShowProcNames(show)
+        _displaySettings.update { it.copy(showProcNames = show) }
+    }
+
+    fun setShowStatusAndBlockTicks(show: Boolean) {
+        displaySettingsStore.saveShowStatusAndBlockTicks(show)
+        _displaySettings.update { it.copy(showStatusAndBlockTicks = show) }
+    }
+
+    fun setShowXpAndSkillGains(show: Boolean) {
+        displaySettingsStore.saveShowXpAndSkillGains(show)
+        _displaySettings.update { it.copy(showXpAndSkillGains = show) }
     }
 
     fun toggleMinimap() {
@@ -1449,6 +1542,311 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun sellItem(itemId: String) {
         _world.update { GameEngine.sellBackpackItem(it, itemId) }
         persistCurrentState(silent = true)
+    }
+
+    fun onBuyBackReaperItem(itemId: String) {
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.buyBackReaperItem(prev, itemId)
+            if (next.reaperVault != prev.reaperVault) changed = true
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
+    }
+
+    fun onBuyBackAllReaperItems() {
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.buyBackAllReaperItems(prev)
+            if (next.reaperVault != prev.reaperVault) changed = true
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
+    }
+
+    fun onDiscardReaperItem(itemId: String) {
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.discardReaperItem(prev, itemId)
+            if (next.reaperVault != prev.reaperVault) changed = true
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
+    }
+
+    fun onAdminSetLevel(targetLevel: Int, syncSkills: Boolean = true) {
+        var changed = false
+        var prevLevel = 1
+        var nextLevel = 1
+        var targetName = "Admin"
+        _world.update { prev ->
+            if (!prev.isAdmin) return@update prev
+            prevLevel = prev.level
+            targetName = prev.playerName
+            val next = GameEngine.setAdminLevel(prev, targetLevel, syncSkills)
+            nextLevel = next.level
+            if (next.level != prev.level || next.skills != prev.skills) changed = true
+            next
+        }
+        if (changed) {
+            broadcastCurrentState()
+            persistCurrentState(silent = true)
+            recordAdminAuditEvent(
+                action = AdminAuditAction.LEVEL_CHANGE,
+                targetName = targetName,
+                summary = "Set level Lv $prevLevel -> Lv $nextLevel",
+                details = mapOf(
+                    "from" to "Lv $prevLevel",
+                    "to" to "Lv $nextLevel",
+                    "syncSkills" to syncSkills.toString()
+                )
+            )
+        }
+    }
+
+    fun onAdminGrantEquipment(classification: AdminEquipmentClassification) {
+        var changed = false
+        var targetName = "Admin"
+        var equippedWeapon = ""
+        _world.update { prev ->
+            if (!prev.isAdmin) return@update prev
+            targetName = prev.playerName
+            val next = GameEngine.grantAdminEquipmentKit(prev, classification)
+            equippedWeapon = next.equipment.weaponId.orEmpty()
+            if (next.equipment != prev.equipment || next.backpack != prev.backpack) changed = true
+            next
+        }
+        if (changed) {
+            broadcastCurrentState()
+            persistCurrentState(silent = true)
+            recordAdminAuditEvent(
+                action = AdminAuditAction.GRANT_GEAR,
+                targetName = targetName,
+                summary = "Granted Tier 5 ${classification.label} Armory",
+                details = buildMap {
+                    put("classification", classification.name)
+                    if (equippedWeapon.isNotBlank()) put("weapon", equippedWeapon)
+                }
+            )
+        }
+    }
+
+    fun onToggleAdminSpectator(enabled: Boolean) {
+        var changed = false
+        var targetName = "Admin"
+        var curFloor = 0
+        _world.update { prev ->
+            if (!prev.isAdmin) return@update prev
+            targetName = prev.playerName
+            curFloor = prev.floor
+            val next = GameEngine.toggleAdminSpectatorMode(prev, enabled)
+            if (next.isSpectator != prev.isSpectator) changed = true
+            next
+        }
+        if (changed) {
+            // Immediately trigger Phoenix untrack + player_leave (when entering Spectator)
+            // or re-track presence (when leaving Spectator)
+            broadcastCurrentState()
+            recordAdminAuditEvent(
+                action = AdminAuditAction.SPECTATOR_TOGGLE,
+                targetName = targetName,
+                summary = if (enabled) "Spectator Mode ENABLED (hidden)" else "Spectator Mode DISABLED (visible)",
+                details = mapOf(
+                    "enabled" to enabled.toString(),
+                    "floor" to "F$curFloor"
+                )
+            )
+        }
+    }
+
+    fun onAdminSetTimeOfDay(hours: Float, commitAudit: Boolean = false) {
+        var isAdminNow = false
+        var appliedHours = DEFAULT_TIME_OF_DAY_HOURS
+        var targetName = "Admin"
+        _world.update { prev ->
+            if (!prev.isAdmin) return@update prev
+            isAdminNow = true
+            targetName = prev.playerName
+            val next = GameEngine.setAdminTimeOfDay(prev, hours)
+            appliedHours = next.timeOfDayHours
+            next
+        }
+        if (isAdminNow && commitAudit) {
+            val clockStr = formatAuditClock(appliedHours)
+            recordAdminAuditEvent(
+                action = AdminAuditAction.TIME_OF_DAY,
+                targetName = targetName,
+                summary = "Adjusted local time of day to $clockStr",
+                details = mapOf("clock" to clockStr)
+            )
+        }
+    }
+
+    fun onAdminSetWeatherOverride(weather: WeatherType?) {
+        _world.update { prev ->
+            if (!prev.isAdmin) return@update prev
+            val note = if (weather == null) {
+                "Admin Weather: Auto (Biome Clock)."
+            } else {
+                "Admin Weather Override: ${weather.displayName}."
+            }
+            prev.copy(
+                adminWeatherOverride = weather,
+                statusLog = (prev.statusLog + note).takeLast(60)
+            )
+        }
+    }
+
+    fun onAdminTeleport(targetFloor: Int, targetX: Int, targetY: Int, destinationLabel: String? = null) {
+        val now = SystemClock.uptimeMillis()
+        var warped = false
+        var floorChanged = false
+        var fromFloor = 0
+        var fromX = 0
+        var fromY = 0
+        var toFloor = 0
+        var toX = 0
+        var toY = 0
+        var targetName = "Admin"
+        _world.update { prev ->
+            if (!prev.isAdmin) return@update prev
+            fromFloor = prev.floor
+            fromX = prev.playerX
+            fromY = prev.playerY
+            targetName = prev.playerName
+            val next = GameEngine.teleportAdmin(
+                state = prev,
+                targetFloor = targetFloor,
+                targetX = targetX,
+                targetY = targetY,
+                destinationLabel = destinationLabel,
+                nowMs = now
+            )
+            toFloor = next.floor
+            toX = next.playerX
+            toY = next.playerY
+            if (next.floor != prev.floor || next.playerX != prev.playerX || next.playerY != prev.playerY) {
+                warped = true
+                floorChanged = next.floor != prev.floor
+            }
+            next
+        }
+        if (warped) {
+            val cur = _world.value
+            if (floorChanged) {
+                multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
+            } else {
+                broadcastCurrentState(PlayerActionState.IDLE)
+            }
+            persistCurrentState(silent = true)
+            val label = destinationLabel?.trim()?.takeIf { it.isNotEmpty() } ?: "F$toFloor ($toX, $toY)"
+            recordAdminAuditEvent(
+                action = AdminAuditAction.TELEPORT,
+                targetName = targetName,
+                summary = "Teleported to $label",
+                details = mapOf(
+                    "from" to "F$fromFloor ($fromX,$fromY)",
+                    "to" to "F$toFloor ($toX,$toY)",
+                    "destination" to label
+                )
+            )
+        }
+    }
+
+    fun onSelectAdminAuditFilter(action: AdminAuditAction?) {
+        if (!_world.value.isAdmin) return
+        _adminAuditState.update { it.copy(selectedFilter = action) }
+    }
+
+    fun onRefreshAdminAuditLog() {
+        if (!_world.value.isAdmin) return
+        val session = activeCloudSession
+        _adminAuditState.update { it.copy(isLoading = true) }
+        viewModelScope.launch {
+            val result = adminAuditRepository.refreshFromServer(isAdminFlag = true, session = session)
+            if (result != null) {
+                _adminAuditState.update { prev ->
+                    prev.copy(
+                        entries = result.entries,
+                        isLoading = false,
+                        isSyncing = false,
+                        pendingQueueCount = result.pendingQueueCount,
+                        lastSyncedAtMs = if (result.syncedFromServer) System.currentTimeMillis() else prev.lastSyncedAtMs,
+                        statusMessage = result.statusMessage
+                    )
+                }
+            } else {
+                _adminAuditState.update { it.copy(isLoading = false, isSyncing = false) }
+            }
+        }
+    }
+
+    private fun hydrateAndSyncAdminAuditLog() {
+        val cached = adminAuditRepository.loadLocalEntries()
+        _adminAuditState.value = AdminAuditUiState(
+            entries = cached,
+            pendingQueueCount = cached.count { it.syncStatus == com.example.game.cloud.AdminAuditSyncStatus.QUEUED }
+        )
+        onRefreshAdminAuditLog()
+    }
+
+    private fun flushAdminAuditQueueIfNeeded() {
+        if (!_world.value.isAdmin) return
+        val session = activeCloudSession
+        viewModelScope.launch {
+            val result = adminAuditRepository.flushPendingQueue(isAdminFlag = true, session = session) ?: return@launch
+            _adminAuditState.update { prev ->
+                prev.copy(
+                    entries = result.entries,
+                    isSyncing = false,
+                    pendingQueueCount = result.pendingQueueCount,
+                    lastSyncedAtMs = if (result.syncedFromServer) System.currentTimeMillis() else prev.lastSyncedAtMs,
+                    statusMessage = result.statusMessage ?: prev.statusMessage
+                )
+            }
+        }
+    }
+
+    private fun recordAdminAuditEvent(
+        action: AdminAuditAction,
+        targetName: String,
+        summary: String,
+        details: Map<String, String>
+    ) {
+        if (!_world.value.isAdmin) return
+        val session = activeCloudSession
+        _adminAuditState.update { it.copy(isSyncing = true) }
+        viewModelScope.launch {
+            val result = adminAuditRepository.recordEvent(
+                isAdminFlag = _world.value.isAdmin,
+                session = session,
+                action = action,
+                targetName = targetName,
+                summary = summary,
+                details = details
+            )
+            if (result != null) {
+                _adminAuditState.update { prev ->
+                    prev.copy(
+                        entries = result.entries,
+                        isSyncing = false,
+                        pendingQueueCount = result.pendingQueueCount,
+                        lastSyncedAtMs = if (result.syncedFromServer) System.currentTimeMillis() else prev.lastSyncedAtMs,
+                        statusMessage = result.statusMessage ?: prev.statusMessage
+                    )
+                }
+            } else {
+                _adminAuditState.update { it.copy(isSyncing = false) }
+            }
+        }
+    }
+
+    private fun formatAuditClock(hours: Float): String {
+        val clamped = hours.coerceIn(0f, 24f)
+        val totalMinutes = (clamped * 60f).toInt().coerceIn(0, 24 * 60)
+        val h = (totalMinutes / 60) % 24
+        val m = totalMinutes % 60
+        return String.format(java.util.Locale.US, "%02d:%02d", h, m)
     }
 
     fun dismissDeathReport() {

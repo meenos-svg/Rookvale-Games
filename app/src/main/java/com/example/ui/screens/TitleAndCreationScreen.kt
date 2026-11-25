@@ -117,6 +117,7 @@ fun TitleAndCreationScreen(
     onSelectGraphicsQuality: (GraphicsQuality) -> Unit = {},
     onToggleMinimapSetting: (Boolean) -> Unit = {},
     onToggleFpsCounter: (Boolean) -> Unit = {},
+    onToggleWeatherEffects: (Boolean) -> Unit = {},
     onDownloadUpdate: (String) -> Unit = {},
     onDismissUpdate: () -> Unit = {},
     onCreateCloudCharacter: (name: String, pin: String, tunicColorIndex: Int, hairColorIndex: Int) -> Unit,
@@ -408,13 +409,22 @@ fun TitleAndCreationScreen(
                             modifier = Modifier.size(26.dp)
                         )
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = cached.characterName,
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = ParchmentLight,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                val isCachedAdmin = com.example.game.cloud.AdminAccountPolicy.isAdminName(cached.characterName)
+                                if (isCachedAdmin) {
+                                    AdminGoldenCrownIcon(sizeDp = 14.dp)
+                                }
+                                Text(
+                                    text = cached.characterName,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = if (isCachedAdmin) TorchGold else ParchmentLight,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                             Text(
                                 text = "Cloud Save Linked • Auto-login ready",
                                 style = MaterialTheme.typography.labelSmall,
@@ -842,6 +852,7 @@ fun TitleAndCreationScreen(
             onSelectGraphicsQuality = onSelectGraphicsQuality,
             onToggleMinimap = onToggleMinimapSetting,
             onToggleFpsCounter = onToggleFpsCounter,
+            onToggleWeatherEffects = onToggleWeatherEffects,
             onDismiss = { showSettingsDialog = false }
         )
     }

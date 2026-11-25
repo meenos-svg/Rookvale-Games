@@ -40,7 +40,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.example.game.model.BossSpecialKind
 import com.example.game.model.CorpseEntity
+import com.example.game.model.DEFAULT_TIME_OF_DAY_HOURS
 import com.example.game.model.Direction
+import com.example.game.model.DisplaySettings
 import com.example.game.model.FloatingTextKind
 import com.example.game.model.GameWorldState
 import com.example.game.model.GraphicsQuality
@@ -55,6 +57,7 @@ import com.example.game.multiplayer.PlayerActionState
 import com.example.game.multiplayer.RemotePlayerInterpolator
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.sprites.EntitySpriteAtlas
+import com.example.game.world.BiomeWeatherSystem
 import com.example.game.world.NpcRole
 import com.example.game.world.NpcSpot
 import com.example.game.world.WorldMaps
@@ -92,6 +95,7 @@ fun GameCanvasView(
     state: GameWorldState,
     remotePlayers: List<RemotePlayerState> = emptyList(),
     graphicsQuality: GraphicsQuality = GraphicsQuality.DEFAULT,
+    displaySettings: DisplaySettings = DisplaySettings(),
     measureFps: Boolean = false,
     onFpsUpdated: (Int) -> Unit = {},
     cameraYawDeg: Float = IsometricCamera.DEFAULT_YAW_DEG,
@@ -103,6 +107,7 @@ fun GameCanvasView(
     val latestState by rememberUpdatedState(state)
     val latestRemotePlayers by rememberUpdatedState(remotePlayers)
     val latestGraphicsQuality by rememberUpdatedState(graphicsQuality)
+    val latestDisplaySettings by rememberUpdatedState(displaySettings)
     val latestMeasureFps by rememberUpdatedState(measureFps)
     val latestOnFpsUpdated by rememberUpdatedState(onFpsUpdated)
     val latestOnTileTapped by rememberUpdatedState(onTileTapped)
@@ -204,6 +209,7 @@ fun GameCanvasView(
     val depthQueue = remember { ArrayList<DepthSortableItem>(256) }
     val visibleLights = remember { ArrayList<ScenePointLight>(128) }
     val hdPostProcess = remember { HdPostProcessRenderer() }
+    val weatherRenderer = remember { WeatherOverlayRenderer() }
 
     Box(modifier = modifier.fillMaxSize()) {
         Canvas(
@@ -296,8 +302,9 @@ fun GameCanvasView(
 
             depthQueue.clear()
             visibleLights.clear()
-            val collectLights = quality.drawPointLightPools || (st.floor < 0 && quality != GraphicsQuality.LOW)
-            val drawLightingPass = quality.drawTwilightAtmosphere || collectLights
+            val customTimeOverride = st.isAdmin && abs(st.timeOfDayHours - DEFAULT_TIME_OF_DAY_HOURS) > 0.01f
+            val collectLights = quality.drawPointLightPools || (st.floor < 0 && quality != GraphicsQuality.LOW) || (customTimeOverride && st.floor == 0)
+            val drawLightingPass = quality.drawTwilightAtmosphere || collectLights || customTimeOverride
 
             if (st.floor < 0 && collectLights) {
                 val heroScreen = camera.tileCenterToScreen(camPlayerX, camPlayerY)
@@ -539,7 +546,7 @@ fun GameCanvasView(
 
             activeRemoteIds.clear()
             latestRemotePlayers.forEach { rp ->
-                if (rp.floor != st.floor || normalizeRegionId(rp.regionId) != localRegionId) return@forEach
+                if (rp.floor != st.floor || !com.example.game.model.isRegionCompatible(st.floor, localRegionId, rp.regionId)) return@forEach
                 activeRemoteIds.add(rp.playerId)
                 val rState = remoteInterpolator.updatePlayer(rp = rp, nowUptimeMs = now, dtSecRaw = dtSec)
                 val visX = rState.renderX
@@ -711,14 +718,35 @@ fun GameCanvasView(
             drawIsometricProjectiles(st, camera, hw, now, quality, if (collectLights) visibleLights else null)
             drawProcAoeEffects(st, camera, hw, hh, now, quality, if (collectLights) visibleLights else null)
 
-            // PASS 5: Moody Twilight Atmospheric Grade & Dynamic Warm/Arcane Point-Light Pools
+            // PASS 5: Time-of-Day Atmospheric Grade & Dynamic Warm/Arcane Point-Light Pools
             if (drawLightingPass) {
                 IsometricLightingEngine.drawTwilightAndPointLightPass(
                     scope = this,
                     floorId = st.floor,
                     nowMs = now,
                     quality = quality,
-                    lights = visibleLights
+                    lights = visibleLights,
+                    timeOfDayHours = st.timeOfDayHours
+                )
+            }
+
+            // PASS 5B: Dynamic Biome Weather Particles, Ground Ripples & Atmospheric Shaders
+            if (latestDisplaySettings.showWeatherEffects) {
+                val resolvedWeather = BiomeWeatherSystem.resolveWeather(
+                    regionId = normalizeRegionId(st.regionId),
+                    floor = st.floor,
+                    utcMillis = System.currentTimeMillis(),
+                    adminOverride = st.adminWeatherOverride
+                )
+                weatherRenderer.drawWeatherPass(
+                    scope = this,
+                    resolved = resolvedWeather,
+                    quality = quality,
+                    nowMs = now,
+                    camTileX = camPlayerX,
+                    camTileY = camPlayerY,
+                    cameraYawDeg = smoothYaw,
+                    timeOfDayHours = st.timeOfDayHours
                 )
             }
 
@@ -728,7 +756,8 @@ fun GameCanvasView(
                     scope = this,
                     quality = quality,
                     floorId = st.floor,
-                    nowMs = now
+                    nowMs = now,
+                    timeOfDayHours = st.timeOfDayHours
                 )
             }
 
@@ -751,6 +780,7 @@ fun GameCanvasView(
 
             st.floatingTexts.forEach { ft ->
                 if (ft.floor != st.floor) return@forEach
+                if (!latestDisplaySettings.shouldRenderFloatingText(ft.kind)) return@forEach
                 val age = (now - ft.createdAtMs).toFloat()
                 if (age < 0f || age > 1300f) return@forEach
                 val progress = (age / 1300f).coerceIn(0f, 1f)
@@ -1093,6 +1123,8 @@ private fun DrawScope.drawIsometricRemotePlayer(
         drawCircle(Color(0xFF4CE678).copy(alpha = 0.72f * aFrac), hw * (0.45f + 0.26f * (1f - aFrac)), haloCenter, style = Stroke(3.5f))
     }
 
+    if (rp.isSpectator) return
+
     val appearance = PaperDollAppearance.fromRemotePlayer(rp)
 
     ArticulatedHumanoidRenderer.drawPlayer(
@@ -1125,16 +1157,34 @@ private fun DrawScope.drawIsometricRemotePlayer(
     )
 
     val prevColor = labelPaint.color
-    labelPaint.color = android.graphics.Color.parseColor("#8CF0FF")
+    labelPaint.color = if (rp.isAdmin) android.graphics.Color.parseColor("#FFE27A") else android.graphics.Color.parseColor("#8CF0FF")
     val tag = "${rp.name} [Lvl ${rp.level}]"
     val tagWidth = labelPaint.measureText(tag)
-    val pipCenter = Offset(c.x - tagWidth * 0.5f - 9f, rBarY - 12f)
-    drawCircle(Color.Black, radius = 4.6f, center = pipCenter)
-    drawCircle(TorchGold, radius = 3.6f, center = pipCenter)
-    drawCircle(Color(0xFF47D7FF), radius = 2.4f, center = pipCenter)
-    drawContext.canvas.nativeCanvas.apply {
-        drawText(tag, c.x, rBarY - 5f, labelShadowPaint)
-        drawText(tag, c.x, rBarY - 5f, labelPaint)
+    if (rp.isAdmin) {
+        val crownH = 14f
+        val crownW = crownH * 1.32f
+        val gap = 4f
+        val totalW = crownW + gap + tagWidth
+        val crownLeft = c.x - totalW * 0.5f
+        val textCenterX = c.x + (crownW + gap) * 0.5f
+        drawIsometricAdminCrown(
+            leftX = crownLeft,
+            centerY = rBarY - 11.5f,
+            heightPx = crownH
+        )
+        drawContext.canvas.nativeCanvas.apply {
+            drawText(tag, textCenterX, rBarY - 5f, labelShadowPaint)
+            drawText(tag, textCenterX, rBarY - 5f, labelPaint)
+        }
+    } else {
+        val pipCenter = Offset(c.x - tagWidth * 0.5f - 9f, rBarY - 12f)
+        drawCircle(Color.Black, radius = 4.6f, center = pipCenter)
+        drawCircle(TorchGold, radius = 3.6f, center = pipCenter)
+        drawCircle(Color(0xFF47D7FF), radius = 2.4f, center = pipCenter)
+        drawContext.canvas.nativeCanvas.apply {
+            drawText(tag, c.x, rBarY - 5f, labelShadowPaint)
+            drawText(tag, c.x, rBarY - 5f, labelPaint)
+        }
     }
     labelPaint.color = prevColor
 }
@@ -1181,6 +1231,15 @@ private fun DrawScope.drawIsometricLocalPlayer(
     )
 
     val auraCenter = Offset(c.x, feetY - heightPx * 0.42f)
+    if (state.isSpectator) {
+        drawCircle(Color(0xFFA78BFA).copy(alpha = 0.22f), hw * 0.78f, auraCenter)
+        drawCircle(
+            color = Color(0xFFA78BFA).copy(alpha = 0.45f),
+            radius = hw * 0.64f,
+            center = auraCenter,
+            style = Stroke(width = 2.2f)
+        )
+    }
     if (state.poisonTicks > 0) drawCircle(PoisonGreen.copy(alpha = 0.28f), hw * 0.72f, auraCenter)
     if (state.fireTicks > 0) drawCircle(FireOrange.copy(alpha = 0.34f), hw * 0.76f, auraCenter)
 
@@ -1191,19 +1250,47 @@ private fun DrawScope.drawIsometricLocalPlayer(
         equipment = state.equipment
     )
 
-    ArticulatedHumanoidRenderer.drawPlayer(
-        scope = this,
-        cx = c.x,
-        feetY = feetY,
-        heightPx = heightPx,
-        appearance = appearance,
-        facing = resolvedFacing,
-        walkPhase = walkPhase,
-        attackProgress = attackProgress,
-        nowMs = now,
-        quality = quality,
-        path = path
-    )
+    if (state.isSpectator) {
+        val layerBounds = androidx.compose.ui.geometry.Rect(
+            left = c.x - heightPx * 1.4f,
+            top = feetY - heightPx * 1.6f,
+            right = c.x + heightPx * 1.4f,
+            bottom = feetY + heightPx * 0.45f
+        )
+        val ghostPaint = androidx.compose.ui.graphics.Paint().apply { alpha = 0.48f }
+        drawContext.canvas.saveLayer(layerBounds, ghostPaint)
+        try {
+            ArticulatedHumanoidRenderer.drawPlayer(
+                scope = this,
+                cx = c.x,
+                feetY = feetY,
+                heightPx = heightPx,
+                appearance = appearance,
+                facing = resolvedFacing,
+                walkPhase = walkPhase,
+                attackProgress = attackProgress,
+                nowMs = now,
+                quality = quality,
+                path = path
+            )
+        } finally {
+            drawContext.canvas.restore()
+        }
+    } else {
+        ArticulatedHumanoidRenderer.drawPlayer(
+            scope = this,
+            cx = c.x,
+            feetY = feetY,
+            heightPx = heightPx,
+            appearance = appearance,
+            facing = resolvedFacing,
+            walkPhase = walkPhase,
+            attackProgress = attackProgress,
+            nowMs = now,
+            quality = quality,
+            path = path
+        )
+    }
 
     val pHpFrac = (state.hp.toFloat() / state.effectiveMaxHp().coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
     val pBarW = hw * 1.22f
@@ -1212,6 +1299,7 @@ private fun DrawScope.drawIsometricLocalPlayer(
     drawRect(Color.Black, Offset(pBarX - 1f, pBarY - 1f), Size(pBarW + 2f, 8f))
     drawRect(
         when {
+            state.isInvulnerable -> TorchGold
             pHpFrac > 0.6f -> Color(0xFF39D952)
             pHpFrac > 0.3f -> TorchGold
             else -> HealthCrimson
@@ -1219,9 +1307,31 @@ private fun DrawScope.drawIsometricLocalPlayer(
         Offset(pBarX, pBarY),
         Size(pBarW * pHpFrac, 6f)
     )
-    drawContext.canvas.nativeCanvas.apply {
-        drawText(state.playerName, c.x, pBarY - 5f, labelShadowPaint)
-        drawText(state.playerName, c.x, pBarY - 5f, labelPaint)
+    if (state.isAdmin) {
+        val prevColor = labelPaint.color
+        labelPaint.color = android.graphics.Color.parseColor("#FFE27A")
+        val nameW = labelPaint.measureText(state.playerName)
+        val crownH = 14.5f
+        val crownW = crownH * 1.32f
+        val gap = 4f
+        val totalW = crownW + gap + nameW
+        val crownLeft = c.x - totalW * 0.5f
+        val textCenterX = c.x + (crownW + gap) * 0.5f
+        drawIsometricAdminCrown(
+            leftX = crownLeft,
+            centerY = pBarY - 11.5f,
+            heightPx = crownH
+        )
+        drawContext.canvas.nativeCanvas.apply {
+            drawText(state.playerName, textCenterX, pBarY - 5f, labelShadowPaint)
+            drawText(state.playerName, textCenterX, pBarY - 5f, labelPaint)
+        }
+        labelPaint.color = prevColor
+    } else {
+        drawContext.canvas.nativeCanvas.apply {
+            drawText(state.playerName, c.x, pBarY - 5f, labelShadowPaint)
+            drawText(state.playerName, c.x, pBarY - 5f, labelPaint)
+        }
     }
 }
 

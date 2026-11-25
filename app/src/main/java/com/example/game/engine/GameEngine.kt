@@ -11,6 +11,7 @@ import com.example.game.multiplayer.RemotePlayerActionFxEvent
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.multiplayer.SyncedMonsterSnapshot
 import com.example.game.world.NpcRole
+import com.example.game.world.WorldBiomeBlueprint
 import com.example.game.world.WorldFloor
 import com.example.game.world.WorldMaps
 import java.util.ArrayDeque
@@ -29,9 +30,10 @@ object GameEngine {
         name: String,
         vocation: Vocation = Vocation.ADVENTURER,
         tunicColorIndex: Int = 0,
-        hairColorIndex: Int = 0
+        hairColorIndex: Int = 0,
+        isAdmin: Boolean = false
     ): GameWorldState {
-        val cleanName = name.trim().ifEmpty { "Aldric" }.take(18)
+        val cleanName = if (isAdmin) "Admin" else name.trim().ifEmpty { "Aldric" }.take(18)
         val equipment = when (vocation) {
             Vocation.ADVENTURER -> EquippedGear(
                 weaponId = "sunbrass_dirk",
@@ -98,10 +100,25 @@ object GameEngine {
         } else {
             "Mine Ochre Veins in the West Quarry, smelt at the Smithy Furnace, and forge at the Anvil."
         }
+        val introLog = if (isAdmin) {
+            listOf(
+                "Welcome, Admin! Infinite Health is active.",
+                "Tap the golden Crown button in the bottom-right corner to open Admin Control (Spectator, Time of Day, Level & Tier 5 Armory)."
+            )
+        } else {
+            listOf(
+                "Welcome to Rookvale, $cleanName the ${vocation.displayName}!",
+                introLine
+            )
+        }
         return GameWorldState(
             saveId = UUID.randomUUID().toString(),
             playerName = cleanName,
             vocation = vocation,
+            isAdmin = isAdmin,
+            infiniteHealth = isAdmin,
+            isSpectator = false,
+            timeOfDayHours = DEFAULT_TIME_OF_DAY_HOURS,
             tunicColorIndex = tunicColorIndex.coerceIn(0, AdventurerPalette.tunicColors.lastIndex),
             hairColorIndex = hairColorIndex.coerceIn(0, AdventurerPalette.hairColors.lastIndex),
             level = 1,
@@ -126,10 +143,7 @@ object GameEngine {
             depot = listOf(ItemStack("health_potion", 2), ItemStack("rope", 1)),
             monsters = WorldMaps.initialMonsters(),
             oreNodes = WorldMaps.initialOreNodes(),
-            statusLog = listOf(
-                "Welcome to Rookvale, $cleanName the ${vocation.displayName}!",
-                introLine
-            )
+            statusLog = introLog
         )
     }
 
@@ -144,18 +158,21 @@ object GameEngine {
         val voc = runCatching { Vocation.valueOf(save.vocationName) }.getOrDefault(Vocation.ADVENTURER)
         val isLegacyV1 = save.mapVersion < 2
         val isLegacyV2 = save.mapVersion == 2
+        val isLegacyV3 = save.mapVersion == 3
         val floorMap = WorldMaps.getFloor(save.floor)
-        val resolvedRegionId = normalizeRegionId(save.regionId)
 
         var targetX = save.x
         var targetY = save.y
         if (save.floor == 0) {
             if (isLegacyV1) {
-                targetX += V1_SURFACE_OFFSET + V2_TO_V3_OFFSET_X
-                targetY += V1_SURFACE_OFFSET + V2_TO_V3_OFFSET_Y
+                targetX += V1_SURFACE_OFFSET + V2_TO_V3_OFFSET_X + V3_TO_V4_OFFSET_X
+                targetY += V1_SURFACE_OFFSET + V2_TO_V3_OFFSET_Y + V3_TO_V4_OFFSET_Y
             } else if (isLegacyV2) {
-                targetX += V2_TO_V3_OFFSET_X
-                targetY += V2_TO_V3_OFFSET_Y
+                targetX += V2_TO_V3_OFFSET_X + V3_TO_V4_OFFSET_X
+                targetY += V2_TO_V3_OFFSET_Y + V3_TO_V4_OFFSET_Y
+            } else if (isLegacyV3) {
+                targetX += V3_TO_V4_OFFSET_X
+                targetY += V3_TO_V4_OFFSET_Y
             }
         }
         val npcCoordsOnFloor = WorldMaps.npcs.filter { it.floor == save.floor }.map { it.x to it.y }.toSet()
@@ -169,27 +186,13 @@ object GameEngine {
             targetX = fx
             targetY = fy
         }
-
-        val migratedCorpses = save.playerCorpses.map { corpse ->
-            var cx = corpse.x
-            var cy = corpse.y
-            if (corpse.floor == 0) {
-                if (isLegacyV1) {
-                    cx += V1_SURFACE_OFFSET + V2_TO_V3_OFFSET_X
-                    cy += V1_SURFACE_OFFSET + V2_TO_V3_OFFSET_Y
-                } else if (isLegacyV2) {
-                    cx += V2_TO_V3_OFFSET_X
-                    cy += V2_TO_V3_OFFSET_Y
-                }
-            }
-            val cMap = WorldMaps.getFloor(corpse.floor)
-            if (cx in 0 until cMap.width && cy in 0 until cMap.height && cMap.tileAt(cx, cy).walkable) {
-                corpse.copy(x = cx, y = cy)
-            } else {
-                val (fx, fy) = WorldMaps.findNearestWalkableTile(corpse.floor, cx, cy, maxRadius = 8)
-                    ?: WorldMaps.fallbackLandingForFloor(corpse.floor)
-                corpse.copy(x = fx, y = fy)
-            }
+        if (save.floor == 0) {
+            floorMap.chunkedGrid.prewarmAround(targetX, targetY, radiusChunks = 2)
+        }
+        val resolvedRegionId = if (save.floor == 0) {
+            WorldMaps.regionForGlobal(targetX, targetY).regionId
+        } else {
+            normalizeRegionId(save.regionId)
         }
 
         // Normalize legacy ore/item IDs and auto-migrate any tools sitting in backpack into the Tool Bag
@@ -213,6 +216,16 @@ object GameEngine {
         for (stack in save.depot) {
             normalizedDepot = addItemPublic(normalizedDepot, ItemCatalog.migrateLegacyItemId(stack.itemId), stack.count)
         }
+        // Normalize Reaper Vault items & rescue items from any legacy pre-refactor playerCorpses
+        var normalizedReaperVault = emptyList<ItemStack>()
+        for (stack in save.reaperVault) {
+            normalizedReaperVault = addItemPublic(normalizedReaperVault, ItemCatalog.migrateLegacyItemId(stack.itemId), stack.count)
+        }
+        for (legacyCorpse in save.playerCorpses) {
+            for (stack in legacyCorpse.items) {
+                normalizedReaperVault = addItemPublic(normalizedReaperVault, ItemCatalog.migrateLegacyItemId(stack.itemId), stack.count)
+            }
+        }
 
         // Safely unequip any shield conflicting with a 2H weapon on older saves
         var migratedEquip = save.equipment
@@ -232,16 +245,34 @@ object GameEngine {
         val notes = buildString {
             if (isLegacyV1) append(" (Migrated V1 save — a Quarry Mattock awaits in Depot!)")
             if (movedToolsCount > 0) append(" (Packed $movedToolsCount tool(s) into your Tool Bag!)")
+            if (normalizedReaperVault.isNotEmpty()) {
+                val totalHeld = normalizedReaperVault.sumOf { it.count }
+                append(" (Mortis holds $totalHeld lost item(s) at the Temple of Reapers.)")
+            }
         }
+        // Legacy Sovereign's Scroll has been superseded by the bottom-right Admin Control HUD overlay.
+        val finalBackpack = migratedBackpack.filterNot {
+            it.itemId == "admin_sovereign_scroll" || ItemCatalog.all[it.itemId]?.adminOnly == true
+        }
+        val finalDepot = migratedDepot.filterNot {
+            it.itemId == "admin_sovereign_scroll" || ItemCatalog.all[it.itemId]?.adminOnly == true
+        }
+        val loadedMaxHp = save.maxHp + migratedEquip.totalBonusMaxHp()
+        val loadedHp = if (save.isAdmin) loadedMaxHp else save.hp.coerceIn(1, loadedMaxHp)
+
         return GameWorldState(
             saveId = save.slotId,
-            playerName = save.name,
+            playerName = if (save.isAdmin) "Admin" else save.name,
             vocation = voc,
+            isAdmin = save.isAdmin,
+            infiniteHealth = save.isAdmin,
+            isSpectator = false,
+            timeOfDayHours = DEFAULT_TIME_OF_DAY_HOURS,
             tunicColorIndex = save.tunicColorIndex.coerceIn(0, AdventurerPalette.tunicColors.lastIndex),
             hairColorIndex = save.hairColorIndex.coerceIn(0, AdventurerPalette.hairColors.lastIndex),
             level = save.level,
             xp = save.xp,
-            hp = save.hp.coerceIn(1, save.maxHp + save.equipment.totalBonusMaxHp()),
+            hp = loadedHp,
             maxHp = save.maxHp,
             mp = save.mp.coerceIn(0, save.maxMp),
             maxMp = save.maxMp,
@@ -256,17 +287,19 @@ object GameEngine {
             playerY = targetY,
             prevPlayerX = targetX,
             prevPlayerY = targetY,
-            playerFacing = runCatching { Direction.valueOf(save.facingName) }.getOrDefault(Direction.SOUTH),
-            poisonTicks = save.poisonTicks,
-            fireTicks = save.fireTicks,
+            playerFacing = Direction.SOUTH,
+            poisonTicks = 0,
+            fireTicks = 0,
             skills = save.skills,
             equipment = migratedEquip,
-            backpack = migratedBackpack,
+            backpack = finalBackpack,
             toolBag = migratedToolBag,
-            depot = migratedDepot,
+            depot = finalDepot,
+            reaperVault = normalizedReaperVault,
+            // World entities always initialize deterministically from WorldMaps (never loaded from DB)
             monsters = WorldMaps.initialMonsters(),
             oreNodes = WorldMaps.initialOreNodes(),
-            corpses = migratedCorpses,
+            corpses = emptyList(),
             questFlags = save.questFlags,
             boundAttackRuneId = save.boundAttackRuneId ?: "magic_dart_rune",
             boundHealRuneId = save.boundHealRuneId ?: "healing_rune",
@@ -280,6 +313,7 @@ object GameEngine {
             slotId = state.saveId,
             name = state.playerName,
             vocationName = state.vocation.name,
+            isAdmin = state.isAdmin,
             level = state.level,
             xp = state.xp,
             hp = state.hp,
@@ -291,19 +325,18 @@ object GameEngine {
             maxCapOz = state.maxCapOz,
             gold = state.gold,
             bankGold = state.bankGold.coerceAtLeast(0L),
-            floor = state.floor,
+            floor = state.floor.coerceIn(-6, 0),
             x = state.playerX,
             y = state.playerY,
-            poisonTicks = state.poisonTicks,
-            fireTicks = state.fireTicks,
+            poisonTicks = 0,
+            fireTicks = 0,
             skills = state.skills,
             equipment = state.equipment,
             backpack = state.backpack.filter { it.itemId.isNotBlank() && it.count > 0 }.toList(),
             toolBag = state.toolBag.filter { it.itemId.isNotBlank() && it.count > 0 }.toList(),
             depot = state.depot.filter { it.itemId.isNotBlank() && it.count > 0 }.toList(),
-            playerCorpses = state.corpses.filter { it.isPlayerCorpse }.map { corpse ->
-                corpse.copy(items = corpse.items.filter { it.itemId.isNotBlank() && it.count > 0 }.toList())
-            }.toList(),
+            reaperVault = state.reaperVault.filter { it.itemId.isNotBlank() && it.count > 0 }.toList(),
+            playerCorpses = emptyList(),
             mapVersion = CURRENT_MAP_VERSION,
             tunicColorIndex = state.tunicColorIndex,
             hairColorIndex = state.hairColorIndex,
@@ -312,7 +345,7 @@ object GameEngine {
             boundHealRuneId = state.boundHealRuneId,
             customHotbarSlots = List(2) { idx -> state.customHotbarSlots.getOrNull(idx) },
             regionId = normalizeRegionId(state.regionId),
-            facingName = state.playerFacing.name
+            facingName = Direction.SOUTH.name
         )
     }
 
@@ -383,12 +416,12 @@ object GameEngine {
         val tile = floorMap.tileAt(tx, ty)
         val dist = chebyshev(baseState.playerX, baseState.playerY, tx, ty)
 
-        // 2. NPC or Shop Counter (Brother Alden, The Oracle, Alaric)
+        // 2. NPC or Shop Counter (Brother Alden, The Oracle, Alaric, Harbor Captains)
         if (npc != null || tile == TileType.SHOP_COUNTER) {
             return if (dist <= 2) {
                 when (npc?.role) {
                     NpcRole.TEMPLE_PRIEST -> blessAtTemple(baseState, nowMs)
-                    NpcRole.ORACLE -> baseState.copy(activePanel = ActivePanel.ORACLE, walkPath = emptyList())
+                    NpcRole.ORACLE -> baseState.copy(activePanel = ActivePanel.ORACLE, walkPath = emptyList(), longRangeGoal = null, longRangeWaypoints = emptyList())
                         .addLogInternal(
                             when {
                                 baseState.vocation != Vocation.ADVENTURER -> "The Oracle: 'Walk proudly on your chosen path, ${baseState.vocation.displayName}.'"
@@ -396,7 +429,32 @@ object GameEngine {
                                 else -> "The Oracle: 'Level ${baseState.level} achieved! Are you ready to claim your vocation?'"
                             }
                         )
-                    else -> baseState.copy(activePanel = ActivePanel.SHOP, walkPath = emptyList())
+                    NpcRole.HARBOR_CAPTAIN -> {
+                        val port = WorldMaps.harborPortAtNpc(npc.x, npc.y)
+                        baseState.copy(
+                            activePanel = ActivePanel.HARBOR_FERRY,
+                            activeHarborPortId = port?.id,
+                            walkPath = emptyList(),
+                            longRangeGoal = null,
+                            longRangeWaypoints = emptyList()
+                        ).addLogInternal("${npc.name}: 'Fair winds, traveler! Choose any coastal port for immediate passage.'")
+                    }
+                    NpcRole.REAPER_KEEPER -> {
+                        val heldCount = baseState.reaperVault.sumOf { it.count }
+                        val totalFee = reaperTotalReclaimFee(baseState.reaperVault)
+                        val greeting = if (heldCount > 0) {
+                            "Mortis: 'I hold $heldCount item(s) reclaimed from your fall. Offer ${formatGold(totalFee.toLong())} gp to restore them.'"
+                        } else {
+                            "Mortis: 'The Soul Basin is empty — tread carefully, mortal. Should you fall, your backpack shall await you here.'"
+                        }
+                        baseState.copy(
+                            activePanel = ActivePanel.REAPER_TEMPLE,
+                            walkPath = emptyList(),
+                            longRangeGoal = null,
+                            longRangeWaypoints = emptyList()
+                        ).addLogInternal(greeting)
+                    }
+                    else -> baseState.copy(activePanel = ActivePanel.SHOP, walkPath = emptyList(), longRangeGoal = null, longRangeWaypoints = emptyList())
                         .addLogInternal("Alaric: 'Potions, Blank Runes, Hatchets & sturdy tools — inscribe spells at the Rune Altar!'")
                 }
             } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
@@ -477,11 +535,12 @@ object GameEngine {
             return useRope(baseState, nowMs)
         }
 
-        // 10. Walkable tile -> BFS path (respecting Tibia-style non-PZ player blocking)
+        // 10. Walkable tile -> A* path (respecting Tibia-style non-PZ player blocking)
         if (tile.walkable) {
-            val path = findPath(baseState, tx, ty, remotePlayersOnFloor)
+            val clean = baseState.copy(longRangeGoal = null, longRangeWaypoints = emptyList())
+            val path = findPath(clean, tx, ty, remotePlayersOnFloor)
             if (path.isNotEmpty()) {
-                return stepAlongPath(baseState.copy(walkPath = path), nowMs, remotePlayersOnFloor)
+                return stepAlongPath(clean.copy(walkPath = path), nowMs, remotePlayersOnFloor)
             }
         }
         return baseState
@@ -495,7 +554,12 @@ object GameEngine {
     ): GameWorldState {
         if (state.deathReport != null) return state
         return attemptMoveTo(
-            state.copy(walkPath = emptyList(), autoFollowTarget = false),
+            state.copy(
+                walkPath = emptyList(),
+                longRangeGoal = null,
+                longRangeWaypoints = emptyList(),
+                autoFollowTarget = false
+            ),
             state.playerX + dir.dx,
             state.playerY + dir.dy,
             dir,
@@ -505,8 +569,8 @@ object GameEngine {
     }
 
     /**
-     * Advances either a manual tap-to-walk path or active melee Target Auto-Follow pursuit.
-     * Re-pathfinds dynamically whenever the targeted monster moves out of melee range (> 1 tile).
+     * Advances a manual tap-to-walk path, a hierarchical multi-region auto-walk chain,
+     * or active melee Target Auto-Follow pursuit.
      */
     fun stepAutoFollowOrPath(
         state: GameWorldState,
@@ -516,6 +580,9 @@ object GameEngine {
         if (state.deathReport != null) return state
         if (state.walkPath.isNotEmpty()) {
             return stepAlongPath(state, nowMs, remotePlayersOnFloor)
+        }
+        if (state.longRangeWaypoints.isNotEmpty() || state.longRangeGoal != null) {
+            return advanceLongRangeAutoWalk(state, nowMs, remotePlayersOnFloor)
         }
         if (!state.autoFollowTarget) return state
         val targetId = state.targetMonsterId ?: return state.copy(autoFollowTarget = false)
@@ -545,6 +612,39 @@ object GameEngine {
         return attemptMoveTo(state, nextStep.first, nextStep.second, dir, nowMs, remotePlayersOnFloor)
     }
 
+    private fun advanceLongRangeAutoWalk(
+        state: GameWorldState,
+        nowMs: Long,
+        remotePlayersOnFloor: List<RemotePlayerState>
+    ): GameWorldState {
+        val finalGoal = state.longRangeGoal ?: return state.copy(longRangeWaypoints = emptyList())
+        if (abs(finalGoal.first - state.playerX) + abs(finalGoal.second - state.playerY) <= 2) {
+            return state.copy(longRangeGoal = null, longRangeWaypoints = emptyList())
+                .addLogInternal("Arrived at (${finalGoal.first}, ${finalGoal.second}).")
+        }
+        var queue = state.longRangeWaypoints
+        while (queue.isNotEmpty() &&
+            abs(queue.first().first - state.playerX) + abs(queue.first().second - state.playerY) <= 4
+        ) {
+            queue = queue.drop(1)
+        }
+        val nextTarget = queue.firstOrNull() ?: finalGoal
+        val remainingQueue = if (queue.isNotEmpty()) queue.drop(1) else emptyList()
+        val resolvedTarget = WorldMaps.findNearestWalkableTile(state.floor, nextTarget.first, nextTarget.second, maxRadius = 8)
+            ?: nextTarget
+        val segPath = findPath(state, resolvedTarget.first, resolvedTarget.second, remotePlayersOnFloor)
+        if (segPath.isEmpty()) {
+            return state.copy(longRangeGoal = null, longRangeWaypoints = emptyList())
+                .addLogInternal("Auto-walk halted near (${state.playerX}, ${state.playerY}).")
+        }
+        val queued = state.copy(
+            walkPath = segPath,
+            longRangeWaypoints = remainingQueue,
+            longRangeGoal = if (nextTarget == finalGoal && remainingQueue.isEmpty()) finalGoal else state.longRangeGoal
+        )
+        return stepAlongPath(queued, nowMs, remotePlayersOnFloor)
+    }
+
     fun stepAlongPath(
         state: GameWorldState,
         nowMs: Long,
@@ -562,11 +662,16 @@ object GameEngine {
             else -> Direction.NORTH
         }
         val moved = attemptMoveTo(state.copy(walkPath = remaining), nx, ny, dir, nowMs, remotePlayersOnFloor)
-        return if (moved.playerX == state.playerX && moved.playerY == state.playerY && moved.floor == state.floor) {
-            moved.copy(walkPath = emptyList())
-        } else {
-            moved
+        if (moved.playerX == state.playerX && moved.playerY == state.playerY && moved.floor == state.floor) {
+            return moved.copy(walkPath = emptyList(), longRangeGoal = null, longRangeWaypoints = emptyList())
         }
+        val finalGoal = moved.longRangeGoal
+        if (remaining.isEmpty() && finalGoal != null &&
+            abs(finalGoal.first - moved.playerX) + abs(finalGoal.second - moved.playerY) <= 2
+        ) {
+            return moved.copy(longRangeGoal = null, longRangeWaypoints = emptyList())
+        }
+        return moved
     }
 
     /**
@@ -638,8 +743,14 @@ object GameEngine {
             } else {
                 state.questFlags
             }
+            val targetRegion = if (portal.toFloor == 0) {
+                WorldMaps.regionForGlobal(portal.toX, portal.toY).regionId
+            } else {
+                state.regionId
+            }
             return state.copy(
                 floor = portal.toFloor,
+                regionId = targetRegion,
                 playerX = portal.toX,
                 playerY = portal.toY,
                 prevPlayerX = portal.toX,
@@ -647,16 +758,19 @@ object GameEngine {
                 lastPlayerMoveMs = nowMs,
                 playerFacing = dir,
                 walkPath = emptyList(),
+                longRangeGoal = null,
+                longRangeWaypoints = emptyList(),
                 targetMonsterId = null,
                 autoFollowTarget = false,
                 activePanel = ActivePanel.NONE,
+                activeHarborPortId = null,
                 floorWarningBanner = banner,
                 questFlags = updatedFlags
             ).addLogInternal(msg)
         }
 
         // Auto-close station panels if the player walks away from the physical station!
-        val moved = state.copy(
+        var moved = state.copy(
             prevPlayerX = state.playerX,
             prevPlayerY = state.playerY,
             playerX = nx,
@@ -664,6 +778,26 @@ object GameEngine {
             lastPlayerMoveMs = nowMs,
             playerFacing = dir
         )
+
+        // Seamless 400x400 region transition detection on Floor 0
+        if (moved.floor == 0) {
+            val currentRegion = WorldMaps.regionForGlobal(nx, ny)
+            if (currentRegion.regionId != moved.regionId) {
+                floorMap.chunkedGrid.prewarmAround(nx, ny, radiusChunks = 2)
+                moved = moved.copy(
+                    regionId = currentRegion.regionId,
+                    floorWarningBanner = FloorWarningBanner(
+                        floorId = 0,
+                        floorName = currentRegion.displayName,
+                        dangerLevel = currentRegion.dangerLevel,
+                        recommendedLevel = currentRegion.recommendedLevel,
+                        severity = currentRegion.dangerSeverity,
+                        createdAtMs = nowMs
+                    )
+                ).addLogInternal("Entered ${currentRegion.displayName} (${currentRegion.recommendedLevel} • ${currentRegion.dangerLevel} Danger).")
+            }
+        }
+
         val shouldCloseStation = when (moved.activePanel) {
             ActivePanel.FURNACE -> !CraftingAndMiningEngine.isNearStation(moved, TileType.SMELTING_FURNACE)
             ActivePanel.ANVIL -> !CraftingAndMiningEngine.isNearStation(moved, TileType.BLACKSMITH_ANVIL)
@@ -676,11 +810,168 @@ object GameEngine {
                 c == null || c.floor != moved.floor || chebyshev(moved.playerX, moved.playerY, c.x, c.y) > 1
             }
             ActivePanel.ORACLE -> moved.floor != 0 || chebyshev(moved.playerX, moved.playerY, WorldMaps.ORACLE_X, WorldMaps.ORACLE_Y) > 2
+            ActivePanel.HARBOR_FERRY -> {
+                val port = moved.activeHarborPortId?.let { WorldMaps.harborPortById(it) }
+                moved.floor != 0 || port == null || chebyshev(moved.playerX, moved.playerY, port.dockX, port.dockY) > 3
+            }
+            ActivePanel.REAPER_TEMPLE -> {
+                moved.floor != 0 || chebyshev(moved.playerX, moved.playerY, WorldMaps.REAPER_X, WorldMaps.REAPER_Y) > 3
+            }
             else -> false
         }
         return if (shouldCloseStation) {
-            moved.copy(activePanel = ActivePanel.NONE, inspectingCorpseId = null)
+            moved.copy(activePanel = ActivePanel.NONE, inspectingCorpseId = null, activeHarborPortId = null)
         } else moved
+    }
+
+    /**
+     * Gold cost to buy back a single unit of [itemId] from Mortis at the Temple of Reapers.
+     * Priced at ~15% of catalog value (fair gold sink while affordable even for endgame gear).
+     */
+    fun reaperReclaimPricePerUnit(itemId: String): Int {
+        val def = ItemCatalog.get(itemId)
+        val raw = (def.buyPrice * 0.15).toInt()
+        return if (def.stackable) {
+            raw.coerceIn(2, 250)
+        } else {
+            raw.coerceIn(10, 2_500)
+        }
+    }
+
+    fun reaperReclaimFeeForStack(stack: ItemStack): Int {
+        if (stack.count <= 0) return 0
+        val perUnit = reaperReclaimPricePerUnit(stack.itemId)
+        val rawTotal = perUnit.toLong() * stack.count.toLong()
+        return rawTotal.coerceIn(10L, 50_000L).toInt()
+    }
+
+    fun reaperTotalReclaimFee(vault: List<ItemStack>): Int =
+        vault.sumOf { reaperReclaimFeeForStack(it) }
+
+    /**
+     * Deducts [fee] from carried gold first and draws any remainder seamlessly from Rookvale Bank gold.
+     * Returns null if combined carried + bank gold is insufficient.
+     */
+    private fun spendGoldWithBankFallback(carriedGold: Int, bankGold: Long, fee: Int): Pair<Int, Long>? {
+        val safeCarried = carriedGold.coerceAtLeast(0)
+        val safeBank = bankGold.coerceAtLeast(0L)
+        val totalAvailable = safeCarried.toLong() + safeBank
+        if (totalAvailable < fee.toLong()) return null
+        val fromCarried = minOf(safeCarried, fee)
+        val remainderFromBank = (fee - fromCarried).toLong()
+        return (safeCarried - fromCarried) to (safeBank - remainderFromBank)
+    }
+
+    fun buyBackReaperItem(state: GameWorldState, itemId: String): GameWorldState {
+        val stack = state.reaperVault.firstOrNull { it.itemId == itemId } ?: return state
+        val def = ItemCatalog.get(stack.itemId)
+        val fee = reaperReclaimFeeForStack(stack)
+        val weight = def.weightOz * stack.count * if (def.isTool) TOOL_BAG_WEIGHT_MULTIPLIER else 1.0
+        if (weight > state.remainingCapOz() + 0.001) {
+            return state.addLogInternal("Not enough carrying Cap (${String.format("%.1f", weight)} oz needed) to reclaim ${def.name}.")
+        }
+        val payment = spendGoldWithBankFallback(state.gold, state.bankGold, fee)
+            ?: return state.addLogInternal("Need ${formatGold(fee.toLong())} gp (purse + bank) to reclaim ${def.name}.")
+
+        val (newGold, newBank) = payment
+        val newVault = state.reaperVault.filterNot { it.itemId == itemId }
+        val newBackpack = if (def.isTool) state.backpack else addItemPublic(state.backpack, stack.itemId, stack.count)
+        val newToolBag = if (def.isTool) addItemPublic(state.toolBag, stack.itemId, stack.count) else state.toolBag
+        val qtyLabel = if (stack.count > 1) "${stack.count}x ${def.name}" else def.name
+        return state.copy(
+            gold = newGold,
+            bankGold = newBank,
+            backpack = newBackpack,
+            toolBag = newToolBag,
+            reaperVault = newVault
+        ).addLogInternal("Mortis restored $qtyLabel for ${formatGold(fee.toLong())} gp.")
+    }
+
+    fun buyBackAllReaperItems(state: GameWorldState): GameWorldState {
+        if (state.reaperVault.isEmpty()) return state.addLogInternal("Mortis holds no lost items for you.")
+        var cur = state
+        var reclaimedStacks = 0
+        var totalPaid = 0
+        var skippedForCapOrGold = 0
+        for (stack in state.reaperVault) {
+            val def = ItemCatalog.get(stack.itemId)
+            val fee = reaperReclaimFeeForStack(stack)
+            val weight = def.weightOz * stack.count * if (def.isTool) TOOL_BAG_WEIGHT_MULTIPLIER else 1.0
+            if (weight > cur.remainingCapOz() + 0.001) {
+                skippedForCapOrGold++
+                continue
+            }
+            val payment = spendGoldWithBankFallback(cur.gold, cur.bankGold, fee)
+            if (payment == null) {
+                skippedForCapOrGold++
+                continue
+            }
+            val (newGold, newBank) = payment
+            cur = cur.copy(
+                gold = newGold,
+                bankGold = newBank,
+                backpack = if (def.isTool) cur.backpack else addItemPublic(cur.backpack, stack.itemId, stack.count),
+                toolBag = if (def.isTool) addItemPublic(cur.toolBag, stack.itemId, stack.count) else cur.toolBag,
+                reaperVault = cur.reaperVault.filterNot { it.itemId == stack.itemId }
+            )
+            reclaimedStacks++
+            totalPaid += fee
+        }
+        return when {
+            reclaimedStacks == 0 -> cur.addLogInternal("Insufficient gold (purse + bank) or Cap to reclaim your lost items.")
+            skippedForCapOrGold > 0 -> cur.addLogInternal("Reclaimed $reclaimedStacks stack(s) for ${formatGold(totalPaid.toLong())} gp ($skippedForCapOrGold held for Cap/gold).")
+            else -> cur.addLogInternal("Mortis restored all $reclaimedStacks stack(s) for ${formatGold(totalPaid.toLong())} gp.")
+        }
+    }
+
+    fun discardReaperItem(state: GameWorldState, itemId: String): GameWorldState {
+        val stack = state.reaperVault.firstOrNull { it.itemId == itemId } ?: return state
+        val def = ItemCatalog.get(stack.itemId)
+        val newVault = state.reaperVault.filterNot { it.itemId == itemId }
+        return state.copy(reaperVault = newVault)
+            .addLogInternal("Released ${stack.count}x ${def.name} to the Temple of Reapers.")
+    }
+
+    /**
+     * Boards a coastal Harbor Ferry from any port to any other coastal port on the 1600x1200 world map.
+     */
+    fun boardHarborFerry(
+        state: GameWorldState,
+        destinationPortId: String,
+        nowMs: Long
+    ): GameWorldState {
+        if (state.deathReport != null) return state
+        val destPort = WorldMaps.harborPortById(destinationPortId) ?: return state
+        val floorMap = WorldMaps.getFloor(0)
+        val (ax, ay) = WorldMaps.findNearestWalkableTile(0, destPort.arrivalX, destPort.arrivalY, maxRadius = 6)
+            ?: (destPort.arrivalX to destPort.arrivalY)
+        floorMap.chunkedGrid.prewarmAround(ax, ay, radiusChunks = 2)
+        val destRegion = WorldMaps.regionForGlobal(ax, ay)
+        return state.copy(
+            floor = 0,
+            regionId = destRegion.regionId,
+            playerX = ax,
+            playerY = ay,
+            prevPlayerX = ax,
+            prevPlayerY = ay,
+            lastPlayerMoveMs = nowMs,
+            playerFacing = Direction.SOUTH,
+            walkPath = emptyList(),
+            longRangeGoal = null,
+            longRangeWaypoints = emptyList(),
+            targetMonsterId = null,
+            autoFollowTarget = false,
+            activePanel = ActivePanel.NONE,
+            activeHarborPortId = null,
+            floorWarningBanner = FloorWarningBanner(
+                floorId = 0,
+                floorName = destPort.name,
+                dangerLevel = destRegion.dangerLevel,
+                recommendedLevel = destRegion.recommendedLevel,
+                severity = destRegion.dangerSeverity,
+                createdAtMs = nowMs
+            )
+        ).addLogInternal("Sailed by Harbor Ferry to ${destPort.name} (${destRegion.displayName})!")
     }
 
     /**
@@ -775,18 +1066,24 @@ object GameEngine {
         // 2. Player attack check (respects variable weapon interval)
         s = processPlayerAttackSubTick(s, nowMs)
 
-        // 3. Poison & Fire status ticks
-        if (s.poisonTicks > 0) {
-            val pDmg = Random.nextInt(4, 9)
-            s = s.copy(hp = (s.hp - pDmg).coerceAtLeast(0), poisonTicks = s.poisonTicks - 1)
-                .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$pDmg", FloatingTextKind.POISON, nowMs)
-                .queuePlayerFx("-$pDmg", FloatingTextKind.POISON, PlayerActionState.IDLE)
-        }
-        if (s.fireTicks > 0 && s.hp > 0) {
-            val fDmg = Random.nextInt(8, 15)
-            s = s.copy(hp = (s.hp - fDmg).coerceAtLeast(0), fireTicks = s.fireTicks - 1)
-                .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$fDmg", FloatingTextKind.FIRE, nowMs)
-                .queuePlayerFx("-$fDmg", FloatingTextKind.FIRE, PlayerActionState.IDLE)
+        // 3. Poison & Fire status ticks (Admin / Infinite Health is immune to elemental afflictions)
+        if (s.isInvulnerable) {
+            if (s.hp != s.effectiveMaxHp() || s.poisonTicks > 0 || s.fireTicks > 0) {
+                s = s.copy(hp = s.effectiveMaxHp(), poisonTicks = 0, fireTicks = 0)
+            }
+        } else {
+            if (s.poisonTicks > 0) {
+                val pDmg = Random.nextInt(4, 9)
+                s = s.copy(hp = (s.hp - pDmg).coerceAtLeast(0), poisonTicks = s.poisonTicks - 1)
+                    .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$pDmg", FloatingTextKind.POISON, nowMs)
+                    .queuePlayerFx("-$pDmg", FloatingTextKind.POISON, PlayerActionState.IDLE)
+            }
+            if (s.fireTicks > 0 && s.hp > 0) {
+                val fDmg = Random.nextInt(8, 15)
+                s = s.copy(hp = (s.hp - fDmg).coerceAtLeast(0), fireTicks = s.fireTicks - 1)
+                    .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$fDmg", FloatingTextKind.FIRE, nowMs)
+                    .queuePlayerFx("-$fDmg", FloatingTextKind.FIRE, PlayerActionState.IDLE)
+            }
         }
 
         // 4. Monster AI on active floor (Host moves & elects targetPlayerId; Non-host resolves attacks targeting local player)
@@ -809,8 +1106,10 @@ object GameEngine {
         s = CraftingAndMiningEngine.regenerateOreNodesTick(s)
         s = CraftingAndMiningEngine.regenerateTreesTick(s)
 
-        // 6. Death penalty check
-        if (s.hp <= 0) {
+        // 6. Death penalty check (Admin / Infinite Health stays permanently locked at effectiveMaxHp)
+        if (s.isInvulnerable) {
+            s = s.copy(hp = s.effectiveMaxHp(), poisonTicks = 0, fireTicks = 0)
+        } else if (s.hp <= 0) {
             s = handlePlayerDeath(s, nowMs)
         }
         return s
@@ -1195,48 +1494,53 @@ object GameEngine {
             }
             val floorMap = WorldMaps.getFloor(s.floor)
             val inPz = floorMap.isProtectionZone(s.playerX, s.playerY)
-            if (!inPz && s.hp > 0 && (s.playerX to s.playerY) in event.aoeTiles) {
-                val caster = s.monsters.firstOrNull { it.id == event.monsterId }
-                val rawDmg = if (caster != null) {
-                    Random.nextInt(caster.type.minDmg, caster.type.maxDmg + 12)
+            if (!inPz && !s.isSpectator && s.hp > 0 && (s.playerX to s.playerY) in event.aoeTiles) {
+                if (s.isInvulnerable) {
+                    s = s.copy(hp = s.effectiveMaxHp(), poisonTicks = 0, fireTicks = 0)
+                        .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "IMMUNE", FloatingTextKind.BLOCK, nowMs)
                 } else {
-                    Random.nextInt(38, 66)
-                }
-                val reduced = (rawDmg - (s.equipment.totalArmor() * 0.5).roundToInt()).coerceAtLeast(14)
-                val casterName = caster?.type?.displayName ?: "Boss"
-                val special = caster?.type?.specialKind ?: BossSpecialKind.FLAME_BURST
-                val isVenom = event.inflictedStatus == "POISON" || special == BossSpecialKind.VENOM_NOVA
-                val isQuake = special == BossSpecialKind.QUARRY_QUAKE
-                s = when {
-                    isVenom -> s.copy(
-                        hp = (s.hp - reduced).coerceAtLeast(0),
-                        poisonTicks = max(s.poisonTicks, 6)
-                    )
-                        .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.POISON, nowMs)
-                        .addLogInternal("$casterName's Venom Nova seared you for $reduced!")
-                    isQuake -> s.copy(
-                        hp = (s.hp - reduced).coerceAtLeast(0)
-                    )
-                        .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.DAMAGE_PLAYER, nowMs)
-                        .addLogInternal("$casterName's Quarry Quake shattered the ground for $reduced!")
-                    special == BossSpecialKind.LABYRINTH_PYRE -> s.copy(
-                        hp = (s.hp - reduced).coerceAtLeast(0),
-                        fireTicks = max(s.fireTicks, 6)
-                    )
-                        .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.FIRE, nowMs)
-                        .addLogInternal("$casterName's Labyrinth Pyre engulfed you for $reduced!")
-                    else -> s.copy(
-                        hp = (s.hp - reduced).coerceAtLeast(0),
-                        fireTicks = max(s.fireTicks, 5)
-                    )
-                        .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.FIRE, nowMs)
-                        .addLogInternal("$casterName's Flame Burst scorched you for $reduced!")
-                }
-                if (s.hp <= 0) {
-                    s = handlePlayerDeath(s, nowMs)
+                    val caster = s.monsters.firstOrNull { it.id == event.monsterId }
+                    val rawDmg = if (caster != null) {
+                        Random.nextInt(caster.type.minDmg, caster.type.maxDmg + 12)
+                    } else {
+                        Random.nextInt(38, 66)
+                    }
+                    val reduced = (rawDmg - (s.equipment.totalArmor() * 0.5).roundToInt()).coerceAtLeast(14)
+                    val casterName = caster?.type?.displayName ?: "Boss"
+                    val special = caster?.type?.specialKind ?: BossSpecialKind.FLAME_BURST
+                    val isVenom = event.inflictedStatus == "POISON" || special == BossSpecialKind.VENOM_NOVA
+                    val isQuake = special == BossSpecialKind.QUARRY_QUAKE
+                    s = when {
+                        isVenom -> s.copy(
+                            hp = (s.hp - reduced).coerceAtLeast(0),
+                            poisonTicks = max(s.poisonTicks, 6)
+                        )
+                            .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.POISON, nowMs)
+                            .addLogInternal("$casterName's Venom Nova seared you for $reduced!")
+                        isQuake -> s.copy(
+                            hp = (s.hp - reduced).coerceAtLeast(0)
+                        )
+                            .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.DAMAGE_PLAYER, nowMs)
+                            .addLogInternal("$casterName's Quarry Quake shattered the ground for $reduced!")
+                        special == BossSpecialKind.LABYRINTH_PYRE -> s.copy(
+                            hp = (s.hp - reduced).coerceAtLeast(0),
+                            fireTicks = max(s.fireTicks, 6)
+                        )
+                            .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.FIRE, nowMs)
+                            .addLogInternal("$casterName's Labyrinth Pyre engulfed you for $reduced!")
+                        else -> s.copy(
+                            hp = (s.hp - reduced).coerceAtLeast(0),
+                            fireTicks = max(s.fireTicks, 5)
+                        )
+                            .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.FIRE, nowMs)
+                            .addLogInternal("$casterName's Flame Burst scorched you for $reduced!")
+                    }
+                    if (s.hp <= 0) {
+                        s = handlePlayerDeath(s, nowMs)
+                    }
                 }
             }
-        } else if (event.inflictedStatus != null && event.targetPlayerId == localPlayerId && s.hp > 0) {
+        } else if (event.inflictedStatus != null && event.targetPlayerId == localPlayerId && s.hp > 0 && !s.isSpectator && !s.isInvulnerable) {
             when (event.inflictedStatus) {
                 "POISON" -> s = s.copy(poisonTicks = max(s.poisonTicks, 5))
                 "FIRE" -> s = s.copy(fireTicks = max(s.fireTicks, 4))
@@ -1654,7 +1958,7 @@ object GameEngine {
                 var bestY = s.playerY
                 var bestDist = Int.MAX_VALUE
 
-                if (!playerInPz && s.hp > 0) {
+                if (!playerInPz && !s.isSpectator && s.hp > 0) {
                     val dLocal = chebyshev(curM.x, curM.y, s.playerX, s.playerY)
                     if (dLocal <= 8) {
                         bestId = localPlayerId
@@ -1664,6 +1968,7 @@ object GameEngine {
                     }
                 }
                 for (rp in activeRemoteTargets) {
+                    if (rp.isSpectator) continue
                     val dRem = chebyshev(curM.x, curM.y, rp.x, rp.y)
                     if (dRem <= 8 && dRem < bestDist) {
                         bestId = rp.playerId
@@ -1681,7 +1986,7 @@ object GameEngine {
                     updatedMonsters[i] = curM
                 }
             } else {
-                targetId = curM.targetPlayerId
+                targetId = if (s.isSpectator && curM.targetPlayerId == localPlayerId) null else curM.targetPlayerId
                 targetX = s.playerX
                 targetY = s.playerY
                 distToTarget = chebyshev(curM.x, curM.y, s.playerX, s.playerY)
@@ -1740,37 +2045,42 @@ object GameEngine {
                             340L
                         )
                     }
-                    if (!playerInPz && s.hp > 0 && (s.playerX to s.playerY) in waveTiles) {
-                        val rawWave = Random.nextInt(curM.type.minDmg, curM.type.maxDmg + 12)
-                        val waveDmg = (rawWave - (s.equipment.totalArmor() * 0.5).roundToInt()).coerceAtLeast(14)
-                        s = when {
-                            isVenomBoss -> s.copy(
-                                hp = (s.hp - waveDmg).coerceAtLeast(0),
-                                poisonTicks = max(s.poisonTicks, 6)
-                            )
-                                .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.POISON, nowMs)
-                                .queuePlayerFx("-$waveDmg", FloatingTextKind.POISON, PlayerActionState.IDLE)
-                                .addLogInternal("${curM.type.displayName}'s Venom Nova seared you for $waveDmg!")
-                            isQuakeBoss -> s.copy(
-                                hp = (s.hp - waveDmg).coerceAtLeast(0)
-                            )
-                                .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.DAMAGE_PLAYER, nowMs)
-                                .queuePlayerFx("-$waveDmg", FloatingTextKind.DAMAGE_PLAYER, PlayerActionState.IDLE)
-                                .addLogInternal("${curM.type.displayName}'s Quarry Quake shattered you for $waveDmg!")
-                            isPyreBoss -> s.copy(
-                                hp = (s.hp - waveDmg).coerceAtLeast(0),
-                                fireTicks = max(s.fireTicks, 6)
-                            )
-                                .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.FIRE, nowMs)
-                                .queuePlayerFx("-$waveDmg", FloatingTextKind.FIRE, PlayerActionState.IDLE)
-                                .addLogInternal("${curM.type.displayName}'s Labyrinth Pyre engulfed you for $waveDmg!")
-                            else -> s.copy(
-                                hp = (s.hp - waveDmg).coerceAtLeast(0),
-                                fireTicks = max(s.fireTicks, 5)
-                            )
-                                .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.FIRE, nowMs)
-                                .queuePlayerFx("-$waveDmg", FloatingTextKind.FIRE, PlayerActionState.IDLE)
-                                .addLogInternal("${curM.type.displayName}'s Flame Burst scorched you for $waveDmg!")
+                    if (!playerInPz && !s.isSpectator && s.hp > 0 && (s.playerX to s.playerY) in waveTiles) {
+                        if (s.isInvulnerable) {
+                            s = s.copy(hp = s.effectiveMaxHp(), poisonTicks = 0, fireTicks = 0)
+                                .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "IMMUNE", FloatingTextKind.BLOCK, nowMs)
+                        } else {
+                            val rawWave = Random.nextInt(curM.type.minDmg, curM.type.maxDmg + 12)
+                            val waveDmg = (rawWave - (s.equipment.totalArmor() * 0.5).roundToInt()).coerceAtLeast(14)
+                            s = when {
+                                isVenomBoss -> s.copy(
+                                    hp = (s.hp - waveDmg).coerceAtLeast(0),
+                                    poisonTicks = max(s.poisonTicks, 6)
+                                )
+                                    .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.POISON, nowMs)
+                                    .queuePlayerFx("-$waveDmg", FloatingTextKind.POISON, PlayerActionState.IDLE)
+                                    .addLogInternal("${curM.type.displayName}'s Venom Nova seared you for $waveDmg!")
+                                isQuakeBoss -> s.copy(
+                                    hp = (s.hp - waveDmg).coerceAtLeast(0)
+                                )
+                                    .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.DAMAGE_PLAYER, nowMs)
+                                    .queuePlayerFx("-$waveDmg", FloatingTextKind.DAMAGE_PLAYER, PlayerActionState.IDLE)
+                                    .addLogInternal("${curM.type.displayName}'s Quarry Quake shattered you for $waveDmg!")
+                                isPyreBoss -> s.copy(
+                                    hp = (s.hp - waveDmg).coerceAtLeast(0),
+                                    fireTicks = max(s.fireTicks, 6)
+                                )
+                                    .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.FIRE, nowMs)
+                                    .queuePlayerFx("-$waveDmg", FloatingTextKind.FIRE, PlayerActionState.IDLE)
+                                    .addLogInternal("${curM.type.displayName}'s Labyrinth Pyre engulfed you for $waveDmg!")
+                                else -> s.copy(
+                                    hp = (s.hp - waveDmg).coerceAtLeast(0),
+                                    fireTicks = max(s.fireTicks, 5)
+                                )
+                                    .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$waveDmg", FloatingTextKind.FIRE, nowMs)
+                                    .queuePlayerFx("-$waveDmg", FloatingTextKind.FIRE, PlayerActionState.IDLE)
+                                    .addLogInternal("${curM.type.displayName}'s Flame Burst scorched you for $waveDmg!")
+                            }
                         }
                     }
                     updatedMonsters[i] = curM.copy(pendingAoeTiles = emptyList(), aoeCooldownTicks = 4)
@@ -1853,7 +2163,7 @@ object GameEngine {
                 curM.type.aiStyle == MonsterAiStyle.RANGED_KITE || Random.nextFloat() < 0.55f
             )
 
-            if (targetsLocal && !playerInPz && s.hp > 0 && (distToLocal <= 1 || shouldRangedLocal)) {
+            if (targetsLocal && !playerInPz && !s.isSpectator && s.hp > 0 && (distToLocal <= 1 || shouldRangedLocal)) {
                 val isRanged = distToLocal > 1
                 val projKind = if (isRanged) curM.type.rangedProjectile ?: ProjectileKind.FIRE_BREATH else null
                 if (projKind != null) {
@@ -1881,30 +2191,36 @@ object GameEngine {
                 )
                 updatedMonsters[i] = curM
                 var statusTag: String? = null
-                val dodgeChance = s.shieldDodgeChance(isRanged)
-                if (Random.nextDouble() < dodgeChance) {
-                    s = s.addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "DODGE!", FloatingTextKind.BLOCK, nowMs)
-                        .queuePlayerFx("DODGE!", FloatingTextKind.BLOCK, PlayerActionState.IDLE)
+                if (s.isInvulnerable) {
+                    // Admin / Infinite Health negates all incoming monster damage & status afflictions
+                    s = s.copy(hp = s.effectiveMaxHp(), poisonTicks = 0, fireTicks = 0)
+                        .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "IMMUNE", FloatingTextKind.BLOCK, nowMs)
                 } else {
-                    val rawDmg = Random.nextInt(curM.type.minDmg, curM.type.maxDmg + 1)
-                    val armorMit = s.equipment.totalArmor() * 0.65
-                    val glancingShieldMit = if (!isRanged && s.hasActiveShield()) s.equipment.shieldDefense() * 0.22 else 0.0
-                    val reduced = (rawDmg - (if (isRanged) armorMit * 0.6 else (armorMit + glancingShieldMit) * Random.nextDouble(0.75, 1.05))).roundToInt()
-
-                    if (reduced <= 0) {
-                        s = s.addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "GLANCE", FloatingTextKind.BLOCK, nowMs)
-                            .queuePlayerFx("GLANCE", FloatingTextKind.BLOCK, PlayerActionState.IDLE)
+                    val dodgeChance = s.shieldDodgeChance(isRanged)
+                    if (Random.nextDouble() < dodgeChance) {
+                        s = s.addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "DODGE!", FloatingTextKind.BLOCK, nowMs)
+                            .queuePlayerFx("DODGE!", FloatingTextKind.BLOCK, PlayerActionState.IDLE)
                     } else {
-                        s = s.copy(hp = (s.hp - reduced).coerceAtLeast(0))
-                            .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.DAMAGE_PLAYER, nowMs)
-                            .queuePlayerFx("-$reduced", FloatingTextKind.DAMAGE_PLAYER, PlayerActionState.IDLE)
-                        if (curM.type.inflictsPoison && Random.nextFloat() < 0.35f) {
-                            statusTag = "POISON"
-                            s = s.copy(poisonTicks = max(s.poisonTicks, 5)).addLogInternal("${curM.type.displayName} poisoned you!")
-                        }
-                        if (curM.type.inflictsFire && (isRanged || Random.nextFloat() < 0.40f)) {
-                            statusTag = "FIRE"
-                            s = s.copy(fireTicks = max(s.fireTicks, 4)).addLogInternal("${curM.type.displayName} set you ablaze!")
+                        val rawDmg = Random.nextInt(curM.type.minDmg, curM.type.maxDmg + 1)
+                        val armorMit = s.equipment.totalArmor() * 0.65
+                        val glancingShieldMit = if (!isRanged && s.hasActiveShield()) s.equipment.shieldDefense() * 0.22 else 0.0
+                        val reduced = (rawDmg - (if (isRanged) armorMit * 0.6 else (armorMit + glancingShieldMit) * Random.nextDouble(0.75, 1.05))).roundToInt()
+
+                        if (reduced <= 0) {
+                            s = s.addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "GLANCE", FloatingTextKind.BLOCK, nowMs)
+                                .queuePlayerFx("GLANCE", FloatingTextKind.BLOCK, PlayerActionState.IDLE)
+                        } else {
+                            s = s.copy(hp = (s.hp - reduced).coerceAtLeast(0))
+                                .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.DAMAGE_PLAYER, nowMs)
+                                .queuePlayerFx("-$reduced", FloatingTextKind.DAMAGE_PLAYER, PlayerActionState.IDLE)
+                            if (curM.type.inflictsPoison && Random.nextFloat() < 0.35f) {
+                                statusTag = "POISON"
+                                s = s.copy(poisonTicks = max(s.poisonTicks, 5)).addLogInternal("${curM.type.displayName} poisoned you!")
+                            }
+                            if (curM.type.inflictsFire && (isRanged || Random.nextFloat() < 0.40f)) {
+                                statusTag = "FIRE"
+                                s = s.copy(fireTicks = max(s.fireTicks, 4)).addLogInternal("${curM.type.displayName} set you ablaze!")
+                            }
                         }
                     }
                 }
@@ -2260,6 +2576,15 @@ object GameEngine {
     }
 
     private fun handlePlayerDeath(state: GameWorldState, nowMs: Long): GameWorldState {
+        // Hard invulnerability safeguard: Admin / Infinite Health can never die or lose gear
+        if (state.isInvulnerable) {
+            return state.copy(
+                hp = state.effectiveMaxHp(),
+                poisonTicks = 0,
+                fireTicks = 0,
+                deathReport = null
+            )
+        }
         val xpLost = (state.xp * 0.10).toLong()
         val newXp = (state.xp - xpLost).coerceAtLeast(0L)
         var newLevel = state.level
@@ -2305,24 +2630,26 @@ object GameEngine {
         val droppedCount = state.backpack.sumOf { it.count }
         val droppedGold = state.gold.coerceAtLeast(0)
         val safeBankGold = state.bankGold.coerceAtLeast(0L)
-        val playerCorpse = CorpseEntity(
-            id = "p_${UUID.randomUUID()}",
-            floor = state.floor,
-            x = state.playerX,
-            y = state.playerY,
-            label = "${state.playerName}'s Fallen Backpack",
-            isPlayerCorpse = true,
-            gold = droppedGold,
-            items = state.backpack
-        )
-        val updatedCorpses = if (state.backpack.isNotEmpty() || droppedGold > 0) state.corpses + playerCorpse else state.corpses
-        // Tool Bag stays strapped to the adventurer on death (ensuring a Rope is always available for recovery)
+        // Transfer dropped backpack items cleanly into the Reaper's Vault (no cloud-persisted world corpses)
+        var nextReaperVault = state.reaperVault
+        for (stack in state.backpack) {
+            if (stack.itemId.isNotBlank() && stack.count > 0) {
+                nextReaperVault = addItemPublic(nextReaperVault, stack.itemId, stack.count)
+            }
+        }
+        if (nextReaperVault.size > 48) {
+            nextReaperVault = nextReaperVault.takeLast(48)
+        }
+        // Tool Bag stays strapped to the adventurer on death (ensuring a Rope is always available)
         val keptTools = if (state.toolBag.any { it.itemId == "rope" }) state.toolBag
         else addItemPublic(state.toolBag, "rope", 1)
 
+        val reaperNote = if (droppedCount > 0) {
+            " Mortis claimed $droppedCount backpack item(s) — visit the Temple of Reapers (NW of Plaza) to buy them back."
+        } else ""
         val goldDropNote = when {
-            droppedGold > 0 && safeBankGold > 0L -> " Dropped $droppedGold gp in your Fallen Backpack; ${formatGold(safeBankGold)} gp stayed safe in Bank."
-            droppedGold > 0 -> " Dropped $droppedGold gp in your Fallen Backpack."
+            droppedGold > 0 && safeBankGold > 0L -> " Lost $droppedGold carried gp; ${formatGold(safeBankGold)} gp stayed safe in Bank."
+            droppedGold > 0 -> " Lost $droppedGold carried gp."
             safeBankGold > 0L -> " Your ${formatGold(safeBankGold)} gp in the Bank Vault stayed safe."
             else -> ""
         }
@@ -2337,6 +2664,7 @@ object GameEngine {
             maxCapOz = newMaxCap,
             gold = 0,
             bankGold = safeBankGold,
+            regionId = DEFAULT_REGION_ID,
             floor = 0,
             playerX = WorldMaps.TEMPLE_SPAWN_X,
             playerY = WorldMaps.TEMPLE_SPAWN_Y,
@@ -2348,13 +2676,15 @@ object GameEngine {
             skills = penalizedSkills,
             backpack = emptyList(),
             toolBag = keptTools,
-            corpses = updatedCorpses,
+            reaperVault = nextReaperVault,
             targetMonsterId = null,
             autoFollowTarget = false,
             walkPath = emptyList(),
+            longRangeGoal = null,
+            longRangeWaypoints = emptyList(),
             activePanel = ActivePanel.NONE,
             deathReport = DeathReport(xpLost, state.floor, state.playerX, state.playerY, droppedCount, droppedGold, safeBankGold)
-        ).addLogInternal("You died! Lost $xpLost XP (-10%). Main Bag dropped on Floor ${state.floor}; Tool Bag remained strapped.$goldDropNote")
+        ).addLogInternal("You died! Lost $xpLost XP (-10%). Tool Bag stayed strapped.$reaperNote$goldDropNote")
     }
 
     internal fun grantExperience(state: GameWorldState, xpGain: Long, fx: Float, fy: Float, nowMs: Long): GameWorldState {
@@ -2462,7 +2792,12 @@ object GameEngine {
         ).addLogInternal("Targeting ${m.type.displayName} [Lvl ${m.type.threatLevel}].")
     }
 
-    /** A* auto-walk triggered from the clickable isometric minimap or Regional World Map. */
+    /**
+     * Hierarchical A* auto-walk triggered from the clickable isometric minimap or Full World Map.
+     * - Short/mid range (<= 120 tiles): runs direct A*.
+     * - Cross-region/cross-continent (> 120 tiles on Floor 0): chains coarse highway/bridge waypoints
+     *   through WorldBiomeBlueprint so players can auto-walk smoothly across the 1600x1200 realm.
+     */
     fun walkToCoordinate(state: GameWorldState, tx: Int, ty: Int): GameWorldState {
         if (state.deathReport != null) return state
         val floorMap = WorldMaps.getFloor(state.floor)
@@ -2471,19 +2806,48 @@ object GameEngine {
         val dismissed = state.copy(
             activePanel = ActivePanel.NONE,
             inspectingCorpseId = null,
-            autoFollowTarget = false
+            activeHarborPortId = null,
+            autoFollowTarget = false,
+            longRangeGoal = null,
+            longRangeWaypoints = emptyList()
         )
         if (clampedX == state.playerX && clampedY == state.playerY) return dismissed
-        val path = if (floorMap.tileAt(clampedX, clampedY).walkable) {
-            findPath(dismissed, clampedX, clampedY)
+
+        // Snap slightly if tapping water/cliff edge on the parchment World Map
+        val (goalX, goalY) = if (floorMap.tileAt(clampedX, clampedY).walkable) {
+            clampedX to clampedY
         } else {
-            findPathToAdjacentOfTarget(dismissed, clampedX, clampedY)
+            WorldMaps.findNearestWalkableTile(state.floor, clampedX, clampedY, maxRadius = 14)
+                ?: (clampedX to clampedY)
+        }
+
+        val manhattan = abs(goalX - state.playerX) + abs(goalY - state.playerY)
+        if (state.floor == 0 && manhattan > 120) {
+            val waypoints = WorldBiomeBlueprint.findCoarseWaypoints(state.playerX, state.playerY, goalX, goalY)
+            val firstHop = waypoints.firstOrNull() ?: (goalX to goalY)
+            val resolvedHop = WorldMaps.findNearestWalkableTile(0, firstHop.first, firstHop.second, maxRadius = 8)
+                ?: firstHop
+            val firstPath = findPath(dismissed, resolvedHop.first, resolvedHop.second)
+            if (firstPath.isNotEmpty()) {
+                val destRegion = WorldMaps.regionForGlobal(goalX, goalY)
+                return dismissed.copy(
+                    walkPath = firstPath,
+                    longRangeGoal = goalX to goalY,
+                    longRangeWaypoints = waypoints.drop(1)
+                ).addLogInternal("Charted route toward ${destRegion.displayName} ($goalX, $goalY)...")
+            }
+        }
+
+        val path = if (floorMap.tileAt(goalX, goalY).walkable) {
+            findPath(dismissed, goalX, goalY)
+        } else {
+            findPathToAdjacentOfTarget(dismissed, goalX, goalY)
         }
         return if (path.isNotEmpty()) {
             dismissed.copy(walkPath = path)
-                .addLogInternal("Auto-walking to ($clampedX, $clampedY)...")
+                .addLogInternal("Auto-walking to ($goalX, $goalY)...")
         } else {
-            dismissed.addLogInternal("No clear route to ($clampedX, $clampedY).")
+            dismissed.addLogInternal("No clear route to ($goalX, $goalY) — try a Harbor Ferry for overseas islands!")
         }
     }
 
@@ -2494,7 +2858,8 @@ object GameEngine {
             def.category == ItemCategory.RUNE_HEAL ||
             def.category == ItemCategory.RUNE_ATTACK ||
             def.category == ItemCategory.FOOD ||
-            def.category == ItemCategory.TOOL_ROPE
+            def.category == ItemCategory.TOOL_ROPE ||
+            def.category == ItemCategory.ADMIN_SCROLL
     }
 
     fun bindCustomHotbarSlot(state: GameWorldState, slotIndex: Int, itemId: String?): GameWorldState {
@@ -2568,13 +2933,19 @@ object GameEngine {
                     .queuePlayerFx("+$healed HP", FloatingTextKind.HEAL, PlayerActionState.HEALING)
                     .addLogInternal("Ate ${def.name}.")
             }
+            ItemCategory.ADMIN_SCROLL -> {
+                if (!state.isAdmin) {
+                    return state.addLogInternal("Only the Admin can unseal the Sovereign's Scroll.")
+                }
+                state.copy(activePanel = ActivePanel.ADMIN_SCROLL)
+            }
             ItemCategory.AMMO -> {
                 state.copy(equipment = state.equipment.copy(ammoId = itemId))
                     .addLogInternal("Loaded ${def.name} into your Quiver slot.")
             }
             else -> {
                 val slot = def.equipSlot ?: return state.addLogInternal("${def.name} can be smelted, forged, fletched, or sold to Alaric.")
-                val unmetReqs = state.unmetEquipRequirements(def)
+                val unmetReqs = if (state.isAdmin) emptyList() else state.unmetEquipRequirements(def)
                 if (unmetReqs.isNotEmpty()) {
                     val reqText = unmetReqs.joinToString(" & ")
                     return state
@@ -2613,7 +2984,8 @@ object GameEngine {
                     state.autoFollowTarget
                 }
                 val nextState = state.copy(equipment = newEquip, backpack = bp, autoFollowTarget = keepFollow)
-                nextState.copy(hp = nextState.hp.coerceAtMost(nextState.effectiveMaxHp()))
+                val resolvedHp = if (nextState.isInvulnerable) nextState.effectiveMaxHp() else nextState.hp.coerceAtMost(nextState.effectiveMaxHp())
+                nextState.copy(hp = resolvedHp)
                     .addLogInternal("Equipped ${def.name}.$notes")
             }
         }
@@ -2629,14 +3001,293 @@ object GameEngine {
             equipment = state.equipment.withSlot(slot, null),
             backpack = addItemPublic(state.backpack, equippedId, 1)
         )
-        return next.copy(hp = next.hp.coerceAtMost(next.effectiveMaxHp()))
+        val resolvedHp = if (next.isInvulnerable) next.effectiveMaxHp() else next.hp.coerceAtMost(next.effectiveMaxHp())
+        return next.copy(hp = resolvedHp)
             .addLogInternal("Unequipped ${ItemCatalog.get(equippedId).name}.")
     }
 
     fun dropItem(state: GameWorldState, itemId: String): GameWorldState {
         if (!state.hasItem(itemId)) return state
+        val def = ItemCatalog.get(itemId)
+        if (def.adminOnly) return state.addLogInternal("${def.name} is bound to the Admin and cannot be dropped.")
         return removeCarriedItem(state, itemId, 1)
-            .addLogInternal("Dropped ${ItemCatalog.get(itemId).name}.")
+            .addLogInternal("Dropped ${def.name}.")
+    }
+
+    /**
+     * Admin-only Sovereign's Scroll action: sets character level to any target level (1..999),
+     * synchronizes XP, scales maxHp/maxMp/maxCapOz cleanly, locks HP full, and optionally
+     * boosts combat/magic skills so high-tier equipment works at full power.
+     */
+    fun setAdminLevel(
+        state: GameWorldState,
+        targetLevel: Int,
+        syncSkills: Boolean = true,
+        nowMs: Long = 0L
+    ): GameWorldState {
+        if (!state.isAdmin) return state
+        val clampedLevel = targetLevel.coerceIn(1, 999)
+        val voc = state.vocation
+        val levelsAboveOne = clampedLevel - 1
+        val newMaxHp = (voc.baseHp + levelsAboveOne * voc.hpPerLevel).coerceIn(voc.baseHp, 50_000)
+        val newMaxMp = (voc.baseMp + levelsAboveOne * voc.mpPerLevel).coerceIn(voc.baseMp, 50_000)
+        val newMaxCap = GameWorldState.maxCapForLevel(clampedLevel, voc)
+        val newXp = state.xpForLevel(clampedLevel)
+
+        val updatedSkills = if (syncSkills) {
+            val targetCombatSkill = clampedLevel.coerceIn(10, 120)
+            val targetMagicSkill = clampedLevel.coerceIn(1, 100)
+            fun boost(sp: SkillProgress, floorLevel: Int): SkillProgress =
+                if (sp.level >= floorLevel) sp else SkillProgress(level = floorLevel, points = 0.0)
+            PlayerSkills(
+                melee = boost(state.skills.melee, targetCombatSkill),
+                fist = boost(state.skills.fist, targetCombatSkill),
+                club = boost(state.skills.club, targetCombatSkill),
+                sword = boost(state.skills.sword, targetCombatSkill),
+                axe = boost(state.skills.axe, targetCombatSkill),
+                distance = boost(state.skills.distance, targetCombatSkill),
+                shielding = boost(state.skills.shielding, targetCombatSkill),
+                magic = boost(state.skills.magic, targetMagicSkill),
+                fishing = boost(state.skills.fishing, targetCombatSkill),
+                mining = boost(state.skills.mining, targetCombatSkill)
+            )
+        } else {
+            state.skills
+        }
+
+        val updated = state.copy(
+            level = clampedLevel,
+            xp = newXp,
+            maxHp = newMaxHp,
+            mp = newMaxMp,
+            maxMp = newMaxMp,
+            maxCapOz = newMaxCap,
+            skills = updatedSkills,
+            poisonTicks = 0,
+            fireTicks = 0
+        )
+        return updated
+            .copy(hp = updated.effectiveMaxHp())
+            .addFloatingInternal(updated.floor, updated.playerX.toFloat(), updated.playerY.toFloat(), "LEVEL $clampedLevel!", FloatingTextKind.SKILL_UP, nowMs)
+            .addLogInternal("Admin Control set your level to $clampedLevel (HP ${updated.effectiveMaxHp()}, MP $newMaxMp).")
+    }
+
+    /**
+     * Admin-only Sovereign's Scroll action: grants top Tier 5 Cinderite equipment & endgame jewelry
+     * for the chosen weapon classification (Sword, Axe, Club, Distance, Magic, or All Classes).
+     * Bypasses carrying Cap overflow so Admin always receives the complete kit cleanly.
+     */
+    fun grantAdminEquipmentKit(
+        state: GameWorldState,
+        classification: AdminEquipmentClassification,
+        autoEquip: Boolean = true,
+        nowMs: Long = 0L
+    ): GameWorldState {
+        if (!state.isAdmin) return state
+        val commonDefenseAndJewelry = listOf(
+            "cinderite_warplate" to 1,
+            "cinderite_bastion" to 1,
+            "viking_helmet" to 1,
+            "brass_legs" to 1,
+            "leather_boots" to 1,
+            "cinderheart_sovereign_torc" to 1,
+            "cinderite_overlord_band" to 1
+        )
+        val classItems: List<Pair<String, Int>> = when (classification) {
+            AdminEquipmentClassification.SWORD -> listOf(
+                "cinderite_greatsword" to 1,
+                "vesperite_longblade" to 1
+            )
+            AdminEquipmentClassification.AXE -> listOf(
+                "cinderite_greataxe" to 1,
+                "vesperite_cleaver" to 1
+            )
+            AdminEquipmentClassification.CLUB -> listOf(
+                "cinderite_worldbreaker" to 1,
+                "vesperite_warmaul" to 1
+            )
+            AdminEquipmentClassification.DISTANCE -> listOf(
+                "cinderite_ashen_bow" to 1,
+                "venom_shafts" to 100,
+                "starlight_quarrels" to 100
+            )
+            AdminEquipmentClassification.MAGIC -> listOf(
+                "cinderite_soulspire" to 1,
+                "sd_rune" to 50,
+                "fireball_rune" to 50,
+                "healing_rune" to 50
+            )
+            AdminEquipmentClassification.ALL -> listOf(
+                "cinderite_greatsword" to 1,
+                "vesperite_longblade" to 1,
+                "cinderite_greataxe" to 1,
+                "vesperite_cleaver" to 1,
+                "cinderite_worldbreaker" to 1,
+                "vesperite_warmaul" to 1,
+                "cinderite_ashen_bow" to 1,
+                "venom_shafts" to 100,
+                "starlight_quarrels" to 100,
+                "cinderite_soulspire" to 1,
+                "sd_rune" to 50,
+                "fireball_rune" to 50,
+                "healing_rune" to 50
+            )
+        }
+
+        val allToGrant = classItems + commonDefenseAndJewelry
+        var bp = state.backpack
+        for ((itemId, qty) in allToGrant) {
+            val def = ItemCatalog.all[itemId] ?: continue
+            val alreadyCarried = bp.filter { it.itemId == itemId }.sumOf { it.count } +
+                (if (state.equipment.getAllEquippedIds().contains(itemId)) 1 else 0)
+            if (def.stackable) {
+                val needed = (qty - alreadyCarried).coerceAtLeast(0)
+                if (needed > 0) bp = addItemPublic(bp, itemId, needed)
+            } else if (alreadyCarried == 0) {
+                bp = addItemPublic(bp, itemId, 1)
+            }
+        }
+
+        var next = state.copy(backpack = bp)
+        if (autoEquip) {
+            val primaryWeaponId = when (classification) {
+                AdminEquipmentClassification.SWORD -> "cinderite_greatsword"
+                AdminEquipmentClassification.AXE -> "cinderite_greataxe"
+                AdminEquipmentClassification.CLUB -> "cinderite_worldbreaker"
+                AdminEquipmentClassification.DISTANCE -> "cinderite_ashen_bow"
+                AdminEquipmentClassification.MAGIC -> "cinderite_soulspire"
+                AdminEquipmentClassification.ALL -> "cinderite_greatsword"
+            }
+            val slotsToEquip = buildList {
+                add(primaryWeaponId)
+                add("cinderite_warplate")
+                add("viking_helmet")
+                add("brass_legs")
+                add("leather_boots")
+                add("cinderheart_sovereign_torc")
+                add("cinderite_overlord_band")
+                if (classification == AdminEquipmentClassification.DISTANCE) {
+                    add("venom_shafts")
+                }
+            }
+            for (eqId in slotsToEquip) {
+                if (next.hasItem(eqId)) {
+                    next = useOrEquipBackpackItem(next, eqId, nowMs)
+                }
+            }
+            if (classification == AdminEquipmentClassification.MAGIC || classification == AdminEquipmentClassification.ALL) {
+                next = next.copy(boundAttackRuneId = "sd_rune", boundHealRuneId = "healing_rune")
+            }
+        }
+        return next
+            .copy(hp = next.effectiveMaxHp())
+            .addFloatingInternal(next.floor, next.playerX.toFloat(), next.playerY.toFloat(), "ARMORY GRANTED!", FloatingTextKind.SKILL_UP, nowMs)
+            .addLogInternal("Admin Control granted top Tier 5 ${classification.label} equipment!")
+    }
+
+    /**
+     * Admin-only local atmospheric lighting override (0.0..24.0 hours).
+     * Strictly gated on [GameWorldState.isAdmin]; does not modify persistent cloud saves.
+     */
+    fun setAdminTimeOfDay(
+        state: GameWorldState,
+        hours: Float
+    ): GameWorldState {
+        if (!state.isAdmin) return state
+        val clamped = if (hours.isNaN() || hours.isInfinite()) DEFAULT_TIME_OF_DAY_HOURS else hours.coerceIn(0f, 24f)
+        return state.copy(timeOfDayHours = clamped)
+    }
+
+    /**
+     * Admin-only Sovereign's Scroll action: toggles Spectator Mode.
+     * While enabled, monsters treat Admin as completely invisible (clearing any active aggro),
+     * and RealtimeMultiplayerManager hides Admin from all remote players.
+     */
+    fun toggleAdminSpectatorMode(
+        state: GameWorldState,
+        enabled: Boolean,
+        nowMs: Long = 0L
+    ): GameWorldState {
+        if (!state.isAdmin) return state
+        val localId = state.saveId.ifBlank { "local" }
+        val updatedMonsters = if (enabled) {
+            state.monsters.map { m ->
+                if (m.targetPlayerId == localId) m.copy(targetPlayerId = null, pendingAoeTiles = emptyList()) else m
+            }
+        } else {
+            state.monsters
+        }
+        val label = if (enabled) "SPECTATOR ON" else "VISIBLE"
+        val logMsg = if (enabled) {
+            "Spectator Mode ENABLED — you are now invisible to monsters and other players."
+        } else {
+            "Spectator Mode DISABLED — you are visible to the world again."
+        }
+        return state.copy(
+            isSpectator = enabled,
+            monsters = updatedMonsters,
+            targetMonsterId = if (enabled) null else state.targetMonsterId,
+            autoFollowTarget = if (enabled) false else state.autoFollowTarget
+        )
+            .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), label, FloatingTextKind.INFO, nowMs)
+            .addLogInternal(logMsg)
+    }
+
+    /**
+     * Admin-only instant teleport to a landmark or custom (floor, x, y) coordinates.
+     * Strictly gated on [GameWorldState.isAdmin], validates floor allowlist (-6..0),
+     * clamps coordinates to floor bounds, snaps to the nearest walkable NPC-free tile,
+     * prewarms surrounding terrain chunks, and clears walk paths & combat aggro cleanly.
+     */
+    fun teleportAdmin(
+        state: GameWorldState,
+        targetFloor: Int,
+        targetX: Int,
+        targetY: Int,
+        destinationLabel: String? = null,
+        nowMs: Long = 0L
+    ): GameWorldState {
+        if (!state.isAdmin) return state
+        val validFloor = if (WorldMaps.floors.containsKey(targetFloor)) targetFloor else 0
+        val floorMap = WorldMaps.getFloor(validFloor)
+        val clampedX = targetX.coerceIn(0, (floorMap.width - 1).coerceAtLeast(0))
+        val clampedY = targetY.coerceIn(0, (floorMap.height - 1).coerceAtLeast(0))
+        val (landX, landY) = WorldMaps.findNearestWalkableTile(validFloor, clampedX, clampedY, maxRadius = 12)
+            ?: WorldMaps.fallbackLandingForFloor(validFloor)
+
+        floorMap.chunkedGrid.prewarmAround(landX, landY, radiusChunks = 2)
+        val destRegionId = if (validFloor == 0) {
+            WorldMaps.regionForGlobal(landX, landY).regionId
+        } else {
+            floorMap.regionId
+        }
+        val localId = state.saveId.ifBlank { "local" }
+        val clearedMonsters = state.monsters.map { m ->
+            if (m.targetPlayerId == localId) m.copy(targetPlayerId = null, pendingAoeTiles = emptyList()) else m
+        }
+        val cleanLabel = destinationLabel?.trim()?.take(40)?.ifBlank { null }
+        val logLocation = cleanLabel ?: "Floor $validFloor ($landX, $landY)"
+
+        val next = state.copy(
+            floor = validFloor,
+            regionId = destRegionId,
+            playerX = landX,
+            playerY = landY,
+            prevPlayerX = landX,
+            prevPlayerY = landY,
+            lastPlayerMoveMs = nowMs,
+            walkPath = emptyList(),
+            longRangeGoal = null,
+            longRangeWaypoints = emptyList(),
+            targetMonsterId = null,
+            autoFollowTarget = false,
+            monsters = clearedMonsters,
+            floorWarningBanner = null
+        )
+        return next
+            .copy(hp = next.effectiveMaxHp())
+            .addFloatingInternal(validFloor, landX.toFloat(), landY.toFloat(), "WARPED!", FloatingTextKind.SKILL_UP, nowMs)
+            .addLogInternal("Admin warped to $logLocation (F$validFloor: $landX, $landY).")
     }
 
     /**
@@ -2934,7 +3585,7 @@ object GameEngine {
     fun sellBackpackItem(state: GameWorldState, itemId: String): GameWorldState {
         if (!state.hasItem(itemId)) return state
         val def = ItemCatalog.get(itemId)
-        if (def.sellPrice <= 0) return state.addLogInternal("Alaric isn't interested in ${def.name}.")
+        if (def.adminOnly || def.sellPrice <= 0) return state.addLogInternal("Alaric isn't interested in ${def.name}.")
         return removeCarriedItem(state, itemId, 1)
             .let { it.copy(gold = it.gold + def.sellPrice) }
             .addLogInternal("Sold ${def.name} for ${def.sellPrice} gp.")

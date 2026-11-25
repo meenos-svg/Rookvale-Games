@@ -49,6 +49,15 @@ object MultiplayerConfig {
         return "https://$host/rest/v1/players"
     }
 
+    fun restAdminAuditLogsBaseUrl(
+        url: String = SUPABASE_URL,
+        anonKey: String = SUPABASE_ANON_KEY
+    ): String? {
+        if (!isConfigured(url, anonKey)) return null
+        val host = parseValidHttpsHost(url) ?: return null
+        return "https://$host/rest/v1/admin_audit_logs"
+    }
+
     private fun isPlaceholder(value: String): Boolean {
         val upper = value.trim().uppercase()
         return upper.startsWith("YOUR_") ||
