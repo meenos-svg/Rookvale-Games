@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.game.engine.GameEngine
+import com.example.game.model.DEFAULT_REGION_ID
 import com.example.game.model.Direction
 import com.example.game.model.EquippedGear
 import com.example.game.model.FloatingTextKind
@@ -22,12 +23,17 @@ import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.multiplayer.SyncedMonsterSnapshot
 import com.example.game.multiplayer.electFloorHost
 import com.example.game.world.WorldMaps
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import okhttp3.Request
+import okhttp3.WebSocket
+import okio.ByteString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -377,5 +383,195 @@ class MultiplayerCoopTest {
             "Portal tiles must never be blocked by remote players",
             GameEngine.isBlockedByRemotePlayer(dungeonMap, stairsCoord.first, stairsCoord.second, listOf(portalBlocker))
         )
+    }
+
+    @Test
+    @Suppress("UNCHECKED_CAST")
+    fun joinFramesEnablePresenceAttachJoinRefAndDoNotLoopOnPresenceReplies() {
+        val moshi = Moshi.Builder().build()
+        val mapAdapter = moshi.adapter<Map<String, Any?>>(
+            Types.newParameterizedType(Map::class.java, String::class.java, Any::class.java)
+        )
+        val sentFrames = mutableListOf<Map<String, Any?>>()
+        val fakeWs = object : WebSocket {
+            override fun request(): Request = Request.Builder().url("https://demo.supabase.co").build()
+            override fun queueSize(): Long = 0L
+            override fun send(text: String): Boolean {
+                sentFrames.add(mapAdapter.fromJson(text)!!)
+                return true
+            }
+            override fun send(bytes: ByteString): Boolean = true
+            override fun close(code: Int, reason: String?): Boolean = true
+            override fun cancel() {}
+        }
+
+        val nowMs = 1_750_000_000_000L
+        val mgr = RealtimeMultiplayerManager(
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+            nowProvider = { nowMs },
+            animClockProvider = { nowMs }
+        )
+        mgr.connect(
+            LocalPlayerPresencePayload(
+                playerId = "p_local",
+                name = "Roland",
+                level = 14,
+                vocation = Vocation.KNIGHT,
+                tunicColorIndex = 0,
+                hairColorIndex = 0,
+                x = 200,
+                y = 200,
+                floor = 0,
+                regionId = DEFAULT_REGION_ID,
+                hp = 250,
+                maxHp = 250,
+                joinedAt = nowMs,
+                lastSeenMs = nowMs
+            )
+        )
+
+        mgr.joinWorldChannel(fakeWs)
+        mgr.joinFloorChannel(fakeWs, 0)
+        assertEquals(2, sentFrames.size)
+
+        val worldJoin = sentFrames[0]
+        val floorJoin = sentFrames[1]
+        assertEquals("realtime:rookvale:world", worldJoin["topic"])
+        assertEquals("phx_join", worldJoin["event"])
+        assertEquals(worldJoin["ref"], worldJoin["join_ref"])
+        val worldPresenceCfg = ((worldJoin["payload"] as Map<String, Any?>)["config"] as Map<String, Any?>)["presence"] as Map<String, Any?>
+        assertEquals("World channel must opt into Supabase Realtime v2 presence", true, worldPresenceCfg["enabled"])
+        assertEquals("p_local", worldPresenceCfg["key"])
+
+        assertEquals("realtime:rookvale:floor:0", floorJoin["topic"])
+        assertEquals("phx_join", floorJoin["event"])
+        assertEquals(floorJoin["ref"], floorJoin["join_ref"])
+        val floorPresenceCfg = ((floorJoin["payload"] as Map<String, Any?>)["config"] as Map<String, Any?>)["presence"] as Map<String, Any?>
+        assertEquals("Floor channel must opt into Supabase Realtime v2 presence", true, floorPresenceCfg["enabled"])
+        assertEquals("p_local", floorPresenceCfg["key"])
+
+        val worldJoinRef = worldJoin["ref"].toString()
+        val floorJoinRef = floorJoin["ref"].toString()
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:world","event":"phx_reply","payload":{"status":"ok","response":{}},"ref":"$worldJoinRef"}""",
+            fakeWs
+        )
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:floor:0","event":"phx_reply","payload":{"status":"ok","response":{}},"ref":"$floorJoinRef"}""",
+            fakeWs
+        )
+        assertEquals(ConnectionStatus.ONLINE, mgr.uiState.value.status)
+
+        val afterJoinCount = sentFrames.size
+        val floorPresenceTrack = sentFrames.firstOrNull {
+            it["topic"] == "realtime:rookvale:floor:0" && it["event"] == "presence"
+        }
+        val worldPresenceTrack = sentFrames.firstOrNull {
+            it["topic"] == "realtime:rookvale:world" && it["event"] == "presence"
+        }
+        assertNotNull("Floor presence track must be sent after join ok", floorPresenceTrack)
+        assertNotNull("World presence track must be sent after join ok", worldPresenceTrack)
+        assertEquals(floorJoinRef, floorPresenceTrack!!["join_ref"])
+        assertEquals(worldJoinRef, worldPresenceTrack!!["join_ref"])
+
+        // Regression test: presence track phx_reply MUST NOT re-trigger trackLocalPresence/broadcastLocalState
+        val floorTrackRef = floorPresenceTrack["ref"].toString()
+        val worldTrackRef = worldPresenceTrack["ref"].toString()
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:floor:0","event":"phx_reply","payload":{"status":"ok","response":{}},"ref":"$floorTrackRef"}""",
+            fakeWs
+        )
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:world","event":"phx_reply","payload":{"status":"ok","response":{}},"ref":"$worldTrackRef"}""",
+            fakeWs
+        )
+        assertEquals(
+            "Presence track phx_reply must NEVER re-trigger trackLocalPresence/broadcastLocalState",
+            afterJoinCount,
+            sentFrames.size
+        )
+    }
+
+    @Test
+    fun worldChannelPresenceRegistersOnlinePlayersAcrossDifferentFloorsAndPolledFallback() {
+        val nowMs = 1_750_000_000_000L
+        val mgr = RealtimeMultiplayerManager(
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+            nowProvider = { nowMs },
+            animClockProvider = { nowMs }
+        )
+        mgr.connect(
+            LocalPlayerPresencePayload(
+                playerId = "p_local",
+                name = "Roland",
+                level = 12,
+                vocation = Vocation.KNIGHT,
+                tunicColorIndex = 0,
+                hairColorIndex = 0,
+                x = 200,
+                y = 200,
+                floor = 0,
+                regionId = DEFAULT_REGION_ID,
+                hp = 240,
+                maxHp = 240,
+                joinedAt = nowMs,
+                lastSeenMs = nowMs
+            )
+        )
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:world","event":"phx_reply","payload":{"status":"ok"},"ref":"1"}"""
+        )
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:floor:0","event":"phx_reply","payload":{"status":"ok"},"ref":"2"}"""
+        )
+
+        // World presence_state reports one player in a Lower Boss Dungeon (floor -16) and one on Overland (floor 0)
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:world","event":"presence_state","payload":{"p_delver":{"metas":[{"playerId":"p_delver","name":"Kael","level":25,"vocation":"KNIGHT","x":24,"y":20,"floor":-16,"regionId":"rookvale_valley","hp":350,"maxHp":380,"joinedAt":$nowMs,"lastSeen":$nowMs}]},"p_overland":{"metas":[{"playerId":"p_overland","name":"Lyra","level":18,"vocation":"PALADIN","x":210,"y":200,"floor":0,"regionId":"sunspire_desert","hp":260,"maxHp":280,"joinedAt":$nowMs,"lastSeen":$nowMs}]}}}"""
+        )
+
+        val state = mgr.uiState.value
+        assertEquals(ConnectionStatus.ONLINE, state.status)
+        assertEquals("Realm count must include local + overland + dungeon delver", 3, state.realmOnlineCount)
+        assertEquals(2, state.realmOnlinePlayers.size)
+        assertEquals("Floor 0 remotePlayers must include cross-biome overland peer only", 1, state.remotePlayers.size)
+        assertEquals("p_overland", state.remotePlayers.first().playerId)
+        assertEquals(2, state.floorOnlineCount)
+
+        // Dungeon delver disconnects from world channel -> realm count drops cleanly to 2
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:world","event":"presence_diff","payload":{"joins":{},"leaves":{"p_delver":{"metas":[{"playerId":"p_delver"}]}}}}"""
+        )
+        assertEquals(2, mgr.uiState.value.realmOnlineCount)
+        assertEquals(1, mgr.uiState.value.realmOnlinePlayers.size)
+        assertFalse(mgr.uiState.value.realmOnlinePlayers.any { it.playerId == "p_delver" })
+
+        // REST polled fallback adds a dungeon player on floor -18 into realmOnlinePlayers without polluting Floor 0 remotePlayers
+        val polledDungeonPeer = RemotePlayerState(
+            playerId = "p_polled_cave",
+            name = "Mireille",
+            level = 22,
+            vocation = Vocation.MAGE,
+            tunicColorIndex = 1,
+            hairColorIndex = 2,
+            x = 18,
+            y = 14,
+            floor = -18,
+            regionId = DEFAULT_REGION_ID,
+            hp = 210,
+            maxHp = 210,
+            joinedAt = nowMs - 5_000L,
+            lastSeenMs = nowMs - 2_000L
+        )
+        mgr.mergePolledPlayers(
+            polled = listOf(polledDungeonPeer),
+            localFloor = 0,
+            localRegionId = DEFAULT_REGION_ID,
+            localPlayerId = "p_local",
+            localPlayerName = "Roland"
+        )
+        assertEquals(3, mgr.uiState.value.realmOnlineCount)
+        assertTrue(mgr.uiState.value.realmOnlinePlayers.any { it.playerId == "p_polled_cave" })
+        assertEquals("Floor 0 remotePlayers must stay at 1", 1, mgr.uiState.value.remotePlayers.size)
     }
 }

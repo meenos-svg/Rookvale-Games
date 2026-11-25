@@ -76,6 +76,7 @@ import com.example.game.model.ItemStack
 import com.example.game.model.ORACLE_MIN_LEVEL
 import com.example.game.model.SkillProgress
 import com.example.game.model.Vocation
+import com.example.game.multiplayer.ConnectionStatus
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.sprites.EntitySpriteAtlas
 import com.example.ui.theme.BasaltDark
@@ -104,6 +105,8 @@ private data class InspectedItemRequest(
 fun SlideUpGamePanel(
     state: GameWorldState,
     remotePlayers: List<RemotePlayerState> = emptyList(),
+    realmOnlinePlayers: List<RemotePlayerState> = remotePlayers,
+    connectionStatus: ConnectionStatus = ConnectionStatus.OFFLINE_SOLO,
     displaySettings: DisplaySettings = DisplaySettings(),
     onClose: () -> Unit,
     onUseItem: (String) -> Unit,
@@ -295,7 +298,13 @@ fun SlideUpGamePanel(
                         onLootAll = onLootAll,
                         onInspectItem = { inspectedItem = it }
                     )
-                    ActivePanel.WORLD_MAP -> RegionalWorldMapContent(state, remotePlayers, onWalkToTile)
+                    ActivePanel.WORLD_MAP -> RegionalWorldMapContent(
+                        state = state,
+                        remotePlayers = remotePlayers,
+                        onWalkToTile = onWalkToTile,
+                        realmOnlinePlayers = realmOnlinePlayers,
+                        connectionStatus = connectionStatus
+                    )
                     ActivePanel.HARBOR_FERRY -> HarborFerryPanelContent(
                         state = state,
                         onBoardFerry = onBoardHarborFerry

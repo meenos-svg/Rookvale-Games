@@ -78,10 +78,11 @@ fun MultiplayerStatusBadge(
         ConnectionStatus.CONNECTING -> TorchAmber
         ConnectionStatus.OFFLINE_SOLO -> ParchmentMuted
     }
+    val onlineCount = maxOf(mpState.realmOnlineCount, mpState.floorOnlineCount)
     val label = when (mpState.status) {
         ConnectionStatus.ONLINE -> {
             val hostTag = if (mpState.isFloorHost && mpState.floorOnlineCount > 1) " • Host" else ""
-            "${mpState.floorOnlineCount} online$hostTag"
+            "$onlineCount online$hostTag"
         }
         ConnectionStatus.CONNECTING -> "Syncing..."
         ConnectionStatus.OFFLINE_SOLO -> "Offline Solo"

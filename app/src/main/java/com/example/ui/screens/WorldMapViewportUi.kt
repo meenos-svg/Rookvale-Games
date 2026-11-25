@@ -80,12 +80,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.game.model.GameWorldState
 import com.example.game.model.OreVeinKind
+import com.example.game.model.isRegionCompatible
 import com.example.game.model.normalizeRegionId
+import com.example.game.multiplayer.ConnectionStatus
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.world.WorldBiomeBlueprint
 import com.example.game.world.WorldFloor
 import com.example.game.world.WorldMaps
 import com.example.game.world.WorldPinCategory
+import com.example.ui.theme.ExpEmerald
 import com.example.ui.theme.ObsidianVoid
 import com.example.ui.theme.ParchmentLight
 import com.example.ui.theme.ParchmentMuted
@@ -93,6 +96,7 @@ import com.example.ui.theme.StoneBorderDark
 import com.example.ui.theme.StoneBorderLight
 import com.example.ui.theme.StoneSurface
 import com.example.ui.theme.TargetRed
+import com.example.ui.theme.TorchAmber
 import com.example.ui.theme.TorchGold
 import java.util.Locale
 import kotlin.math.abs
@@ -465,7 +469,9 @@ private fun oreVeinMarkerColor(kind: OreVeinKind): Color = when (kind) {
 fun EnhancedRegionalWorldMapContent(
     state: GameWorldState,
     remotePlayers: List<RemotePlayerState>,
-    onWalkToTile: (Int, Int) -> Unit
+    onWalkToTile: (Int, Int) -> Unit,
+    realmOnlinePlayers: List<RemotePlayerState> = remotePlayers,
+    connectionStatus: ConnectionStatus = ConnectionStatus.OFFLINE_SOLO
 ) {
     val floorMap = remember(state.floor) { WorldMaps.getFloor(state.floor) }
     val isOverland = state.floor == 0
@@ -477,9 +483,27 @@ fun EnhancedRegionalWorldMapContent(
     val floorRemotePlayers = remember(remotePlayers, state.floor, localRegionId, state.playerX, state.playerY) {
         remotePlayers
             .filter {
-                !it.isSpectator && it.floor == state.floor && (isOverland || normalizeRegionId(it.regionId) == localRegionId)
+                !it.isSpectator && it.floor == state.floor && isRegionCompatible(state.floor, localRegionId, it.regionId)
             }
             .sortedBy { max(abs(it.x - state.playerX), abs(it.y - state.playerY)) }
+    }
+    val allOnlinePeers = remember(realmOnlinePlayers, floorRemotePlayers, state.floor, state.playerX, state.playerY) {
+        val merged = LinkedHashMap<String, RemotePlayerState>()
+        floorRemotePlayers.forEach { merged[it.playerId] = it }
+        realmOnlinePlayers.forEach { rp ->
+            if (!rp.isSpectator && rp.playerId !in merged) {
+                merged[rp.playerId] = rp
+            }
+        }
+        merged.values.sortedWith(
+            compareByDescending<RemotePlayerState> { it.floor == state.floor }
+                .thenBy { max(abs(it.x - state.playerX), abs(it.y - state.playerY)) }
+        )
+    }
+    val totalOnlineCount = if (connectionStatus == ConnectionStatus.ONLINE || allOnlinePeers.isNotEmpty()) {
+        1 + allOnlinePeers.size
+    } else {
+        1
     }
     val floorOreNodes = remember(state.oreNodes, state.floor) {
         state.oreNodes.values.filter { it.floor == state.floor }
@@ -699,20 +723,42 @@ fun EnhancedRegionalWorldMapContent(
                         testTag = "world_map_filter_veins"
                     )
                     WorldMapChip(
-                        label = "Allies (${floorRemotePlayers.size})",
+                        label = "Online ($totalOnlineCount)",
                         selected = showAllies,
-                        accent = Color(0xFF7BE8FF),
+                        accent = ExpEmerald,
                         onClick = { showAllies = !showAllies },
                         testTag = "world_map_filter_allies"
                     )
                 }
-                Text(
-                    text = "${currentRegion?.displayName ?: floorMap.name} • (${state.playerX},${state.playerY})",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
-                    color = TorchGold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                val syncColor = when (connectionStatus) {
+                    ConnectionStatus.ONLINE -> ExpEmerald
+                    ConnectionStatus.CONNECTING -> TorchAmber
+                    ConnectionStatus.OFFLINE_SOLO -> ParchmentMuted
+                }
+                val syncLabel = when (connectionStatus) {
+                    ConnectionStatus.ONLINE -> "Connected"
+                    ConnectionStatus.CONNECTING -> "Syncing"
+                    ConnectionStatus.OFFLINE_SOLO -> "Offline"
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(syncColor)
+                    )
+                    Text(
+                        text = "$syncLabel • (${state.playerX},${state.playerY})",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                        color = syncColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("world_map_sync_status")
+                    )
+                }
             }
         }
 
@@ -1168,17 +1214,22 @@ fun EnhancedRegionalWorldMapContent(
                                 }
                             }
 
-                            // LAYER 9: Online Allies (with Golden Crown for Admin!)
+                            // LAYER 9: Online Heroes (with glowing green Online dot & Golden Crown for Admin!)
                             if (showAllies || !isOverland) {
                                 val allyR = (3.4f + zoomFactor * 2.0f).coerceIn(3.4f, 6.0f)
                                 allyLabelPaint.textSize = (15f + zoomFactor * 3.5f).coerceIn(15f, 18.5f)
                                 floorRemotePlayers.forEach { rp ->
                                     val pos = WorldMapViewportCamera.worldToScreen(rp.x + 0.5f, rp.y + 0.5f, camera, w, h)
                                     if (pos.x !in -16f..(w + 16f) || pos.y !in -16f..(h + 16f)) return@forEach
+                                    drawCircle(ExpEmerald.copy(alpha = 0.30f), radius = allyR * 1.9f * beaconPulse, center = pos)
                                     drawCircle(Color.Black, radius = allyR + 2.4f, center = pos)
                                     drawCircle(TorchGold, radius = allyR + 1.1f, center = pos)
                                     drawCircle(Color(0xFF47D7FF), radius = allyR, center = pos)
-                                    val label = if (rp.isAdmin) "★ ${rp.name.take(10)}" else rp.name.take(12)
+                                    // Glowing green online indicator pip at bottom-right of marker
+                                    val dotPos = Offset(pos.x + allyR * 0.85f, pos.y + allyR * 0.85f)
+                                    drawCircle(Color.Black, radius = 3.2f, center = dotPos)
+                                    drawCircle(ExpEmerald, radius = 2.2f, center = dotPos)
+                                    val label = if (rp.isAdmin) "● ★ ${rp.name.take(10)}" else "● ${rp.name.take(12)}"
                                     tryDrawBadgeLabel(
                                         text = label,
                                         anchorX = pos.x,
@@ -1298,24 +1349,31 @@ fun EnhancedRegionalWorldMapContent(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    if (floorRemotePlayers.isNotEmpty()) {
+                    if (allOnlinePeers.isNotEmpty()) {
                         item(key = "world_map_online_header") {
                             Text(
-                                text = "ONLINE PLAYERS (${floorRemotePlayers.size})",
+                                text = "ONLINE PLAYERS (${allOnlinePeers.size})",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold),
-                                color = Color(0xFF7BE8FF),
+                                color = ExpEmerald,
                                 modifier = Modifier.padding(top = 2.dp, bottom = 1.dp)
                             )
                         }
-                        items(floorRemotePlayers, key = { "wm_ally_${it.playerId}" }) { rp ->
+                        items(allOnlinePeers, key = { "wm_ally_${it.playerId}" }) { rp ->
+                            val sameFloor = rp.floor == state.floor && isRegionCompatible(state.floor, localRegionId, rp.regionId)
                             val dist = max(abs(rp.x - state.playerX), abs(rp.y - state.playerY))
+                            val locationLabel = if (sameFloor) {
+                                "(${rp.x},${rp.y}) • ${dist}t"
+                            } else {
+                                val flName = if (rp.floor == 0) "Overland" else "F${rp.floor}"
+                                "$flName (${rp.x},${rp.y})"
+                            }
                             Surface(
                                 color = Color(0xFF142834),
                                 shape = RoundedCornerShape(6.dp),
-                                border = BorderStroke(1.dp, Color(0xFF47D7FF).copy(alpha = 0.7f)),
+                                border = BorderStroke(1.dp, ExpEmerald.copy(alpha = 0.65f)),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
+                                    .clickable(enabled = sameFloor) {
                                         followPlayer = false
                                         camera = WorldMapViewportCamera.recenterOnPlayer(camera, rp.x, rp.y)
                                         onWalkToTile(rp.x, rp.y)
@@ -1324,38 +1382,59 @@ fun EnhancedRegionalWorldMapContent(
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        if (rp.isAdmin) {
-                                            AdminGoldenCrownIcon(sizeDp = 12.dp)
-                                        } else {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(8.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color(0xFF47D7FF))
-                                                    .border(1.dp, TorchGold, CircleShape)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(ExpEmerald)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            if (rp.isAdmin) {
+                                                AdminGoldenCrownIcon(sizeDp = 11.dp)
+                                            }
+                                            Text(
+                                                text = "${rp.name} (L${rp.level})",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                color = if (rp.isAdmin) TorchGold else Color(0xFF8CF0FF),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                         }
                                         Text(
-                                            text = "${rp.name} (L${rp.level})",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                            color = if (rp.isAdmin) TorchGold else Color(0xFF8CF0FF),
+                                            text = locationLabel,
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                            color = ParchmentMuted,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     }
-                                    Text(
-                                        text = "(${rp.x},${rp.y}) ${dist}t",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = TorchGold
-                                    )
+                                    if (sameFloor) {
+                                        Surface(
+                                            color = ExpEmerald.copy(alpha = 0.18f),
+                                            shape = RoundedCornerShape(4.dp),
+                                            border = BorderStroke(1.dp, ExpEmerald.copy(alpha = 0.7f)),
+                                            modifier = Modifier
+                                                .clickable {
+                                                    followPlayer = false
+                                                    camera = WorldMapViewportCamera.recenterOnPlayer(camera, rp.x, rp.y)
+                                                }
+                                                .testTag("world_map_locate_${rp.playerId}")
+                                        ) {
+                                            Text(
+                                                text = "Locate",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.ExtraBold),
+                                                color = ExpEmerald,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

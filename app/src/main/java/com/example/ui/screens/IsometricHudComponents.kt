@@ -133,6 +133,7 @@ import com.example.game.model.MonsterEntity
 import com.example.game.model.PlayerSkills
 import com.example.game.model.ThreatBand
 import com.example.game.model.TileType
+import com.example.game.model.isRegionCompatible
 import com.example.game.model.normalizeRegionId
 import com.example.game.multiplayer.ChatChannel
 import com.example.game.multiplayer.ChatMessage
@@ -647,7 +648,7 @@ private fun CharacterVitalsHudCard(
         burning = state.fireTicks > 0,
         saveBanner = saveBanner,
         connectionStatus = multiplayerState.status,
-        floorOnlineCount = multiplayerState.floorOnlineCount
+        floorOnlineCount = maxOf(multiplayerState.realmOnlineCount, multiplayerState.floorOnlineCount)
     )
     CharacterVitalsHudCardContent(
         snapshot = snapshot,
@@ -1057,7 +1058,7 @@ fun TopRightUtilityAndBattleCluster(
     val onlineAllies = remember(remotePlayers, state.floor, localRegionId, state.playerX, state.playerY) {
         remotePlayers
             .filter { rp ->
-                !rp.isSpectator && rp.floor == state.floor && normalizeRegionId(rp.regionId) == localRegionId
+                !rp.isSpectator && rp.floor == state.floor && isRegionCompatible(state.floor, localRegionId, rp.regionId)
             }
             .sortedBy { rp -> max(abs(rp.x - state.playerX), abs(rp.y - state.playerY)) }
     }
@@ -2024,12 +2025,16 @@ private fun CustomHotbarBindDialog(
 fun RegionalWorldMapContent(
     state: GameWorldState,
     remotePlayers: List<RemotePlayerState>,
-    onWalkToTile: (Int, Int) -> Unit
+    onWalkToTile: (Int, Int) -> Unit,
+    realmOnlinePlayers: List<RemotePlayerState> = remotePlayers,
+    connectionStatus: ConnectionStatus = ConnectionStatus.OFFLINE_SOLO
 ) {
     EnhancedRegionalWorldMapContent(
         state = state,
         remotePlayers = remotePlayers,
-        onWalkToTile = onWalkToTile
+        onWalkToTile = onWalkToTile,
+        realmOnlinePlayers = realmOnlinePlayers,
+        connectionStatus = connectionStatus
     )
 }
 

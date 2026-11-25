@@ -292,6 +292,8 @@ fun GameScreen(
                 SlideUpGamePanel(
                     state = state,
                     remotePlayers = multiplayerState.remotePlayers,
+                    realmOnlinePlayers = multiplayerState.realmOnlinePlayers,
+                    connectionStatus = multiplayerState.status,
                     displaySettings = displaySettings,
                     onClose = onClosePanel,
                     onUseItem = onUseItem,

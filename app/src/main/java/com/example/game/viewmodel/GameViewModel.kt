@@ -34,6 +34,7 @@ import com.example.game.model.normalizeRegionId
 import com.example.game.multiplayer.ChatChannel
 import com.example.game.multiplayer.ConnectionStatus
 import com.example.game.multiplayer.LocalPlayerPresencePayload
+import com.example.game.multiplayer.MultiplayerConfig
 import com.example.game.multiplayer.MultiplayerUiState
 import com.example.game.multiplayer.PlayerActionState
 import com.example.game.multiplayer.RealtimeMultiplayerManager
@@ -815,16 +816,48 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Pure Supabase Realtime Presence & Broadcast heartbeat (ZERO Postgres reads or writes!)
+        // Supabase Realtime Presence & Broadcast heartbeat + periodic REST fallback poll on public.players
         onlinePresenceSyncJob = viewModelScope.launch(Dispatchers.IO) {
+            var tick = 0
             while (true) {
                 delay(4_000L)
-                if (_screen.value == AppScreen.PLAYING &&
-                    multiplayerManager.uiState.value.status == ConnectionStatus.ONLINE
-                ) {
-                    val cur = _world.value
-                    if (cur.saveId.isNotBlank()) {
-                        multiplayerManager.broadcastLocalState(cur.toPresencePayload())
+                if (_screen.value != AppScreen.PLAYING) {
+                    tick = 0
+                    continue
+                }
+                val cur = _world.value
+                if (cur.saveId.isBlank()) continue
+                tick++
+
+                val status = multiplayerManager.uiState.value.status
+                if (status == ConnectionStatus.ONLINE) {
+                    multiplayerManager.broadcastLocalState(cur.toPresencePayload())
+                }
+
+                // Every 16s (and on initial tick 1): ensure Realtime connection is active and poll recently active peers
+                if ((tick == 1 || tick % 4 == 0) && MultiplayerConfig.isConfigured()) {
+                    if (status == ConnectionStatus.OFFLINE_SOLO) {
+                        multiplayerManager.ensureConnectedOrRetry(cur.toPresencePayload())
+                    }
+                    val polled = runCatching {
+                        cloudRepository.fetchRecentOnlinePlayers(
+                            sinceEpochMs = System.currentTimeMillis() - 90_000L,
+                            excludePlayerId = cur.saveId,
+                            excludeCharacterName = cur.playerName
+                        )
+                    }.getOrDefault(emptyList())
+                    multiplayerManager.mergePolledPlayers(
+                        polled = polled,
+                        localFloor = cur.floor,
+                        localRegionId = cur.regionId,
+                        localPlayerId = cur.saveId,
+                        localPlayerName = cur.playerName
+                    )
+                    // If WebSocket is blocked by network/firewall, periodically flush cloud presence so REST peers see us
+                    if (status == ConnectionStatus.OFFLINE_SOLO && activeCloudSession != null && tick % 8 == 0) {
+                        runCatching {
+                            cloudSaveController.flushNow(cur, force = false, logConsoleFeedback = false)
+                        }
                     }
                 }
             }
@@ -992,9 +1025,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val cur = _world.value
         if (cur.saveId.isBlank()) return
         val result = multiplayerManager.ensureConnectedOrRetry(cur.toPresencePayload())
+        val mp = multiplayerManager.uiState.value
+        val realmCount = maxOf(mp.realmOnlineCount, mp.floorOnlineCount)
         val msg = when (result) {
             RealtimeMultiplayerManager.RetryResult.ALREADY_ONLINE ->
-                "Online on Floor ${cur.floor} (${multiplayerManager.uiState.value.floorOnlineCount} hero(es) present)."
+                "Online in Rookvale ($realmCount online, ${mp.floorOnlineCount} on Floor ${cur.floor})."
             RealtimeMultiplayerManager.RetryResult.CONNECTING ->
                 "Connecting to Rookvale Floor ${cur.floor} live co-op..."
             RealtimeMultiplayerManager.RetryResult.MISSING_CREDENTIALS ->

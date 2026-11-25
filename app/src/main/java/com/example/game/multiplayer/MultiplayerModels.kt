@@ -200,6 +200,8 @@ data class MultiplayerUiState(
     val hostPlayerId: String = "",
     val floorOnlineCount: Int = 1,
     val remotePlayers: List<RemotePlayerState> = emptyList(),
+    val realmOnlineCount: Int = 1,
+    val realmOnlinePlayers: List<RemotePlayerState> = emptyList(),
     val chatMessages: List<ChatMessage> = emptyList(),
     val chatExpanded: Boolean = false,
     val unreadChatCount: Int = 0,

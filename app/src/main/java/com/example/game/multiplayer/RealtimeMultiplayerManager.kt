@@ -85,16 +85,25 @@ class RealtimeMultiplayerManager(
     private var lastChatSentMs = 0L
     @Volatile
     private var lastPresenceTrackMs = 0L
+    @Volatile
+    private var lastWorldPresenceTrackMs = 0L
 
     private val presenceMap = LinkedHashMap<String, RemotePlayerState>()
     private val polledOnlyIds = LinkedHashSet<String>()
     private val realtimeLastRxMs = HashMap<String, Long>()
+    private val realmPresenceMap = LinkedHashMap<String, RemotePlayerState>()
+    private val realmPolledOnlyIds = LinkedHashSet<String>()
+    private val realmRealtimeLastRxMs = HashMap<String, Long>()
+    private val topicJoinRefs = HashMap<String, String>()
+    private val joinedTopics = HashSet<String>()
     private val nearbyNotifiedPlayers = LinkedHashMap<String, String>()
 
     companion object {
         private const val NEARBY_ENTER_TILES = 24
         private const val NEARBY_EXIT_TILES = 32
         private const val PRESENCE_RETRACK_MIN_MS = 4_000L
+        private const val WORLD_PRESENCE_RETRACK_MIN_MS = 15_000L
+        private const val HEARTBEAT_INTERVAL_MS = 20_000L
         private const val POLLED_STALE_MS = 65_000L
         private const val REALTIME_PRIORITY_WINDOW_MS = 8_000L
         const val MOVEMENT_BROADCAST_EVENT = "player_move"
@@ -163,10 +172,17 @@ class RealtimeMultiplayerManager(
         reconnectJob = null
         activeWebSocket?.close(1000, "Session ended")
         activeWebSocket = null
+        synchronized(topicJoinRefs) {
+            topicJoinRefs.clear()
+            joinedTopics.clear()
+        }
         synchronized(presenceMap) {
             presenceMap.clear()
             polledOnlyIds.clear()
             realtimeLastRxMs.clear()
+            realmPresenceMap.clear()
+            realmPolledOnlyIds.clear()
+            realmRealtimeLastRxMs.clear()
             nearbyNotifiedPlayers.clear()
         }
         val localId = latestLocalPayload?.playerId.orEmpty()
@@ -205,8 +221,16 @@ class RealtimeMultiplayerManager(
                     mapOf("playerId" to normalized.playerId, "floor" to oldFloor)
                 )
                 sendPhoenixFrame(ws, oldTopic, "phx_leave", emptyMap())
+                synchronized(topicJoinRefs) {
+                    topicJoinRefs.remove(oldTopic)
+                    joinedTopics.remove(oldTopic)
+                }
             }
             joinFloorChannel(ws, newFloor)
+            if (!normalized.isSpectator) {
+                trackWorldPresence(ws)
+                sendBroadcast(ws, MultiplayerConfig.WORLD_CHANNEL_TOPIC, "player_state", playerPayloadToMap(normalized))
+            }
         }
     }
 
@@ -240,6 +264,7 @@ class RealtimeMultiplayerManager(
         }
         if (wasSpectator) {
             trackLocalPresence(ws, currentFloor)
+            trackWorldPresence(ws)
         }
 
         val compactBody = movementPayloadToMap(normalized)
@@ -275,6 +300,11 @@ class RealtimeMultiplayerManager(
             lastPresenceTrackMs = now
             trackLocalPresence(ws, currentFloor)
         }
+        if (wasSpectator || now - lastWorldPresenceTrackMs >= WORLD_PRESENCE_RETRACK_MIN_MS) {
+            lastWorldPresenceTrackMs = now
+            trackWorldPresence(ws)
+            sendBroadcast(ws, MultiplayerConfig.WORLD_CHANNEL_TOPIC, "player_state", body)
+        }
     }
 
     /**
@@ -295,18 +325,60 @@ class RealtimeMultiplayerManager(
         val animNow = animClockProvider()
         val staleCutoff = now - POLLED_STALE_MS
         val freshPolledIds = HashSet<String>()
+        val freshRealmPolledIds = HashSet<String>()
 
         synchronized(presenceMap) {
             for (raw in polled) {
                 if (raw.isSpectator) continue
-                val rpRegion = normalizeRegionId(raw.regionId)
-                if (!isRegionVisible(raw.floor, rpRegion, localFloor, normalizedRegion)) continue
+                if (!MultiplayerSanitizer.isValidFloor(raw.floor)) continue
                 if (raw.lastSeenMs in 1L until staleCutoff) continue
                 if (isSelfIdentity(raw.playerId, raw.name, localPlayerId, localPlayerName)) continue
 
+                val rpRegion = normalizeRegionId(raw.regionId)
+                val effectiveLastSeen = if (raw.lastSeenMs > 0L) raw.lastSeenMs else now
+
+                // 1. Realm-wide roster: track every active online player across all valid floors
+                freshRealmPolledIds.add(raw.playerId)
+                val existingRealm = realmPresenceMap[raw.playerId]
+                if (existingRealm == null) {
+                    realmPresenceMap[raw.playerId] = raw.copy(
+                        regionId = rpRegion,
+                        prevX = raw.x,
+                        prevY = raw.y,
+                        targetX = raw.x,
+                        targetY = raw.y,
+                        lastMoveMs = animNow,
+                        networkReceivedMs = animNow,
+                        lastSeenMs = effectiveLastSeen
+                    )
+                    realmPolledOnlyIds.add(raw.playerId)
+                } else {
+                    val isRealmPolledOnly = raw.playerId in realmPolledOnlyIds
+                    val lastRealmRt = realmRealtimeLastRxMs[raw.playerId]
+                    val hasFreshRealmRt = lastRealmRt != null && (animNow - lastRealmRt) < REALTIME_PRIORITY_WINDOW_MS
+                    if (!hasFreshRealmRt && (isRealmPolledOnly || effectiveLastSeen >= existingRealm.lastSeenMs)) {
+                        realmPresenceMap[raw.playerId] = existingRealm.copy(
+                            name = raw.name,
+                            level = raw.level,
+                            vocation = raw.vocation,
+                            tunicColorIndex = raw.tunicColorIndex,
+                            hairColorIndex = raw.hairColorIndex,
+                            x = raw.x,
+                            y = raw.y,
+                            floor = raw.floor,
+                            regionId = rpRegion,
+                            hp = raw.hp,
+                            maxHp = raw.maxHp,
+                            lastSeenMs = maxOf(existingRealm.lastSeenMs, effectiveLastSeen)
+                        )
+                    }
+                }
+
+                // 2. Floor-local roster: strictly filter by compatible floor & region
+                if (!isRegionVisible(raw.floor, rpRegion, localFloor, normalizedRegion)) continue
+
                 freshPolledIds.add(raw.playerId)
                 val existing = presenceMap[raw.playerId]
-                val effectiveLastSeen = if (raw.lastSeenMs > 0L) raw.lastSeenMs else now
                 if (existing == null) {
                     presenceMap[raw.playerId] = raw.copy(
                         regionId = rpRegion,
@@ -362,7 +434,7 @@ class RealtimeMultiplayerManager(
                 }
             }
 
-            // Expire polled-only players that are no longer active in the 60s window
+            // Expire polled-only players that are no longer active in the 65s window
             val iter = polledOnlyIds.iterator()
             while (iter.hasNext()) {
                 val id = iter.next()
@@ -373,6 +445,17 @@ class RealtimeMultiplayerManager(
                     presenceMap.remove(id)
                     realtimeLastRxMs.remove(id)
                     iter.remove()
+                }
+            }
+
+            val realmIter = realmPolledOnlyIds.iterator()
+            while (realmIter.hasNext()) {
+                val id = realmIter.next()
+                val existing = realmPresenceMap[id]
+                if (id !in freshRealmPolledIds || existing == null || existing.lastSeenMs < staleCutoff) {
+                    realmPresenceMap.remove(id)
+                    realmRealtimeLastRxMs.remove(id)
+                    realmIter.remove()
                 }
             }
         }
@@ -594,11 +677,16 @@ class RealtimeMultiplayerManager(
 
         heartbeatJob?.cancel()
         activeWebSocket?.cancel()
+        synchronized(topicJoinRefs) {
+            topicJoinRefs.clear()
+            joinedTopics.clear()
+        }
         _uiState.update { it.copy(status = ConnectionStatus.CONNECTING) }
 
         val request = Request.Builder()
             .url(wsUrl)
             .header("apikey", MultiplayerConfig.SUPABASE_ANON_KEY)
+            .header("Authorization", "Bearer ${MultiplayerConfig.SUPABASE_ANON_KEY}")
             .build()
 
         activeWebSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
@@ -635,6 +723,10 @@ class RealtimeMultiplayerManager(
         heartbeatJob?.cancel()
         heartbeatJob = null
         activeWebSocket = null
+        synchronized(topicJoinRefs) {
+            topicJoinRefs.clear()
+            joinedTopics.clear()
+        }
         synchronized(presenceMap) {
             // Drop WebSocket-only presence entries while keeping active polled peers intact until next poll
             val iter = presenceMap.keys.iterator()
@@ -642,18 +734,28 @@ class RealtimeMultiplayerManager(
                 val id = iter.next()
                 if (id !in polledOnlyIds) iter.remove()
             }
+            val realmIter = realmPresenceMap.keys.iterator()
+            while (realmIter.hasNext()) {
+                val id = realmIter.next()
+                if (id !in realmPolledOnlyIds) realmIter.remove()
+            }
         }
         val remaining = synchronized(presenceMap) { presenceMap.values.toList() }
-        if (remaining.isEmpty()) {
+        val remainingRealm = synchronized(presenceMap) { realmPresenceMap.values.toList() }
+        if (remaining.isEmpty() && remainingRealm.isEmpty()) {
             transitionToOfflineSolo(latestLocalPayload?.playerId.orEmpty())
         } else {
             _uiState.update { st ->
+                val floorCount = 1 + remaining.size
+                val realmCount = maxOf(floorCount, 1 + remainingRealm.size)
                 st.copy(
                     status = ConnectionStatus.OFFLINE_SOLO,
                     isFloorHost = true,
                     hostPlayerId = latestLocalPayload?.playerId.orEmpty(),
-                    floorOnlineCount = 1 + remaining.size,
-                    remotePlayers = remaining
+                    floorOnlineCount = floorCount,
+                    remotePlayers = remaining,
+                    realmOnlineCount = realmCount,
+                    realmOnlinePlayers = remainingRealm
                 )
             }
         }
@@ -681,7 +783,9 @@ class RealtimeMultiplayerManager(
                 isFloorHost = true,
                 hostPlayerId = localPlayerId,
                 floorOnlineCount = 1,
-                remotePlayers = emptyList()
+                remotePlayers = emptyList(),
+                realmOnlineCount = 1,
+                realmOnlinePlayers = emptyList()
             )
         }
     }
@@ -690,28 +794,35 @@ class RealtimeMultiplayerManager(
         heartbeatJob?.cancel()
         heartbeatJob = scope.launch(Dispatchers.IO) {
             while (sessionActive) {
-                delay(25_000L)
+                delay(HEARTBEAT_INTERVAL_MS)
                 sendPhoenixFrame(webSocket, "phoenix", "heartbeat", emptyMap())
+                val local = latestLocalPayload
+                if (local != null && !local.isSpectator && _uiState.value.status == ConnectionStatus.ONLINE) {
+                    trackWorldPresence(webSocket)
+                    trackLocalPresence(webSocket, currentFloor)
+                }
             }
         }
     }
 
-    private fun joinWorldChannel(webSocket: WebSocket) {
+    internal fun joinWorldChannel(webSocket: WebSocket) {
+        val localId = latestLocalPayload?.playerId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
         val payload = mapOf(
             "config" to mapOf(
-                "broadcast" to mapOf("self" to false, "ack" to false)
+                "broadcast" to mapOf("self" to false, "ack" to false),
+                "presence" to mapOf("enabled" to true, "key" to localId)
             ),
             "access_token" to MultiplayerConfig.SUPABASE_ANON_KEY
         )
         sendPhoenixFrame(webSocket, MultiplayerConfig.WORLD_CHANNEL_TOPIC, "phx_join", payload, includeJoinRef = true)
     }
 
-    private fun joinFloorChannel(webSocket: WebSocket, floor: Int) {
-        val localId = latestLocalPayload?.playerId ?: UUID.randomUUID().toString()
+    internal fun joinFloorChannel(webSocket: WebSocket, floor: Int) {
+        val localId = latestLocalPayload?.playerId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
         val payload = mapOf(
             "config" to mapOf(
                 "broadcast" to mapOf("self" to false, "ack" to false),
-                "presence" to mapOf("key" to localId)
+                "presence" to mapOf("enabled" to true, "key" to localId)
             ),
             "access_token" to MultiplayerConfig.SUPABASE_ANON_KEY
         )
@@ -721,7 +832,8 @@ class RealtimeMultiplayerManager(
     private fun trackLocalPresence(webSocket: WebSocket, floor: Int) {
         val local = latestLocalPayload ?: return
         if (local.isSpectator) return
-        lastPresenceTrackMs = nowProvider()
+        val now = nowProvider()
+        lastPresenceTrackMs = now
         val presencePayload = mapOf(
             "type" to "presence",
             "event" to "track",
@@ -730,11 +842,31 @@ class RealtimeMultiplayerManager(
                     floor = floor,
                     regionId = normalizeRegionId(local.regionId),
                     joinedAt = floorJoinedAtMs,
-                    lastSeenMs = lastPresenceTrackMs
+                    lastSeenMs = now
                 )
             )
         )
         sendPhoenixFrame(webSocket, MultiplayerConfig.floorChannelTopic(floor), "presence", presencePayload)
+    }
+
+    private fun trackWorldPresence(webSocket: WebSocket) {
+        val local = latestLocalPayload ?: return
+        if (local.isSpectator) return
+        val now = nowProvider()
+        lastWorldPresenceTrackMs = now
+        val presencePayload = mapOf(
+            "type" to "presence",
+            "event" to "track",
+            "payload" to playerPayloadToMap(
+                local.copy(
+                    floor = currentFloor,
+                    regionId = normalizeRegionId(local.regionId),
+                    joinedAt = floorJoinedAtMs,
+                    lastSeenMs = now
+                )
+            )
+        )
+        sendPhoenixFrame(webSocket, MultiplayerConfig.WORLD_CHANNEL_TOPIC, "presence", presencePayload)
     }
 
     private fun untrackLocalPresenceAndNotifyLeave(webSocket: WebSocket, floor: Int, playerId: String) {
@@ -745,12 +877,19 @@ class RealtimeMultiplayerManager(
             "player_leave",
             mapOf("playerId" to playerId, "floor" to floor)
         )
+        sendBroadcast(
+            webSocket,
+            MultiplayerConfig.WORLD_CHANNEL_TOPIC,
+            "player_leave",
+            mapOf("playerId" to playerId, "floor" to floor)
+        )
         val untrackPayload = mapOf(
             "type" to "presence",
             "event" to "untrack",
             "payload" to emptyMap<String, Any>()
         )
         sendPhoenixFrame(webSocket, topic, "presence", untrackPayload)
+        sendPhoenixFrame(webSocket, MultiplayerConfig.WORLD_CHANNEL_TOPIC, "presence", untrackPayload)
     }
 
     private fun sendBroadcast(webSocket: WebSocket, topic: String, eventName: String, body: Map<String, Any?>) {
@@ -775,7 +914,18 @@ class RealtimeMultiplayerManager(
         frame["event"] = event
         frame["payload"] = payload
         frame["ref"] = ref
-        if (includeJoinRef) frame["join_ref"] = ref
+        if (includeJoinRef) {
+            synchronized(topicJoinRefs) {
+                topicJoinRefs[topic] = ref
+                joinedTopics.remove(topic)
+            }
+            frame["join_ref"] = ref
+        } else if (topic != "phoenix") {
+            val joinRef = synchronized(topicJoinRefs) { topicJoinRefs[topic] }
+            if (joinRef != null) {
+                frame["join_ref"] = joinRef
+            }
+        }
         val json = runCatching { mapAdapter.toJson(frame) }.getOrNull() ?: return
         webSocket.send(json)
     }
@@ -787,34 +937,91 @@ class RealtimeMultiplayerManager(
         val payload = frame["payload"].asStringMap() ?: return
 
         val expectedFloorTopic = MultiplayerConfig.floorChannelTopic(currentFloor)
+        val isWorldTopic = topic == MultiplayerConfig.WORLD_CHANNEL_TOPIC
 
         when (event) {
             "phx_reply" -> {
                 val status = payload["status"] as? String
-                if (status == "ok" && topic == expectedFloorTopic) {
-                    _uiState.update { it.copy(status = ConnectionStatus.ONLINE) }
-                    if (webSocket != null) {
-                        trackLocalPresence(webSocket, currentFloor)
-                        latestLocalPayload?.let { broadcastLocalState(it) }
+                val replyRef = frame["ref"]?.toString()
+                if (status == "ok" && (topic == expectedFloorTopic || isWorldTopic)) {
+                    // Only treat a phx_reply as a channel-join confirmation when it matches our phx_join ref
+                    // (or on first ack when tests inject phx_reply directly without openSocket).
+                    // This prevents presence track replies from re-triggering trackLocalPresence in an infinite loop!
+                    val isJoinAck = synchronized(topicJoinRefs) {
+                        val expectedJoinRef = topicJoinRefs[topic]
+                        val matched = if (expectedJoinRef != null) {
+                            replyRef == expectedJoinRef && topic !in joinedTopics
+                        } else {
+                            topic !in joinedTopics
+                        }
+                        if (matched) joinedTopics.add(topic)
+                        matched
                     }
-                    recomputePresenceAndHost()
+                    if (isJoinAck) {
+                        _uiState.update { it.copy(status = ConnectionStatus.ONLINE) }
+                        if (webSocket != null) {
+                            if (topic == expectedFloorTopic) {
+                                trackLocalPresence(webSocket, currentFloor)
+                                latestLocalPayload?.let { local ->
+                                    if (!local.isSpectator) {
+                                        sendBroadcast(
+                                            webSocket,
+                                            expectedFloorTopic,
+                                            "player_state",
+                                            playerPayloadToMap(local.copy(joinedAt = floorJoinedAtMs, lastSeenMs = nowProvider()))
+                                        )
+                                    }
+                                }
+                            } else if (isWorldTopic) {
+                                trackWorldPresence(webSocket)
+                                latestLocalPayload?.let { local ->
+                                    if (!local.isSpectator) {
+                                        sendBroadcast(
+                                            webSocket,
+                                            MultiplayerConfig.WORLD_CHANNEL_TOPIC,
+                                            "player_state",
+                                            playerPayloadToMap(local.copy(joinedAt = floorJoinedAtMs, lastSeenMs = nowProvider()))
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        recomputePresenceAndHost()
+                    }
+                } else if (status == "error") {
+                    synchronized(topicJoinRefs) {
+                        val expectedJoinRef = topicJoinRefs[topic]
+                        if (expectedJoinRef != null && replyRef == expectedJoinRef) {
+                            joinedTopics.remove(topic)
+                        }
+                    }
                 }
             }
             "presence_state" -> {
-                if (topic != expectedFloorTopic) return
-                applyPresenceState(payload)
+                when {
+                    topic == expectedFloorTopic -> applyPresenceState(payload)
+                    isWorldTopic -> applyWorldPresenceState(payload)
+                }
             }
             "presence_diff" -> {
-                if (topic != expectedFloorTopic) return
-                applyPresenceDiff(payload)
+                when {
+                    topic == expectedFloorTopic -> applyPresenceDiff(payload)
+                    isWorldTopic -> applyWorldPresenceDiff(payload)
+                }
             }
             "broadcast" -> {
                 val innerEvent = payload["event"] as? String ?: return
                 val innerBody = payload["payload"].asStringMap() ?: return
                 when (innerEvent) {
-                    MOVEMENT_BROADCAST_EVENT -> if (topic == expectedFloorTopic) applyRemotePlayerState(innerBody)
-                    "player_state" -> if (topic == expectedFloorTopic) applyRemotePlayerState(innerBody)
-                    "player_leave" -> if (topic == expectedFloorTopic) applyRemotePlayerLeave(innerBody)
+                    MOVEMENT_BROADCAST_EVENT -> if (topic == expectedFloorTopic) applyRemotePlayerState(innerBody, fromWorldChannel = false)
+                    "player_state" -> {
+                        if (topic == expectedFloorTopic) applyRemotePlayerState(innerBody, fromWorldChannel = false)
+                        else if (isWorldTopic) applyRemotePlayerState(innerBody, fromWorldChannel = true)
+                    }
+                    "player_leave" -> {
+                        if (topic == expectedFloorTopic) applyRemotePlayerLeave(innerBody, fromWorldChannel = false)
+                        else if (isWorldTopic) applyRemotePlayerLeave(innerBody, fromWorldChannel = true)
+                    }
                     "player_fx" -> if (topic == expectedFloorTopic) applyRemotePlayerActionFx(innerBody)
                     "monster_sync" -> if (topic == expectedFloorTopic) applyMonsterSync(innerBody)
                     "monster_hit" -> if (topic == expectedFloorTopic) applyRemoteMonsterHit(innerBody)
@@ -834,17 +1041,19 @@ class RealtimeMultiplayerManager(
                 val meta = extractFirstMeta(entry) ?: continue
                 val existing = presenceMap[MultiplayerSanitizer.sanitizeId(meta["playerId"] as? String ?: key)]
                 val parsed = parseRemotePlayer(meta, fallbackId = key, animNow = animNow, existing = existing) ?: continue
-                if (!parsed.isSpectator &&
-                    !isLocalPlayer(parsed.playerId, parsed.name) &&
-                    isRegionVisible(parsed.floor, parsed.regionId, currentFloor, currentRegionId)
-                ) {
-                    seenPresenceIds.add(parsed.playerId)
-                    polledOnlyIds.remove(parsed.playerId)
-                    val lastRtRx = realtimeLastRxMs[parsed.playerId]
-                    val hasFreshRealtime = lastRtRx != null && (animNow - lastRtRx) < REALTIME_PRIORITY_WINDOW_MS
-                    // Keep fresher broadcast coordinates if existing entry has an active Realtime movement stream
-                    if (existing == null || (!hasFreshRealtime && parsed.lastSeenMs >= existing.lastSeenMs)) {
-                        presenceMap[parsed.playerId] = parsed
+                if (!parsed.isSpectator && !isLocalPlayer(parsed.playerId, parsed.name)) {
+                    // Mirror into realm presence map so floor presence always contributes to global online count
+                    realmPolledOnlyIds.remove(parsed.playerId)
+                    realmPresenceMap[parsed.playerId] = parsed
+                    if (isRegionVisible(parsed.floor, parsed.regionId, currentFloor, currentRegionId)) {
+                        seenPresenceIds.add(parsed.playerId)
+                        polledOnlyIds.remove(parsed.playerId)
+                        val lastRtRx = realtimeLastRxMs[parsed.playerId]
+                        val hasFreshRealtime = lastRtRx != null && (animNow - lastRtRx) < REALTIME_PRIORITY_WINDOW_MS
+                        // Keep fresher broadcast coordinates if existing entry has an active Realtime movement stream
+                        if (existing == null || (!hasFreshRealtime && parsed.lastSeenMs >= existing.lastSeenMs)) {
+                            presenceMap[parsed.playerId] = parsed
+                        }
                     }
                 }
             }
@@ -854,6 +1063,47 @@ class RealtimeMultiplayerManager(
                 val id = iter.next()
                 if (id !in seenPresenceIds && id !in polledOnlyIds) {
                     realtimeLastRxMs.remove(id)
+                    iter.remove()
+                }
+            }
+        }
+        recomputePresenceAndHost()
+    }
+
+    private fun applyWorldPresenceState(stateMap: Map<String, Any?>) {
+        val animNow = animClockProvider()
+        val seenRealmIds = HashSet<String>()
+        synchronized(presenceMap) {
+            for ((key, rawEntry) in stateMap) {
+                val entry = rawEntry.asStringMap() ?: continue
+                val meta = extractFirstMeta(entry) ?: continue
+                val existingRealm = realmPresenceMap[MultiplayerSanitizer.sanitizeId(meta["playerId"] as? String ?: key)]
+                val parsed = parseRemotePlayer(meta, fallbackId = key, animNow = animNow, existing = existingRealm) ?: continue
+                if (!parsed.isSpectator && !isLocalPlayer(parsed.playerId, parsed.name)) {
+                    seenRealmIds.add(parsed.playerId)
+                    realmPolledOnlyIds.remove(parsed.playerId)
+                    val lastRealmRt = realmRealtimeLastRxMs[parsed.playerId]
+                    val hasFreshRealmRt = lastRealmRt != null && (animNow - lastRealmRt) < REALTIME_PRIORITY_WINDOW_MS
+                    if (existingRealm == null || (!hasFreshRealmRt && parsed.lastSeenMs >= existingRealm.lastSeenMs)) {
+                        realmPresenceMap[parsed.playerId] = parsed
+                    }
+                    // If this realm peer is also on our current floor + compatible region, surface them immediately
+                    if (isRegionVisible(parsed.floor, parsed.regionId, currentFloor, currentRegionId)) {
+                        val existingFloor = presenceMap[parsed.playerId]
+                        val lastFloorRt = realtimeLastRxMs[parsed.playerId]
+                        val hasFreshFloorRt = lastFloorRt != null && (animNow - lastFloorRt) < REALTIME_PRIORITY_WINDOW_MS
+                        if (existingFloor == null || (!hasFreshFloorRt && parsed.lastSeenMs >= existingFloor.lastSeenMs)) {
+                            presenceMap[parsed.playerId] = parsed
+                            polledOnlyIds.remove(parsed.playerId)
+                        }
+                    }
+                }
+            }
+            val iter = realmPresenceMap.keys.iterator()
+            while (iter.hasNext()) {
+                val id = iter.next()
+                if (id !in seenRealmIds && id !in realmPolledOnlyIds && id !in presenceMap) {
+                    realmRealtimeLastRxMs.remove(id)
                     iter.remove()
                 }
             }
@@ -878,6 +1128,11 @@ class RealtimeMultiplayerManager(
                 polledOnlyIds.remove(sanitizedKey)
                 realtimeLastRxMs.remove(id)
                 realtimeLastRxMs.remove(sanitizedKey)
+                // If the peer wasn't also tracked on the world channel (e.g., floor-only tests), prune from realm map too
+                if (MultiplayerConfig.WORLD_CHANNEL_TOPIC !in joinedTopics) {
+                    realmPresenceMap.remove(id)
+                    realmPresenceMap.remove(sanitizedKey)
+                }
             }
             joins?.forEach { (key, rawEntry) ->
                 val entry = rawEntry.asStringMap() ?: return@forEach
@@ -886,22 +1141,23 @@ class RealtimeMultiplayerManager(
                 if (id.isNotBlank()) {
                     val existing = presenceMap[id]
                     val parsed = parseRemotePlayer(meta, fallbackId = id, animNow = animNow, existing = existing)
-                    if (parsed != null &&
-                        !parsed.isSpectator &&
-                        !isLocalPlayer(parsed.playerId, parsed.name) &&
-                        isRegionVisible(parsed.floor, parsed.regionId, currentFloor, currentRegionId)
-                    ) {
-                        polledOnlyIds.remove(parsed.playerId)
-                        val lastRtRx = realtimeLastRxMs[parsed.playerId]
-                        val hasFreshRealtime = lastRtRx != null && (animNow - lastRtRx) < REALTIME_PRIORITY_WINDOW_MS
-                        if (existing == null || (!hasFreshRealtime && parsed.lastSeenMs >= existing.lastSeenMs)) {
-                            presenceMap[parsed.playerId] = parsed
+                    if (parsed != null && !parsed.isSpectator && !isLocalPlayer(parsed.playerId, parsed.name)) {
+                        realmPolledOnlyIds.remove(parsed.playerId)
+                        realmPresenceMap[parsed.playerId] = parsed
+                        if (isRegionVisible(parsed.floor, parsed.regionId, currentFloor, currentRegionId)) {
+                            polledOnlyIds.remove(parsed.playerId)
+                            val lastRtRx = realtimeLastRxMs[parsed.playerId]
+                            val hasFreshRealtime = lastRtRx != null && (animNow - lastRtRx) < REALTIME_PRIORITY_WINDOW_MS
+                            if (existing == null || (!hasFreshRealtime && parsed.lastSeenMs >= existing.lastSeenMs)) {
+                                presenceMap[parsed.playerId] = parsed
+                            }
+                            hasNewRemoteJoin = true
                         }
-                        hasNewRemoteJoin = true
                     } else if (parsed != null && parsed.isSpectator) {
                         presenceMap.remove(parsed.playerId)
                         polledOnlyIds.remove(parsed.playerId)
                         realtimeLastRxMs.remove(parsed.playerId)
+                        realmPresenceMap.remove(parsed.playerId)
                     }
                 }
             }
@@ -923,34 +1179,137 @@ class RealtimeMultiplayerManager(
         }
     }
 
-    private fun applyRemotePlayerState(body: Map<String, Any?>) {
+    private fun applyWorldPresenceDiff(diffMap: Map<String, Any?>) {
+        val animNow = animClockProvider()
+        val joins = diffMap["joins"].asStringMap()
+        val leaves = diffMap["leaves"].asStringMap()
+        var hasNewRealmJoin = false
+
+        synchronized(presenceMap) {
+            leaves?.forEach { (key, rawEntry) ->
+                val meta = rawEntry.asStringMap()?.let { extractFirstMeta(it) }
+                val id = MultiplayerSanitizer.sanitizeId(meta?.get("playerId") as? String ?: key)
+                val sanitizedKey = MultiplayerSanitizer.sanitizeId(key)
+                realmPresenceMap.remove(id)
+                realmPresenceMap.remove(sanitizedKey)
+                realmPolledOnlyIds.remove(id)
+                realmPolledOnlyIds.remove(sanitizedKey)
+                realmRealtimeLastRxMs.remove(id)
+                realmRealtimeLastRxMs.remove(sanitizedKey)
+                // If peer disconnected from the realm completely, also clear them from the floor map
+                presenceMap.remove(id)
+                presenceMap.remove(sanitizedKey)
+                polledOnlyIds.remove(id)
+                polledOnlyIds.remove(sanitizedKey)
+                realtimeLastRxMs.remove(id)
+                realtimeLastRxMs.remove(sanitizedKey)
+            }
+            joins?.forEach { (key, rawEntry) ->
+                val entry = rawEntry.asStringMap() ?: return@forEach
+                val meta = extractFirstMeta(entry) ?: return@forEach
+                val id = MultiplayerSanitizer.sanitizeId(meta["playerId"] as? String ?: key)
+                if (id.isNotBlank()) {
+                    val existingRealm = realmPresenceMap[id]
+                    val parsed = parseRemotePlayer(meta, fallbackId = id, animNow = animNow, existing = existingRealm)
+                    if (parsed != null && !parsed.isSpectator && !isLocalPlayer(parsed.playerId, parsed.name)) {
+                        realmPolledOnlyIds.remove(parsed.playerId)
+                        val lastRealmRt = realmRealtimeLastRxMs[parsed.playerId]
+                        val hasFreshRealmRt = lastRealmRt != null && (animNow - lastRealmRt) < REALTIME_PRIORITY_WINDOW_MS
+                        if (existingRealm == null || (!hasFreshRealmRt && parsed.lastSeenMs >= existingRealm.lastSeenMs)) {
+                            realmPresenceMap[parsed.playerId] = parsed
+                        }
+                        if (isRegionVisible(parsed.floor, parsed.regionId, currentFloor, currentRegionId)) {
+                            val existingFloor = presenceMap[parsed.playerId]
+                            val lastFloorRt = realtimeLastRxMs[parsed.playerId]
+                            val hasFreshFloorRt = lastFloorRt != null && (animNow - lastFloorRt) < REALTIME_PRIORITY_WINDOW_MS
+                            if (existingFloor == null || (!hasFreshFloorRt && parsed.lastSeenMs >= existingFloor.lastSeenMs)) {
+                                presenceMap[parsed.playerId] = parsed
+                                polledOnlyIds.remove(parsed.playerId)
+                            }
+                        }
+                        hasNewRealmJoin = true
+                    } else if (parsed != null && parsed.isSpectator) {
+                        realmPresenceMap.remove(parsed.playerId)
+                        presenceMap.remove(parsed.playerId)
+                    }
+                }
+            }
+        }
+        recomputePresenceAndHost()
+
+        if (hasNewRealmJoin) {
+            val ws = activeWebSocket
+            val local = latestLocalPayload
+            if (ws != null && local != null && !local.isSpectator && _uiState.value.status == ConnectionStatus.ONLINE) {
+                sendBroadcast(
+                    ws,
+                    MultiplayerConfig.WORLD_CHANNEL_TOPIC,
+                    "player_state",
+                    playerPayloadToMap(local.copy(lastSeenMs = nowProvider()))
+                )
+            }
+        }
+    }
+
+    private fun applyRemotePlayerState(body: Map<String, Any?>, fromWorldChannel: Boolean = false) {
         val id = MultiplayerSanitizer.sanitizeId(body["playerId"] as? String)
         if (id.isBlank() || isLocalPlayer(id, body["name"] as? String)) return
         val animNow = animClockProvider()
 
         synchronized(presenceMap) {
-            val existing = presenceMap[id]
-            val parsed = parseRemotePlayer(body, fallbackId = id, animNow = animNow, existing = existing) ?: return
-            if (parsed.isSpectator || !isRegionVisible(parsed.floor, parsed.regionId, currentFloor, currentRegionId)) {
+            val existingRealm = realmPresenceMap[id]
+            val existingFloor = presenceMap[id]
+            val parsed = parseRemotePlayer(
+                body,
+                fallbackId = id,
+                animNow = animNow,
+                existing = if (fromWorldChannel) existingRealm else (existingFloor ?: existingRealm)
+            ) ?: return
+
+            if (parsed.isSpectator) {
+                realmPresenceMap.remove(id)
+                realmPolledOnlyIds.remove(id)
+                realmRealtimeLastRxMs.remove(id)
                 presenceMap.remove(id)
                 polledOnlyIds.remove(id)
                 realtimeLastRxMs.remove(id)
             } else {
-                presenceMap[id] = parsed
-                polledOnlyIds.remove(id)
-                realtimeLastRxMs[id] = animNow
+                realmPresenceMap[id] = parsed
+                realmPolledOnlyIds.remove(id)
+                realmRealtimeLastRxMs[id] = animNow
+                if (!isRegionVisible(parsed.floor, parsed.regionId, currentFloor, currentRegionId)) {
+                    presenceMap.remove(id)
+                    polledOnlyIds.remove(id)
+                    realtimeLastRxMs.remove(id)
+                } else {
+                    val lastFloorRt = realtimeLastRxMs[id]
+                    val hasFreshFloorRt = lastFloorRt != null && (animNow - lastFloorRt) < REALTIME_PRIORITY_WINDOW_MS
+                    if (!fromWorldChannel || existingFloor == null || !hasFreshFloorRt) {
+                        presenceMap[id] = parsed
+                        polledOnlyIds.remove(id)
+                        if (!fromWorldChannel) realtimeLastRxMs[id] = animNow
+                    }
+                }
             }
         }
         recomputePresenceAndHost()
     }
 
-    private fun applyRemotePlayerLeave(body: Map<String, Any?>) {
+    private fun applyRemotePlayerLeave(body: Map<String, Any?>, fromWorldChannel: Boolean = false) {
         val id = MultiplayerSanitizer.sanitizeId(body["playerId"] as? String)
         if (id.isBlank() || isLocalPlayer(id, null)) return
         val removed = synchronized(presenceMap) {
             polledOnlyIds.remove(id)
             realtimeLastRxMs.remove(id)
-            presenceMap.remove(id) != null
+            val removedFloor = presenceMap.remove(id) != null
+            val removedRealm = if (fromWorldChannel || MultiplayerConfig.WORLD_CHANNEL_TOPIC !in joinedTopics) {
+                realmPolledOnlyIds.remove(id)
+                realmRealtimeLastRxMs.remove(id)
+                realmPresenceMap.remove(id) != null
+            } else {
+                false
+            }
+            removedFloor || removedRealm
         }
         if (removed) recomputePresenceAndHost()
     }
@@ -1160,24 +1519,36 @@ class RealtimeMultiplayerManager(
 
     private fun recomputePresenceAndHost() {
         val localId = latestLocalPayload?.playerId.orEmpty()
-        val remotes = synchronized(presenceMap) {
-            presenceMap.values
-                .filter { isRegionVisible(it.floor, it.regionId, currentFloor, currentRegionId) }
+        val (remotes, realmRemotes) = synchronized(presenceMap) {
+            val floorList = presenceMap.values
+                .filter { !it.isSpectator && isRegionVisible(it.floor, it.regionId, currentFloor, currentRegionId) }
                 .toList()
+            val realmList = realmPresenceMap.values
+                .filter { !it.isSpectator && !isLocalPlayer(it.playerId, it.name) }
+                .sortedWith(compareByDescending<RemotePlayerState> { it.floor == currentFloor }.thenByDescending { it.level }.thenBy { it.name })
+                .toList()
+            floorList to realmList
         }
         val electedHost = electFloorHost(localId, floorJoinedAtMs, remotes)
         val isHost = electedHost == localId || _uiState.value.status != ConnectionStatus.ONLINE
         _uiState.update { st ->
-            val onlineCount = if (st.status == ConnectionStatus.ONLINE || remotes.isNotEmpty()) {
+            val floorCount = if (st.status == ConnectionStatus.ONLINE || remotes.isNotEmpty()) {
                 1 + remotes.size
+            } else {
+                1
+            }
+            val realmCount = if (st.status == ConnectionStatus.ONLINE || realmRemotes.isNotEmpty()) {
+                maxOf(floorCount, 1 + realmRemotes.size)
             } else {
                 1
             }
             st.copy(
                 isFloorHost = isHost,
                 hostPlayerId = electedHost,
-                floorOnlineCount = onlineCount,
-                remotePlayers = remotes
+                floorOnlineCount = floorCount,
+                remotePlayers = remotes,
+                realmOnlineCount = realmCount,
+                realmOnlinePlayers = realmRemotes
             )
         }
         updateNearbyPlayerNotifications(remotes)
