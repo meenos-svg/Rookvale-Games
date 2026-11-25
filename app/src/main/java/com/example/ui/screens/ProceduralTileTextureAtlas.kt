@@ -6,7 +6,6 @@ import android.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
 import com.example.game.model.TileType
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
 /**
@@ -45,10 +44,56 @@ object ProceduralTileTextureAtlas {
         ABYSS_WATER
     }
 
-    private data class CacheKey(val family: SurfaceFamily, val variant: Int)
-
-    private val bitmapCache = ConcurrentHashMap<CacheKey, Bitmap>()
+    private val flatBitmapCache: Array<Bitmap?> = arrayOfNulls(SurfaceFamily.entries.size * VARIANT_COUNT)
     private val matrixValues = FloatArray(9)
+
+    @Volatile
+    private var corePrewarmed: Boolean = false
+
+    private val corePrewarmFamilies = arrayOf(
+        SurfaceFamily.COBBLESTONE,
+        SurfaceFamily.CRYPT_FLOOR,
+        SurfaceFamily.OBSIDIAN_FLOOR,
+        SurfaceFamily.GRASS,
+        SurfaceFamily.DIRT_FLOOR,
+        SurfaceFamily.WATER_DEEP,
+        SurfaceFamily.WATER_SHALLOW,
+        SurfaceFamily.LAVA
+    )
+
+    /**
+     * Pre-renders reusable core procedural tile textures (cobblestone, dungeon stone, grass, dirt,
+     * water, lava) once at startup so the first frames in HD/High mode render without baking hitches.
+     */
+    fun prewarmCoreTextures() {
+        if (corePrewarmed) return
+        synchronized(this) {
+            if (corePrewarmed) return
+            for (family in corePrewarmFamilies) {
+                val count = when (family) {
+                    SurfaceFamily.WATER_DEEP,
+                    SurfaceFamily.WATER_SHALLOW,
+                    SurfaceFamily.ABYSS_WATER,
+                    SurfaceFamily.LAVA -> WATER_FRAMES
+                    else -> VARIANT_COUNT
+                }
+                for (v in 0 until count) {
+                    getOrBakeTile(family, v)
+                }
+            }
+            corePrewarmed = true
+        }
+    }
+
+    fun isCorePrewarmed(): Boolean = corePrewarmed
+
+    fun cachedTileCount(): Int {
+        var n = 0
+        for (i in flatBitmapCache.indices) {
+            if (flatBitmapCache[i] != null) n++
+        }
+        return n
+    }
 
     /**
      * Pure deterministic integer hash for `(tx, ty, seed)` so every world tile on the 400x400 map
@@ -145,10 +190,14 @@ object ProceduralTileTextureAtlas {
         return true
     }
 
-    private fun getOrBakeTile(family: SurfaceFamily, variant: Int): Bitmap {
-        val key = CacheKey(family, variant)
-        return bitmapCache.getOrPut(key) {
-            bakeTileBitmap(family, variant)
+    fun getOrBakeTile(family: SurfaceFamily, variant: Int): Bitmap {
+        val safeVariant = variant.coerceIn(0, VARIANT_COUNT - 1)
+        val idx = family.ordinal * VARIANT_COUNT + safeVariant
+        flatBitmapCache[idx]?.let { return it }
+        return synchronized(this) {
+            flatBitmapCache[idx] ?: bakeTileBitmap(family, safeVariant).also {
+                flatBitmapCache[idx] = it
+            }
         }
     }
 

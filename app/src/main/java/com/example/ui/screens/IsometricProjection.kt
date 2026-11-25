@@ -115,6 +115,34 @@ class IsometricCamera {
         )
     }
 
+    /**
+     * Zero-allocation projection writing screen coordinates into [outXY] (`[0] = sx, [1] = sy`).
+     */
+    fun tileCenterToScreenOut(tx: Float, ty: Float, outXY: FloatArray) {
+        val dx = tx - camTileX
+        val dy = ty - camTileY
+        outXY[0] = viewportCenterX + dx * ux + dy * vx
+        outXY[1] = viewportCenterY + dx * uy + dy * vy
+    }
+
+    /**
+     * Fast screen-space frustum rejection accounting for tile half-dimensions and tall wall/light overhang.
+     */
+    fun isScreenPointInFrustum(
+        sx: Float,
+        sy: Float,
+        viewportW: Float,
+        viewportH: Float,
+        marginX: Float = halfW * 2.0f,
+        marginTop: Float = halfH * 2.2f,
+        marginBottom: Float = halfH * 3.8f
+    ): Boolean {
+        return sx + marginX >= 0f &&
+            sx - marginX <= viewportW &&
+            sy + marginBottom >= 0f &&
+            sy - marginTop <= viewportH
+    }
+
     fun screenToTileFloat(sx: Float, sy: Float): Pair<Float, Float> {
         val scaleX = unitScale.coerceAtLeast(1f)
         val scaleY = (unitScale * pitchRatio).coerceAtLeast(1f)
@@ -140,15 +168,20 @@ class IsometricCamera {
         return (tx - camTileX) * sinYaw + (ty - camTileY) * cosYaw
     }
 
+    /**
+     * Computes the tight world-tile bounding box covering the rotated & zoomed screen viewport,
+     * padded by [margin] tiles (default [FRUSTUM_MARGIN_TILES] = 2) so tall walls, trees, and lights
+     * entering the edges never pop in while off-screen tiles are skipped completely.
+     */
     fun visibleTileBounds(
         viewportW: Float,
         viewportH: Float,
         floorWidth: Int,
         floorHeight: Int,
-        margin: Int = 4
+        margin: Int = FRUSTUM_MARGIN_TILES
     ): IsoBounds {
-        // Expand vertical sampling upward/downward to include tall 2.4x walls, trees & lanterns
-        val padTop = tileH * 3.6f
+        // Tight vertical padding tuned for tall 2.4x walls & point lights entering bottom/top edges
+        val padTop = tileH * 1.4f
         val padBottom = tileH * 2.2f
         val c0 = screenToTileFloat(0f, -padTop)
         val c1 = screenToTileFloat(viewportW, -padTop)
@@ -171,6 +204,7 @@ class IsometricCamera {
         const val DEFAULT_YAW_DEG = 45f
         const val MIN_ZOOM = 0.70f
         const val MAX_ZOOM = 2.00f
+        const val FRUSTUM_MARGIN_TILES = 2
 
         fun normalizeYawDeg(deg: Float): Float {
             var r = deg % 360f

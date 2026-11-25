@@ -83,6 +83,15 @@ private sealed class DepthSortableItem(val depth: Float, val subOrder: Int) {
     class LocalPlayerItem(depth: Float, val fx: Float, val fy: Float, val moveFrac: Float, val facingRad: Float) : DepthSortableItem(depth, 5)
 }
 
+private val EMPTY_LONG_SET: Set<Long> = emptySet()
+
+private fun packCanvasTile(x: Int, y: Int): Long = (x.toLong() shl 32) or (y.toLong() and 0xFFFFFFFFL)
+
+private val DEPTH_ITEM_COMPARATOR = Comparator<DepthSortableItem> { a, b ->
+    val cmp = a.depth.compareTo(b.depth)
+    if (cmp != 0) cmp else a.subOrder.compareTo(b.subOrder)
+}
+
 /**
  * Fullscreen 60 FPS 2.5D Isometric World Viewport:
  * - True 2:1 diamond projection with strict viewport culling
@@ -99,6 +108,7 @@ fun GameCanvasView(
     measureFps: Boolean = false,
     onFpsUpdated: (Int) -> Unit = {},
     cameraYawDeg: Float = IsometricCamera.DEFAULT_YAW_DEG,
+    cameraYawProvider: (() -> Float)? = null,
     rotateDragMode: Boolean = false,
     onCameraYawDelta: (Float) -> Unit = {},
     onTileTapped: (Int, Int) -> Unit,
@@ -112,13 +122,14 @@ fun GameCanvasView(
     val latestOnFpsUpdated by rememberUpdatedState(onFpsUpdated)
     val latestOnTileTapped by rememberUpdatedState(onTileTapped)
     val latestCameraYaw by rememberUpdatedState(cameraYawDeg)
+    val latestCameraYawProvider by rememberUpdatedState(cameraYawProvider)
     val latestRotateDragMode by rememberUpdatedState(rotateDragMode)
     val latestOnCameraYawDelta by rememberUpdatedState(onCameraYawDelta)
 
     var frameUptimeMs by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
     var targetZoom by remember { mutableFloatStateOf(1.0f) }
     var smoothZoom by remember { mutableFloatStateOf(1.0f) }
-    var smoothYaw by remember { mutableFloatStateOf(cameraYawDeg) }
+    var smoothYaw by remember { mutableFloatStateOf(cameraYawProvider?.invoke() ?: cameraYawDeg) }
 
     LaunchedEffect(Unit) {
         var fpsWindowStartMs = SystemClock.uptimeMillis()
@@ -146,11 +157,12 @@ fun GameCanvasView(
                 } else {
                     smoothZoom = targetZoom
                 }
-                val yawDiff = IsometricCamera.shortestAngleDeltaDeg(smoothYaw, latestCameraYaw)
+                val desiredYaw = latestCameraYawProvider?.invoke() ?: latestCameraYaw
+                val yawDiff = IsometricCamera.shortestAngleDeltaDeg(smoothYaw, desiredYaw)
                 if (abs(yawDiff) > 0.08f) {
                     smoothYaw = IsometricCamera.normalizeYawDeg(smoothYaw + yawDiff * 0.22f)
                 } else {
-                    smoothYaw = IsometricCamera.normalizeYawDeg(latestCameraYaw)
+                    smoothYaw = IsometricCamera.normalizeYawDeg(desiredYaw)
                 }
             }
         }
@@ -208,8 +220,48 @@ fun GameCanvasView(
     }
     val depthQueue = remember { ArrayList<DepthSortableItem>(256) }
     val visibleLights = remember { ArrayList<ScenePointLight>(128) }
+    val reusableScreenXY = remember { FloatArray(2) }
+    val lightLayerRenderer = remember { HalfResLightLayerRenderer() }
     val hdPostProcess = remember { HdPostProcessRenderer() }
     val weatherRenderer = remember { WeatherOverlayRenderer() }
+
+    // Pre-warm core procedural tile bitmaps and soft radial glow sprites once at startup
+    remember {
+        ProceduralTileTextureAtlas.prewarmCoreTextures()
+        LightGlowSpriteAtlas.prewarm()
+        true
+    }
+
+    // Pre-index depleted ore veins and chopped trees on the active floor into packed Long sets
+    // so PASS 1 avoids allocating a Triple(floor, tx, ty) for every ore/tree tile every frame.
+    val depletedOreCoords = remember(state.floor, state.oreNodes) {
+        if (state.oreNodes.isEmpty()) {
+            EMPTY_LONG_SET
+        } else {
+            val out = HashSet<Long>(state.oreNodes.size)
+            for ((key, node) in state.oreNodes) {
+                if (key.first == state.floor && node.isDepleted) {
+                    out.add(packCanvasTile(key.second, key.third))
+                }
+            }
+            out
+        }
+    }
+    val choppedTreeCoords = remember(state.floor, state.choppedTrees) {
+        if (state.choppedTrees.isEmpty()) {
+            EMPTY_LONG_SET
+        } else {
+            val out = HashSet<Long>(state.choppedTrees.size)
+            for ((key, rem) in state.choppedTrees) {
+                if (key.first == state.floor && rem > 0) {
+                    out.add(packCanvasTile(key.second, key.third))
+                }
+            }
+            out
+        }
+    }
+    val latestDepletedOres by rememberUpdatedState(depletedOreCoords)
+    val latestChoppedTrees by rememberUpdatedState(choppedTreeCoords)
 
     Box(modifier = modifier.fillMaxSize()) {
         Canvas(
@@ -293,7 +345,8 @@ fun GameCanvasView(
                 cameraYawDeg = smoothYaw
             )
 
-            val bounds = camera.visibleTileBounds(size.width, size.height, floorMap.width, floorMap.height, margin = quality.cullMargin)
+            val tightMargin = minOf(quality.cullMargin, IsometricCamera.FRUSTUM_MARGIN_TILES)
+            val bounds = camera.visibleTileBounds(size.width, size.height, floorMap.width, floorMap.height, margin = tightMargin)
             val chunkBounds = floorMap.visibleChunkBounds(bounds.minTx, bounds.maxTx, bounds.minTy, bounds.maxTy)
             val chunkSize = floorMap.chunkedGrid.chunkSize
             val hw = camera.halfW
@@ -307,11 +360,11 @@ fun GameCanvasView(
             val drawLightingPass = quality.drawTwilightAtmosphere || collectLights || customTimeOverride
 
             if (st.floor < 0 && collectLights) {
-                val heroScreen = camera.tileCenterToScreen(camPlayerX, camPlayerY)
+                camera.tileCenterToScreenOut(camPlayerX, camPlayerY, reusableScreenXY)
                 visibleLights.add(
                     ScenePointLight(
-                        screenX = heroScreen.x,
-                        screenY = heroScreen.y - hh * 0.55f,
+                        screenX = reusableScreenXY[0],
+                        screenY = reusableScreenXY[1] - hh * 0.55f,
                         radiusPx = hw * 4.5f,
                         coreColor = Color(0xFFFFE4A8),
                         outerColor = TorchAmber,
@@ -321,7 +374,12 @@ fun GameCanvasView(
                 )
             }
 
-            // PASS 1: Chunk-Culled & Rotated-Viewport-Culled 2.5D Terrain Quads (Pixel-Mosaic in High/HD)
+            // PASS 1: Chunk-Culled & Tight Camera-Rotated Frustum-Culled 2.5D Terrain Quads
+            val depletedSet = latestDepletedOres
+            val choppedSet = latestChoppedTrees
+            val frustumMarginX = hw * 2.0f
+            val frustumMarginTop = hh * 2.2f
+            val frustumMarginBottom = hh * 3.8f
             for (cy in chunkBounds.minChunkY..chunkBounds.maxChunkY) {
                 val yStart = maxOf(bounds.minTy, cy * chunkSize)
                 val yEnd = minOf(bounds.maxTy, (cy + 1) * chunkSize - 1)
@@ -330,17 +388,28 @@ fun GameCanvasView(
                     val xEnd = minOf(bounds.maxTx, (cxChunk + 1) * chunkSize - 1)
                     for (ty in yStart..yEnd) {
                         for (tx in xStart..xEnd) {
-                            val center = camera.tileCenterToScreen(tx.toFloat(), ty.toFloat())
-                            if (center.x + hw * 2.4f < 0f || center.x - hw * 2.4f > size.width ||
-                                center.y + hh * 4.5f < 0f || center.y - hh * 4.5f > size.height
+                            camera.tileCenterToScreenOut(tx.toFloat(), ty.toFloat(), reusableScreenXY)
+                            val cx = reusableScreenXY[0]
+                            val cyScr = reusableScreenXY[1]
+                            if (!camera.isScreenPointInFrustum(
+                                    sx = cx,
+                                    sy = cyScr,
+                                    viewportW = size.width,
+                                    viewportH = size.height,
+                                    marginX = frustumMarginX,
+                                    marginTop = frustumMarginTop,
+                                    marginBottom = frustumMarginBottom
+                                )
                             ) continue
 
                             val baseTile = floorMap.tileAt(tx, ty)
                             val renderTile = when {
                                 baseTile.oreVeinKind() != null &&
-                                    st.oreNodes[Triple(st.floor, tx, ty)]?.isDepleted == true -> TileType.DEPLETED_VEIN
+                                    depletedSet.isNotEmpty() &&
+                                    depletedSet.contains(packCanvasTile(tx, ty)) -> TileType.DEPLETED_VEIN
                                 baseTile == TileType.TREE &&
-                                    (st.choppedTrees[Triple(st.floor, tx, ty)] ?: 0) > 0 -> TileType.TREE_STUMP
+                                    choppedSet.isNotEmpty() &&
+                                    choppedSet.contains(packCanvasTile(tx, ty)) -> TileType.TREE_STUMP
                                 else -> baseTile
                             }
 
@@ -352,8 +421,8 @@ fun GameCanvasView(
                                 tx = tx,
                                 ty = ty,
                                 tile = renderTile,
-                                cx = center.x,
-                                cy = center.y,
+                                cx = cx,
+                                cy = cyScr,
                                 nowMs = now,
                                 quality = quality,
                                 tileMatrix = reusableTileMatrix,
@@ -365,8 +434,8 @@ fun GameCanvasView(
                                     tile = renderTile,
                                     tx = tx,
                                     ty = ty,
-                                    cx = center.x,
-                                    cy = center.y,
+                                    cx = cx,
+                                    cy = cyScr,
                                     cam = camera,
                                     outLights = visibleLights
                                 )
@@ -407,16 +476,24 @@ fun GameCanvasView(
             val aoeCoreScale = 0.34f + aoeWavePulse * 0.26f
             st.monsters.forEach { m ->
                 if (m.floor == st.floor && m.pendingAoeTiles.isNotEmpty()) {
-                    val (fillBase, strokeBase, coreBase, isArcaneLight) = when (m.type.specialKind) {
-                        BossSpecialKind.VENOM_NOVA -> listOf(Color(0xFF4CFF33), Color(0xFFB4FF6E), Color(0xFFDEFF99), true)
-                        BossSpecialKind.QUARRY_QUAKE -> listOf(Color(0xFF8C5EFF), Color(0xFFD8C2FF), Color(0xFFF3EAFF), true)
-                        BossSpecialKind.LABYRINTH_PYRE -> listOf(Color(0xFFFF6D1F), Color(0xFFFFD45C), Color(0xFFFFF4B8), false)
-                        else -> listOf(FireOrange, TargetRed, Color(0xFFFFE066), false)
+                    val fillColor: Color
+                    val strokeColor: Color
+                    val coreColor: Color
+                    val arcaneFlag: Boolean
+                    when (m.type.specialKind) {
+                        BossSpecialKind.VENOM_NOVA -> {
+                            fillColor = Color(0xFF4CFF33); strokeColor = Color(0xFFB4FF6E); coreColor = Color(0xFFDEFF99); arcaneFlag = true
+                        }
+                        BossSpecialKind.QUARRY_QUAKE -> {
+                            fillColor = Color(0xFF8C5EFF); strokeColor = Color(0xFFD8C2FF); coreColor = Color(0xFFF3EAFF); arcaneFlag = true
+                        }
+                        BossSpecialKind.LABYRINTH_PYRE -> {
+                            fillColor = Color(0xFFFF6D1F); strokeColor = Color(0xFFFFD45C); coreColor = Color(0xFFFFF4B8); arcaneFlag = false
+                        }
+                        else -> {
+                            fillColor = FireOrange; strokeColor = TargetRed; coreColor = Color(0xFFFFE066); arcaneFlag = false
+                        }
                     }
-                    val fillColor = fillBase as Color
-                    val strokeColor = strokeBase as Color
-                    val coreColor = coreBase as Color
-                    val arcaneFlag = isArcaneLight as Boolean
                     m.pendingAoeTiles.forEach { (ax, ay) ->
                         if (ax in bounds.minTx..bounds.maxTx && ay in bounds.minTy..bounds.maxTy) {
                             val c = camera.tileCenterToScreen(ax.toFloat(), ay.toFloat())
@@ -491,17 +568,28 @@ fun GameCanvasView(
                     val mxF = m.lastMoveFromX + (m.x - m.lastMoveFromX) * mFrac
                     val myF = m.lastMoveFromY + (m.y - m.lastMoveFromY) * mFrac
                     if (m.type.isBoss && collectLights && visibleLights.size < 46) {
-                        val mc = camera.tileCenterToScreen(mxF, myF)
-                        val (bossCore, bossOuter, bossArcane) = when (m.type.specialKind) {
-                            BossSpecialKind.VENOM_NOVA -> Triple(Color(0xFFA8FF6E), Color(0xFF4CFF33), true)
-                            BossSpecialKind.QUARRY_QUAKE -> Triple(Color(0xFFE0CCFF), Color(0xFF9466FF), true)
-                            BossSpecialKind.LABYRINTH_PYRE -> Triple(Color(0xFFFFE48C), Color(0xFFFF5E1A), false)
-                            else -> Triple(Color(0xFFFFC266), FireOrange, false)
+                        camera.tileCenterToScreenOut(mxF, myF, reusableScreenXY)
+                        val bossCore: Color
+                        val bossOuter: Color
+                        val bossArcane: Boolean
+                        when (m.type.specialKind) {
+                            BossSpecialKind.VENOM_NOVA -> {
+                                bossCore = Color(0xFFA8FF6E); bossOuter = Color(0xFF4CFF33); bossArcane = true
+                            }
+                            BossSpecialKind.QUARRY_QUAKE -> {
+                                bossCore = Color(0xFFE0CCFF); bossOuter = Color(0xFF9466FF); bossArcane = true
+                            }
+                            BossSpecialKind.LABYRINTH_PYRE -> {
+                                bossCore = Color(0xFFFFE48C); bossOuter = Color(0xFFFF5E1A); bossArcane = false
+                            }
+                            else -> {
+                                bossCore = Color(0xFFFFC266); bossOuter = FireOrange; bossArcane = false
+                            }
                         }
                         visibleLights.add(
                             ScenePointLight(
-                                screenX = mc.x,
-                                screenY = mc.y - hh * 0.8f,
+                                screenX = reusableScreenXY[0],
+                                screenY = reusableScreenXY[1] - hh * 0.8f,
                                 radiusPx = hw * 3.4f,
                                 coreColor = bossCore,
                                 outerColor = bossOuter,
@@ -616,8 +704,8 @@ fun GameCanvasView(
                 )
             )
 
-            // PASS 3: Dynamic 360-Degree Rotated Painter's Algorithm Depth Sort
-            depthQueue.sortWith(compareBy<DepthSortableItem> { it.depth }.thenBy { it.subOrder })
+            // PASS 3: Dynamic 360-Degree Rotated Painter's Algorithm Depth Sort (zero-alloc comparator)
+            depthQueue.sortWith(DEPTH_ITEM_COMPARATOR)
 
             for (item in depthQueue) {
                 when (item) {
@@ -718,7 +806,7 @@ fun GameCanvasView(
             drawIsometricProjectiles(st, camera, hw, now, quality, if (collectLights) visibleLights else null)
             drawProcAoeEffects(st, camera, hw, hh, now, quality, if (collectLights) visibleLights else null)
 
-            // PASS 5: Time-of-Day Atmospheric Grade & Dynamic Warm/Arcane Point-Light Pools
+            // PASS 5: Time-of-Day Atmospheric Grade & Half-Res Offscreen Dynamic Point-Light Composite
             if (drawLightingPass) {
                 IsometricLightingEngine.drawTwilightAndPointLightPass(
                     scope = this,
@@ -726,7 +814,8 @@ fun GameCanvasView(
                     nowMs = now,
                     quality = quality,
                     lights = visibleLights,
-                    timeOfDayHours = st.timeOfDayHours
+                    timeOfDayHours = st.timeOfDayHours,
+                    lightLayerRenderer = lightLayerRenderer
                 )
             }
 

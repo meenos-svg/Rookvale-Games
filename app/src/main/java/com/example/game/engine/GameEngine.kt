@@ -1918,6 +1918,41 @@ object GameEngine {
         return next
     }
 
+    /**
+     * Distance threshold (Chebyshev tiles) beyond which monsters on the active floor enter AI sleep.
+     * Sleeping monsters preserve their HP, position, and co-op aggro targets without spending CPU on
+     * targeting, combat, or pathfinding until the local player or an active co-op ally comes within range.
+     */
+    const val MONSTER_AI_SLEEP_DISTANCE: Int = 22
+
+    /**
+     * Returns true when [monster] is on [activeFloor] and within [sleepDistance] Chebyshev tiles of
+     * either the local player ([localX], [localY]) or any living non-spectator remote co-op ally
+     * on the same floor.
+     */
+    fun isMonsterAwakeForAi(
+        monster: MonsterEntity,
+        activeFloor: Int,
+        localX: Int,
+        localY: Int,
+        remoteTargetsOnFloor: List<RemotePlayerState>,
+        sleepDistance: Int = MONSTER_AI_SLEEP_DISTANCE
+    ): Boolean {
+        if (monster.floor != activeFloor) return false
+        if (chebyshev(monster.x, monster.y, localX, localY) <= sleepDistance) return true
+        for (i in 0 until remoteTargetsOnFloor.size) {
+            val rp = remoteTargetsOnFloor[i]
+            if (!rp.isSpectator && rp.hp > 0 && rp.floor == activeFloor &&
+                chebyshev(monster.x, monster.y, rp.x, rp.y) <= sleepDistance
+            ) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun packAiTile(x: Int, y: Int): Long = (x.toLong() shl 32) or (y.toLong() and 0xFFFFFFFFL)
+
     private fun processMonstersTick(
         state: GameWorldState,
         floorMap: WorldFloor,
@@ -1931,19 +1966,28 @@ object GameEngine {
         val updatedMonsters = s.monsters.toMutableList()
         val spawnedSummons = mutableListOf<MonsterEntity>()
         val defensiveProcAttackers = mutableListOf<MonsterEntity>()
-        val activeRemoteTargets = remotePlayersOnFloor.filter {
-            it.floor == s.floor && it.hp > 0 && !floorMap.isProtectionZone(it.x, it.y)
+        val awakeRemotePlayers = remotePlayersOnFloor.filter {
+            it.floor == s.floor && it.hp > 0 && !it.isSpectator
         }
+        val activeRemoteTargets = awakeRemotePlayers.filter {
+            !floorMap.isProtectionZone(it.x, it.y)
+        }
+        var monstersMutated = false
+        var occupiedTiles: HashSet<Long>? = null
 
         for (i in updatedMonsters.indices) {
             var curM = updatedMonsters[i]
             if (curM.floor != s.floor) continue
+            // Distant Monster AI Sleep Culling: skip pathfinding & heavy AI beyond 22 tiles from
+            // the local player and all active co-op allies on this floor (keeps HP and co-op aggro intact).
+            if (!isMonsterAwakeForAi(curM, s.floor, s.playerX, s.playerY, awakeRemotePlayers)) continue
             if (curM.shatterTicks > 0 || curM.slowTicks > 0) {
                 curM = curM.copy(
                     shatterTicks = (curM.shatterTicks - 1).coerceAtLeast(0),
                     slowTicks = (curM.slowTicks - 1).coerceAtLeast(0)
                 )
                 updatedMonsters[i] = curM
+                monstersMutated = true
             }
 
             // 1. Determine target player: Host picks closest non-PZ player on floor; Non-host follows host's targetPlayerId
@@ -2279,15 +2323,27 @@ object GameEngine {
             if (isFloorHost) {
                 if (curM.moveCooldown > 0) {
                     updatedMonsters[i] = curM.copy(moveCooldown = curM.moveCooldown - 1)
+                    monstersMutated = true
                 } else {
+                    // Lazily build O(1) monster tile occupancy set once per tick when any awake monster moves
+                    val occ = occupiedTiles ?: HashSet<Long>(updatedMonsters.size + 8).also { set ->
+                        for (j in 0 until updatedMonsters.size) {
+                            val om = updatedMonsters[j]
+                            if (om.floor == s.floor && om.hp > 0) set.add(packAiTile(om.x, om.y))
+                        }
+                        for (j in 0 until spawnedSummons.size) {
+                            val sm = spawnedSummons[j]
+                            if (sm.floor == s.floor && sm.hp > 0) set.add(packAiTile(sm.x, sm.y))
+                        }
+                        occupiedTiles = set
+                    }
                     val isTileFree: (Int, Int) -> Boolean = { cx, cy ->
                         val t = floorMap.tileAt(cx, cy)
                         t.walkable &&
                             !floorMap.isProtectionZone(cx, cy) &&
                             !(cx == s.playerX && cy == s.playerY) &&
-                            remotePlayersOnFloor.none { rp -> rp.floor == curM.floor && rp.x == cx && rp.y == cy } &&
-                            updatedMonsters.none { other -> other.id != curM.id && other.floor == curM.floor && other.x == cx && other.y == cy } &&
-                            spawnedSummons.none { other -> other.floor == curM.floor && other.x == cx && other.y == cy }
+                            !occ.contains(packAiTile(cx, cy)) &&
+                            remotePlayersOnFloor.none { rp -> rp.floor == curM.floor && rp.x == cx && rp.y == cy }
                     }
 
                     val moveDest: Pair<Int, Int>? = when {
@@ -2327,6 +2383,8 @@ object GameEngine {
 
                     if (moveDest != null) {
                         val slowPenalty = if (curM.slowTicks > 0) 1 else 0
+                        occ.remove(packAiTile(curM.x, curM.y))
+                        occ.add(packAiTile(moveDest.first, moveDest.second))
                         updatedMonsters[i] = curM.copy(
                             lastMoveFromX = curM.x,
                             lastMoveFromY = curM.y,
@@ -2336,11 +2394,14 @@ object GameEngine {
                             targetPlayerId = targetId,
                             moveCooldown = (curM.type.moveIntervalTicks - 1 + slowPenalty).coerceAtLeast(0)
                         )
+                        monstersMutated = true
                     }
                 }
             }
         }
-        s = s.copy(monsters = updatedMonsters + spawnedSummons)
+        if (monstersMutated || spawnedSummons.isNotEmpty() || updatedMonsters != s.monsters) {
+            s = s.copy(monsters = if (spawnedSummons.isEmpty()) updatedMonsters else updatedMonsters + spawnedSummons)
+        }
 
         // 6. Tick proc Ignite Burn DoT on active floor monsters (awards full XP & loot on kill)
         val burningIds = s.monsters.filter { it.floor == s.floor && it.hp > 0 && it.burnTicks > 0 }.map { it.id }

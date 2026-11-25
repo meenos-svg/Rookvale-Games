@@ -138,19 +138,10 @@ fun GameScreen(
     onSelectAdminAuditFilter: (AdminAuditAction?) -> Unit = {},
     onRefreshAdminAuditLog: () -> Unit = {}
 ) {
-    var cameraYawDeg by rememberSaveable { mutableFloatStateOf(IsometricCamera.DEFAULT_YAW_DEG) }
+    val cameraYawState = rememberSaveable { mutableFloatStateOf(IsometricCamera.DEFAULT_YAW_DEG) }
     var rotateDragMode by rememberSaveable { mutableStateOf(false) }
-    var liveFps by remember { mutableIntStateOf(60) }
+    val liveFpsState = remember { mutableIntStateOf(60) }
     var adminControlExpanded by rememberSaveable(state.isAdmin) { mutableStateOf(false) }
-    var weatherClockMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
-
-    LaunchedEffect(displaySettings.showWeatherEffects, state.floor) {
-        if (!displaySettings.showWeatherEffects || state.floor != 0) return@LaunchedEffect
-        while (true) {
-            weatherClockMs = System.currentTimeMillis()
-            delay(2_000L)
-        }
-    }
 
     BackHandler(enabled = state.isAdmin && adminControlExpanded) {
         adminControlExpanded = false
@@ -168,11 +159,11 @@ fun GameScreen(
             graphicsQuality = displaySettings.graphicsQuality,
             displaySettings = displaySettings,
             measureFps = displaySettings.showFpsCounter,
-            onFpsUpdated = { liveFps = it },
-            cameraYawDeg = cameraYawDeg,
+            onFpsUpdated = { liveFpsState.intValue = it },
+            cameraYawProvider = { cameraYawState.floatValue },
             rotateDragMode = rotateDragMode,
             onCameraYawDelta = { delta ->
-                cameraYawDeg = IsometricCamera.normalizeYawDeg(cameraYawDeg + delta)
+                cameraYawState.floatValue = IsometricCamera.normalizeYawDeg(cameraYawState.floatValue + delta)
             },
             onTileTapped = onTileTapped,
             modifier = Modifier.fillMaxSize()
@@ -190,9 +181,9 @@ fun GameScreen(
                 state = state,
                 multiplayerState = multiplayerState,
                 saveBanner = saveBanner,
-                cameraYawDeg = cameraYawDeg,
+                cameraYawProvider = { cameraYawState.floatValue },
                 rotateDragMode = rotateDragMode,
-                onResetNorth = { cameraYawDeg = IsometricCamera.DEFAULT_YAW_DEG },
+                onResetNorth = { cameraYawState.floatValue = IsometricCamera.DEFAULT_YAW_DEG },
                 onToggleRotateDragMode = { rotateDragMode = !rotateDragMode },
                 onWalkToTile = onWalkToTile,
                 onExpandWorldMap = { onOpenPanel(ActivePanel.WORLD_MAP) },
@@ -201,85 +192,25 @@ fun GameScreen(
                 modifier = Modifier.align(Alignment.TopStart)
             )
 
-            // LEFT EDGE VERTICAL SKILL DOCK (below Top-Left Minimap, above Bottom-Left Console)
+            // LEFT EDGE VERTICAL SKILL DOCK (skips recomposition unless PlayerSkills changes)
             VerticalSkillDock(
-                state = state,
+                skills = state.skills,
                 onOpenSkills = { onOpenPanel(ActivePanel.SKILLS) },
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(top = 108.dp, bottom = 52.dp)
             )
 
-            // TOP-CENTER LIVE FPS PILL, ACTIVE BOSS HP NAMEPLATE & FLOOR DESCENT DANGER BANNER
-            val activeBoss = remember(state.monsters, state.targetMonsterId, state.floor, state.playerX, state.playerY) {
-                val targetedBoss = state.monsters.firstOrNull {
-                    it.id == state.targetMonsterId && it.floor == state.floor && it.type.isBoss && it.hp > 0
-                }
-                targetedBoss ?: state.monsters
-                    .filter { it.floor == state.floor && it.type.isBoss && it.hp > 0 }
-                    .minByOrNull { maxOf(kotlin.math.abs(it.x - state.playerX), kotlin.math.abs(it.y - state.playerY)) }
-                    ?.takeIf { maxOf(kotlin.math.abs(it.x - state.playerX), kotlin.math.abs(it.y - state.playerY)) <= 10 }
-            }
-            Column(
+            // TOP-CENTER LIVE FPS PILL, WEATHER BADGE, BOSS HP NAMEPLATE & FLOOR DESCENT BANNER
+            // Isolated into its own composable so 500ms FPS / 2s weather ticks never recompose GameScreen
+            TopCenterStatusOverlay(
+                state = state,
+                displaySettings = displaySettings,
+                liveFpsProvider = { liveFpsState.intValue },
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 2.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                val resolvedHudWeather = remember(
-                    state.regionId,
-                    state.floor,
-                    state.adminWeatherOverride,
-                    weatherClockMs,
-                    displaySettings.showWeatherEffects
-                ) {
-                    if (!displaySettings.showWeatherEffects || state.floor != 0) {
-                        null
-                    } else {
-                        BiomeWeatherSystem.resolveWeather(
-                            regionId = normalizeRegionId(state.regionId),
-                            floor = state.floor,
-                            utcMillis = weatherClockMs,
-                            adminOverride = state.adminWeatherOverride
-                        )
-                    }
-                }
-                if (displaySettings.showFpsCounter || resolvedHudWeather != null) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (displaySettings.showFpsCounter) {
-                            LiveFpsHudBadge(
-                                fps = liveFps,
-                                quality = displaySettings.graphicsQuality
-                            )
-                        }
-                        resolvedHudWeather?.let { weather ->
-                            LiveWeatherHudBadge(weather = weather)
-                        }
-                    }
-                }
-                AnimatedVisibility(
-                    visible = activeBoss != null && state.activePanel == ActivePanel.NONE,
-                    enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
-                    exit = fadeOut() + slideOutVertically(targetOffsetY = { -it })
-                ) {
-                    activeBoss?.let { boss ->
-                        BossHpNameplateBar(boss = boss)
-                    }
-                }
-                AnimatedVisibility(
-                    visible = state.floorWarningBanner != null && state.activePanel == ActivePanel.NONE,
-                    enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
-                    exit = fadeOut() + slideOutVertically(targetOffsetY = { -it })
-                ) {
-                    state.floorWarningBanner?.let { banner ->
-                        FloorDescentWarningBanner(banner = banner)
-                    }
-                }
-            }
+                    .padding(top = 2.dp)
+            )
 
             // TOP-RIGHT UTILITY BAR & LIVE BATTLE LIST
             TopRightUtilityAndBattleCluster(
@@ -405,6 +336,94 @@ fun GameScreen(
 
     if (state.deathReport != null) {
         DeathPenaltyDialog(report = state.deathReport, onDismiss = onDismissDeath)
+    }
+}
+
+@Composable
+private fun TopCenterStatusOverlay(
+    state: GameWorldState,
+    displaySettings: DisplaySettings,
+    liveFpsProvider: () -> Int,
+    modifier: Modifier = Modifier
+) {
+    var weatherClockMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(displaySettings.showWeatherEffects, state.floor) {
+        if (!displaySettings.showWeatherEffects || state.floor != 0) return@LaunchedEffect
+        while (true) {
+            weatherClockMs = System.currentTimeMillis()
+            delay(2_000L)
+        }
+    }
+
+    val activeBoss = remember(state.monsters, state.targetMonsterId, state.floor, state.playerX, state.playerY) {
+        val targetedBoss = state.monsters.firstOrNull {
+            it.id == state.targetMonsterId && it.floor == state.floor && it.type.isBoss && it.hp > 0
+        }
+        targetedBoss ?: state.monsters
+            .filter { it.floor == state.floor && it.type.isBoss && it.hp > 0 }
+            .minByOrNull { maxOf(kotlin.math.abs(it.x - state.playerX), kotlin.math.abs(it.y - state.playerY)) }
+            ?.takeIf { maxOf(kotlin.math.abs(it.x - state.playerX), kotlin.math.abs(it.y - state.playerY)) <= 10 }
+    }
+
+    val resolvedHudWeather = remember(
+        state.regionId,
+        state.floor,
+        state.adminWeatherOverride,
+        weatherClockMs,
+        displaySettings.showWeatherEffects
+    ) {
+        if (!displaySettings.showWeatherEffects || state.floor != 0) {
+            null
+        } else {
+            BiomeWeatherSystem.resolveWeather(
+                regionId = normalizeRegionId(state.regionId),
+                floor = state.floor,
+                utcMillis = weatherClockMs,
+                adminOverride = state.adminWeatherOverride
+            )
+        }
+    }
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        if (displaySettings.showFpsCounter || resolvedHudWeather != null) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (displaySettings.showFpsCounter) {
+                    LiveFpsHudBadge(
+                        fps = liveFpsProvider(),
+                        quality = displaySettings.graphicsQuality
+                    )
+                }
+                resolvedHudWeather?.let { weather ->
+                    LiveWeatherHudBadge(weather = weather)
+                }
+            }
+        }
+        AnimatedVisibility(
+            visible = activeBoss != null && state.activePanel == ActivePanel.NONE,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it })
+        ) {
+            activeBoss?.let { boss ->
+                BossHpNameplateBar(boss = boss)
+            }
+        }
+        AnimatedVisibility(
+            visible = state.floorWarningBanner != null && state.activePanel == ActivePanel.NONE,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it })
+        ) {
+            state.floorWarningBanner?.let { banner ->
+                FloorDescentWarningBanner(banner = banner)
+            }
+        }
     }
 }
 

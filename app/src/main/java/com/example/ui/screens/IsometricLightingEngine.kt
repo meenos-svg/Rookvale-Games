@@ -636,7 +636,8 @@ object IsometricLightingEngine {
         nowMs: Long,
         quality: GraphicsQuality,
         lights: List<ScenePointLight>,
-        timeOfDayHours: Float = DEFAULT_TIME_OF_DAY_HOURS
+        timeOfDayHours: Float = DEFAULT_TIME_OF_DAY_HOURS,
+        lightLayerRenderer: HalfResLightLayerRenderer? = null
     ) {
         val isUnderground = floorId < 0
         val isCustomTime = abs(timeOfDayHours - DEFAULT_TIME_OF_DAY_HOURS) > 0.01f
@@ -706,6 +707,23 @@ object IsometricLightingEngine {
         // 2. Dynamic flickering warm amber & cool cyan/arcane radial point-light pools
         val lightMultiplier = if (isOverland) tod.pointLightBoost else 1.0f
         if ((quality.drawPointLightPools || drawDungeonMood || (isOverland && isCustomTime)) && lights.isNotEmpty() && lightMultiplier > 0.05f) {
+            // Fast path for both HD & High (and any tier with a provided HalfResLightLayerRenderer):
+            // Render all lights onto the 0.5x offscreen layer with pre-baked soft glow sprites and
+            // composite in ONE bilinear pass (4x lower GPU fill cost, zero per-frame Brush allocations).
+            val useHalfResLayer = lightLayerRenderer != null &&
+                (quality == GraphicsQuality.HD || quality == GraphicsQuality.HIGH || drawDungeonMood || isCustomTime)
+            if (useHalfResLayer && lightLayerRenderer != null) {
+                lightLayerRenderer.renderAndCompositeLights(
+                    scope = scope,
+                    lights = lights,
+                    quality = quality,
+                    nowMs = nowMs,
+                    lightMultiplier = lightMultiplier
+                )
+                return
+            }
+
+            // Fallback path when no offscreen renderer is supplied
             val timeSec = nowMs * 0.001
             for (light in lights) {
                 val r = light.radiusPx
@@ -720,55 +738,20 @@ object IsometricLightingEngine {
                 val center = Offset(light.screenX, light.screenY)
                 val scaledR = (r * flicker).coerceAtLeast(16f)
 
-                if (isHd) {
-                    // HD Layer 1: Wide atmospheric light pool with additive/screen radiance
-                    val wideR = scaledR * 1.32f
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colorStops = arrayOf(
-                                0.0f to light.outerColor.copy(alpha = (0.28f * effIntensity * flicker).coerceIn(0f, 0.62f)),
-                                0.48f to light.outerColor.copy(alpha = (0.12f * effIntensity * flicker).coerceIn(0f, 0.34f)),
-                                1.0f to Color.Transparent
-                            ),
-                            center = center,
-                            radius = wideR
+                scope.drawCircle(
+                    brush = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0.0f to light.coreColor.copy(alpha = (0.34f * effIntensity * flicker).coerceIn(0f, 0.58f)),
+                            0.46f to light.outerColor.copy(alpha = (0.16f * effIntensity * flicker).coerceIn(0f, 0.34f)),
+                            1.0f to Color.Transparent
                         ),
-                        radius = wideR,
                         center = center,
-                        blendMode = BlendMode.Screen
-                    )
-                    // HD Layer 2: Crisp incandescent/arcane inner bloom
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colorStops = arrayOf(
-                                0.0f to light.coreColor.copy(alpha = (0.44f * effIntensity * flicker).coerceIn(0f, 0.72f)),
-                                0.42f to light.outerColor.copy(alpha = (0.20f * effIntensity * flicker).coerceIn(0f, 0.44f)),
-                                1.0f to Color.Transparent
-                            ),
-                            center = center,
-                            radius = scaledR * 0.78f
-                        ),
-                        radius = scaledR * 0.78f,
-                        center = center,
-                        blendMode = BlendMode.Plus
-                    )
-                } else {
-                    // High / Custom Time tier: Single balanced glowing light pool
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            colorStops = arrayOf(
-                                0.0f to light.coreColor.copy(alpha = (0.34f * effIntensity * flicker).coerceIn(0f, 0.58f)),
-                                0.46f to light.outerColor.copy(alpha = (0.16f * effIntensity * flicker).coerceIn(0f, 0.34f)),
-                                1.0f to Color.Transparent
-                            ),
-                            center = center,
-                            radius = scaledR
-                        ),
-                        radius = scaledR,
-                        center = center,
-                        blendMode = BlendMode.Screen
-                    )
-                }
+                        radius = scaledR
+                    ),
+                    radius = scaledR,
+                    center = center,
+                    blendMode = BlendMode.Screen
+                )
             }
         }
     }

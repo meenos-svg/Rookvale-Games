@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.os.SystemClock
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -76,7 +77,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -126,6 +129,7 @@ import com.example.game.model.Direction
 import com.example.game.model.GameWorldState
 import com.example.game.model.ItemCatalog
 import com.example.game.model.MonsterEntity
+import com.example.game.model.PlayerSkills
 import com.example.game.model.ThreatBand
 import com.example.game.model.TileType
 import com.example.game.model.normalizeRegionId
@@ -259,6 +263,7 @@ fun TopLeftHudCluster(
     multiplayerState: MultiplayerUiState,
     saveBanner: String?,
     cameraYawDeg: Float = IsometricCamera.DEFAULT_YAW_DEG,
+    cameraYawProvider: (() -> Float)? = null,
     rotateDragMode: Boolean = false,
     onResetNorth: () -> Unit = {},
     onToggleRotateDragMode: () -> Unit = {},
@@ -271,6 +276,7 @@ fun TopLeftHudCluster(
     val zoomRadii = remember { listOf(14, 22, 34) }
     var zoomIndex by rememberSaveable { mutableIntStateOf(1) }
     val currentRadius = zoomRadii[zoomIndex.coerceIn(0, zoomRadii.lastIndex)]
+    val resolvedYawProvider: () -> Float = cameraYawProvider ?: { cameraYawDeg }
 
     Row(
         modifier = modifier,
@@ -282,7 +288,7 @@ fun TopLeftHudCluster(
                 state = state,
                 remotePlayers = multiplayerState.remotePlayers,
                 radius = currentRadius,
-                cameraYawDeg = cameraYawDeg,
+                cameraYawProvider = resolvedYawProvider,
                 rotateDragMode = rotateDragMode,
                 canZoomIn = zoomIndex > 0,
                 canZoomOut = zoomIndex < zoomRadii.lastIndex,
@@ -310,7 +316,7 @@ private fun IsometricMinimapCard(
     state: GameWorldState,
     remotePlayers: List<RemotePlayerState>,
     radius: Int,
-    cameraYawDeg: Float,
+    cameraYawProvider: () -> Float,
     rotateDragMode: Boolean,
     canZoomIn: Boolean,
     canZoomOut: Boolean,
@@ -322,25 +328,12 @@ private fun IsometricMinimapCard(
     onExpandWorldMap: () -> Unit
 ) {
     val floorMap = remember(state.floor) { WorldMaps.getFloor(state.floor) }
-    val isRotatedAwayFromNorth = abs(IsometricCamera.shortestAngleDeltaDeg(cameraYawDeg, IsometricCamera.DEFAULT_YAW_DEG)) > 2f
-    val conePath = remember { Path() }
-    val minimapLabelPaint = remember {
-        Paint().apply {
-            isAntiAlias = true
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.MONOSPACE
-            isFakeBoldText = true
-            textSize = 18f
-            color = android.graphics.Color.parseColor("#8CF0FF")
+    val isRotatedAwayFromNorth by remember(cameraYawProvider) {
+        derivedStateOf {
+            abs(IsometricCamera.shortestAngleDeltaDeg(cameraYawProvider(), IsometricCamera.DEFAULT_YAW_DEG)) > 2f
         }
     }
-    val minimapLabelOutline = remember {
-        Paint(minimapLabelPaint).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 4.2f
-            color = android.graphics.Color.BLACK
-        }
-    }
+    val minimapCache = remember { MinimapOffscreenCache() }
 
     Surface(
         color = BasaltDark.copy(alpha = 0.90f),
@@ -355,7 +348,7 @@ private fun IsometricMinimapCard(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(3.dp)
-                    .pointerInput(state.floor, state.playerX, state.playerY, radius, cameraYawDeg) {
+                    .pointerInput(state.floor, state.playerX, state.playerY, radius) {
                         detectTapGestures { tap ->
                             val (wx, wy) = MinimapCoordinateMapper.screenTapToWorldTile(
                                 tapX = tap.x,
@@ -367,111 +360,32 @@ private fun IsometricMinimapCard(
                                 radius = radius,
                                 floorWidth = floorMap.width,
                                 floorHeight = floorMap.height,
-                                cameraYawDeg = cameraYawDeg
+                                cameraYawDeg = cameraYawProvider()
                             )
                             onTapWalk(wx, wy)
                         }
                     }
             ) {
-                val cx = size.width * 0.5f
-                val cy = size.height * 0.5f
-                val scale = (minOf(size.width, size.height) * 0.46f) / radius.toFloat()
-                val rad = IsometricCamera.normalizeYawDeg(cameraYawDeg) * (PI / 180.0)
-                val cosY = cos(rad).toFloat() * scale
-                val sinY = sin(rad).toFloat() * scale
-                val dotSize = (scale * 1.32f).coerceAtLeast(2.2f)
-
-                // Rotated terrain pips synchronized live with cameraYaw
-                for (dy in -radius..radius) {
-                    val wy = state.playerY + dy
-                    if (wy !in 0 until floorMap.height) continue
-                    for (dx in -radius..radius) {
-                        val wx = state.playerX + dx
-                        if (wx !in 0 until floorMap.width) continue
-                        val sx = cx + dx * cosY - dy * sinY
-                        val sy = cy + dx * sinY + dy * cosY
-                        if (sx < -dotSize || sx > size.width + dotSize || sy < -dotSize || sy > size.height + dotSize) continue
-                        val col = minimapTileColor(floorMap.tileAt(wx, wy))
-                        drawRect(col, Offset(sx - dotSize * 0.5f, sy - dotSize * 0.5f), Size(dotSize, dotSize))
-                    }
+                val widthPx = size.width.roundToInt().coerceAtLeast(1)
+                val heightPx = size.height.roundToInt().coerceAtLeast(1)
+                val cachedBitmap = minimapCache.getOrRender(
+                    widthPx = widthPx,
+                    heightPx = heightPx,
+                    floorMap = floorMap,
+                    state = state,
+                    remotePlayers = remotePlayers,
+                    radius = radius,
+                    cameraYawDeg = cameraYawProvider(),
+                    nowUptimeMs = SystemClock.uptimeMillis()
+                )
+                if (cachedBitmap != null) {
+                    drawImage(
+                        image = cachedBitmap,
+                        dstOffset = IntOffset.Zero,
+                        dstSize = IntSize(widthPx, heightPx),
+                        filterQuality = FilterQuality.Low
+                    )
                 }
-
-                // Live camera forward-view direction cone (always points toward top of viewport)
-                val coneLen = minOf(size.width, size.height) * 0.34f
-                val coneHalfW = coneLen * 0.48f
-                conePath.reset()
-                conePath.moveTo(cx, cy)
-                conePath.lineTo(cx - coneHalfW, cy - coneLen)
-                conePath.lineTo(cx + coneHalfW, cy - coneLen)
-                conePath.close()
-                drawPath(conePath, color = TorchGold.copy(alpha = 0.22f))
-
-                // Walk path breadcrumbs on rotated minimap
-                state.walkPath.forEach { (wx, wy) ->
-                    val dx = wx - state.playerX
-                    val dy = wy - state.playerY
-                    if (abs(dx) <= radius && abs(dy) <= radius) {
-                        val sx = cx + dx * cosY - dy * sinY
-                        val sy = cy + dx * sinY + dy * cosY
-                        drawCircle(TorchGold.copy(alpha = 0.88f), radius = 1.8f, center = Offset(sx, sy))
-                    }
-                }
-
-                // Nearby monsters as crimson dots
-                state.monsters.forEach { m ->
-                    if (m.floor == state.floor) {
-                        val dx = m.x - state.playerX
-                        val dy = m.y - state.playerY
-                        if (abs(dx) <= radius && abs(dy) <= radius) {
-                            val sx = cx + dx * cosY - dy * sinY
-                            val sy = cy + dx * sinY + dy * cosY
-                            drawCircle(TargetRed, radius = if (m.id == state.targetMonsterId) 3.4f else 2.2f, center = Offset(sx, sy))
-                        }
-                    }
-                }
-
-                // Remote players: distinct cyan/gold dots + crisp name tooltips (plus edge pips if outside zoom)
-                val localRegionId = normalizeRegionId(state.regionId)
-                remotePlayers.forEach { rp ->
-                    if (!rp.isSpectator && rp.floor == state.floor && com.example.game.model.isRegionCompatible(state.floor, localRegionId, rp.regionId)) {
-                        val dx = rp.x - state.playerX
-                        val dy = rp.y - state.playerY
-                        val sx = cx + dx * cosY - dy * sinY
-                        val sy = cy + dx * sinY + dy * cosY
-                        val inBounds = sx in 5f..(size.width - 5f) && sy in 5f..(size.height - 5f)
-                        if (inBounds) {
-                            drawCircle(Color.Black, radius = 4.8f, center = Offset(sx, sy))
-                            drawCircle(TorchGold, radius = 3.8f, center = Offset(sx, sy))
-                            drawCircle(Color(0xFF47D7FF), radius = 2.6f, center = Offset(sx, sy))
-                            val shortName = rp.name.take(9)
-                            val labelX = sx.coerceIn(22f, (size.width - 22f).coerceAtLeast(22f))
-                            val labelY = (sy - 7f).coerceIn(16f, (size.height - 4f).coerceAtLeast(16f))
-                            drawContext.canvas.nativeCanvas.apply {
-                                drawText(shortName, labelX, labelY, minimapLabelOutline)
-                                drawText(shortName, labelX, labelY, minimapLabelPaint)
-                            }
-                        } else {
-                            // Directional border pip pointing toward remote player elsewhere on the 400x400 floor
-                            val vx = sx - cx
-                            val vy = sy - cy
-                            val halfBoxX = (size.width * 0.5f - 6f).coerceAtLeast(6f)
-                            val halfBoxY = (size.height * 0.5f - 6f).coerceAtLeast(6f)
-                            val scaleToEdge = minOf(
-                                if (abs(vx) > 0.001f) halfBoxX / abs(vx) else Float.MAX_VALUE,
-                                if (abs(vy) > 0.001f) halfBoxY / abs(vy) else Float.MAX_VALUE
-                            ).coerceIn(0f, 1f)
-                            val ex = cx + vx * scaleToEdge
-                            val ey = cy + vy * scaleToEdge
-                            drawCircle(Color.Black, radius = 3.6f, center = Offset(ex, ey))
-                            drawCircle(TorchGold, radius = 2.7f, center = Offset(ex, ey))
-                            drawCircle(Color(0xFF47D7FF), radius = 1.7f, center = Offset(ex, ey))
-                        }
-                    }
-                }
-
-                // Local player center marker
-                drawCircle(Color.Black, radius = 4f, center = Offset(cx, cy))
-                drawCircle(Color.White, radius = 2.6f, center = Offset(cx, cy))
             }
 
             // Clickable North compass badge: tap to smoothly snap cameraYaw back to North (45°)
@@ -594,6 +508,31 @@ private fun MinimapTinyButton(
     }
 }
 
+@Immutable
+private data class CharacterVitalsSnapshot(
+    val playerName: String,
+    val level: Int,
+    val expFraction: Float,
+    val hp: Int,
+    val effMaxHp: Int,
+    val mp: Int,
+    val maxMp: Int,
+    val gold: Int,
+    val remainingCap: Double,
+    val soul: Int,
+    val weaponNeedsAmmo: Boolean,
+    val ammoCount: Int,
+    val isAdmin: Boolean,
+    val isInvulnerable: Boolean,
+    val isSpectator: Boolean,
+    val inPz: Boolean,
+    val poisoned: Boolean,
+    val burning: Boolean,
+    val saveBanner: String?,
+    val connectionStatus: ConnectionStatus,
+    val floorOnlineCount: Int
+)
+
 @Composable
 private fun CharacterVitalsHudCard(
     state: GameWorldState,
@@ -611,10 +550,45 @@ private fun CharacterVitalsHudCard(
         )
     }
     val floorInfo = remember(state.floor) { WorldMaps.getFloor(state.floor) }
-    val inPz = floorInfo.isProtectionZone(state.playerX, state.playerY)
-    val remainingCap = state.remainingCapOz()
     val weaponNeedsAmmo = state.equipment.weaponDef()?.requiredAmmoKind != null
+    val snapshot = CharacterVitalsSnapshot(
+        playerName = state.playerName,
+        level = state.level,
+        expFraction = state.levelProgressFraction(),
+        hp = state.hp,
+        effMaxHp = state.effectiveMaxHp(),
+        mp = state.mp,
+        maxMp = state.maxMp,
+        gold = state.gold,
+        remainingCap = state.remainingCapOz(),
+        soul = state.soul,
+        weaponNeedsAmmo = weaponNeedsAmmo,
+        ammoCount = if (weaponNeedsAmmo) state.activeAmmoCount() else 0,
+        isAdmin = state.isAdmin,
+        isInvulnerable = state.isInvulnerable,
+        isSpectator = state.isSpectator,
+        inPz = floorInfo.isProtectionZone(state.playerX, state.playerY),
+        poisoned = state.poisonTicks > 0,
+        burning = state.fireTicks > 0,
+        saveBanner = saveBanner,
+        connectionStatus = multiplayerState.status,
+        floorOnlineCount = multiplayerState.floorOnlineCount
+    )
+    CharacterVitalsHudCardContent(
+        snapshot = snapshot,
+        portraitAppearance = portraitAppearance,
+        onMultiplayerStatusTapped = onMultiplayerStatusTapped,
+        onOpenAdminScroll = onOpenAdminScroll
+    )
+}
 
+@Composable
+private fun CharacterVitalsHudCardContent(
+    snapshot: CharacterVitalsSnapshot,
+    portraitAppearance: PaperDollAppearance,
+    onMultiplayerStatusTapped: () -> Unit,
+    onOpenAdminScroll: () -> Unit
+) {
     Surface(
         color = BasaltDark.copy(alpha = 0.88f),
         shape = RoundedCornerShape(8.dp),
@@ -639,7 +613,7 @@ private fun CharacterVitalsHudCard(
             ) {
                 LivePaperDollPreview(
                     appearance = portraitAppearance,
-                    contentDesc = "${state.playerName} portrait",
+                    contentDesc = "${snapshot.playerName} portrait",
                     modifier = Modifier.size(44.dp)
                 )
                 Box(
@@ -649,7 +623,7 @@ private fun CharacterVitalsHudCard(
                         .padding(horizontal = 3.dp, vertical = 0.5.dp)
                 ) {
                     Text(
-                        text = "${state.level}",
+                        text = "${snapshot.level}",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.ExtraBold),
                         color = TorchGold
                     )
@@ -666,11 +640,11 @@ private fun CharacterVitalsHudCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    if (state.isAdmin) {
+                    if (snapshot.isAdmin) {
                         AdminGoldenCrownIcon(sizeDp = 14.dp)
                     }
                     Text(
-                        text = state.playerName,
+                        text = snapshot.playerName,
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold, fontSize = 13.sp),
                         color = TorchGold,
                         maxLines = 1,
@@ -678,7 +652,8 @@ private fun CharacterVitalsHudCard(
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     CompactOnlineIndicator(
-                        mpState = multiplayerState,
+                        status = snapshot.connectionStatus,
+                        floorOnlineCount = snapshot.floorOnlineCount,
                         onClick = onMultiplayerStatusTapped
                     )
                 }
@@ -686,20 +661,19 @@ private fun CharacterVitalsHudCard(
                 // EXP Progress Bar
                 CompactMeterBar(
                     label = "EXP",
-                    valueText = "${(state.levelProgressFraction() * 100).toInt()}%",
-                    fraction = state.levelProgressFraction(),
+                    valueText = "${(snapshot.expFraction * 100).toInt()}%",
+                    fraction = snapshot.expFraction,
                     fillColor = ExpEmerald,
                     trackColor = Color(0xFF15291B),
                     heightDp = 7
                 )
 
                 // Red HP Bar (with ∞ Immortal indicator for Admin)
-                val effMaxHp = state.effectiveMaxHp()
                 CompactMeterBar(
                     label = "HP",
-                    valueText = if (state.isInvulnerable) "∞ / $effMaxHp" else "${state.hp}/$effMaxHp",
-                    fraction = if (state.isInvulnerable) 1f else (state.hp.toFloat() / effMaxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
-                    fillColor = if (state.isInvulnerable) TorchGold else HealthCrimson,
+                    valueText = if (snapshot.isInvulnerable) "∞ / ${snapshot.effMaxHp}" else "${snapshot.hp}/${snapshot.effMaxHp}",
+                    fraction = if (snapshot.isInvulnerable) 1f else (snapshot.hp.toFloat() / snapshot.effMaxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
+                    fillColor = if (snapshot.isInvulnerable) TorchGold else HealthCrimson,
                     trackColor = HealthCrimsonDark,
                     heightDp = 11
                 )
@@ -707,8 +681,8 @@ private fun CharacterVitalsHudCard(
                 // Blue MP Bar
                 CompactMeterBar(
                     label = "MP",
-                    valueText = "${state.mp}/${state.maxMp}",
-                    fraction = (state.mp.toFloat() / state.maxMp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
+                    valueText = "${snapshot.mp}/${snapshot.maxMp}",
+                    fraction = (snapshot.mp.toFloat() / snapshot.maxMp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
                     fillColor = ManaSapphire,
                     trackColor = ManaSapphireDark,
                     heightDp = 11
@@ -721,30 +695,29 @@ private fun CharacterVitalsHudCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${state.gold}gp",
+                        text = "${snapshot.gold}gp",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
                         color = TorchGold,
                         maxLines = 1
                     )
                     Text(
-                        text = "Cap ${formatOz(remainingCap)}",
+                        text = "Cap ${formatOz(snapshot.remainingCap)}",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
-                        color = if (remainingCap < 25.0) HealthCrimson else ParchmentLight,
+                        color = if (snapshot.remainingCap < 25.0) HealthCrimson else ParchmentLight,
                         maxLines = 1,
                         modifier = Modifier.testTag("hud_cap_text")
                     )
                     Text(
-                        text = "S:${state.soul}",
+                        text = "S:${snapshot.soul}",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
                         color = SoulViolet,
                         maxLines = 1,
                         modifier = Modifier.testTag("hud_soul_text")
                     )
-                    if (weaponNeedsAmmo) {
-                        val ammoQty = state.activeAmmoCount()
-                        HudMiniPill("A:$ammoQty", if (ammoQty > 0) TorchAmber else HealthCrimson)
+                    if (snapshot.weaponNeedsAmmo) {
+                        HudMiniPill("A:${snapshot.ammoCount}", if (snapshot.ammoCount > 0) TorchAmber else HealthCrimson)
                     }
-                    if (state.isSpectator) {
+                    if (snapshot.isSpectator) {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
@@ -762,10 +735,10 @@ private fun CharacterVitalsHudCard(
                             )
                         }
                     }
-                    if (inPz) HudMiniPill("PZ", ExpEmerald)
-                    if (state.poisonTicks > 0) HudMiniPill("PSN", PoisonGreen)
-                    if (state.fireTicks > 0) HudMiniPill("BRN", FireOrange)
-                    if (saveBanner != null) HudMiniPill("Saved", TorchGold)
+                    if (snapshot.inPz) HudMiniPill("PZ", ExpEmerald)
+                    if (snapshot.poisoned) HudMiniPill("PSN", PoisonGreen)
+                    if (snapshot.burning) HudMiniPill("BRN", FireOrange)
+                    if (snapshot.saveBanner != null) HudMiniPill("Saved", TorchGold)
                 }
             }
         }
@@ -774,16 +747,17 @@ private fun CharacterVitalsHudCard(
 
 @Composable
 private fun CompactOnlineIndicator(
-    mpState: MultiplayerUiState,
+    status: ConnectionStatus,
+    floorOnlineCount: Int,
     onClick: () -> Unit
 ) {
-    val dotColor = when (mpState.status) {
+    val dotColor = when (status) {
         ConnectionStatus.ONLINE -> ExpEmerald
         ConnectionStatus.CONNECTING -> TorchAmber
         ConnectionStatus.OFFLINE_SOLO -> ParchmentMuted
     }
-    val text = when (mpState.status) {
-        ConnectionStatus.ONLINE -> "Online (${mpState.floorOnlineCount})"
+    val text = when (status) {
+        ConnectionStatus.ONLINE -> "Online ($floorOnlineCount)"
         ConnectionStatus.CONNECTING -> "Sync..."
         ConnectionStatus.OFFLINE_SOLO -> "Offline"
     }
@@ -891,16 +865,31 @@ fun VerticalSkillDock(
     onOpenSkills: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val entries = listOf(
-        SkillDockEntry("MAG", state.skills.magic.level, Icons.Default.AutoFixHigh, Color(0xFFC084FC)),
-        SkillDockEntry("FST", state.skills.fist.level, Icons.Default.SportsMma, Color(0xFFE8A468)),
-        SkillDockEntry("CLB", state.skills.club.level, Icons.Default.Gavel, Color(0xFFD68C45)),
-        SkillDockEntry("SWD", state.skills.sword.level, Icons.Default.MilitaryTech, Color(0xFFE05A47)),
-        SkillDockEntry("AXE", state.skills.axe.level, Icons.Default.Hardware, Color(0xFFEF7B45)),
-        SkillDockEntry("DST", state.skills.distance.level, Icons.Default.GpsFixed, Color(0xFF47B86E)),
-        SkillDockEntry("SHD", state.skills.shielding.level, Icons.Default.Shield, Color(0xFF5CA8FF)),
-        SkillDockEntry("FSH", state.skills.fishing.level, Icons.Default.SetMeal, Color(0xFF4AD2D9))
+    VerticalSkillDock(
+        skills = state.skills,
+        onOpenSkills = onOpenSkills,
+        modifier = modifier
     )
+}
+
+@Composable
+fun VerticalSkillDock(
+    skills: PlayerSkills,
+    onOpenSkills: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val entries = remember(skills) {
+        listOf(
+            SkillDockEntry("MAG", skills.magic.level, Icons.Default.AutoFixHigh, Color(0xFFC084FC)),
+            SkillDockEntry("FST", skills.fist.level, Icons.Default.SportsMma, Color(0xFFE8A468)),
+            SkillDockEntry("CLB", skills.club.level, Icons.Default.Gavel, Color(0xFFD68C45)),
+            SkillDockEntry("SWD", skills.sword.level, Icons.Default.MilitaryTech, Color(0xFFE05A47)),
+            SkillDockEntry("AXE", skills.axe.level, Icons.Default.Hardware, Color(0xFFEF7B45)),
+            SkillDockEntry("DST", skills.distance.level, Icons.Default.GpsFixed, Color(0xFF47B86E)),
+            SkillDockEntry("SHD", skills.shielding.level, Icons.Default.Shield, Color(0xFF5CA8FF)),
+            SkillDockEntry("FSH", skills.fishing.level, Icons.Default.SetMeal, Color(0xFF4AD2D9))
+        )
+    }
 
     Surface(
         color = BasaltDark.copy(alpha = 0.84f),
@@ -953,6 +942,17 @@ fun VerticalSkillDock(
     }
 }
 
+@Immutable
+private data class BattleHudSnapshot(
+    val activePanel: ActivePanel,
+    val playerLevel: Int,
+    val playerX: Int,
+    val playerY: Int,
+    val targetMonsterId: Int?,
+    val nearbyMonsters: List<MonsterEntity>,
+    val onlineAllies: List<RemotePlayerState>
+)
+
 /**
  * TOP-RIGHT UTILITY BAR & LIVE BATTLE LIST:
  * Quick-menu icon row (Backpack, Equipment, Skills, Save, World Map, Title) +
@@ -970,8 +970,6 @@ fun TopRightUtilityAndBattleCluster(
     onWalkToTile: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
-    var battleExpanded by rememberSaveable { mutableStateOf(true) }
-
     val nearbyMonsters = remember(state.monsters, state.floor, state.playerX, state.playerY) {
         state.monsters
             .filter { m ->
@@ -988,6 +986,41 @@ fun TopRightUtilityAndBattleCluster(
             }
             .sortedBy { rp -> max(abs(rp.x - state.playerX), abs(rp.y - state.playerY)) }
     }
+    val snapshot = BattleHudSnapshot(
+        activePanel = state.activePanel,
+        playerLevel = state.level,
+        playerX = state.playerX,
+        playerY = state.playerY,
+        targetMonsterId = state.targetMonsterId,
+        nearbyMonsters = nearbyMonsters,
+        onlineAllies = onlineAllies
+    )
+    TopRightUtilityAndBattleClusterContent(
+        snapshot = snapshot,
+        onOpenPanel = onOpenPanel,
+        onSaveManual = onSaveManual,
+        onReturnTitle = onReturnTitle,
+        onTargetMonster = onTargetMonster,
+        onInspectAlly = onInspectAlly,
+        onWalkToTile = onWalkToTile,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun TopRightUtilityAndBattleClusterContent(
+    snapshot: BattleHudSnapshot,
+    onOpenPanel: (ActivePanel) -> Unit,
+    onSaveManual: () -> Unit,
+    onReturnTitle: () -> Unit,
+    onTargetMonster: (Int) -> Unit,
+    onInspectAlly: (String) -> Unit,
+    onWalkToTile: (Int, Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var battleExpanded by rememberSaveable { mutableStateOf(true) }
+    val nearbyMonsters = snapshot.nearbyMonsters
+    val onlineAllies = snapshot.onlineAllies
     val liveOnlineCount = 1 + onlineAllies.size
 
     Column(
@@ -1006,12 +1039,12 @@ fun TopRightUtilityAndBattleCluster(
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                UtilityIconChip(Icons.Default.Backpack, "Backpack", state.activePanel == ActivePanel.BACKPACK, { onOpenPanel(ActivePanel.BACKPACK) }, "tab_backpack")
-                UtilityIconChip(Icons.Default.Shield, "Equipment", state.activePanel == ActivePanel.EQUIPMENT, { onOpenPanel(ActivePanel.EQUIPMENT) }, "tab_equipment")
-                UtilityIconChip(Icons.Default.MilitaryTech, "Skills", state.activePanel == ActivePanel.SKILLS, { onOpenPanel(ActivePanel.SKILLS) }, "tab_skills")
+                UtilityIconChip(Icons.Default.Backpack, "Backpack", snapshot.activePanel == ActivePanel.BACKPACK, { onOpenPanel(ActivePanel.BACKPACK) }, "tab_backpack")
+                UtilityIconChip(Icons.Default.Shield, "Equipment", snapshot.activePanel == ActivePanel.EQUIPMENT, { onOpenPanel(ActivePanel.EQUIPMENT) }, "tab_equipment")
+                UtilityIconChip(Icons.Default.MilitaryTech, "Skills", snapshot.activePanel == ActivePanel.SKILLS, { onOpenPanel(ActivePanel.SKILLS) }, "tab_skills")
                 UtilityIconChip(Icons.Default.CloudUpload, "Save", false, onSaveManual, "manual_save_button", accentTint = TorchGold)
-                UtilityIconChip(Icons.Default.Map, "World Map", state.activePanel == ActivePanel.WORLD_MAP, { onOpenPanel(ActivePanel.WORLD_MAP) }, "utility_world_map_button")
-                UtilityIconChip(Icons.Default.Settings, "Settings", state.activePanel == ActivePanel.SETTINGS, { onOpenPanel(ActivePanel.SETTINGS) }, "utility_settings_button")
+                UtilityIconChip(Icons.Default.Map, "World Map", snapshot.activePanel == ActivePanel.WORLD_MAP, { onOpenPanel(ActivePanel.WORLD_MAP) }, "utility_world_map_button")
+                UtilityIconChip(Icons.Default.Settings, "Settings", snapshot.activePanel == ActivePanel.SETTINGS, { onOpenPanel(ActivePanel.SETTINGS) }, "utility_settings_button")
                 UtilityIconChip(Icons.Default.Home, "Character Select", false, onReturnTitle, "return_title_button")
             }
         }
@@ -1101,7 +1134,7 @@ fun TopRightUtilityAndBattleCluster(
                             verticalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
                             items(onlineAllies, key = { "p_${it.playerId}" }) { ally ->
-                                val dist = max(abs(ally.x - state.playerX), abs(ally.y - state.playerY))
+                                val dist = max(abs(ally.x - snapshot.playerX), abs(ally.y - snapshot.playerY))
                                 BattleAllyRow(
                                     ally = ally,
                                     distanceTiles = dist,
@@ -1112,8 +1145,8 @@ fun TopRightUtilityAndBattleCluster(
                             items(nearbyMonsters, key = { "m_${it.id}" }) { monster ->
                                 BattleMonsterRow(
                                     monster = monster,
-                                    playerLevel = state.level,
-                                    isTargeted = state.targetMonsterId == monster.id,
+                                    playerLevel = snapshot.playerLevel,
+                                    isTargeted = snapshot.targetMonsterId == monster.id,
                                     onClick = { onTargetMonster(monster.id) }
                                 )
                             }
