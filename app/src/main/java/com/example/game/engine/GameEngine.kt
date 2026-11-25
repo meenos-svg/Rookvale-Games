@@ -326,7 +326,7 @@ object GameEngine {
             maxCapOz = state.maxCapOz,
             gold = state.gold,
             bankGold = state.bankGold.coerceAtLeast(0L),
-            floor = state.floor.coerceIn(-6, 0),
+            floor = state.floor.coerceIn(-10, 0),
             x = state.playerX,
             y = state.playerY,
             poisonTicks = 0,
@@ -2659,18 +2659,33 @@ object GameEngine {
                 val occupied = (state.floor == r.floor && state.playerX == r.spawnX && state.playerY == r.spawnY) ||
                     remotePlayersOnFloor.any { it.floor == r.floor && it.x == r.spawnX && it.y == r.spawnY } ||
                     state.monsters.any { it.floor == r.floor && it.x == r.spawnX && it.y == r.spawnY }
+                val floorMap = WorldMaps.getFloor(r.floor)
+                val inPz = floorMap.isProtectionZone(r.spawnX, r.spawnY)
+                if (inPz) {
+                    // Never respawn wild monsters inside Protection Zones
+                    continue
+                }
                 if (!occupied) {
                     val respawnId = if (r.originalMonsterId > 0) r.originalMonsterId else nextMonsterId++
+                    val respawnSeed = ((nowMs / 1000L).toInt() xor (respawnId * 31) xor (r.spawnX * 17) xor r.spawnY)
+                    val (resolvedType, resolvedLevel) = com.example.game.world.BiomeMonsterSpawner.resolveRespawnSpeciesAndLevel(
+                        floor = r.floor,
+                        spawnX = r.spawnX,
+                        spawnY = r.spawnY,
+                        originalType = r.type,
+                        fallbackLevel = r.level,
+                        respawnSeed = respawnSeed
+                    )
                     spawned += BiomeProgressionRules.createScaledMonster(
                         id = respawnId,
-                        type = r.type,
+                        type = resolvedType,
                         floor = r.floor,
                         x = r.spawnX,
                         y = r.spawnY,
-                        targetLevel = r.level
+                        targetLevel = resolvedLevel
                     )
-                    if (r.type.isBoss) {
-                        bossSpawnAlerts += "[BOSS] ${r.type.displayName} has awakened on Floor ${r.floor}!"
+                    if (resolvedType.isBoss) {
+                        bossSpawnAlerts += "[BOSS] ${resolvedType.displayName} has awakened on Floor ${r.floor}!"
                     }
                 } else {
                     remaining += r.copy(

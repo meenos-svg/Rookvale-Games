@@ -177,7 +177,7 @@ class RookvaleLoreExpansionTest {
             MonsterType.VAELGOR_LABYRINTH_WARDEN
         )
 
-        // Overworld camps exist far from Rookvale's main starting city (distance > 110 tiles)
+        // Overworld Grimmaw & Gorek live exclusively in outer-continent biomes (never in Lv 1-20 Rookvale Heartland)
         val ox = WorldMaps.ROOKVALE_ORIGIN_X
         val oy = WorldMaps.ROOKVALE_ORIGIN_Y
         val overworldGrimmaw = spawns.filter { it.floor == 0 && it.type in grimmawTypes }
@@ -186,23 +186,23 @@ class RookvaleLoreExpansionTest {
         val heartlandGorek = overworldGorek.filter { it.x in ox until (ox + 400) && it.y in oy until (oy + 400) }
         val dungeonGrimmaw = spawns.filter { it.floor == -5 && it.type in grimmawTypes }
         val dungeonGorek = spawns.filter { it.floor == -6 && it.type in gorekTypes }
-        assertTrue("Grimmaw frontier camp must have surface defenders", heartlandGrimmaw.size >= 6)
-        assertTrue("Gorek frontier war-camp must have surface defenders", heartlandGorek.size >= 6)
+        assertEquals("Grimmaw must NOT spawn inside Lv 1-20 Rookvale Heartland", 0, heartlandGrimmaw.size)
+        assertEquals("Gorek must NOT spawn inside Lv 1-20 Rookvale Heartland", 0, heartlandGorek.size)
+        assertTrue("Grimmaw frontier biomes must have surface defenders", overworldGrimmaw.size >= 4)
+        assertTrue("Gorek frontier biomes must have surface defenders", overworldGorek.size >= 4)
         assertTrue("Grimmaw Quarry must have interior monsters + boss", dungeonGrimmaw.size >= 6)
         assertTrue("Gorek Labyrinth must have interior monsters + boss", dungeonGorek.size >= 6)
 
         val surfaceFloor = WorldMaps.getFloor(0)
-        for (m in heartlandGrimmaw) {
+        for (m in overworldGrimmaw) {
             val dCity = hypot((m.x - WorldMaps.TEMPLE_SPAWN_X).toDouble(), (m.y - WorldMaps.TEMPLE_SPAWN_Y).toDouble())
-            assertTrue("Grimmaw camp spawn (${m.x},${m.y}) must be far off from Rookvale City (d=$dCity)", dCity >= 110.0)
-            assertTrue("Grimmaw camp must lie in SW wilderness", (m.x - ox) < 150 && (m.y - oy) > 270)
-            assertTrue("Grimmaw camp spawn (${m.x},${m.y}) must be walkable", surfaceFloor.tileAt(m.x, m.y).walkable)
+            assertTrue("Grimmaw frontier spawn (${m.x},${m.y}) must be far off from Rookvale City (d=$dCity)", dCity >= 180.0)
+            assertTrue("Grimmaw frontier spawn (${m.x},${m.y}) must be walkable", surfaceFloor.tileAt(m.x, m.y).walkable)
         }
-        for (m in heartlandGorek) {
+        for (m in overworldGorek) {
             val dCity = hypot((m.x - WorldMaps.TEMPLE_SPAWN_X).toDouble(), (m.y - WorldMaps.TEMPLE_SPAWN_Y).toDouble())
-            assertTrue("Gorek war-camp spawn (${m.x},${m.y}) must be far off from Rookvale City (d=$dCity)", dCity >= 110.0)
-            assertTrue("Gorek war-camp must lie in SE wilderness", (m.x - ox) > 250 && (m.y - oy) > 270)
-            assertTrue("Gorek war-camp spawn (${m.x},${m.y}) must be walkable", surfaceFloor.tileAt(m.x, m.y).walkable)
+            assertTrue("Gorek frontier spawn (${m.x},${m.y}) must be far off from Rookvale City (d=$dCity)", dCity >= 180.0)
+            assertTrue("Gorek frontier spawn (${m.x},${m.y}) must be walkable", surfaceFloor.tileAt(m.x, m.y).walkable)
         }
 
         // Neither clan appears in classic Floors -1..-4

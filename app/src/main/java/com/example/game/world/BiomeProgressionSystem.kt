@@ -92,6 +92,7 @@ enum class OverlandBiomeTier(
  * floors off their surface biome (`surfaceMinLevel + abs(floor) * 6`).
  */
 object BiomeProgressionRules {
+    const val MIN_DUNGEON_FLOOR: Int = -10
     const val DUNGEON_DEPTH_STEP_LEVELS: Int = 6
 
     fun biomeForRegion(regionId: String): OverlandBiomeTier = when (normalizeRegionId(regionId)) {
@@ -108,24 +109,41 @@ object BiomeProgressionRules {
 
     /**
      * Canonical surface biome anchor for each underground dungeon floor so deeper floors
-     * naturally progress from starter Rookvale sewers up to Level 90+ Gorek Labyrinth encounters.
+     * and outer-continent biome dungeons scale strictly from their host biome.
      */
     fun surfaceBiomeForDungeonFloor(floorId: Int): OverlandBiomeTier = when (floorId) {
         -1 -> OverlandBiomeTier.ROOKVALE_HEARTLAND
         -2 -> OverlandBiomeTier.WHISPERING_MARSH
         -3 -> OverlandBiomeTier.SUNSCORCH_BADLANDS
         -4 -> OverlandBiomeTier.FROSTPEAK_HIGHLANDS
-        -5 -> OverlandBiomeTier.SUNSCORCH_BADLANDS // Grimmaw Quarry anchored to Sunscorch Badlands
+        -5 -> OverlandBiomeTier.SUNSCORCH_BADLANDS // Grimmaw Quarry anchored to Sunscorch/Frostpeak frontier
         -6 -> OverlandBiomeTier.ASHEN_CALDERA      // Gorek Labyrinth anchored to Ashen Caldera
+        -7 -> OverlandBiomeTier.WHISPERING_MARSH   // The Sunken Mire Vaults (Lvl 26-31)
+        -8 -> OverlandBiomeTier.WHISPERING_MARSH   // The Overgrown Ziggurat Vault (Lvl 32-37)
+        -9 -> OverlandBiomeTier.FROSTPEAK_HIGHLANDS // The Blightwood Barrow Catacombs (Lvl 48-53)
+        -10 -> OverlandBiomeTier.ASHEN_CALDERA     // The Ashen Caldera Foundry (Lvl 67-72+)
         else -> OverlandBiomeTier.ROOKVALE_HEARTLAND
     }
 
     /**
-     * Core dungeon progression formula: `surfaceMinLevel + abs(floor) * 6`.
+     * Effective progression depth multiplier for a dungeon floor.
+     * Classic descending floors (-1..-6) scale directly by `abs(floorId)`; dedicated
+     * outer-biome continental dungeons (-7..-10) scale at depth 1 or 2 above their host biome.
+     */
+    fun effectiveDungeonDepth(floorId: Int): Int = when (floorId) {
+        -7 -> 1
+        -8 -> 2
+        -9 -> 1
+        -10 -> 2
+        else -> abs(floorId).coerceAtLeast(1)
+    }
+
+    /**
+     * Core dungeon progression formula: `surfaceMinLevel + effectiveDungeonDepth(floorId) * 6`.
      * Regular encounters span `[base, base + 4]`; dungeon bosses scale to `base + 5`.
      */
     fun dungeonBaseLevel(surfaceMinLevel: Int, floorId: Int): Int {
-        val depth = abs(floorId).coerceAtLeast(1)
+        val depth = effectiveDungeonDepth(floorId)
         return (surfaceMinLevel.coerceAtLeast(1) + depth * DUNGEON_DEPTH_STEP_LEVELS)
     }
 
@@ -142,39 +160,17 @@ object BiomeProgressionRules {
     fun dungeonRecommendedLevelLabel(floorId: Int, surfaceMinLevel: Int = surfaceBiomeForDungeonFloor(floorId).minLevel): String {
         val base = dungeonBaseLevel(surfaceMinLevel, floorId)
         val top = base + 5
-        return if (floorId <= -6) "Lvl $base-${top}+" else "Lvl $base-$top"
+        return if (floorId == -6 || floorId == -10) "Lvl $base-${top}+" else "Lvl $base-$top"
     }
 
     /**
      * Resolves the strict biome-locked level for an overland (Floor 0) monster spawn.
-     * Rookvale Heartland spawns remain strictly in Levels 1-20 (preserving starter 1-3 meadows);
+     * Rookvale Heartland spawns remain strictly in Levels 1-20 (grading gently from 1-5 near
+     * Rookvale City gates up to 12-20 toward outer Heartland borders & ruins);
      * all outer biomes strictly populate their locked level ranges up to 75+.
      */
-    fun resolveOverlandSpawnLevel(x: Int, y: Int, type: MonsterType): Int {
-        val biome = biomeForGlobalTile(x, y)
-        if (biome == OverlandBiomeTier.ROOKVALE_HEARTLAND) {
-            // Preserve Rookvale starter 1-3 meadows and smoothly graduate outer frontier camps up to Lvl 20
-            val clampedBase = type.threatLevel.coerceIn(biome.minLevel, biome.maxLevel)
-            return if (x < WorldMaps.ROOKVALE_ORIGIN_X) {
-                // Spirewood Western Reach (outer Heartland frontier: Lvl 10-20)
-                val span = 10
-                val hashOffset = (coordHash(x, y) and 0x7FFFFFFF) % (span + 1)
-                (10 + ((clampedBase + hashOffset) / 2)).coerceIn(10, biome.maxLevel)
-            } else {
-                clampedBase
-            }
-        }
-
-        val span = (biome.maxLevel - biome.minLevel).coerceAtLeast(1)
-        val speciesFraction = ((type.tier - 1).coerceIn(0, 5) / 5.0)
-        val jitter = ((coordHash(x, y) and 0x7FFFFFFF) % 5) - 2
-        val raw = biome.minLevel + (span * speciesFraction).roundToInt() + jitter
-        return if (type.isBoss) {
-            (biome.maxLevel + 3).coerceAtLeast(biome.minLevel)
-        } else {
-            raw.coerceIn(biome.minLevel, biome.maxLevel)
-        }
-    }
+    fun resolveOverlandSpawnLevel(x: Int, y: Int, type: MonsterType): Int =
+        BiomeMonsterSpawner.resolveOverlandLevel(x, y, type)
 
     fun resolveDungeonSpawnLevel(
         floorId: Int,

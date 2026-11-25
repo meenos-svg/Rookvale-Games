@@ -228,7 +228,7 @@ fun electFloorHost(
 }
 
 object MultiplayerSanitizer {
-    private val validFloors = setOf(0, -1, -2, -3, -4, -5, -6)
+    private val validFloors = (-10..0).toSet()
     private val controlRegex = Regex("[\\p{Cntrl}&&[^\t]]")
 
     fun isValidFloor(floor: Int): Boolean = floor in validFloors

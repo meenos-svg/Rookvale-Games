@@ -116,50 +116,52 @@ object WorldMaps {
     fun harborPortAtNpc(x: Int, y: Int): HarborPort? =
         harborPorts.firstOrNull { abs(it.dockX - x) <= 3 && abs(it.dockY - y) <= 3 }
 
-    val undergroundCamps: List<UndergroundCampZone> = listOf(
-        UndergroundCampZone(
-            floorId = -1,
-            name = "SEWERS VANGUARD CAMP (PZ)",
-            minX = 25, minY = 9, maxX = 31, maxY = 12,
-            healerX = 26, healerY = 10, healerName = "Sister Mara",
-            merchantX = 30, merchantY = 10, merchantName = "Quartermaster Bram"
-        ),
-        UndergroundCampZone(
-            floorId = -2,
-            name = "DEEP CAVERNS FORWARD CAMP (PZ)",
-            minX = 20, minY = 35, maxX = 28, maxY = 40,
-            healerX = 21, healerY = 38, healerName = "Brother Tavin",
-            merchantX = 27, merchantY = 38, merchantName = "Alchemist Veyra"
-        ),
-        UndergroundCampZone(
-            floorId = -3,
-            name = "ABYSSAL CRYPT FORWARD CAMP (PZ)",
-            minX = 20, minY = 6, maxX = 28, maxY = 11,
-            healerX = 21, healerY = 8, healerName = "Chaplain Oren",
-            merchantX = 27, merchantY = 8, merchantName = "Supplier Kora"
-        ),
-        UndergroundCampZone(
-            floorId = -4,
-            name = "WYRM SANCTUM VANGUARD CAMP (PZ)",
-            minX = 19, minY = 35, maxX = 29, maxY = 41,
-            healerX = 21, healerY = 39, healerName = "Priestess Selene",
-            merchantX = 27, merchantY = 39, merchantName = "Quartermaster Dax"
-        ),
-        UndergroundCampZone(
-            floorId = -5,
-            name = "GRIMMAW QUARRY FORWARD CAMP (PZ)",
-            minX = 20, minY = 37, maxX = 28, maxY = 42,
-            healerX = 21, healerY = 40, healerName = "Brother Halden",
-            merchantX = 27, merchantY = 40, merchantName = "Alchemist Talia"
-        ),
-        UndergroundCampZone(
-            floorId = -6,
-            name = "GOREK LABYRINTH VANGUARD CAMP (PZ)",
-            minX = 20, minY = 38, maxX = 28, maxY = 42,
-            healerX = 21, healerY = 40, healerName = "High Cleric Vesper",
-            merchantX = 27, merchantY = 40, merchantName = "Quartermaster Ryn"
-        )
-    )
+    val undergroundCamps: List<UndergroundCampZone> by lazy {
+        listOf(
+            UndergroundCampZone(
+                floorId = -1,
+                name = "CATACOMBS VANGUARD CAMP (PZ)",
+                minX = 25, minY = 9, maxX = 31, maxY = 12,
+                healerX = 26, healerY = 10, healerName = "Sister Mara",
+                merchantX = 30, merchantY = 10, merchantName = "Quartermaster Bram"
+            ),
+            UndergroundCampZone(
+                floorId = -2,
+                name = "DEEP CAVERNS FORWARD CAMP (PZ)",
+                minX = 20, minY = 35, maxX = 28, maxY = 40,
+                healerX = 21, healerY = 38, healerName = "Brother Tavin",
+                merchantX = 27, merchantY = 38, merchantName = "Alchemist Veyra"
+            ),
+            UndergroundCampZone(
+                floorId = -3,
+                name = "ABYSSAL CRYPT FORWARD CAMP (PZ)",
+                minX = 20, minY = 6, maxX = 28, maxY = 11,
+                healerX = 21, healerY = 8, healerName = "Chaplain Oren",
+                merchantX = 27, merchantY = 8, merchantName = "Supplier Kora"
+            ),
+            UndergroundCampZone(
+                floorId = -4,
+                name = "WYRM SANCTUM VANGUARD CAMP (PZ)",
+                minX = 19, minY = 35, maxX = 29, maxY = 41,
+                healerX = 21, healerY = 39, healerName = "Priestess Selene",
+                merchantX = 27, merchantY = 39, merchantName = "Quartermaster Dax"
+            ),
+            UndergroundCampZone(
+                floorId = -5,
+                name = "GRIMMAW QUARRY FORWARD CAMP (PZ)",
+                minX = 20, minY = 37, maxX = 28, maxY = 42,
+                healerX = 21, healerY = 40, healerName = "Brother Halden",
+                merchantX = 27, merchantY = 40, merchantName = "Alchemist Talia"
+            ),
+            UndergroundCampZone(
+                floorId = -6,
+                name = "GOREK LABYRINTH VANGUARD CAMP (PZ)",
+                minX = 20, minY = 38, maxX = 28, maxY = 42,
+                healerX = 21, healerY = 40, healerName = "High Cleric Vesper",
+                merchantX = 27, merchantY = 40, merchantName = "Quartermaster Ryn"
+            )
+        ) + ContinentalDungeonGenerator.generatedDungeons.map { it.camp }
+    }
 
     fun undergroundCampForFloor(floorId: Int): UndergroundCampZone? =
         undergroundCamps.firstOrNull { it.floorId == floorId }
@@ -221,17 +223,17 @@ object WorldMaps {
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 224, ROOKVALE_ORIGIN_Y + 204, "CRAFT & FLETCHING WARD"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 245, ROOKVALE_ORIGIN_Y + 204, "LOGGING ORCHARD"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 183, ROOKVALE_ORIGIN_Y + 231, "WEST RIVER FISHING PIER"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 242, ROOKVALE_ORIGIN_Y + 180, "CITY SEWERS (FLOOR -1)"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 152, ROOKVALE_ORIGIN_Y + 173, "CELLAR ROPE HOLE (FLOOR -1)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 242, ROOKVALE_ORIGIN_Y + 179, "SCHOLAR'S MARKET PLAZA"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 152, ROOKVALE_ORIGIN_Y + 172, "WEST GARDEN COURTYARD"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 134, "NORTH STARTER MEADOWS"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, "NW COPPER QUARRY (FLOOR -1)"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 85, "MOUNTAIN CAVERN (FLOOR -1)"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 67, "DEEP ABYSSAL CAVERN (FLOOR -2)"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 207, "DARK FOREST SINKHOLE (FLOOR -1)"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 88, ROOKVALE_ORIGIN_Y + 320, "GRIMMAW CRAGS CAMP (LVL 16-20)"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, "THE GRIMMAW QUARRY (FLOOR -5)"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 320, "GOREK BADLANDS CAMP (LVL 18-20)"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 317, "THE GOREK LABYRINTH (FLOOR -6)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 88, ROOKVALE_ORIGIN_Y + 320, "OLD QUARRY RUINS CAMP (LVL 12-16)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, "OLD QUARRY CATACOMBS (FLOOR -1)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 320, "HEARTLAND WATCH RUINS (LVL 15-20)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 317, "WATCH RUINS CAVERNS (FLOOR -2)"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 8, "FROSTPEAK NORTH HIGHWAY"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 8, ROOKVALE_ORIGIN_Y + 192, "SPIREWOOD WEST HIGHWAY"))
 
@@ -244,17 +246,17 @@ object WorldMaps {
                 add(LandmarkLabel(0, port.dockX, port.dockY, port.name.uppercase()))
             }
 
-            // Sea-Bridges, Shrines & Outer Dungeon Entrances
+            // Sea-Bridges, Shrines & Outer-Continent Dedicated Biome Dungeon Entrances
             add(LandmarkLabel(0, 760, 790, "MAELSTROM SEA-DRAGON SHRINE"))
             add(LandmarkLabel(0, 650, 211, "FROSTBAY SEA-BRIDGE"))
             add(LandmarkLabel(0, 770, 591, "CENTRAL ALDER CAUSEWAY"))
-            add(LandmarkLabel(0, 318, 252, "ASHEN CALDERA SHAFT (FLOOR -2)"))
-            add(LandmarkLabel(0, 295, 515, "WRITHING SINKHOLE (FLOOR -1)"))
-            add(LandmarkLabel(0, 1020, 175, "BLIGHTWOOD BARROW (FLOOR -1)"))
-            add(LandmarkLabel(0, 1320, 260, "FROSTPEAK GRIMMAW RIDGE (FLOOR -5)"))
-            add(LandmarkLabel(0, 242, 1020, "BADLANDS GOREK GATE (FLOOR -6)"))
-            add(LandmarkLabel(0, 720, 1020, "JUNGLE RUIN VAULT (FLOOR -2)"))
-            add(LandmarkLabel(0, 1510, 975, "EMBER SANCTUM DESCENT (FLOOR -2)"))
+            add(LandmarkLabel(0, 318, 252, "ASHEN CALDERA FOUNDRY (FLOOR -10)"))
+            add(LandmarkLabel(0, 295, 515, "SUNKEN MIRE VAULTS (FLOOR -7)"))
+            add(LandmarkLabel(0, 1020, 175, "BLIGHTWOOD BARROW (FLOOR -9)"))
+            add(LandmarkLabel(0, 1320, 260, "FROSTPEAK GRIMMAW QUARRY (FLOOR -5)"))
+            add(LandmarkLabel(0, 242, 1020, "BADLANDS GOREK LABYRINTH (FLOOR -6)"))
+            add(LandmarkLabel(0, 720, 1020, "OVERGROWN ZIGGURAT VAULT (FLOOR -8)"))
+            add(LandmarkLabel(0, 1510, 975, "EMBER SANCTUM DESCENT (FLOOR -10)"))
 
             // Dungeon Floor Landmarks & Subterranean Safe Forward Camps
             undergroundCamps.forEach { camp ->
@@ -265,45 +267,55 @@ object WorldMaps {
             add(LandmarkLabel(-3, 24, 18, "DEEP FORGE OUTPOST"))
             add(LandmarkLabel(-5, 24, 12, "KRAGOR'S QUARRY PIT"))
             add(LandmarkLabel(-6, 24, 11, "VAELGOR'S LABYRINTH SANCTUM"))
+            ContinentalDungeonGenerator.generatedDungeons.forEach { d ->
+                add(d.bossLandmark)
+            }
         }
     }
 
     val portals: List<FloorPortal> = listOf(
-        // Rookvale City Sewers Stairs <-> Floor -1
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 242, ROOKVALE_ORIGIN_Y + 179, -1, 28, 11, requiresRope = false),
-        FloorPortal(-1, 28, 10, 0, ROOKVALE_ORIGIN_X + 242, ROOKVALE_ORIGIN_Y + 180, requiresRope = false),
-        // Rookvale Western Town Cellar Rope-Hole <-> Floor -1
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 152, ROOKVALE_ORIGIN_Y + 172, -1, 10, 11, requiresRope = false),
-        FloorPortal(-1, 10, 10, 0, ROOKVALE_ORIGIN_X + 152, ROOKVALE_ORIGIN_Y + 173, requiresRope = true),
-        // Rookvale NW Quarry Rope-Hole <-> Floor -1
+        // Outer Heartland Starter Ruins <-> Floor -1 (ZERO portals inside Rookvale City limits!)
+        // SW Old Quarry Frontier Ruins <-> Floor -1 Vanguard Gatehouse
+        FloorPortal(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 316, -1, 28, 11, requiresRope = false),
+        FloorPortal(-1, 28, 10, 0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, requiresRope = false),
+        // Rookvale NW Quarry Rope-Hole <-> Floor -1 (both west rope-spots return to NW Quarry outside city)
         FloorPortal(0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 96, -1, 14, 15, requiresRope = false),
         FloorPortal(-1, 14, 14, 0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, requiresRope = true),
+        FloorPortal(-1, 10, 10, 0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, requiresRope = true),
         // Rookvale Mountain Cavern Stairs <-> Floor -1
         FloorPortal(0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 84, -1, 38, 11, requiresRope = false),
         FloorPortal(-1, 38, 10, 0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 85, requiresRope = false),
         // Rookvale Dark Forest Sinkhole Rope-Hole <-> Floor -1
         FloorPortal(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 206, -1, 38, 29, requiresRope = false),
         FloorPortal(-1, 38, 28, 0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 207, requiresRope = true),
-        // Rookvale NE Crag Hills Deep Cavern <-> Direct Floor -2 Deep Caverns
+
+        // Outer Heartland Deep Caverns <-> Floor -2
+        // NE Crag Hills Deep Cavern <-> Floor -2
         FloorPortal(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 66, -2, 11, 24, requiresRope = false),
         FloorPortal(-2, 10, 24, 0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 67, requiresRope = false),
+        // SE Heartland Watch Ruins <-> Floor -2 Forward Camp
+        FloorPortal(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 316, -2, 24, 37, requiresRope = false),
 
-        // Rookvale SW Frontier Grimmaw Crags Camp <-> Floor -5 The Grimmaw Quarry
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 316, -5, 24, 40, requiresRope = false),
-        FloorPortal(-5, 24, 41, 0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, requiresRope = false),
-
-        // Rookvale SE Frontier Gorek Badlands War-Camp <-> Floor -6 The Gorek Labyrinth
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 316, -6, 24, 40, requiresRope = false),
-        FloorPortal(-6, 24, 41, 0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 317, requiresRope = false),
-
-        // Outer-Continent Regional Dungeon Entrances (one-way descents into shared deep dungeon floors)
-        FloorPortal(0, 318, 252, -2, 11, 24, requiresRope = false),   // Ashen Caldera Shaft -> Floor -2
-        FloorPortal(0, 295, 515, -1, 14, 15, requiresRope = false),   // Writhing Sinkhole -> Floor -1
-        FloorPortal(0, 1020, 175, -1, 38, 11, requiresRope = false),  // Blightwood Barrow -> Floor -1
-        FloorPortal(0, 1320, 260, -5, 24, 40, requiresRope = false),  // Frostcrest Grimmaw Ridge -> Floor -5
-        FloorPortal(0, 242, 1020, -6, 24, 40, requiresRope = false),  // Badlands Gorek Gate -> Floor -6
-        FloorPortal(0, 720, 1020, -2, 11, 24, requiresRope = false),  // Jungle Ruin Vault -> Floor -2
-        FloorPortal(0, 1510, 975, -2, 11, 24, requiresRope = false),  // Ember Sanctum -> Floor -2
+        // Outer-Continent Dedicated Biome Dungeons (Bidirectional!)
+        // Frostpeak Grimmaw Ridge <-> Floor -5 The Grimmaw Quarry
+        FloorPortal(0, 1320, 260, -5, 24, 40, requiresRope = false),
+        FloorPortal(-5, 24, 41, 0, 1320, 261, requiresRope = false),
+        // Badlands Gorek Gate <-> Floor -6 The Gorek Labyrinth
+        FloorPortal(0, 242, 1020, -6, 24, 40, requiresRope = false),
+        FloorPortal(-6, 24, 41, 0, 242, 1021, requiresRope = false),
+        // Writhing Sinkhole (Whispering Marsh) <-> Floor -7 The Sunken Mire Vaults
+        FloorPortal(0, 295, 515, -7, 24, 40, requiresRope = false),
+        FloorPortal(-7, 24, 41, 0, 295, 516, requiresRope = false),
+        // Jungle Ruin Vault (Emerald Jungle) <-> Floor -8 The Overgrown Ziggurat Vault
+        FloorPortal(0, 720, 1020, -8, 24, 40, requiresRope = false),
+        FloorPortal(-8, 24, 41, 0, 720, 1021, requiresRope = false),
+        // Blightwood Barrow (Northern Frontier) <-> Floor -9 The Blightwood Barrow Catacombs
+        FloorPortal(0, 1020, 175, -9, 24, 40, requiresRope = false),
+        FloorPortal(-9, 24, 41, 0, 1020, 176, requiresRope = false),
+        // Ashen Caldera Shaft & Ember Sanctum <-> Floor -10 The Ashen Caldera Foundry
+        FloorPortal(0, 318, 252, -10, 24, 40, requiresRope = false),
+        FloorPortal(0, 1510, 975, -10, 24, 40, requiresRope = false),
+        FloorPortal(-10, 24, 41, 0, 318, 253, requiresRope = false),
 
         // Floor -1 <-> Floor -2 (Rope-Hole Down / Rope-Spot Up)
         FloorPortal(-1, 24, 38, -2, 24, 37, requiresRope = false),
@@ -322,111 +334,8 @@ object WorldMaps {
         FloorPortal(-4, 10, 34, -3, 11, 34, requiresRope = true)
     )
 
-    val monsterSpawns: List<MonsterSpawn> = listOf(
-        // --- Floor 0 Rookvale Starter Meadows & Farms (TIER 1 — Levels 1-3, outside Rookvale City PZ) ---
-        // North Gate Starter Meadows
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 188, ROOKVALE_ORIGIN_Y + 136, MonsterType.WILD_RABBIT),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 204, ROOKVALE_ORIGIN_Y + 134, MonsterType.WILD_RABBIT),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 190, ROOKVALE_ORIGIN_Y + 126, MonsterType.CAVE_RAT),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 208, ROOKVALE_ORIGIN_Y + 124, MonsterType.YOUNG_SNAKE),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 114, MonsterType.CRAG_WOLF),
-        // West Gate Glades & Farms
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 134, ROOKVALE_ORIGIN_Y + 186, MonsterType.WILD_RABBIT),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 128, ROOKVALE_ORIGIN_Y + 198, MonsterType.CAVE_RAT),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 120, ROOKVALE_ORIGIN_Y + 184, MonsterType.YOUNG_SNAKE),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 114, ROOKVALE_ORIGIN_Y + 196, MonsterType.CAVE_RAT),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 106, ROOKVALE_ORIGIN_Y + 180, MonsterType.CRAG_WOLF),
-        // East Gate Meadow & Whispering Edge
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 266, ROOKVALE_ORIGIN_Y + 186, MonsterType.WILD_RABBIT),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 272, ROOKVALE_ORIGIN_Y + 198, MonsterType.YOUNG_SNAKE),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 280, ROOKVALE_ORIGIN_Y + 184, MonsterType.CRAG_WOLF),
-        // South Valley Meadows (across river bridges)
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 184, ROOKVALE_ORIGIN_Y + 260, MonsterType.WILD_RABBIT),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 210, ROOKVALE_ORIGIN_Y + 262, MonsterType.YOUNG_SNAKE),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 278, MonsterType.CRAG_WOLF),
-
-        // --- Floor 0 Rookvale Outer Wilds (TIER 2 — Levels 3-6, Quarry, Dark Woods & Crag Hills) ---
-        // NW Ochre Quarry & Foothills
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 110, ROOKVALE_ORIGIN_Y + 114, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 98, ROOKVALE_ORIGIN_Y + 106, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 96, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 94, ROOKVALE_ORIGIN_Y + 82, MonsterType.SKELETON),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 76, ROOKVALE_ORIGIN_Y + 104, MonsterType.SWAMP_TROLL),
-        // East Deep Dark Woods
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 294, ROOKVALE_ORIGIN_Y + 196, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 304, ROOKVALE_ORIGIN_Y + 212, MonsterType.POISON_SPIDER),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 322, ROOKVALE_ORIGIN_Y + 202, MonsterType.POISON_SPIDER),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 220, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 336, ROOKVALE_ORIGIN_Y + 194, MonsterType.POISON_SPIDER),
-        // NE Crag Hills & Deep Cavern Approach
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 242, ROOKVALE_ORIGIN_Y + 98, MonsterType.CRAG_WOLF),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 256, ROOKVALE_ORIGIN_Y + 90, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 274, ROOKVALE_ORIGIN_Y + 82, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 288, ROOKVALE_ORIGIN_Y + 76, MonsterType.SKELETON),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 300, ROOKVALE_ORIGIN_Y + 72, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 68, MonsterType.SKELETON),
-
-        // --- Floor 0 SW Rookvale Frontier: Grimmaw Crags & Quarry Camp (TIER 5) ---
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 114, ROOKVALE_ORIGIN_Y + 318, MonsterType.GRIMMAW_QUARRYMAN),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 102, ROOKVALE_ORIGIN_Y + 310, MonsterType.GRIMMAW_ROCK_HURLER),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 102, ROOKVALE_ORIGIN_Y + 330, MonsterType.GRIMMAW_QUARRYMAN),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 322, MonsterType.GRIMMAW_CRUSHER),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 74, ROOKVALE_ORIGIN_Y + 314, MonsterType.GRIMMAW_ROCK_HURLER),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 78, ROOKVALE_ORIGIN_Y + 330, MonsterType.GRIMMAW_CRUSHER),
-
-        // --- Floor 0 SE Rookvale Frontier: Gorek Badlands & War-Camp (TIER 6) ---
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 286, ROOKVALE_ORIGIN_Y + 318, MonsterType.GOREK_RAIDER),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 298, ROOKVALE_ORIGIN_Y + 310, MonsterType.GOREK_PHALANX),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 298, ROOKVALE_ORIGIN_Y + 330, MonsterType.GOREK_RAIDER),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 322, MonsterType.GOREK_HEX_CALLER),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 326, ROOKVALE_ORIGIN_Y + 314, MonsterType.GOREK_PHALANX),
-        MonsterSpawn(0, ROOKVALE_ORIGIN_X + 324, ROOKVALE_ORIGIN_Y + 330, MonsterType.GOREK_HEX_CALLER),
-
-        // --- Multi-Region World Spawns across the 11 Outer 400x400 Regions ---
-        // Spirewood Western Reach (Lvl 4-10)
-        MonsterSpawn(0, 1085, 578, MonsterType.CRAG_WOLF),
-        MonsterSpawn(0, 1062, 608, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(0, 1018, 635, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(0, 1042, 692, MonsterType.ORC_WARRIOR),
-        // Mirewatch Peninsula (Lvl 6-12)
-        MonsterSpawn(0, 495, 572, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(0, 488, 622, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(0, 580, 628, MonsterType.ORC_WARRIOR),
-        // The Writhing Marshes (Lvl 6-12)
-        MonsterSpawn(0, 320, 540, MonsterType.POISON_SPIDER),
-        MonsterSpawn(0, 275, 520, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(0, 305, 492, MonsterType.POISON_SPIDER),
-        MonsterSpawn(0, 250, 560, MonsterType.GHOUL),
-        // Blightwood & Duskport Reach (Lvl 8-14)
-        MonsterSpawn(0, 960, 240, MonsterType.SKELETON),
-        MonsterSpawn(0, 1010, 210, MonsterType.GHOUL),
-        MonsterSpawn(0, 1042, 190, MonsterType.NECROMANCER),
-        // Frostcrest Highlands (Lvl 12-20)
-        MonsterSpawn(0, 1390, 315, MonsterType.ORC_WARRIOR),
-        MonsterSpawn(0, 1352, 265, MonsterType.GRIMMAW_QUARRYMAN),
-        MonsterSpawn(0, 1312, 272, MonsterType.GRIMMAW_CRUSHER),
-        MonsterSpawn(0, 1418, 225, MonsterType.GRIMMAW_ROCK_HURLER),
-        // Ashen Caldera Peaks (Lvl 14-22)
-        MonsterSpawn(0, 340, 260, MonsterType.FIRE_DEVIL),
-        MonsterSpawn(0, 300, 270, MonsterType.DRAGON_HATCHLING),
-        MonsterSpawn(0, 375, 225, MonsterType.FIRE_DEVIL),
-        // Sunspire Desert & Badlands (Lvl 12-22)
-        MonsterSpawn(0, 370, 725, MonsterType.SKELETON),
-        MonsterSpawn(0, 435, 835, MonsterType.FIRE_DEVIL),
-        MonsterSpawn(0, 285, 965, MonsterType.GOREK_RAIDER),
-        MonsterSpawn(0, 255, 1005, MonsterType.GOREK_PHALANX),
-        MonsterSpawn(0, 232, 1032, MonsterType.GOREK_HEX_CALLER),
-        // Emerald Jungle Continent (Lvl 10-18)
-        MonsterSpawn(0, 880, 1005, MonsterType.POISON_SPIDER),
-        MonsterSpawn(0, 765, 1015, MonsterType.ORC_WARRIOR),
-        MonsterSpawn(0, 705, 1012, MonsterType.DRAGON_HATCHLING),
-        MonsterSpawn(0, 675, 992, MonsterType.POISON_SPIDER),
-        // The Ember Isles (Lvl 18-26)
-        MonsterSpawn(0, 1488, 962, MonsterType.FIRE_DEVIL),
-        MonsterSpawn(0, 1502, 985, MonsterType.DRAGON_HATCHLING),
-        MonsterSpawn(0, 1495, 938, MonsterType.NECROMANCER),
-
-        // --- Floor -1: Mossy Sewers & Caves (TIER 2 — Levels 3-6 + Dungeon Boss) ---
+    private val dungeonFixedSpawns: List<MonsterSpawn> = listOf(
+        // --- Floor -1: Heartland Catacombs & Caves (Starter Ruins — Lvl 7-12 + Boss) ---
         MonsterSpawn(-1, 26, 13, MonsterType.CAVE_RAT),
         MonsterSpawn(-1, 13, 21, MonsterType.SWAMP_TROLL),
         MonsterSpawn(-1, 37, 13, MonsterType.GOBLIN_SCOUT),
@@ -438,7 +347,7 @@ object WorldMaps {
         MonsterSpawn(-1, 27, 35, MonsterType.POISON_SPIDER),
         MonsterSpawn(-1, 24, 34, MonsterType.BROODMOTHER_ARACHNE),
 
-        // --- Floor -2: Deep Caverns & Molten Chasm (TIER 3 — Levels 6-10 + Dungeon Boss) ---
+        // --- Floor -2: Deep Caverns & Molten Chasm ---
         MonsterSpawn(-2, 12, 33, MonsterType.ORC_WARRIOR),
         MonsterSpawn(-2, 35, 33, MonsterType.ORC_WARRIOR),
         MonsterSpawn(-2, 13, 25, MonsterType.FIRE_DEVIL),
@@ -449,7 +358,7 @@ object WorldMaps {
         MonsterSpawn(-2, 24, 15, MonsterType.FIRE_DEVIL),
         MonsterSpawn(-2, 24, 12, MonsterType.IGNIS_LORD_OF_THE_PIT),
 
-        // --- Floor -3: Abyssal Crypt & Boss (TIER 4 — Levels 10-18) ---
+        // --- Floor -3: Abyssal Crypt & Boss ---
         MonsterSpawn(-3, 14, 14, MonsterType.DRAGON_HATCHLING),
         MonsterSpawn(-3, 34, 14, MonsterType.NECROMANCER),
         MonsterSpawn(-3, 12, 24, MonsterType.DRAGON_HATCHLING),
@@ -458,7 +367,7 @@ object WorldMaps {
         MonsterSpawn(-3, 32, 32, MonsterType.DRAGON_HATCHLING),
         MonsterSpawn(-3, 24, 34, MonsterType.DEMON_LORD),
 
-        // --- Floor -4: Obsidian Wyrm Sanctum (Classic Endgame Raid — Levels 16-20) ---
+        // --- Floor -4: Obsidian Wyrm Sanctum ---
         MonsterSpawn(-4, 18, 32, MonsterType.DRAGON_HATCHLING),
         MonsterSpawn(-4, 32, 32, MonsterType.FIRE_DEVIL),
         MonsterSpawn(-4, 14, 24, MonsterType.NECROMANCER),
@@ -485,17 +394,42 @@ object WorldMaps {
         MonsterSpawn(-6, 24, 11, MonsterType.VAELGOR_LABYRINTH_WARDEN)
     )
 
+    /**
+     * Overland (Floor 0) monsters are generated dynamically from the underlying terrain
+     * [BiomeType] pools via [BiomeMonsterSpawner] (no hand-placed town spots, zero PZ
+     * intrusion, zero chunk-cache churn). Underground floors -1..-10 append their dungeon
+     * patrols and boss encounters.
+     */
+    val monsterSpawns: List<MonsterSpawn> by lazy {
+        val overlandSpawns = BiomeMonsterSpawner.generateOverlandBiomeSpawns(
+            isProtectionZone = { x, y -> isOverlandProtectionZone(x, y) },
+            tileOracle = { x, y -> fastHeartlandTileOrNull(x, y) ?: WorldBiomeBlueprint.tileAtGlobal(x, y) }
+        )
+        overlandSpawns + dungeonFixedSpawns + ContinentalDungeonGenerator.generatedDungeons.flatMap { it.spawns }
+    }
+
+    private fun isOverlandProtectionZone(x: Int, y: Int): Boolean {
+        return (x in (ROOKVALE_ORIGIN_X + 147)..(ROOKVALE_ORIGIN_X + 255) &&
+            y in (ROOKVALE_ORIGIN_Y + 149)..(ROOKVALE_ORIGIN_Y + 227)) ||
+            WorldBiomeBlueprint.isSecondarySafeZone(x, y)
+    }
+
     private val rookvaleHeartlandGrid: ChunkedTileGrid by lazy { buildRookvaleHeartlandGrid() }
 
-    val floors: Map<Int, WorldFloor> = mapOf(
-        0 to buildOverlandSurface(),
-        -1 to buildSewersFloor(),
-        -2 to buildCryptsFloor(),
-        -3 to buildForgehallFloor(),
-        -4 to buildWyrmSanctumFloor(),
-        -5 to buildGrimmawQuarryFloor(),
-        -6 to buildGorekLabyrinthFloor()
-    )
+    val floors: Map<Int, WorldFloor> by lazy {
+        buildMap {
+            put(0, buildOverlandSurface())
+            put(-1, buildSewersFloor())
+            put(-2, buildCryptsFloor())
+            put(-3, buildForgehallFloor())
+            put(-4, buildWyrmSanctumFloor())
+            put(-5, buildGrimmawQuarryFloor())
+            put(-6, buildGorekLabyrinthFloor())
+            ContinentalDungeonGenerator.generatedDungeons.forEach { d ->
+                put(d.spec.floorId, d.floor)
+            }
+        }
+    }
 
     fun getFloor(floorId: Int): WorldFloor = floors[floorId] ?: floors.getValue(0)
 
@@ -514,6 +448,7 @@ object WorldMaps {
         -4 -> 24 to 39
         -5 -> 24 to 40
         -6 -> 24 to 40
+        -7, -8, -9, -10 -> 24 to 40
         else -> TEMPLE_SPAWN_X to TEMPLE_SPAWN_Y
     }
 
@@ -803,7 +738,7 @@ object WorldMaps {
             grid.set(vx, vy, TileType.ORE_BOG_IRON)
         }
 
-        // 7B. NEW FRONTIER AREA 1: SW GRIMMAW CRAGS & QUARRY CAMP (x=54..126, y=288..352 — High Difficulty, far off from Rookvale City)
+        // 7B. SW HEARTLAND FRONTIER: OLD QUARRY RUINS CAMP (x=54..126, y=288..352 — Level 12-16 Heartland Ruins)
         grid.fillEllipse(88, 320, 34, 28, TileType.DIRT_FLOOR)
         grid.fillRect(68, 306, 108, 334, TileType.COBBLESTONE)
         // Natural crag cliff ridge wrapping the west & south borders
@@ -815,7 +750,7 @@ object WorldMaps {
             grid.set(56, y, TileType.MOUNTAIN_ROCK)
             if (y > 304) grid.set(57, y, TileType.MOUNTAIN_ROCK)
         }
-        // Fortified Grimmaw stone camp barricades with wide East War-Gate (y=317..323)
+        // Weathered Heartland quarry ruin walls with wide East Archway (y=317..323)
         for (x in 66..112) {
             grid.set(x, 304, TileType.STONE_WALL)
             grid.set(x, 336, TileType.STONE_WALL)
@@ -824,33 +759,29 @@ object WorldMaps {
             grid.set(66, y, TileType.STONE_WALL)
             if (y !in 317..323) grid.set(112, y, TileType.STONE_WALL)
         }
-        // East Gate iron-barred archway & warning torch beacons
         for (y in 318..322) grid.set(112, y, TileType.IRON_BAR_GATE)
         listOf(112 to 316, 112 to 324, 82 to 314, 86 to 314, 72 to 305, 104 to 305, 72 to 335, 104 to 335).forEach { (tx, ty) ->
-            grid.set(tx, ty, TileType.TORCH_WALL)
+            grid.set(tx, ty, TileType.LANTERN_POST)
         }
-        // Quarry camp supply crates & weapon racks
+        // Quarry ruins supply crates & weapon racks
         listOf(70 to 308, 71 to 308, 106 to 332, 107 to 332).forEach { (px, py) -> grid.set(px, py, TileType.CRATE_BARREL) }
         listOf(106 to 308, 70 to 332).forEach { (px, py) -> grid.set(px, py, TileType.WEAPON_RACK) }
-        // Outskirts Copper/Tin/Bog Iron veins outside Grimmaw Crags
+        // Outskirts Copper & Bog Iron veins outside Old Quarry Ruins
         listOf(62 to 300, 64 to 342).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_COPPER) }
         listOf(118 to 302, 118 to 338).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_BOG_IRON) }
-        // Frontier Road branching west off South Highway (195, 318) -> Grimmaw Camp Gate (112, 320)
+        // Frontier Road branching west off South Highway (195, 318) -> Old Quarry Ruins Gate (112, 320)
         grid.drawRoadSegment(195, 318, 154, 318, 2, TileType.DIRT_FLOOR)
         grid.drawRoadSegment(154, 318, 110, 320, 2, TileType.DIRT_FLOOR)
         listOf(168 to 315, 168 to 321, 134 to 316, 134 to 322).forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
-        // Grimmaw Quarry Dungeon Entrance (Floor -5)
+        // Starter Ruins Catacombs Entrance (Floor -1) outside Rookvale City
         grid.set(84, 316, TileType.STAIRS_DOWN)
         grid.set(84, 317, TileType.COBBLESTONE)
 
-        // 7C. NEW FRONTIER AREA 2: SE GOREK BADLANDS & WAR-CAMP (x=274..346, y=288..352 — Pinnacle Difficulty, far off from Rookvale City)
+        // 7C. SE HEARTLAND FRONTIER: HEARTLAND WATCH RUINS (x=274..346, y=288..352 — Level 15-20 Heartland Ruins)
         grid.fillEllipse(312, 320, 34, 28, TileType.DARK_GRASS)
-        grid.fillEllipse(312, 320, 28, 22, TileType.CRYPT_FLOOR)
-        grid.fillRect(292, 306, 332, 334, TileType.OBSIDIAN_FLOOR)
-        // Scorched lava fissures flanking the outer north & east badlands
-        grid.fillRect(296, 294, 328, 296, TileType.LAVA)
-        grid.fillRect(340, 304, 342, 336, TileType.LAVA)
-        // Fortified Gorek War-Camp bastion walls with wide West Gate (y=317..323)
+        grid.fillEllipse(312, 320, 28, 22, TileType.DIRT_FLOOR)
+        grid.fillRect(292, 306, 332, 334, TileType.CRYPT_FLOOR)
+        // Mossy stone ruin walls & overgrown timber framing (no volcanic lava inside Heartland!)
         for (x in 288..334) {
             grid.set(x, 304, TileType.STONE_WALL)
             grid.set(x, 336, TileType.STONE_WALL)
@@ -859,24 +790,23 @@ object WorldMaps {
             grid.set(334, y, TileType.STONE_WALL)
             if (y !in 317..323) grid.set(288, y, TileType.STONE_WALL)
         }
-        // West Bastion Iron-Barred Gate & crimson war-braziers
         for (y in 318..322) grid.set(288, y, TileType.IRON_BAR_GATE)
         listOf(288 to 316, 288 to 324, 314 to 314, 318 to 314, 296 to 305, 328 to 305, 296 to 335, 328 to 335).forEach { (tx, ty) ->
-            grid.set(tx, ty, TileType.TORCH_WALL)
+            grid.set(tx, ty, TileType.LANTERN_POST)
         }
-        // War-camp weapon racks & supply barrels
+        // Watchtower ruin supplies & weapon racks
         listOf(294 to 308, 328 to 308, 294 to 332).forEach { (px, py) -> grid.set(px, py, TileType.WEAPON_RACK) }
         listOf(328 to 332, 329 to 332).forEach { (px, py) -> grid.set(px, py, TileType.CRATE_BARREL) }
-        // Outskirts Tin & Bog Iron veins outside Gorek Badlands
+        // Outskirts Tin & Bog Iron veins outside Heartland Watch Ruins
         listOf(282 to 302, 282 to 338).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_BOG_IRON) }
         listOf(336 to 298, 336 to 342).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_TIN) }
-        // Frontier Road branching east off South Highway (197, 318) -> Gorek Bastion Gate (288, 320)
+        // Frontier Road branching east off South Highway (197, 318) -> Heartland Watch Gate (288, 320)
         grid.drawRoadSegment(197, 318, 244, 318, 2, TileType.DIRT_FLOOR)
         grid.drawRoadSegment(244, 318, 290, 320, 2, TileType.DIRT_FLOOR)
         listOf(228 to 315, 228 to 321, 266 to 316, 266 to 322).forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
-        // Gorek Labyrinth Citadel Entrance (Floor -6)
+        // Heartland Watch Caverns Entrance (Floor -2)
         grid.set(316, 316, TileType.STAIRS_DOWN)
-        grid.set(316, 317, TileType.OBSIDIAN_FLOOR)
+        grid.set(316, 317, TileType.COBBLESTONE)
 
         // 8. Starter Meadows & Rustic Farms outside North & West Gates
         // North farmstead garden plot (fenced patch with open gate)
@@ -1095,9 +1025,14 @@ object WorldMaps {
         grid.set(178, 199, TileType.CRATE_BARREL)
         grid.set(178, 209, TileType.LANTERN_POST)
 
-        // Western Town Cellar Rope-Hole (Floor -1) in cozy garden courtyard (152, 172)
-        grid.fillRect(150, 170, 155, 175, TileType.COBBLESTONE)
-        grid.set(152, 172, TileType.ROPE_HOLE_DOWN)
+        // Sunlit West Garden Courtyard (replaces old cellar rope-hole — zero dungeons inside Rookvale City)
+        grid.fillRect(150, 170, 155, 175, TileType.FLOWER_GRASS)
+        grid.fillRect(151, 171, 154, 174, TileType.COBBLESTONE)
+        grid.set(152, 172, TileType.FLOWER_GRASS)
+        grid.set(153, 172, TileType.FLOWER_GRASS)
+        grid.set(150, 170, TileType.HEDGE)
+        grid.set(155, 170, TileType.HEDGE)
+        grid.set(150, 175, TileType.HEDGE)
         grid.set(154, 171, TileType.LANTERN_POST)
 
         // --- DISTRICT 3: ARCANE & RUNECRAFTING QUARTER (x = 214..246, y = 172..188) ---
@@ -1133,9 +1068,13 @@ object WorldMaps {
         grid.set(232, 175, TileType.BOOKSHELF)
         grid.set(232, 185, TileType.WOOD_BED)
         grid.set(231, 183, TileType.CRATE_BARREL)
-        // City Sewers Entrance (Floor -1) neatly beside Academy courtyard
+        // Open Scholar's Market Courtyard & Garden Plaza beside Academy (replaces old city sewers entrance)
         grid.fillRect(239, 176, 245, 183, TileType.COBBLESTONE)
-        grid.set(242, 179, TileType.STAIRS_DOWN)
+        grid.fillRect(240, 181, 244, 182, TileType.FLOWER_GRASS)
+        grid.set(242, 178, TileType.MARKET_AWNING)
+        grid.set(244, 179, TileType.CRATE_BARREL)
+        grid.set(239, 183, TileType.HEDGE)
+        grid.set(245, 183, TileType.HEDGE)
         grid.set(240, 177, TileType.LANTERN_POST)
         grid.set(244, 177, TileType.LANTERN_POST)
 
@@ -1252,16 +1191,7 @@ object WorldMaps {
             }
         }
 
-        // Guarantee every Rookvale-local Floor 0 monster spawn & portal landing is walkable ground
-        for (spawn in monsterSpawns) {
-            if (spawn.floor == 0 && WorldBiomeBlueprint.isInRookvaleHeartland(spawn.x, spawn.y)) {
-                val lx = spawn.x - ROOKVALE_ORIGIN_X
-                val ly = spawn.y - ROOKVALE_ORIGIN_Y
-                if (!grid.get(lx, ly).walkable) {
-                    grid.set(lx, ly, TileType.GRASS)
-                }
-            }
-        }
+        // Guarantee every Rookvale-local Floor 0 portal landing is walkable ground
         for (portal in portals) {
             if (portal.toFloor == 0 && WorldBiomeBlueprint.isInRookvaleHeartland(portal.toX, portal.toY)) {
                 val lx = portal.toX - ROOKVALE_ORIGIN_X
@@ -1403,11 +1333,7 @@ object WorldMaps {
             chunkedGrid = streamingGrid,
             regionId = DEFAULT_REGION_ID,
             buildings = cityBuildings,
-            isProtectionZone = { x, y ->
-                (x in (ROOKVALE_ORIGIN_X + 147)..(ROOKVALE_ORIGIN_X + 255) &&
-                    y in (ROOKVALE_ORIGIN_Y + 149)..(ROOKVALE_ORIGIN_Y + 227)) ||
-                    WorldBiomeBlueprint.isSecondarySafeZone(x, y)
-            },
+            isProtectionZone = { x, y -> isOverlandProtectionZone(x, y) },
             dangerLevel = "Varies",
             recommendedLevel = "Lvl 1-75+",
             dangerSeverity = 0
@@ -1508,8 +1434,8 @@ object WorldMaps {
 
         return WorldFloor(
             floorId = -1,
-            name = "Mossy Sewers & Caves",
-            subtitle = "Dungeon Floor -1 • Forward Camp PZ",
+            name = "Heartland Catacombs & Caves",
+            subtitle = "Starter Ruins • Floor -1 • Forward Camp PZ",
             width = s,
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),

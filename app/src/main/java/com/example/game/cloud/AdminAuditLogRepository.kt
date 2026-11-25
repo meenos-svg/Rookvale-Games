@@ -276,33 +276,37 @@ object AdminTeleportCatalog {
         ),
         AdminTeleportPreset(
             id = "grimmaw_camp",
-            label = "Grimmaw Camp",
+            label = "Grimmaw Ridge",
             floor = 0,
-            x = WorldMaps.ROOKVALE_ORIGIN_X + 88,
-            y = WorldMaps.ROOKVALE_ORIGIN_Y + 320,
+            x = 1320,
+            y = 261,
             category = AdminWarpCategory.OVERLAND_CAMPS,
-            levelRangeLabel = compactLevelLabel(OverlandBiomeTier.SUNSCORCH_BADLANDS),
-            biomeTier = OverlandBiomeTier.SUNSCORCH_BADLANDS
+            levelRangeLabel = compactLevelLabel(OverlandBiomeTier.FROSTPEAK_HIGHLANDS),
+            biomeTier = OverlandBiomeTier.FROSTPEAK_HIGHLANDS
         ),
         AdminTeleportPreset(
             id = "gorek_camp",
-            label = "Gorek War-Camp",
+            label = "Gorek Gate",
             floor = 0,
-            x = WorldMaps.ROOKVALE_ORIGIN_X + 312,
-            y = WorldMaps.ROOKVALE_ORIGIN_Y + 320,
+            x = 242,
+            y = 1021,
             category = AdminWarpCategory.OVERLAND_CAMPS,
-            levelRangeLabel = compactLevelLabel(OverlandBiomeTier.ASHEN_CALDERA),
-            biomeTier = OverlandBiomeTier.ASHEN_CALDERA
+            levelRangeLabel = compactLevelLabel(OverlandBiomeTier.SUNSCORCH_BADLANDS),
+            biomeTier = OverlandBiomeTier.SUNSCORCH_BADLANDS
         )
     )
 
     val dungeonCamps: List<AdminTeleportPreset> = listOf(
-        dungeonCampPreset("floor_m1", "F-1 Sewers Camp", -1, 28, 11),
+        dungeonCampPreset("floor_m1", "F-1 Catacombs Camp", -1, 28, 11),
         dungeonCampPreset("floor_m2", "F-2 Caverns Camp", -2, 24, 37),
         dungeonCampPreset("floor_m3", "F-3 Crypt Camp", -3, 24, 9),
         dungeonCampPreset("floor_m4", "F-4 Wyrm Camp", -4, 24, 39),
         dungeonCampPreset("floor_m5", "F-5 Grimmaw Camp", -5, 24, 40),
-        dungeonCampPreset("floor_m6", "F-6 Labyrinth Camp", -6, 24, 40, openEndedTop = true)
+        dungeonCampPreset("floor_m6", "F-6 Labyrinth Camp", -6, 24, 40, openEndedTop = true),
+        dungeonCampPreset("floor_m7", "F-7 Mire Vaults Camp", -7, 24, 40),
+        dungeonCampPreset("floor_m8", "F-8 Ziggurat Camp", -8, 24, 40),
+        dungeonCampPreset("floor_m9", "F-9 Barrow Camp", -9, 24, 40),
+        dungeonCampPreset("floor_m10", "F-10 Caldera Camp", -10, 24, 40, openEndedTop = true)
     )
 
     val overlandLandmarks: List<AdminTeleportPreset> = townsAndEmpires + overlandCamps

@@ -1154,7 +1154,7 @@ fun EnhancedRegionalWorldMapContent(
                                             .replace("CRAFT & FLETCHING WARD", "Craft Ward")
                                             .replace("TOWN SQUARE FOUNTAIN", "Town Square")
                                             .replace("TOWN DEPOT HALL", "Depot Hall")
-                                            .replace("CITY SEWERS (FLOOR -1)", "City Sewers")
+                                            .replace("SCHOLAR'S MARKET PLAZA", "Scholar Plaza")
                                             .take(18)
                                         tryDrawBadgeLabel(
                                             text = compactLabel,

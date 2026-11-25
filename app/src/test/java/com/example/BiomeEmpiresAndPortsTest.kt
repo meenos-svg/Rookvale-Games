@@ -92,8 +92,16 @@ class BiomeEmpiresAndPortsTest {
         val afterRespawn = GameEngine.processCombatTick(readyState, nowMs + 60_000L)
         val respawned = afterRespawn.monsters.firstOrNull { it.id == target.id }
         assertNotNull("Respawned monster must return to the world", respawned)
-        assertEquals("Respawned monster must preserve its exact biome level", target.level, respawned!!.level)
-        assertEquals("Respawned monster must preserve scaled maxHp", target.maxHp, respawned.maxHp)
+        val targetBiome = com.example.game.world.BiomeMonsterSpawner.resolveBiomeTypeAt(target.spawnX, target.spawnY)
+        assertTrue(
+            "Respawned species ${respawned!!.type} must belong to ${targetBiome.displayName} pool",
+            targetBiome.containsSpecies(respawned.type)
+        )
+        assertTrue(
+            "Respawned level ${respawned.level} must stay strictly inside ${targetBiome.minLevel}..${targetBiome.maxLevel}",
+            respawned.level in targetBiome.minLevel..targetBiome.maxLevel
+        )
+        assertTrue("Respawned monster must preserve scaled maxHp above base HP", respawned.maxHp > respawned.type.maxHp)
     }
 
     @Test
