@@ -198,6 +198,85 @@ data class RemotePlayerActionFxEvent(
     val toY: Int? = null
 )
 
+data class SharedLootSpawnEvent(
+    val corpseId: String,
+    val floor: Int,
+    val x: Int,
+    val y: Int,
+    val label: String,
+    val ownerPlayerId: String,
+    val ownerName: String,
+    val isDroppedBag: Boolean,
+    val monsterTypeName: String? = null,
+    val gold: Int = 0,
+    val items: List<com.example.game.model.ItemStack> = emptyList(),
+    val lockRemainingMs: Long = com.example.game.model.LOOT_OWNER_PROTECTION_MS,
+    val lifetimeRemainingMs: Long = com.example.game.model.REGULAR_CORPSE_LIFETIME_MS
+)
+
+data class SharedLootClaimEvent(
+    val corpseId: String,
+    val floor: Int,
+    val claimerId: String,
+    val claimerName: String,
+    val remainingGold: Int = 0,
+    val remainingItems: List<com.example.game.model.ItemStack> = emptyList(),
+    val emptied: Boolean = false
+)
+
+enum class TradeSessionStatus {
+    INVITING,
+    INCOMING_INVITE,
+    NEGOTIATING
+}
+
+enum class TradeSignalType {
+    INVITE,
+    ACCEPT,
+    DECLINE,
+    OFFER,
+    LOCK,
+    CONFIRM,
+    CANCEL
+}
+
+data class TradeOfferSnapshot(
+    val gold: Int = 0,
+    val items: List<com.example.game.model.ItemStack> = emptyList(),
+    val locked: Boolean = false,
+    val confirmed: Boolean = false,
+    val version: Int = 0
+)
+
+data class PlayerTradeSession(
+    val tradeId: String,
+    val partnerId: String,
+    val partnerName: String,
+    val partnerLevel: Int,
+    val partnerVocation: Vocation,
+    val status: TradeSessionStatus,
+    val expiresAtMs: Long = 0L,
+    val localOffer: TradeOfferSnapshot = TradeOfferSnapshot(),
+    val partnerOffer: TradeOfferSnapshot = TradeOfferSnapshot(),
+    val statusNotice: String? = null
+)
+
+data class TradeSignalEvent(
+    val type: TradeSignalType,
+    val tradeId: String,
+    val fromPlayerId: String,
+    val fromPlayerName: String,
+    val fromLevel: Int = 1,
+    val fromVocation: Vocation = Vocation.ADVENTURER,
+    val toPlayerId: String,
+    val gold: Int = 0,
+    val items: List<com.example.game.model.ItemStack> = emptyList(),
+    val locked: Boolean = false,
+    val confirmed: Boolean = false,
+    val offerVersion: Int = 0,
+    val reason: String? = null
+)
+
 data class MultiplayerUiState(
     val status: ConnectionStatus = ConnectionStatus.OFFLINE_SOLO,
     val isFloorHost: Boolean = true,

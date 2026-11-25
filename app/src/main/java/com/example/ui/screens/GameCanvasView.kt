@@ -66,6 +66,7 @@ import com.example.game.world.BiomeWeatherSystem
 import com.example.game.world.NpcRole
 import com.example.game.world.NpcSpot
 import com.example.game.world.WorldMaps
+import com.example.ui.theme.ExpEmerald
 import com.example.ui.theme.FireOrange
 import com.example.ui.theme.HealthCrimson
 import com.example.ui.theme.ObsidianVoid
@@ -721,6 +722,7 @@ fun GameCanvasView(
                             if (corpse.floor == st.floor && corpse.x in bounds.minTx..bounds.maxTx && corpse.y in bounds.minTy..bounds.maxTy) {
                                 drawIsometricCorpse(
                                     corpse = corpse,
+                                    localPlayerId = st.saveId,
                                     camera = worldCamera,
                                     path = reusablePath,
                                     spritePx = spritePx,
@@ -1319,6 +1321,7 @@ fun GameCanvasView(
 
 private fun DrawScope.drawIsometricCorpse(
     corpse: CorpseEntity,
+    localPlayerId: String,
     camera: IsometricCamera,
     path: Path,
     spritePx: Int,
@@ -1328,6 +1331,12 @@ private fun DrawScope.drawIsometricCorpse(
 ) {
     val c = camera.tileCenterToScreen(corpse.x.toFloat(), corpse.y.toFloat())
     val expiringSoon = !corpse.isPlayerCorpse && corpse.isExpiringSoon(now)
+    val ownerLockedForMe = corpse.isOwnerLockedFor(localPlayerId, now)
+    val isPublicOtherLoot = !corpse.isPlayerCorpse &&
+        !corpse.ownerPlayerId.isNullOrBlank() &&
+        corpse.ownerPlayerId != localPlayerId &&
+        !ownerLockedForMe
+
     if (corpse.isPlayerCorpse) {
         val pulse = if (animFrame == 0) 0.65f else 0.30f
         IsometricTileDrawer.drawRotatedQuad(
@@ -1335,6 +1344,14 @@ private fun DrawScope.drawIsometricCorpse(
             fillColor = TorchGold.copy(alpha = pulse * 0.22f),
             strokeColor = TorchGold.copy(alpha = pulse),
             strokeWidth = 3.2f
+        )
+    } else if (ownerLockedForMe) {
+        val lockPulse = ((sin(now * 0.010) + 1.0) * 0.5).toFloat()
+        IsometricTileDrawer.drawRotatedQuad(
+            this, path, camera, c.x, c.y, fracU = 0.88f, fracV = 0.88f,
+            fillColor = TorchAmber.copy(alpha = 0.12f + lockPulse * 0.14f),
+            strokeColor = TorchAmber.copy(alpha = 0.55f + lockPulse * 0.35f),
+            strokeWidth = 2.6f
         )
     } else if (expiringSoon) {
         val warnPulse = ((sin(now * 0.014) + 1.0) * 0.5).toFloat()
@@ -1345,16 +1362,41 @@ private fun DrawScope.drawIsometricCorpse(
             strokeColor = ringColor.copy(alpha = 0.55f + warnPulse * 0.42f),
             strokeWidth = 2.8f
         )
+    } else if (isPublicOtherLoot) {
+        IsometricTileDrawer.drawRotatedQuad(
+            this, path, camera, c.x, c.y, fracU = 0.84f, fracV = 0.84f,
+            fillColor = ExpEmerald.copy(alpha = 0.12f),
+            strokeColor = ExpEmerald.copy(alpha = 0.68f),
+            strokeWidth = 2.2f
+        )
+    } else if (corpse.isDroppedBag) {
+        IsometricTileDrawer.drawRotatedQuad(
+            this, path, camera, c.x, c.y, fracU = 0.82f, fracV = 0.82f,
+            fillColor = TorchGold.copy(alpha = 0.10f),
+            strokeColor = TorchGold.copy(alpha = 0.55f),
+            strokeWidth = 2.0f
+        )
     }
-    val size = (spritePx * 0.78f).roundToInt()
+
+    val size = (spritePx * if (corpse.isDroppedBag) 0.72f else 0.78f).roundToInt()
     drawImage(
-        image = EntitySpriteAtlas.corpseBitmap(corpse.isPlayerCorpse),
+        image = EntitySpriteAtlas.corpseBitmap(corpse.isPlayerCorpse || corpse.isDroppedBag),
         dstOffset = IntOffset((c.x - size * 0.5f).roundToInt(), (c.y - size * 0.65f).roundToInt()),
         dstSize = IntSize(size, size),
         filterQuality = FilterQuality.None
     )
 
-    if (expiringSoon) {
+    if (ownerLockedForMe) {
+        val remMs = corpse.ownerLockRemainingMs(localPlayerId, now)
+        val secsLeft = ((remMs + 999L) / 1000L).coerceIn(1L, 5L)
+        val rec = overlayBuffer.acquire()
+        rec.kind = NativeOverlayKind.EXPIRING_CORPSE
+        rec.screenX = c.x
+        rec.anchorY = c.y - size * 0.78f
+        rec.primaryText = "LOCK ${secsLeft}s"
+        rec.secsLeft = secsLeft
+        rec.textColorArgb = android.graphics.Color.parseColor("#FFD166")
+    } else if (expiringSoon) {
         val remMs = corpse.remainingMs(now) ?: 0L
         val secsLeft = ((remMs + 999L) / 1000L).coerceIn(1L, 15L)
         val rec = overlayBuffer.acquire()

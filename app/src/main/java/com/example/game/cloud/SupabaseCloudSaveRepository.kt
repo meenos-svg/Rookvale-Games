@@ -252,6 +252,7 @@ object CloudSavePayloadCodec {
             put("magicXp", data.skills.magic.points)
             data.boundAttackRuneId?.let { put("boundAttackRuneId", it) }
             data.boundHealRuneId?.let { put("boundHealRuneId", it) }
+            data.selectedBaitId?.let { put("selectedBaitId", it) }
             put("customHotbarSlots", JSONArray().apply {
                 val normalized = List(2) { idx -> data.customHotbarSlots.getOrNull(idx) }
                 normalized.forEach { put(it ?: JSONObject.NULL) }
@@ -412,6 +413,7 @@ object CloudSavePayloadCodec {
             questFlags = questFlags,
             boundAttackRuneId = json.optNullableString("boundAttackRuneId"),
             boundHealRuneId = json.optNullableString("boundHealRuneId") ?: "healing_rune",
+            selectedBaitId = json.optNullableString("selectedBaitId"),
             customHotbarSlots = run {
                 val arr = json.optJSONArray("customHotbarSlots")
                 List(2) { idx ->

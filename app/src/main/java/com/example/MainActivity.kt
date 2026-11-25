@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
                 val cloudAuthState by gameViewModel.cloudAuthState.collectAsStateWithLifecycle()
                 val displaySettings by gameViewModel.displaySettings.collectAsStateWithLifecycle()
                 val adminAuditState by gameViewModel.adminAuditState.collectAsStateWithLifecycle()
+                val tradeSession by gameViewModel.tradeSession.collectAsStateWithLifecycle()
 
                 when (screen) {
                     AppScreen.TITLE_AND_CREATE -> {
@@ -72,7 +73,9 @@ class MainActivity : ComponentActivity() {
                     }
                     AppScreen.PLAYING -> {
                         BackHandler {
-                            if (world.activePanel != ActivePanel.NONE) {
+                            if (tradeSession != null) {
+                                gameViewModel.cancelTrade()
+                            } else if (world.activePanel != ActivePanel.NONE) {
                                 gameViewModel.closePanel()
                             } else {
                                 gameViewModel.returnToTitle()
@@ -142,7 +145,18 @@ class MainActivity : ComponentActivity() {
                             onAdminSetWeatherOverride = gameViewModel::onAdminSetWeatherOverride,
                             onAdminTeleport = gameViewModel::onAdminTeleport,
                             onSelectAdminAuditFilter = gameViewModel::onSelectAdminAuditFilter,
-                            onRefreshAdminAuditLog = gameViewModel::onRefreshAdminAuditLog
+                            onRefreshAdminAuditLog = gameViewModel::onRefreshAdminAuditLog,
+                            tradeSession = tradeSession,
+                            onDismissInspectedPlayer = gameViewModel::dismissInspectedPlayer,
+                            onRequestTrade = gameViewModel::requestTradeWithPlayer,
+                            onAcceptTrade = gameViewModel::acceptTradeInvite,
+                            onDeclineTrade = gameViewModel::declineTradeInvite,
+                            onCancelTrade = { gameViewModel.cancelTrade() },
+                            onAddTradeItem = gameViewModel::addTradeItem,
+                            onRemoveTradeItem = gameViewModel::removeTradeItem,
+                            onSetTradeGold = gameViewModel::setTradeGold,
+                            onToggleTradeLock = gameViewModel::toggleTradeLock,
+                            onConfirmTrade = gameViewModel::confirmTrade
                         )
                     }
                 }

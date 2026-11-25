@@ -36,7 +36,19 @@ object ItemCatalog {
         ItemDefinition("hmm_rune", "Heavy Magic Missile", ItemCategory.RUNE_ATTACK, 1.2, sellPrice = 24, attack = 48, range = 5, requiredMagicLevel = 7, runeTier = 2, manaCost = 14, stackable = true, description = "Tier 2 offensive rune (Magic Lv 7). Piercing lightning bolt with arcane shock."),
         ItemDefinition("fireball_rune", "Great Fireball Rune", ItemCategory.RUNE_ATTACK, 1.3, sellPrice = 42, attack = 68, range = 5, requiredMagicLevel = 12, aoeRadius = 1, runeTier = 3, manaCost = 22, stackable = true, description = "Tier 3 AoE rune (Magic Lv 12). Unleashes a 3x3 fiery splash blast around your target."),
         ItemDefinition("sd_rune", "Sudden Death Rune", ItemCategory.RUNE_ATTACK, 1.4, sellPrice = 75, attack = 108, range = 5, requiredMagicLevel = 15, aoeRadius = 1, runeTier = 4, manaCost = 35, stackable = true, description = "Tier 4 master rune (Magic Lv 15). Devastating death blast & shockwave for bosses."),
-        ItemDefinition("fresh_fish", "Fresh Fish", ItemCategory.FOOD, 5.2, buyPrice = 12, sellPrice = 6, restoreAmount = 35, stackable = true, description = "Caught at Rookvale Pier. Restores 35 HP and 20 MP."),
+        ItemDefinition("fresh_fish", "Fresh Fish", ItemCategory.FOOD, 5.2, buyPrice = 12, sellPrice = 6, requiredFishingLevel = 10, fishingTier = 1, restoreAmount = 35, stackable = true, biomeClass = BiomeEquipmentClass.HEARTLAND, description = "Tier 1 river catch (Fishing Lv 10, Garden Worm). Restores 35 HP and 17 MP."),
+        ItemDefinition("silver_trout", "Silver Trout", ItemCategory.FOOD, 6.0, sellPrice = 14, requiredFishingLevel = 15, fishingTier = 2, restoreAmount = 55, stackable = true, biomeClass = BiomeEquipmentClass.HEARTLAND, description = "Tier 2 glimmering stream trout (Fishing Lv 15, Dew Nightcrawler). Restores 55 HP and 27 MP."),
+        ItemDefinition("marsh_pike", "Marsh Pike", ItemCategory.FOOD, 7.2, sellPrice = 26, requiredFishingLevel = 22, fishingTier = 3, restoreAmount = 85, stackable = true, biomeClass = BiomeEquipmentClass.MIRE_WOVEN, description = "Tier 3 fanged mire predator (Fishing Lv 22, Mire Bloodworm). Restores 85 HP and 42 MP."),
+        ItemDefinition("sunfin_snapper", "Sunfin Snapper", ItemCategory.FOOD, 8.4, sellPrice = 44, requiredFishingLevel = 30, fishingTier = 4, restoreAmount = 120, stackable = true, biomeClass = BiomeEquipmentClass.VESPERITE_SUNSCORCH, description = "Tier 4 golden oasis snapper (Fishing Lv 30, Dune Sandworm). Restores 120 HP and 60 MP."),
+        ItemDefinition("glacier_salmon", "Glacier Salmon", ItemCategory.FOOD, 9.6, sellPrice = 68, requiredFishingLevel = 40, fishingTier = 5, restoreAmount = 165, stackable = true, biomeClass = BiomeEquipmentClass.RIME_PLATE, description = "Tier 5 glacial run salmon (Fishing Lv 40, Frost Glowworm). Restores 165 HP and 82 MP."),
+        ItemDefinition("emberfin_sturgeon", "Emberfin Sturgeon", ItemCategory.FOOD, 11.0, sellPrice = 105, requiredFishingLevel = 50, fishingTier = 6, restoreAmount = 220, stackable = true, biomeClass = BiomeEquipmentClass.CINDERITE_ASHEN, description = "Tier 6 volcanic apex sturgeon (Fishing Lv 50, Cinder Emberworm). Restores 220 HP and 110 MP."),
+        // --- 6 Realistic Fishing Bait Worms (Shop + Digging Ore Veins + Chopping Trees) ---
+        ItemDefinition("garden_worm", "Garden Worm", ItemCategory.FISHING_BAIT, 0.2, buyPrice = 2, sellPrice = 1, requiredFishingLevel = 10, fishingTier = 1, baitTargetFishId = "fresh_fish", stackable = true, biomeClass = BiomeEquipmentClass.HEARTLAND, description = "Tier 1 bait (Fishing Lv 10). Catches Fresh Fish (+35 HP). Found digging Heartland soil & chopping trees; consumed only on catch."),
+        ItemDefinition("dew_nightcrawler", "Dew Nightcrawler", ItemCategory.FISHING_BAIT, 0.2, buyPrice = 6, sellPrice = 2, requiredFishingLevel = 15, fishingTier = 2, baitTargetFishId = "silver_trout", stackable = true, biomeClass = BiomeEquipmentClass.HEARTLAND, description = "Tier 2 bait (Fishing Lv 15). Catches Silver Trout (+55 HP). Found digging Bog Iron & Heartland trees; consumed only on catch."),
+        ItemDefinition("mire_bloodworm", "Mire Bloodworm", ItemCategory.FISHING_BAIT, 0.2, buyPrice = 14, sellPrice = 5, requiredFishingLevel = 22, fishingTier = 3, baitTargetFishId = "marsh_pike", stackable = true, biomeClass = BiomeEquipmentClass.MIRE_WOVEN, description = "Tier 3 bait (Fishing Lv 22). Catches Marsh Pike (+85 HP). Found digging Mire veins & Marsh trees; consumed only on catch."),
+        ItemDefinition("dune_sandworm", "Dune Sandworm", ItemCategory.FISHING_BAIT, 0.2, buyPrice = 26, sellPrice = 10, requiredFishingLevel = 30, fishingTier = 4, baitTargetFishId = "sunfin_snapper", stackable = true, biomeClass = BiomeEquipmentClass.VESPERITE_SUNSCORCH, description = "Tier 4 bait (Fishing Lv 30). Catches Sunfin Snapper (+120 HP). Found digging Vesperite & Sunscorch trees; consumed only on catch."),
+        ItemDefinition("frost_glowworm", "Frost Glowworm", ItemCategory.FISHING_BAIT, 0.2, buyPrice = 44, sellPrice = 18, requiredFishingLevel = 40, fishingTier = 5, baitTargetFishId = "glacier_salmon", stackable = true, biomeClass = BiomeEquipmentClass.RIME_PLATE, description = "Tier 5 bait (Fishing Lv 40). Catches Glacier Salmon (+165 HP). Found digging Frost veins & Boreal trees; consumed only on catch."),
+        ItemDefinition("cinder_emberworm", "Cinder Emberworm", ItemCategory.FISHING_BAIT, 0.2, buyPrice = 70, sellPrice = 28, requiredFishingLevel = 50, fishingTier = 6, baitTargetFishId = "emberfin_sturgeon", stackable = true, biomeClass = BiomeEquipmentClass.CINDERITE_ASHEN, description = "Tier 6 bait (Fishing Lv 50). Catches Emberfin Sturgeon (+220 HP). Found digging Cinderite & Ashen trees; consumed only on catch."),
         ItemDefinition("fresh_meat", "Fresh Meat", ItemCategory.FOOD, 6.0, buyPrice = 0, sellPrice = 5, restoreAmount = 32, stackable = true, description = "Hearty wild game meat dropped by outskirts critters. Restores 32 HP."),
         ItemDefinition("dragon_ham", "Wyrm Haunch", ItemCategory.FOOD, 12.0, buyPrice = 0, sellPrice = 28, restoreAmount = 85, stackable = true, description = "Rich roasted meat. Restores 85 HP and 45 MP."),
         ItemDefinition("cheese", "Cellar Curd", ItemCategory.FOOD, 4.0, buyPrice = 6, sellPrice = 2, restoreAmount = 22, stackable = true, description = "Simple dungeon rations. Restores 22 HP."),
@@ -836,6 +848,12 @@ object ItemCatalog {
         "bronze_pickaxe",
         "rope",
         "fishing_rod",
+        "garden_worm",
+        "dew_nightcrawler",
+        "mire_bloodworm",
+        "dune_sandworm",
+        "frost_glowworm",
+        "cinder_emberworm",
         "steel_shield",
         "viking_helmet",
         "brass_armor",
@@ -852,6 +870,74 @@ object ItemCatalog {
     }
 
     fun get(id: String): ItemDefinition = all[id] ?: all[migrateLegacyItemId(id)] ?: all.getValue("cheese")
+}
+
+object FishingCatalog {
+    val tiers: List<FishingTierSpec> = listOf(
+        FishingTierSpec(
+            tier = 1,
+            baitId = "garden_worm",
+            fishId = "fresh_fish",
+            requiredFishingLevel = 10,
+            baseCatchChance = 0.44,
+            catchXpPoints = 5.5,
+            missXpPoints = 2.0
+        ),
+        FishingTierSpec(
+            tier = 2,
+            baitId = "dew_nightcrawler",
+            fishId = "silver_trout",
+            requiredFishingLevel = 15,
+            baseCatchChance = 0.42,
+            catchXpPoints = 9.0,
+            missXpPoints = 3.0
+        ),
+        FishingTierSpec(
+            tier = 3,
+            baitId = "mire_bloodworm",
+            fishId = "marsh_pike",
+            requiredFishingLevel = 22,
+            baseCatchChance = 0.40,
+            catchXpPoints = 14.0,
+            missXpPoints = 4.2
+        ),
+        FishingTierSpec(
+            tier = 4,
+            baitId = "dune_sandworm",
+            fishId = "sunfin_snapper",
+            requiredFishingLevel = 30,
+            baseCatchChance = 0.38,
+            catchXpPoints = 20.5,
+            missXpPoints = 5.5
+        ),
+        FishingTierSpec(
+            tier = 5,
+            baitId = "frost_glowworm",
+            fishId = "glacier_salmon",
+            requiredFishingLevel = 40,
+            baseCatchChance = 0.36,
+            catchXpPoints = 28.0,
+            missXpPoints = 7.0
+        ),
+        FishingTierSpec(
+            tier = 6,
+            baitId = "cinder_emberworm",
+            fishId = "emberfin_sturgeon",
+            requiredFishingLevel = 50,
+            baseCatchChance = 0.34,
+            catchXpPoints = 38.0,
+            missXpPoints = 9.0
+        )
+    )
+
+    private val byBaitId: Map<String, FishingTierSpec> = tiers.associateBy { it.baitId }
+    private val byFishId: Map<String, FishingTierSpec> = tiers.associateBy { it.fishId }
+
+    val allBaitIds: List<String> = tiers.map { it.baitId }
+    val allFishIds: List<String> = tiers.map { it.fishId }
+
+    fun tierForBait(baitId: String?): FishingTierSpec? = baitId?.let { byBaitId[it] }
+    fun tierForFish(fishId: String?): FishingTierSpec? = fishId?.let { byFishId[it] }
 }
 
 object RecipeCatalog {

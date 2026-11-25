@@ -55,7 +55,11 @@ import com.example.game.model.GraphicsQuality
 import com.example.game.model.Vocation
 import com.example.game.model.normalizeRegionId
 import com.example.game.multiplayer.ChatChannel
+import com.example.game.multiplayer.ConnectionStatus
 import com.example.game.multiplayer.MultiplayerUiState
+import com.example.game.multiplayer.PlayerTradeSession
+import com.example.game.multiplayer.RemotePlayerState
+import com.example.game.multiplayer.TradeSessionStatus
 import com.example.game.world.BiomeWeatherSystem
 import com.example.game.world.WeatherType
 import com.example.ui.theme.BasaltDark
@@ -136,7 +140,18 @@ fun GameScreen(
     onAdminSetWeatherOverride: (WeatherType?) -> Unit = {},
     onAdminTeleport: (Int, Int, Int, String?) -> Unit = { _, _, _, _ -> },
     onSelectAdminAuditFilter: (AdminAuditAction?) -> Unit = {},
-    onRefreshAdminAuditLog: () -> Unit = {}
+    onRefreshAdminAuditLog: () -> Unit = {},
+    tradeSession: PlayerTradeSession? = null,
+    onDismissInspectedPlayer: () -> Unit = {},
+    onRequestTrade: (RemotePlayerState) -> Unit = {},
+    onAcceptTrade: () -> Unit = {},
+    onDeclineTrade: () -> Unit = {},
+    onCancelTrade: () -> Unit = {},
+    onAddTradeItem: (String, Int) -> Unit = { _, _ -> },
+    onRemoveTradeItem: (String, Int) -> Unit = { _, _ -> },
+    onSetTradeGold: (Int) -> Unit = {},
+    onToggleTradeLock: () -> Unit = {},
+    onConfirmTrade: () -> Unit = {}
 ) {
     val cameraYawState = rememberSaveable { mutableFloatStateOf(IsometricCamera.DEFAULT_YAW_DEG) }
     var rotateDragMode by rememberSaveable { mutableStateOf(false) }
@@ -313,6 +328,10 @@ fun GameScreen(
                     onCraftRecipe = onCraftRecipe,
                     onBindRune = onBindRune,
                     onWalkToTile = onWalkToTile,
+                    onTradePlayer = { peer ->
+                        onClosePanel()
+                        onRequestTrade(peer)
+                    },
                     onBoardHarborFerry = onBoardHarborFerry,
                     onBuyBackReaperItem = onBuyBackReaperItem,
                     onBuyBackAllReaperItems = onBuyBackAllReaperItems,
@@ -330,6 +349,73 @@ fun GameScreen(
                     onAdminGrantEquipment = onAdminGrantEquipment,
                     onToggleAdminSpectator = onToggleAdminSpectator
                 )
+            }
+
+            // FLOATING ADVENTURER ACTION CARD (Shown when tapping a remote player on the map)
+            val inspectedPeer = remember(state.inspectedPlayerId, multiplayerState.remotePlayers, multiplayerState.realmOnlinePlayers) {
+                val id = state.inspectedPlayerId ?: return@remember null
+                multiplayerState.remotePlayers.firstOrNull { it.playerId == id }
+                    ?: multiplayerState.realmOnlinePlayers.firstOrNull { it.playerId == id }
+            }
+            AnimatedVisibility(
+                visible = inspectedPeer != null && tradeSession == null && state.activePanel == ActivePanel.NONE,
+                enter = fadeIn() + slideInVertically { it / 2 },
+                exit = fadeOut() + slideOutVertically { it / 2 },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 78.dp)
+            ) {
+                if (inspectedPeer != null) {
+                    AdventurerActionCard(
+                        peer = inspectedPeer,
+                        canTrade = multiplayerState.status == ConnectionStatus.ONLINE,
+                        onTrade = { onRequestTrade(inspectedPeer) },
+                        onDismiss = onDismissInspectedPlayer
+                    )
+                }
+            }
+
+            // TOP-CENTER FLOATING TRADE INVITE / WAITING BANNER
+            AnimatedVisibility(
+                visible = tradeSession != null && tradeSession.status != TradeSessionStatus.NEGOTIATING,
+                enter = fadeIn() + slideInVertically { -it },
+                exit = fadeOut() + slideOutVertically { -it },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 48.dp, start = 16.dp, end = 16.dp)
+            ) {
+                if (tradeSession != null && tradeSession.status != TradeSessionStatus.NEGOTIATING) {
+                    TradeInviteBanner(
+                        session = tradeSession,
+                        onAccept = onAcceptTrade,
+                        onDecline = onDeclineTrade,
+                        onCancel = onCancelTrade
+                    )
+                }
+            }
+
+            // CENTERED DUAL-PANE PLAYER-TO-PLAYER TRADE LEDGER MODAL
+            AnimatedVisibility(
+                visible = tradeSession?.status == TradeSessionStatus.NEGOTIATING,
+                enter = fadeIn() + scaleIn(initialScale = 0.94f),
+                exit = fadeOut() + scaleOut(targetScale = 0.94f),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .widthIn(min = 340.dp, max = 600.dp)
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                if (tradeSession != null && tradeSession.status == TradeSessionStatus.NEGOTIATING) {
+                    PlayerTradeLedgerModal(
+                        state = state,
+                        session = tradeSession,
+                        onAddItem = onAddTradeItem,
+                        onRemoveItem = onRemoveTradeItem,
+                        onSetGold = onSetTradeGold,
+                        onToggleLock = onToggleTradeLock,
+                        onConfirm = onConfirmTrade,
+                        onCancel = onCancelTrade
+                    )
+                }
             }
         }
     }

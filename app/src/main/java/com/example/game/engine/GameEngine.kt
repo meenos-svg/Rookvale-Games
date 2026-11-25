@@ -9,6 +9,8 @@ import com.example.game.multiplayer.RemoteMonsterAttackEvent
 import com.example.game.multiplayer.RemoteMonsterHitEvent
 import com.example.game.multiplayer.RemotePlayerActionFxEvent
 import com.example.game.multiplayer.RemotePlayerState
+import com.example.game.multiplayer.SharedLootClaimEvent
+import com.example.game.multiplayer.SharedLootSpawnEvent
 import com.example.game.multiplayer.SyncedMonsterSnapshot
 import com.example.game.world.BiomeProgressionRules
 import com.example.game.world.NpcRole
@@ -71,14 +73,16 @@ object GameEngine {
                 ItemStack("mana_potion", 2),
                 ItemStack("magic_dart_rune", 3),
                 ItemStack("blank_rune", 2),
-                ItemStack("cheese", 3)
+                ItemStack("cheese", 3),
+                ItemStack("garden_worm", 15)
             )
             Vocation.KNIGHT -> listOf(
                 ItemStack("health_potion", 4),
                 ItemStack("mana_potion", 1),
                 ItemStack("magic_dart_rune", 2),
                 ItemStack("blank_rune", 1),
-                ItemStack("cheese", 3)
+                ItemStack("cheese", 3),
+                ItemStack("garden_worm", 15)
             )
             Vocation.PALADIN -> listOf(
                 ItemStack("ochre_shafts", 45),
@@ -86,14 +90,16 @@ object GameEngine {
                 ItemStack("mana_potion", 2),
                 ItemStack("magic_dart_rune", 4),
                 ItemStack("blank_rune", 2),
-                ItemStack("cheese", 3)
+                ItemStack("cheese", 3),
+                ItemStack("garden_worm", 15)
             )
             Vocation.MAGE -> listOf(
                 ItemStack("health_potion", 2),
                 ItemStack("mana_potion", 5),
                 ItemStack("magic_dart_rune", 6),
                 ItemStack("blank_rune", 4),
-                ItemStack("cheese", 2)
+                ItemStack("cheese", 2),
+                ItemStack("garden_worm", 15)
             )
         }
         val introLine = if (vocation == Vocation.ADVENTURER) {
@@ -144,6 +150,7 @@ object GameEngine {
             depot = listOf(ItemStack("health_potion", 2), ItemStack("rope", 1)),
             monsters = WorldMaps.initialMonsters(),
             oreNodes = WorldMaps.initialOreNodes(),
+            selectedBaitId = "garden_worm",
             statusLog = introLog
         )
     }
@@ -304,6 +311,7 @@ object GameEngine {
             questFlags = save.questFlags,
             boundAttackRuneId = save.boundAttackRuneId ?: "magic_dart_rune",
             boundHealRuneId = save.boundHealRuneId ?: "healing_rune",
+            selectedBaitId = save.selectedBaitId,
             customHotbarSlots = List(2) { idx -> save.customHotbarSlots.getOrNull(idx) },
             statusLog = listOf("Loaded ${save.name} (Lvl ${save.level} ${voc.displayName}).$notes")
         )
@@ -344,6 +352,7 @@ object GameEngine {
             questFlags = state.questFlags.toMap(),
             boundAttackRuneId = state.boundAttackRuneId,
             boundHealRuneId = state.boundHealRuneId,
+            selectedBaitId = state.selectedBaitId,
             customHotbarSlots = List(2) { idx -> state.customHotbarSlots.getOrNull(idx) },
             regionId = normalizeRegionId(state.regionId),
             facingName = Direction.SOUTH.name
@@ -403,12 +412,12 @@ object GameEngine {
         // Any tap on a non-monster tile cancels melee auto-follow so the player can disengage freely
         val baseState = if (dismissedState.autoFollowTarget) dismissedState.copy(autoFollowTarget = false) else dismissedState
 
-        // 1.5 Tap Remote Player -> Tibia-style Look / Inspect ("You see PlayerName (Level X Vocation).")
+        // 1.5 Tap Remote Player -> Tibia-style Look / Inspect + Adventurer Action Card (Trade)
         val tappedPlayer = remotePlayersOnFloor.firstOrNull { it.floor == baseState.floor && it.x == tx && it.y == ty }
         if (tappedPlayer != null) {
             return baseState.copy(
                 inspectedPlayerId = tappedPlayer.playerId,
-                inspectedPlayerUntilMs = nowMs + 2600L,
+                inspectedPlayerUntilMs = nowMs + 8_000L,
                 walkPath = emptyList()
             ).addLogInternal("You see ${tappedPlayer.name} (Level ${tappedPlayer.level} ${tappedPlayer.vocation.displayName}).")
         }
@@ -1294,8 +1303,13 @@ object GameEngine {
             )
         }
 
-        // Monster slain: local player contributed, so spawn their personal instanced loot drop
-        val corpse = generateMonsterCorpse(m, nowMs)
+        // Monster slain: spawn loot corpse protected for the killer for 5s, then public for anyone nearby
+        val corpse = generateMonsterCorpse(
+            m = m,
+            nowMs = nowMs,
+            ownerPlayerId = s.saveId,
+            ownerName = s.playerName
+        )
         val remainingMonsters = s.monsters.filterNot { it.id == monsterId }
         val respawnTicks = if (m.type.isBoss) 300 else 32
         val respawnAtMs = if (m.type.isBoss) nowMs + BOSS_RESPAWN_MS else 0L
@@ -1328,6 +1342,7 @@ object GameEngine {
             targetMonsterId = if (s.targetMonsterId == monsterId) null else s.targetMonsterId,
             autoFollowTarget = if (s.targetMonsterId == monsterId) false else s.autoFollowTarget,
             corpses = (s.corpses + corpse).takeLast(38),
+            outboundLootSpawns = s.outboundLootSpawns + corpse,
             pendingRespawns = updatedRespawns,
             questFlags = bossFlags,
             outboundSystemAlerts = s.outboundSystemAlerts + bossAlert
@@ -1396,8 +1411,16 @@ object GameEngine {
         )
 
         if (localContributed) {
-            val personalCorpse = generateMonsterCorpse(m, nowMs)
-            s = s.copy(corpses = (s.corpses + personalCorpse).takeLast(38))
+            val personalCorpse = generateMonsterCorpse(
+                m = m,
+                nowMs = nowMs,
+                ownerPlayerId = localPlayerId,
+                ownerName = s.playerName
+            )
+            s = s.copy(
+                corpses = (s.corpses + personalCorpse).takeLast(38),
+                outboundLootSpawns = s.outboundLootSpawns + personalCorpse
+            )
             s = grantExperience(s, m.scaledXpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
             s = s.addLogInternal("Co-op kill: ${m.type.displayName}! (+${m.scaledXpReward} XP) Personal loot dropped.")
         } else {
@@ -1427,8 +1450,16 @@ object GameEngine {
         // Check if any monster we contributed to died on the host while a hit packet was missed
         for ((id, oldM) in existingOnFloor) {
             if (id !in syncedIds && localPlayerId.isNotBlank() && localPlayerId in oldM.contributors) {
-                val personalCorpse = generateMonsterCorpse(oldM, nowMs)
-                s = s.copy(corpses = (s.corpses + personalCorpse).takeLast(38))
+                val personalCorpse = generateMonsterCorpse(
+                    m = oldM,
+                    nowMs = nowMs,
+                    ownerPlayerId = localPlayerId,
+                    ownerName = s.playerName
+                )
+                s = s.copy(
+                    corpses = (s.corpses + personalCorpse).takeLast(38),
+                    outboundLootSpawns = s.outboundLootSpawns + personalCorpse
+                )
                 s = grantExperience(s, oldM.scaledXpReward.toLong(), oldM.x.toFloat(), oldM.y.toFloat(), nowMs)
                 s = s.addLogInternal("Co-op kill: ${oldM.type.displayName}! (+${oldM.scaledXpReward} XP) Personal loot dropped.")
             }
@@ -1645,9 +1676,15 @@ object GameEngine {
 
     /**
      * Generates a slain monster corpse using the data-driven [MonsterLootTable] registry and
-     * stamps its auto-despawn expiration timer (`90s` regular monsters, `180s` Dungeon Bosses).
+     * stamps its auto-despawn expiration timer (`90s` regular monsters, `180s` Dungeon Bosses)
+     * plus its 5-second owner-only loot protection window (`LOOT_OWNER_PROTECTION_MS`).
      */
-    fun generateMonsterCorpse(m: MonsterEntity, nowMs: Long = 0L): CorpseEntity {
+    fun generateMonsterCorpse(
+        m: MonsterEntity,
+        nowMs: Long = 0L,
+        ownerPlayerId: String? = null,
+        ownerName: String? = null
+    ): CorpseEntity {
         val rolled = MonsterLootTable.rollLoot(m.type)
         val scaledGold = if (m.scaledGoldMax > m.type.goldMax) {
             Random.nextInt(m.scaledGoldMin, m.scaledGoldMax + 1)
@@ -1656,6 +1693,7 @@ object GameEngine {
         }
         val lifetimeMs = if (m.type.isBoss) BOSS_CORPSE_LIFETIME_MS else REGULAR_CORPSE_LIFETIME_MS
         val expiresAt = if (nowMs > 0L) nowMs + lifetimeMs else 0L
+        val publicAt = if (nowMs > 0L && !ownerPlayerId.isNullOrBlank()) nowMs + LOOT_OWNER_PROTECTION_MS else 0L
         return CorpseEntity(
             id = "m_${UUID.randomUUID()}",
             floor = m.floor,
@@ -1667,7 +1705,11 @@ object GameEngine {
             gold = scaledGold,
             items = rolled.items,
             createdAtMs = nowMs,
-            expiresAtMs = expiresAt
+            expiresAtMs = expiresAt,
+            ownerPlayerId = ownerPlayerId?.takeIf { it.isNotBlank() },
+            ownerName = ownerName?.takeIf { it.isNotBlank() },
+            publicAtMs = publicAt,
+            isDroppedBag = false
         )
     }
 
@@ -1944,23 +1986,110 @@ object GameEngine {
             .addLogInternal("Climbed up the rope-hole to ${destFloor.name}!")
     }
 
-    fun attemptFishing(state: GameWorldState, waterX: Int, waterY: Int, nowMs: Long): GameWorldState {
-        if (!state.hasItem("fishing_rod")) return state.addLogInternal("You need a Fishing Rod in your backpack to fish.")
-        var next = state.addProjectileInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), waterX.toFloat(), waterY.toFloat(), ProjectileKind.SPLASH, nowMs, 340L)
-        next = advanceSkillPublic(next, SkillType.FISHING, 4.5, nowMs)
-        val catchChance = (0.38 + (next.skills.fishing.level - 10) * 0.03).coerceAtMost(0.85)
-        if (Random.nextDouble() <= catchChance) {
-            val fishDef = ItemCatalog.get("fresh_fish")
-            if (next.remainingCapOz() < fishDef.weightOz) {
-                return next.addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "CAP FULL", FloatingTextKind.INFO, nowMs)
-                    .addLogInternal("A fish bit, but you lack Cap (${fishDef.weightOz} oz needed)!")
-            }
-            next = next.copy(backpack = addItemPublic(next.backpack, "fresh_fish", 1))
-                .addFloatingInternal(state.floor, waterX.toFloat(), waterY.toFloat(), "+1 Fish!", FloatingTextKind.HEAL, nowMs)
-                .addLogInternal("Caught a Fresh Fish! (Fishing ${next.skills.fishing.level})")
+    fun selectFishingBait(state: GameWorldState, baitId: String, nowMs: Long = 0L): GameWorldState {
+        val tier = FishingCatalog.tierForBait(baitId) ?: return state
+        if (!state.hasItem(baitId)) {
+            val name = ItemCatalog.get(baitId).name
+            return state.addLogInternal("You don't have any $name in your backpack.")
+        }
+        val baitDef = ItemCatalog.get(baitId)
+        val fishDef = ItemCatalog.get(tier.fishId)
+        val count = state.itemCount(baitId)
+        val fishingLevel = state.skills.fishing.level
+        val next = state.copy(selectedBaitId = baitId)
+        return if (!state.isAdmin && fishingLevel < tier.requiredFishingLevel) {
+            next
+                .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "BAIT: ${baitDef.name}", FloatingTextKind.INFO, nowMs)
+                .addLogInternal("Selected ${baitDef.name} (x$count) as Active Bait — catches ${fishDef.name}, but requires Fishing Lv ${tier.requiredFishingLevel} (you: Lv $fishingLevel).")
         } else {
-            next = next.addFloatingInternal(state.floor, waterX.toFloat(), waterY.toFloat(), "Splash...", FloatingTextKind.INFO, nowMs)
-                .addLogInternal("Cast your line into the river... no bite yet.")
+            next
+                .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "BAIT: ${baitDef.name}", FloatingTextKind.INFO, nowMs)
+                .addLogInternal("Baited hook with ${baitDef.name} (x$count) — targets ${fishDef.name} (+${fishDef.restoreAmount} HP).")
+        }
+    }
+
+    fun attemptFishing(
+        state: GameWorldState,
+        waterX: Int,
+        waterY: Int,
+        nowMs: Long,
+        catchRollOverride: Double? = null
+    ): GameWorldState {
+        if (!state.hasItem("fishing_rod")) {
+            return state.addLogInternal("You need a Fishing Rod in your backpack or Tool Bag to fish.")
+        }
+
+        val activeBaitId = state.selectedBaitId
+        val tier = FishingCatalog.tierForBait(activeBaitId)
+        if (tier == null || activeBaitId == null) {
+            val hint = if (state.carriedFishingBaitStacks().isNotEmpty()) {
+                "No Active Bait selected! Open your Backpack and tap a worm to set it as Active Bait."
+            } else {
+                "You have no fishing worms! Buy worms from Alaric's Shop or dig ore veins & chop trees to find them."
+            }
+            return state
+                .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "PICK BAIT", FloatingTextKind.INFO, nowMs)
+                .addLogInternal(hint)
+        }
+
+        val baitDef = ItemCatalog.get(tier.baitId)
+        val fishDef = ItemCatalog.get(tier.fishId)
+        val currentBaitCount = state.itemCount(tier.baitId)
+        if (currentBaitCount <= 0) {
+            val otherHint = if (state.carriedFishingBaitStacks().isNotEmpty()) {
+                "Pick another worm in your Backpack."
+            } else {
+                "Buy worms at Alaric's Shop or dig ore veins & chop trees to find more."
+            }
+            return state
+                .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "NO WORMS", FloatingTextKind.INFO, nowMs)
+                .addLogInternal("Out of ${baitDef.name}! $otherHint")
+        }
+
+        val currentFishingLevel = state.skills.fishing.level
+        if (!state.isAdmin && currentFishingLevel < tier.requiredFishingLevel) {
+            return state
+                .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "FISHING LV ${tier.requiredFishingLevel}", FloatingTextKind.INFO, nowMs)
+                .addLogInternal("Need Fishing Lv ${tier.requiredFishingLevel} to fish with ${baitDef.name} for ${fishDef.name} (you: Lv $currentFishingLevel). Select a lower worm in your Backpack.")
+        }
+
+        var next = state.copy(
+            playerFacing = directionToward(state.playerX, state.playerY, waterX, waterY)
+        ).addProjectileInternal(
+            state.floor,
+            state.playerX.toFloat(),
+            state.playerY.toFloat(),
+            waterX.toFloat(),
+            waterY.toFloat(),
+            ProjectileKind.SPLASH,
+            nowMs,
+            340L
+        )
+
+        val levelAdvantage = (currentFishingLevel - tier.requiredFishingLevel).coerceAtLeast(0)
+        val catchChance = (tier.baseCatchChance + levelAdvantage * 0.025).coerceIn(0.28, 0.88)
+        val roll = catchRollOverride ?: Random.nextDouble()
+
+        if (roll <= catchChance) {
+            // Do not consume bait if carrying capacity cannot hold the fish
+            val netExtraWeight = (fishDef.weightOz - baitDef.weightOz).coerceAtLeast(0.0)
+            if (next.remainingCapOz() < netExtraWeight) {
+                return next
+                    .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "CAP FULL", FloatingTextKind.INFO, nowMs)
+                    .addLogInternal("A ${fishDef.name} bit, but you lack Cap (${fishDef.weightOz} oz needed)! No worm lost.")
+            }
+            next = advanceSkillPublic(next, SkillType.FISHING, tier.catchXpPoints, nowMs)
+            val afterBaitRemoved = removeItemPublic(next.backpack, tier.baitId, 1)
+            val updatedBackpack = addItemPublic(afterBaitRemoved, tier.fishId, 1)
+            val remainingWorms = updatedBackpack.filter { it.itemId == tier.baitId }.sumOf { it.count }
+            next = next.copy(backpack = updatedBackpack)
+                .addFloatingInternal(state.floor, waterX.toFloat(), waterY.toFloat(), "+1 ${fishDef.name}!", FloatingTextKind.HEAL, nowMs)
+                .addLogInternal("Caught a ${fishDef.name}! (-1 ${baitDef.name}, $remainingWorms left • Fishing ${next.skills.fishing.level})")
+        } else {
+            // Miss: ZERO worms consumed; still award modest Fishing skill practice XP
+            next = advanceSkillPublic(next, SkillType.FISHING, tier.missXpPoints, nowMs)
+                .addFloatingInternal(state.floor, waterX.toFloat(), waterY.toFloat(), "Splash...", FloatingTextKind.INFO, nowMs)
+                .addLogInternal("Cast with ${baitDef.name}... no bite yet (0 worms used).")
         }
         return next
     }
@@ -3061,11 +3190,14 @@ object GameEngine {
                 val newHp = (state.hp + def.restoreAmount).coerceAtMost(state.effectiveMaxHp())
                 val newMp = (state.mp + def.restoreAmount / 2).coerceAtMost(state.maxMp)
                 val healed = newHp - state.hp
+                val healedMp = newMp - state.mp
+                val healLabel = if (healedMp > 0) "+$healed HP / +$healedMp MP" else "+$healed HP"
                 state.copy(hp = newHp, mp = newMp, backpack = removeItemPublic(state.backpack, itemId, 1))
                     .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "+$healed HP", FloatingTextKind.HEAL, nowMs)
                     .queuePlayerFx("+$healed HP", FloatingTextKind.HEAL, PlayerActionState.HEALING)
-                    .addLogInternal("Ate ${def.name}.")
+                    .addLogInternal("Ate ${def.name} ($healLabel).")
             }
+            ItemCategory.FISHING_BAIT -> selectFishingBait(state, itemId, nowMs)
             ItemCategory.ADMIN_SCROLL -> {
                 if (!state.isAdmin) {
                     return state.addLogInternal("Only the Admin can unseal the Sovereign's Scroll.")
@@ -3139,12 +3271,38 @@ object GameEngine {
             .addLogInternal("Unequipped ${ItemCatalog.get(equippedId).name}.")
     }
 
-    fun dropItem(state: GameWorldState, itemId: String): GameWorldState {
+    fun dropItem(state: GameWorldState, itemId: String, nowMs: Long = 0L): GameWorldState {
         if (!state.hasItem(itemId)) return state
         val def = ItemCatalog.get(itemId)
         if (def.adminOnly) return state.addLogInternal("${def.name} is bound to the Admin and cannot be dropped.")
-        return removeCarriedItem(state, itemId, 1)
-            .addLogInternal("Dropped ${def.name}.")
+        val removed = removeCarriedItem(state, itemId, 1)
+        val ownerId = state.saveId.takeIf { it.isNotBlank() }
+        val ownerLabel = state.playerName.ifBlank { "Adventurer" }
+        val publicAt = if (nowMs > 0L && ownerId != null) nowMs + LOOT_OWNER_PROTECTION_MS else 0L
+        val expiresAt = if (nowMs > 0L) nowMs + REGULAR_CORPSE_LIFETIME_MS else 0L
+        val droppedBag = CorpseEntity(
+            id = "drop_${UUID.randomUUID()}",
+            floor = removed.floor,
+            x = removed.playerX,
+            y = removed.playerY,
+            label = "$ownerLabel's Dropped Bag",
+            isPlayerCorpse = false,
+            monsterTypeName = null,
+            gold = 0,
+            items = listOf(ItemStack(itemId, 1)),
+            createdAtMs = nowMs,
+            expiresAtMs = expiresAt,
+            ownerPlayerId = ownerId,
+            ownerName = ownerLabel,
+            publicAtMs = publicAt,
+            isDroppedBag = true
+        )
+        return removed.copy(
+            corpses = (removed.corpses + droppedBag).takeLast(38),
+            outboundLootSpawns = removed.outboundLootSpawns + droppedBag
+        )
+            .addFloatingInternal(removed.floor, removed.playerX.toFloat(), removed.playerY.toFloat(), "Dropped ${def.name}", FloatingTextKind.INFO, nowMs)
+            .addLogInternal("Dropped ${def.name} on the ground (protected for 5s).")
     }
 
     /**
@@ -3429,6 +3587,10 @@ object GameEngine {
      */
     fun lootGoldFromCorpse(state: GameWorldState, corpseId: String, nowMs: Long): GameWorldState {
         val corpse = state.corpses.firstOrNull { it.id == corpseId } ?: return state
+        if (corpse.isOwnerLockedFor(state.saveId, nowMs)) {
+            val secs = ((corpse.ownerLockRemainingMs(state.saveId, nowMs) + 999L) / 1000L).coerceAtLeast(1L)
+            return state.addLogInternal("${corpse.ownerName ?: "Owner"}'s loot is protected for ${secs}s!")
+        }
         if (corpse.gold <= 0) return state
         val intRoom = (Int.MAX_VALUE.toLong() - state.gold.toLong()).coerceAtLeast(0L)
         val capRoom = ((state.remainingCapOz() + 1e-6) / GOLD_COIN_WEIGHT_OZ).toLong().coerceAtLeast(0L)
@@ -3466,6 +3628,10 @@ object GameEngine {
      */
     fun lootItemFromCorpse(state: GameWorldState, corpseId: String, stackIndex: Int, nowMs: Long): GameWorldState {
         val corpse = state.corpses.firstOrNull { it.id == corpseId } ?: return state
+        if (corpse.isOwnerLockedFor(state.saveId, nowMs)) {
+            val secs = ((corpse.ownerLockRemainingMs(state.saveId, nowMs) + 999L) / 1000L).coerceAtLeast(1L)
+            return state.addLogInternal("${corpse.ownerName ?: "Owner"}'s loot is protected for ${secs}s!")
+        }
         val stack = corpse.items.getOrNull(stackIndex) ?: return state
         val def = ItemCatalog.get(stack.itemId)
         val unitWeight = def.carriedWeightOz()
@@ -3518,6 +3684,10 @@ object GameEngine {
 
     fun lootAllFromCorpse(state: GameWorldState, corpseId: String, nowMs: Long): GameWorldState {
         val corpse = state.corpses.firstOrNull { it.id == corpseId } ?: return state
+        if (corpse.isOwnerLockedFor(state.saveId, nowMs)) {
+            val secs = ((corpse.ownerLockRemainingMs(state.saveId, nowMs) + 999L) / 1000L).coerceAtLeast(1L)
+            return state.addLogInternal("${corpse.ownerName ?: "Owner"}'s loot is protected for ${secs}s!")
+        }
         var s = state
         var remainingGold = corpse.gold
         var lootedGold = 0
@@ -3560,6 +3730,177 @@ object GameEngine {
             activePanel = if (closePanel) ActivePanel.NONE else s.activePanel,
             inspectingCorpseId = if (closePanel) null else s.inspectingCorpseId
         ).addLogInternal(msg)
+    }
+
+    /**
+     * Spawns a shared ground corpse or dropped item pouch broadcast by another player on the same floor.
+     * Uses relative [SharedLootSpawnEvent.lockRemainingMs] and [SharedLootSpawnEvent.lifetimeRemainingMs]
+     * anchored to local [nowMs] so the 5-second owner-only countdown is exact across devices.
+     */
+    fun applyRemoteLootSpawn(
+        state: GameWorldState,
+        event: SharedLootSpawnEvent,
+        nowMs: Long
+    ): GameWorldState {
+        if (event.floor != state.floor) return state
+        if (event.gold <= 0 && event.items.isEmpty()) return state
+        if (state.corpses.any { it.id == event.corpseId }) return state
+        val validItems = event.items.filter { it.count > 0 && it.itemId.isNotBlank() }
+        if (event.gold <= 0 && validItems.isEmpty()) return state
+        val lockMs = event.lockRemainingMs.coerceIn(0L, LOOT_OWNER_PROTECTION_MS)
+        val lifeMs = event.lifetimeRemainingMs.coerceIn(5_000L, BOSS_CORPSE_LIFETIME_MS)
+        val corpse = CorpseEntity(
+            id = event.corpseId,
+            floor = event.floor,
+            x = event.x,
+            y = event.y,
+            label = event.label,
+            isPlayerCorpse = false,
+            monsterTypeName = event.monsterTypeName,
+            gold = event.gold.coerceAtLeast(0),
+            items = validItems,
+            createdAtMs = nowMs,
+            expiresAtMs = if (nowMs > 0L) nowMs + lifeMs else 0L,
+            ownerPlayerId = event.ownerPlayerId.takeIf { it.isNotBlank() },
+            ownerName = event.ownerName.takeIf { it.isNotBlank() },
+            publicAtMs = if (nowMs > 0L && lockMs > 0L) nowMs + lockMs else 0L,
+            isDroppedBag = event.isDroppedBag
+        )
+        return state.copy(corpses = (state.corpses + corpse).takeLast(38))
+    }
+
+    /**
+     * Synchronizes a ground loot pickup performed by another player on the same floor so items
+     * cannot be duplicated across clients.
+     */
+    fun applyRemoteLootClaim(
+        state: GameWorldState,
+        event: SharedLootClaimEvent
+    ): GameWorldState {
+        if (event.floor != state.floor) return state
+        val existing = state.corpses.firstOrNull { it.id == event.corpseId } ?: return state
+        val isEmptied = event.emptied || (event.remainingGold <= 0 && event.remainingItems.isEmpty())
+        val updatedCorpses = if (isEmptied) {
+            state.corpses.filterNot { it.id == event.corpseId }
+        } else {
+            state.corpses.map {
+                if (it.id == event.corpseId) {
+                    it.copy(
+                        gold = event.remainingGold.coerceAtLeast(0),
+                        items = event.remainingItems.filter { stack -> stack.count > 0 }
+                    )
+                } else it
+            }
+        }
+        val wasInspecting = state.inspectingCorpseId == event.corpseId
+        val closePanel = wasInspecting && isEmptied
+        var next = state.copy(
+            corpses = updatedCorpses,
+            activePanel = if (closePanel && state.activePanel == ActivePanel.LOOT_CORPSE) ActivePanel.NONE else state.activePanel,
+            inspectingCorpseId = if (closePanel) null else state.inspectingCorpseId
+        )
+        if (closePanel) {
+            next = next.addLogInternal("${event.claimerName} claimed the remaining loot from ${existing.label}.")
+        }
+        return next
+    }
+
+    /**
+     * Computes the net carrying-capacity weight delta (in oz) for a player-to-player trade.
+     * Negative values mean the trade makes the player lighter; positive values require remaining Cap.
+     */
+    fun tradeNetWeightDeltaOz(
+        outgoingGold: Int,
+        outgoingItems: List<ItemStack>,
+        incomingGold: Int,
+        incomingItems: List<ItemStack>
+    ): Double {
+        val outOz = outgoingGold.coerceAtLeast(0) * GOLD_COIN_WEIGHT_OZ +
+            outgoingItems.sumOf { ItemCatalog.get(it.itemId).carriedWeightOz() * it.count.coerceAtLeast(0) }
+        val inOz = incomingGold.coerceAtLeast(0) * GOLD_COIN_WEIGHT_OZ +
+            incomingItems.sumOf { ItemCatalog.get(it.itemId).carriedWeightOz() * it.count.coerceAtLeast(0) }
+        return inOz - outOz
+    }
+
+    fun canCarryTradeDelta(
+        state: GameWorldState,
+        outgoingGold: Int,
+        outgoingItems: List<ItemStack>,
+        incomingGold: Int,
+        incomingItems: List<ItemStack>
+    ): Boolean {
+        val delta = tradeNetWeightDeltaOz(outgoingGold, outgoingItems, incomingGold, incomingItems)
+        return state.remainingCapOz() + 1e-6 >= delta
+    }
+
+    /**
+     * Atomically executes a confirmed player-to-player trade swap:
+     * validates owned gold, owned non-admin items, carrying capacity (Cap oz), and gold overflow,
+     * then deducts outgoing offers and grants incoming offers in a single state transition.
+     */
+    fun executePlayerTradeSwap(
+        state: GameWorldState,
+        partnerName: String,
+        outgoingGold: Int,
+        outgoingItems: List<ItemStack>,
+        incomingGold: Int,
+        incomingItems: List<ItemStack>,
+        nowMs: Long
+    ): Pair<GameWorldState, String?> {
+        val safeOutGold = outgoingGold.coerceAtLeast(0)
+        val safeInGold = incomingGold.coerceAtLeast(0)
+        if (safeOutGold > state.gold) {
+            return state to "Not enough gold to complete the trade."
+        }
+        val cleanOutItems = outgoingItems
+            .filter { it.count > 0 && it.itemId.isNotBlank() }
+            .groupBy { it.itemId }
+            .map { (id, list) -> ItemStack(id, list.sumOf { it.count }) }
+        val cleanInItems = incomingItems
+            .filter { it.count > 0 && it.itemId.isNotBlank() }
+            .groupBy { it.itemId }
+            .map { (id, list) -> ItemStack(id, list.sumOf { it.count }) }
+
+        for (stack in cleanOutItems) {
+            val def = ItemCatalog.get(stack.itemId)
+            if (def.adminOnly) {
+                return state to "${def.name} is Admin-bound and cannot be traded."
+            }
+            if (state.itemCount(stack.itemId) < stack.count) {
+                return state to "You no longer have ${stack.count}x ${def.name}."
+            }
+        }
+        val resultingGoldLong = state.gold.toLong() - safeOutGold.toLong() + safeInGold.toLong()
+        if (resultingGoldLong < 0L || resultingGoldLong > Int.MAX_VALUE.toLong()) {
+            return state to "Gold pouch limit exceeded."
+        }
+        if (!canCarryTradeDelta(state, safeOutGold, cleanOutItems, safeInGold, cleanInItems)) {
+            return state to "Too heavy! Not enough Cap (oz) to carry ${partnerName}'s offer."
+        }
+
+        var s = state.copy(gold = resultingGoldLong.toInt())
+        for (stack in cleanOutItems) {
+            s = removeCarriedItem(s, stack.itemId, stack.count)
+        }
+        for (stack in cleanInItems) {
+            s = addCarriedItem(s, stack.itemId, stack.count)
+        }
+
+        val receivedParts = buildList {
+            if (safeInGold > 0) add("$safeInGold gp")
+            cleanInItems.forEach { st ->
+                val name = ItemCatalog.get(st.itemId).name
+                add(if (st.count > 1) "${st.count}x $name" else name)
+            }
+        }
+        val summary = if (receivedParts.isEmpty()) {
+            "Completed trade with $partnerName."
+        } else {
+            "Traded with $partnerName! Received ${receivedParts.joinToString(", ")}."
+        }
+        return s
+            .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "Trade Complete!", FloatingTextKind.XP, nowMs)
+            .addLogInternal(summary) to null
     }
 
     fun depositItem(state: GameWorldState, itemId: String, requestedCount: Int = 1): GameWorldState {

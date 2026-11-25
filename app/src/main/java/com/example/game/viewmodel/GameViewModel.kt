@@ -37,8 +37,12 @@ import com.example.game.multiplayer.LocalPlayerPresencePayload
 import com.example.game.multiplayer.MultiplayerConfig
 import com.example.game.multiplayer.MultiplayerUiState
 import com.example.game.multiplayer.PlayerActionState
+import com.example.game.multiplayer.PlayerTradeCoordinator
+import com.example.game.multiplayer.PlayerTradeSession
 import com.example.game.multiplayer.RealtimeMultiplayerManager
 import com.example.game.multiplayer.RemotePlayerInterpolator
+import com.example.game.multiplayer.RemotePlayerState
+import com.example.game.multiplayer.TradeSessionStatus
 import com.example.game.sprites.EntitySpriteAtlas
 import com.example.game.sprites.TileSpriteAtlas
 import com.example.game.update.GitHubUpdateChecker
@@ -107,6 +111,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _adminAuditState = MutableStateFlow(AdminAuditUiState())
     val adminAuditState: StateFlow<AdminAuditUiState> = _adminAuditState.asStateFlow()
 
+    private val _tradeSession = MutableStateFlow<PlayerTradeSession?>(null)
+    val tradeSession: StateFlow<PlayerTradeSession?> = _tradeSession.asStateFlow()
+
     private var activeCloudSession: CloudSession? = null
     private val persistMutex = Mutex()
     private val cloudSaveController = EventDrivenCloudSaveController(
@@ -122,6 +129,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private var walkLoopJob: Job? = null
     private var movementBroadcastJob: Job? = null
     private var onlinePresenceSyncJob: Job? = null
+    private var tradeTimeoutJob: Job? = null
+    private val emptiedLootTombstones = LinkedHashSet<String>()
+    private val completedTradeIds = LinkedHashSet<String>()
     private var lastStepMs: Long = 0L
     @Volatile
     private var lastLocalMoveUptimeMs: Long = 0L
@@ -171,6 +181,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     if (next.xp != prev.xp) xpChanged = true
                     next
                 }
+                flushOutboundLootSpawns(now)
                 if (leveledUp) {
                     multiplayerManager.broadcastSystemCallout("$playerName advanced to Level $newLevel!", floor)
                     persistCurrentState(silent = true)
@@ -202,6 +213,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     if (next.xp != prev.xp) xpChanged = true
                     next
                 }
+                flushOutboundLootSpawns(now)
                 if (leveledUp) {
                     multiplayerManager.broadcastSystemCallout("$playerName advanced to Level $newLevel!", curFloor)
                     broadcastCurrentState()
@@ -240,6 +252,47 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 _world.update { prev ->
                     GameEngine.applyRemotePlayerActionFx(prev, fxEvent, now)
                 }
+            }
+        }
+
+        // Apply incoming shared ground loot (monster kills & dropped bags with 5-second owner lock)
+        viewModelScope.launch {
+            multiplayerManager.lootSpawnEvents.collect { spawnEvent ->
+                if (_screen.value != AppScreen.PLAYING) return@collect
+                if (spawnEvent.corpseId in emptiedLootTombstones) return@collect
+                val now = SystemClock.uptimeMillis()
+                _world.update { prev ->
+                    GameEngine.applyRemoteLootSpawn(prev, spawnEvent, now)
+                }
+            }
+        }
+
+        // Apply incoming ground loot claims from nearby players so shared piles update immediately
+        viewModelScope.launch {
+            multiplayerManager.lootClaimEvents.collect { claimEvent ->
+                if (_screen.value != AppScreen.PLAYING) return@collect
+                if (claimEvent.emptied || (claimEvent.remainingGold <= 0 && claimEvent.remainingItems.isEmpty())) {
+                    recordEmptiedLootTombstone(claimEvent.corpseId)
+                }
+                _world.update { prev ->
+                    GameEngine.applyRemoteLootClaim(prev, claimEvent)
+                }
+            }
+        }
+
+        // Apply incoming real-time player-to-player trade protocol signals
+        viewModelScope.launch {
+            multiplayerManager.tradeSignalEvents.collect { signal ->
+                if (_screen.value != AppScreen.PLAYING) return@collect
+                val now = SystemClock.uptimeMillis()
+                val res = PlayerTradeCoordinator.handleIncomingSignal(
+                    world = _world.value,
+                    currentSession = _tradeSession.value,
+                    signal = signal,
+                    completedTradeIds = completedTradeIds,
+                    nowMs = now
+                )
+                applyTradeTransition(res)
             }
         }
     }
@@ -900,6 +953,38 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         flushOutboundSystemAlerts()
+        flushOutboundLootSpawns()
+    }
+
+    private fun flushOutboundLootSpawns(nowMs: Long = SystemClock.uptimeMillis()) {
+        val pending = _world.value.outboundLootSpawns
+        if (pending.isEmpty()) return
+        _world.update { it.copy(outboundLootSpawns = emptyList()) }
+        for (corpse in pending) {
+            multiplayerManager.broadcastLootSpawn(corpse, nowMs)
+        }
+    }
+
+    private fun recordEmptiedLootTombstone(corpseId: String) {
+        if (emptiedLootTombstones.size >= 128) {
+            emptiedLootTombstones.iterator().let { it.next(); it.remove() }
+        }
+        emptiedLootTombstones.add(corpseId)
+    }
+
+    private fun broadcastLootClaimState(corpseId: String, floor: Int, claimerId: String, claimerName: String) {
+        val remaining = _world.value.corpses.firstOrNull { it.id == corpseId }
+        val emptied = remaining == null || (remaining.gold <= 0 && remaining.items.isEmpty())
+        if (emptied) recordEmptiedLootTombstone(corpseId)
+        multiplayerManager.broadcastLootClaim(
+            corpseId = corpseId,
+            floor = floor,
+            claimerId = claimerId,
+            claimerName = claimerName,
+            remainingGold = remaining?.gold ?: 0,
+            remainingItems = remaining?.items ?: emptyList(),
+            emptied = emptied
+        )
     }
 
     private fun flushOutboundSystemAlerts() {
@@ -1254,9 +1339,107 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _world.update { prev ->
             prev.copy(
                 inspectedPlayerId = ally.playerId,
-                inspectedPlayerUntilMs = now + 4500L,
+                inspectedPlayerUntilMs = now + 8_000L,
                 statusLog = (prev.statusLog + "Ally ${ally.name} (Lvl ${ally.level} ${ally.vocation.displayName}) at (${ally.x}, ${ally.y}).").takeLast(6)
             )
+        }
+    }
+
+    fun dismissInspectedPlayer() {
+        _world.update { it.copy(inspectedPlayerId = null, inspectedPlayerUntilMs = 0L) }
+    }
+
+    fun requestTradeWithPlayer(partner: RemotePlayerState) {
+        if (multiplayerState.value.status != ConnectionStatus.ONLINE) {
+            _world.update { prev ->
+                prev.copy(statusLog = (prev.statusLog + "Connect online to trade with other players.").takeLast(6))
+            }
+            return
+        }
+        val now = SystemClock.uptimeMillis()
+        val res = PlayerTradeCoordinator.startOutgoingInvite(
+            world = _world.value,
+            currentSession = _tradeSession.value,
+            partner = partner,
+            nowMs = now
+        )
+        applyTradeTransition(res)
+    }
+
+    fun acceptTradeInvite() {
+        val res = PlayerTradeCoordinator.acceptIncomingInvite(_world.value, _tradeSession.value)
+        applyTradeTransition(res)
+    }
+
+    fun declineTradeInvite() {
+        val res = PlayerTradeCoordinator.declineIncomingInvite(_world.value, _tradeSession.value)
+        applyTradeTransition(res)
+    }
+
+    fun cancelTrade(reason: String = "Trade cancelled.") {
+        val res = PlayerTradeCoordinator.cancelTrade(_world.value, _tradeSession.value, reason)
+        applyTradeTransition(res)
+    }
+
+    fun addTradeItem(itemId: String, delta: Int = 1) {
+        val res = PlayerTradeCoordinator.addLocalItem(_world.value, _tradeSession.value, itemId, delta)
+        applyTradeTransition(res)
+    }
+
+    fun removeTradeItem(itemId: String, delta: Int = 1) {
+        val res = PlayerTradeCoordinator.removeLocalItem(_world.value, _tradeSession.value, itemId, delta)
+        applyTradeTransition(res)
+    }
+
+    fun setTradeGold(amount: Int) {
+        val res = PlayerTradeCoordinator.setLocalGold(_world.value, _tradeSession.value, amount)
+        applyTradeTransition(res)
+    }
+
+    fun toggleTradeLock() {
+        val res = PlayerTradeCoordinator.toggleLocalLock(_world.value, _tradeSession.value)
+        applyTradeTransition(res)
+    }
+
+    fun confirmTrade() {
+        val now = SystemClock.uptimeMillis()
+        val res = PlayerTradeCoordinator.confirmTrade(
+            world = _world.value,
+            currentSession = _tradeSession.value,
+            completedTradeIds = completedTradeIds,
+            nowMs = now
+        )
+        applyTradeTransition(res)
+    }
+
+    private fun applyTradeTransition(res: PlayerTradeCoordinator.TransitionResult) {
+        val nextWorld = if (res.logMessage != null) {
+            res.worldState.copy(statusLog = (res.worldState.statusLog + res.logMessage).takeLast(6))
+        } else {
+            res.worldState
+        }
+        _world.value = nextWorld
+        _tradeSession.value = res.session
+        res.outboundSignal?.let { multiplayerManager.broadcastTradeSignal(it) }
+
+        tradeTimeoutJob?.cancel()
+        val session = res.session
+        if (session != null && (session.status == TradeSessionStatus.INVITING || session.status == TradeSessionStatus.INCOMING_INVITE)) {
+            val expectedId = session.tradeId
+            tradeTimeoutJob = viewModelScope.launch {
+                delay(PlayerTradeCoordinator.INVITE_TIMEOUT_MS)
+                val cur = _tradeSession.value
+                if (cur != null && cur.tradeId == expectedId && cur.status != TradeSessionStatus.NEGOTIATING) {
+                    cancelTrade("Trade request with ${cur.partnerName} timed out.")
+                }
+            }
+        }
+
+        if (res.swapCompleted) {
+            if (completedTradeIds.size > 64) {
+                completedTradeIds.iterator().let { it.next(); it.remove() }
+            }
+            persistCurrentState(silent = true)
         }
     }
 
@@ -1443,12 +1626,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var floorChanged = false
         var skillLevelUp = false
         var bagChanged = false
+        var baitChanged = false
         _world.update { prev ->
             val next = GameEngine.useOrEquipBackpackItem(prev, itemId, now)
             if (next.hp != prev.hp) hpChanged = true
             if (next.equipment != prev.equipment) equipChanged = true
             if (next.floor != prev.floor) floorChanged = true
             if (next.backpack != prev.backpack) bagChanged = true
+            if (next.selectedBaitId != prev.selectedBaitId) baitChanged = true
             if (totalSkillLevels(next.skills) > totalSkillLevels(prev.skills)) skillLevelUp = true
             if (next.outboundPlayerEffects.size > prev.outboundPlayerEffects.size) {
                 action = next.outboundPlayerEffects.lastOrNull()?.actionState
@@ -1463,14 +1648,23 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             persistCurrentState(silent = true)
         } else {
             if (hpChanged || equipChanged || action != null) broadcastCurrentState(action ?: PlayerActionState.IDLE)
-            if (equipChanged || skillLevelUp) persistCurrentState(silent = true)
+            if (equipChanged || skillLevelUp || baitChanged) persistCurrentState(silent = true)
             else if (bagChanged) scheduleDebouncedSkillSave()
         }
     }
 
     fun dropBackpackItem(itemId: String) {
-        _world.update { GameEngine.dropItem(it, itemId) }
-        persistCurrentState(silent = true)
+        val now = SystemClock.uptimeMillis()
+        var dropped = false
+        _world.update { prev ->
+            val next = GameEngine.dropItem(prev, itemId, now)
+            if (next.corpses.size != prev.corpses.size || next.backpack != prev.backpack || next.toolBag != prev.toolBag) {
+                dropped = true
+            }
+            next
+        }
+        flushOutboundLootSpawns(now)
+        if (dropped) persistCurrentState(silent = true)
     }
 
     fun unequipSlot(slot: EquipmentSlot) {
@@ -1489,40 +1683,67 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun lootCorpseItem(corpseId: String, stackIndex: Int) {
         val now = SystemClock.uptimeMillis()
         var looted = false
+        var corpseFloor = _world.value.floor
+        var claimerId = _world.value.saveId
+        var claimerName = _world.value.playerName
         _world.update { prev ->
+            corpseFloor = prev.corpses.firstOrNull { it.id == corpseId }?.floor ?: prev.floor
+            claimerId = prev.saveId
+            claimerName = prev.playerName
             val next = GameEngine.lootItemFromCorpse(prev, corpseId, stackIndex, now)
             if (next.backpack != prev.backpack || next.toolBag != prev.toolBag || next.corpses != prev.corpses) {
                 looted = true
             }
             next
         }
-        if (looted) persistCurrentState(silent = true)
+        if (looted) {
+            broadcastLootClaimState(corpseId, corpseFloor, claimerId, claimerName)
+            persistCurrentState(silent = true)
+        }
     }
 
     fun lootCorpseGold(corpseId: String) {
         val now = SystemClock.uptimeMillis()
         var looted = false
+        var corpseFloor = _world.value.floor
+        var claimerId = _world.value.saveId
+        var claimerName = _world.value.playerName
         _world.update { prev ->
+            corpseFloor = prev.corpses.firstOrNull { it.id == corpseId }?.floor ?: prev.floor
+            claimerId = prev.saveId
+            claimerName = prev.playerName
             val next = GameEngine.lootGoldFromCorpse(prev, corpseId, now)
             if (next.gold != prev.gold || next.corpses != prev.corpses) {
                 looted = true
             }
             next
         }
-        if (looted) persistCurrentState(silent = true)
+        if (looted) {
+            broadcastLootClaimState(corpseId, corpseFloor, claimerId, claimerName)
+            persistCurrentState(silent = true)
+        }
     }
 
     fun lootAllCorpse(corpseId: String) {
         val now = SystemClock.uptimeMillis()
         var looted = false
+        var corpseFloor = _world.value.floor
+        var claimerId = _world.value.saveId
+        var claimerName = _world.value.playerName
         _world.update { prev ->
+            corpseFloor = prev.corpses.firstOrNull { it.id == corpseId }?.floor ?: prev.floor
+            claimerId = prev.saveId
+            claimerName = prev.playerName
             val next = GameEngine.lootAllFromCorpse(prev, corpseId, now)
             if (next.gold != prev.gold || next.backpack != prev.backpack || next.toolBag != prev.toolBag || next.corpses != prev.corpses) {
                 looted = true
             }
             next
         }
-        if (looted) persistCurrentState(silent = true)
+        if (looted) {
+            broadcastLootClaimState(corpseId, corpseFloor, claimerId, claimerName)
+            persistCurrentState(silent = true)
+        }
     }
 
     fun depositItem(itemId: String, count: Int = 1) {

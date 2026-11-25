@@ -63,6 +63,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.R
 import com.example.game.engine.GameEngine
 import com.example.game.model.ActivePanel
+import com.example.game.model.FishingCatalog
 import com.example.game.model.AdminEquipmentClassification
 import com.example.game.model.CorpseEntity
 import com.example.game.model.DeathReport
@@ -126,6 +127,7 @@ fun SlideUpGamePanel(
     onCraftRecipe: (String) -> Unit,
     onBindRune: (String) -> Unit = {},
     onWalkToTile: (Int, Int) -> Unit = { _, _ -> },
+    onTradePlayer: (RemotePlayerState) -> Unit = {},
     onBoardHarborFerry: (String) -> Unit = {},
     onBuyBackReaperItem: (String) -> Unit = {},
     onBuyBackAllReaperItems: () -> Unit = {},
@@ -303,7 +305,8 @@ fun SlideUpGamePanel(
                         remotePlayers = remotePlayers,
                         onWalkToTile = onWalkToTile,
                         realmOnlinePlayers = realmOnlinePlayers,
-                        connectionStatus = connectionStatus
+                        connectionStatus = connectionStatus,
+                        onTradePlayer = onTradePlayer
                     )
                     ActivePanel.HARBOR_FERRY -> HarborFerryPanelContent(
                         state = state,
@@ -628,6 +631,77 @@ private fun BackpackPanelContent(
 
         if (bagTab == 0) {
             val mainBagEntries = remember(state.backpack) { state.backpack.withStableKeys("bag_main") }
+            val activeBait = state.activeFishingBaitDef()
+            val activeBaitCount = state.activeFishingBaitCount()
+            val showBaitStrip = state.hasItem("fishing_rod") || state.carriedFishingBaitStacks().isNotEmpty()
+            if (showBaitStrip) {
+                val activeTier = FishingCatalog.tierForBait(activeBait?.id)
+                val targetFish = activeTier?.let { ItemCatalog.get(it.fishId) }
+                val baitLevelMet = activeTier == null || state.isAdmin || state.skills.fishing.level >= activeTier.requiredFishingLevel
+                val stripBorder = when {
+                    activeBait == null || activeBaitCount <= 0 -> StoneBorderLight.copy(alpha = 0.7f)
+                    !baitLevelMet -> HealthCrimson.copy(alpha = 0.75f)
+                    else -> TorchGold.copy(alpha = 0.75f)
+                }
+                Surface(
+                    color = StoneSurface,
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, stripBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 3.dp)
+                        .testTag("backpack_active_bait_strip")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (activeBait != null) {
+                            val baitIcon = remember(activeBait.id) { EntitySpriteAtlas.itemIcon(activeBait.id) }
+                            PixelSpritePreview(
+                                bitmap = baitIcon,
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(ObsidianVoid, RoundedCornerShape(4.dp))
+                                    .border(1.dp, stripBorder, RoundedCornerShape(4.dp))
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(
+                                text = when {
+                                    activeBait == null -> "Active Bait: None (Fishing Lv ${state.skills.fishing.level})"
+                                    activeBaitCount <= 0 -> "Active Bait: ${activeBait.name} (Empty — 0 left)"
+                                    else -> "Active Bait: ${activeBait.name} x$activeBaitCount (Fishing Lv ${state.skills.fishing.level})"
+                                },
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = when {
+                                    activeBait == null || activeBaitCount <= 0 -> ParchmentMuted
+                                    !baitLevelMet -> HealthCrimson
+                                    else -> TorchGold
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = when {
+                                    activeBait == null || activeBaitCount <= 0 ->
+                                        "Tap 'Set Bait' on any worm below • Worms are only used when you catch a fish"
+                                    !baitLevelMet && activeTier != null ->
+                                        "Requires Fishing Lv ${activeTier.requiredFishingLevel} to catch ${targetFish?.name ?: "fish"} • Pick a lower worm"
+                                    targetFish != null ->
+                                        "Targets ${targetFish.name} (+${targetFish.restoreAmount} HP) • Used only on catch"
+                                    else -> "Ready to fish"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (!baitLevelMet && activeBait != null && activeBaitCount > 0) HealthCrimson else ParchmentMuted,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
             if (mainBagEntries.isEmpty()) {
                 Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     Text("Your main backpack is empty.", style = MaterialTheme.typography.bodyLarge, color = ParchmentMuted)
@@ -641,9 +715,15 @@ private fun BackpackPanelContent(
                         val isBound = (def.category == ItemCategory.RUNE_ATTACK && state.boundAttackRuneId == def.id) ||
                             (def.category == ItemCategory.RUNE_HEAL && state.boundHealRuneId == def.id)
                         val isAdminScroll = def.category == ItemCategory.ADMIN_SCROLL
+                        val isFishingBait = def.category == ItemCategory.FISHING_BAIT
+                        val isActiveBait = isFishingBait && state.selectedBaitId == def.id
+                        val baitMeetsFishing = !isFishingBait || state.isAdmin || state.skills.fishing.level >= def.requiredFishingLevel
+                        val isFood = def.category == ItemCategory.FOOD
                         val actionLabel = when {
                             isAdminScroll -> "Unseal"
                             isCastableRune -> "Cast"
+                            isFishingBait -> if (isActiveBait) "Active" else "Set Bait"
+                            isFood -> "Eat"
                             def.category == ItemCategory.AMMO -> "Load"
                             def.equipSlot != null -> "Equip"
                             else -> "Use"
@@ -653,6 +733,20 @@ private fun BackpackPanelContent(
                         val sub = buildString {
                             if (isAdminScroll) {
                                 append("Admin Relic • Level, Tier 5 Armory & Spectator • ")
+                            }
+                            if (isFishingBait) {
+                                val targetFish = def.baitTargetFishId?.let { ItemCatalog.get(it) }
+                                append("Fish Lv ${def.requiredFishingLevel}")
+                                if (targetFish != null) append(" • ${targetFish.name} (+${targetFish.restoreAmount} HP)")
+                                if (isActiveBait) append(" • ACTIVE BAIT")
+                                append(" • ")
+                            }
+                            if (isFood && def.restoreAmount > 0) {
+                                if (def.fishingTier > 0) append("T${def.fishingTier} Fish • ")
+                                append("+${def.restoreAmount} HP")
+                                val mpAmt = def.restoreAmount / 2
+                                if (mpAmt > 0) append("/+$mpAmt MP")
+                                append(" • ")
                             }
                             if (def.equipmentTier > 0) append("T${def.equipmentTier} • ")
                             if (def.equipSlot != null) {
@@ -682,11 +776,15 @@ private fun BackpackPanelContent(
                             subtitleOverride = sub,
                             subtitleColor = when {
                                 isAdminScroll -> TorchGold
+                                isFishingBait && !baitMeetsFishing -> HealthCrimson
+                                isActiveBait -> TorchGold
                                 !meetsReqs && def.equipSlot != null -> HealthCrimson
                                 else -> ParchmentMuted
                             },
                             accentBorderColor = when {
                                 isAdminScroll -> TorchGold.copy(alpha = 0.85f)
+                                isFishingBait && !baitMeetsFishing -> HealthCrimson.copy(alpha = 0.65f)
+                                isActiveBait -> TorchGold.copy(alpha = 0.85f)
                                 !meetsReqs && def.equipSlot != null -> HealthCrimson.copy(alpha = 0.65f)
                                 def.proc != null -> Color(def.proc.elementColor).copy(alpha = 0.65f)
                                 else -> null
@@ -694,10 +792,12 @@ private fun BackpackPanelContent(
                             primaryLabel = actionLabel,
                             primaryContainerColor = when {
                                 isAdminScroll -> TorchGold
+                                isActiveBait && baitMeetsFishing -> ExpEmerald
+                                isFishingBait && !baitMeetsFishing -> HealthCrimson.copy(alpha = 0.78f)
                                 !meetsReqs && def.equipSlot != null -> HealthCrimson.copy(alpha = 0.78f)
                                 else -> TorchAmber
                             },
-                            primaryContentColor = if (!meetsReqs && def.equipSlot != null) ParchmentLight else ObsidianVoid,
+                            primaryContentColor = if ((!meetsReqs && def.equipSlot != null) || (isFishingBait && !baitMeetsFishing)) ParchmentLight else ObsidianVoid,
                             onPrimary = { onUseItem(stack.itemId) },
                             secondaryLabel = when {
                                 def.adminOnly -> null
@@ -925,10 +1025,20 @@ private fun ShopPanelContent(
                 items(ItemCatalog.shopInventoryIds, key = { it }) { itemId ->
                     val def = ItemCatalog.get(itemId)
                     val wt = if (def.isTool) "${formatOz(def.carriedWeightOz())} oz (Tool Bag)" else "${formatOz(def.weightOz)} oz"
-                    val reqNote = if (def.equipSlot != null && def.requiredLevel > 1) " • Req Lv ${def.requiredLevel}" else ""
+                    val isBait = def.category == ItemCategory.FISHING_BAIT
+                    val baitMeetsFish = !isBait || state.isAdmin || state.skills.fishing.level >= def.requiredFishingLevel
+                    val shopSubtitle = if (isBait) {
+                        val targetFish = def.baitTargetFishId?.let { ItemCatalog.get(it) }
+                        val targetText = targetFish?.let { "Catches ${it.name} (+${it.restoreAmount} HP)" } ?: def.description
+                        "${def.buyPrice} gp • Fish Lv ${def.requiredFishingLevel} • $targetText • $wt"
+                    } else {
+                        val reqNote = if (def.equipSlot != null && def.requiredLevel > 1) " • Req Lv ${def.requiredLevel}" else ""
+                        "${def.buyPrice} gp • $wt$reqNote • ${def.description}"
+                    }
                     ItemActionRow(
                         stack = ItemStack(itemId, 1),
-                        subtitleOverride = "${def.buyPrice} gp • $wt$reqNote • ${def.description}",
+                        subtitleOverride = shopSubtitle,
+                        subtitleColor = if (isBait && !baitMeetsFish) HealthCrimson else ParchmentMuted,
                         primaryLabel = "Buy ${def.buyPrice}g",
                         onPrimary = { onBuy(itemId) },
                         onInspect = {
@@ -999,8 +1109,8 @@ private fun LootCorpseContent(
     val remainingCap = state.remainingCapOz()
     val totalStacks = corpse.items.size + if (corpse.gold > 0) 1 else 0
     var nowUptimeMs by remember(corpse.id) { mutableLongStateOf(SystemClock.uptimeMillis()) }
-    LaunchedEffect(corpse.id, corpse.expiresAtMs, corpse.isPlayerCorpse) {
-        if (!corpse.isPlayerCorpse && corpse.expiresAtMs > 0L) {
+    LaunchedEffect(corpse.id, corpse.expiresAtMs, corpse.publicAtMs, corpse.isPlayerCorpse) {
+        if (!corpse.isPlayerCorpse && (corpse.expiresAtMs > 0L || corpse.publicAtMs > 0L)) {
             while (true) {
                 nowUptimeMs = SystemClock.uptimeMillis()
                 delay(250L)
@@ -1009,8 +1119,65 @@ private fun LootCorpseContent(
     }
     val remainingMs = corpse.remainingMs(nowUptimeMs)
     val expiringSoon = corpse.isExpiringSoon(nowUptimeMs)
+    val ownerLockedForMe = corpse.isOwnerLockedFor(state.saveId, nowUptimeMs)
+    val ownerLockSecs = ((corpse.ownerLockRemainingMs(state.saveId, nowUptimeMs) + 999L) / 1000L).coerceAtLeast(1L)
+    val ownerPublicCountdownMs = corpse.publicCountdownMs(nowUptimeMs)
+    val isMyOwnedLoot = !corpse.isPlayerCorpse && !corpse.ownerPlayerId.isNullOrBlank() && corpse.ownerPlayerId == state.saveId
+    val isUnlockedPublicOther = !corpse.isPlayerCorpse && !corpse.ownerPlayerId.isNullOrBlank() && corpse.ownerPlayerId != state.saveId && !ownerLockedForMe
 
     Column(modifier = Modifier.fillMaxWidth()) {
+        if (ownerLockedForMe) {
+            Surface(
+                color = TorchAmber.copy(alpha = 0.20f),
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(1.2.dp, TorchAmber),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                    .testTag("corpse_owner_lock_badge")
+            ) {
+                Text(
+                    text = "${corpse.ownerName ?: "Owner"}'s loot — unlocks for everyone in ${ownerLockSecs}s",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = TorchGold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
+        } else if (isUnlockedPublicOther) {
+            Surface(
+                color = ExpEmerald.copy(alpha = 0.16f),
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(1.dp, ExpEmerald.copy(alpha = 0.75f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                    .testTag("corpse_public_loot_badge")
+            ) {
+                Text(
+                    text = "Public loot — anyone can claim!",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = ExpEmerald,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
+        } else if (isMyOwnedLoot && ownerPublicCountdownMs > 0L) {
+            val mySecs = ((ownerPublicCountdownMs + 999L) / 1000L).coerceAtLeast(1L)
+            Surface(
+                color = TorchGold.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(1.dp, TorchGold.copy(alpha = 0.55f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = "Your loot — becomes public in ${mySecs}s",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = TorchGold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                )
+            }
+        }
         if (corpse.isPlayerCorpse || remainingMs != null) {
             val badgeBg = when {
                 corpse.isPlayerCorpse -> TorchGold.copy(alpha = 0.14f)
@@ -1097,7 +1264,7 @@ private fun LootCorpseContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 52.dp)
-                            .clickable { onLootGold(corpse.id) }
+                            .clickable(enabled = !ownerLockedForMe) { onLootGold(corpse.id) }
                             .testTag("corpse_gold_row")
                     ) {
                         Row(
@@ -1139,15 +1306,19 @@ private fun LootCorpseContent(
                             Box(
                                 modifier = Modifier
                                     .background(
-                                        if (canTakeAnyGold) TorchGold else StoneBorderDark,
+                                        if (!ownerLockedForMe && canTakeAnyGold) TorchGold else StoneBorderDark,
                                         RoundedCornerShape(6.dp)
                                     )
                                     .padding(horizontal = 10.dp, vertical = 6.dp)
                             ) {
                                 Text(
-                                    text = if (canTakeAnyGold) "Take" else "Heavy",
+                                    text = when {
+                                        ownerLockedForMe -> "${ownerLockSecs}s"
+                                        canTakeAnyGold -> "Take"
+                                        else -> "Heavy"
+                                    },
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = if (canTakeAnyGold) ObsidianVoid else ParchmentMuted
+                                    color = if (!ownerLockedForMe && canTakeAnyGold) ObsidianVoid else ParchmentMuted
                                 )
                             }
                         }
@@ -1180,7 +1351,7 @@ private fun LootCorpseContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 54.dp)
-                        .clickable { onLootItem(corpse.id, index) }
+                        .clickable(enabled = !ownerLockedForMe) { onLootItem(corpse.id, index) }
                         .testTag("corpse_item_row_$index")
                 ) {
                     Row(
@@ -1244,15 +1415,19 @@ private fun LootCorpseContent(
                         Box(
                             modifier = Modifier
                                 .background(
-                                    if (canTakeOne) TorchAmber else StoneBorderDark,
+                                    if (!ownerLockedForMe && canTakeOne) TorchAmber else StoneBorderDark,
                                     RoundedCornerShape(6.dp)
                                 )
                                 .padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = if (canTakeOne) "Take" else "Heavy",
+                                text = when {
+                                    ownerLockedForMe -> "${ownerLockSecs}s"
+                                    canTakeOne -> "Take"
+                                    else -> "Heavy"
+                                },
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = if (canTakeOne) ObsidianVoid else ParchmentMuted
+                                color = if (!ownerLockedForMe && canTakeOne) ObsidianVoid else ParchmentMuted
                             )
                         }
                     }
@@ -1272,7 +1447,13 @@ private fun LootCorpseContent(
         ) {
             Button(
                 onClick = { onLootAll(corpse.id) },
-                colors = ButtonDefaults.buttonColors(containerColor = TorchGold, contentColor = ObsidianVoid),
+                enabled = !ownerLockedForMe,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TorchGold,
+                    contentColor = ObsidianVoid,
+                    disabledContainerColor = StoneSurface,
+                    disabledContentColor = ParchmentMuted
+                ),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1282,12 +1463,16 @@ private fun LootCorpseContent(
                 Icon(
                     imageVector = Icons.Default.Inventory2,
                     contentDescription = null,
-                    tint = ObsidianVoid,
+                    tint = if (ownerLockedForMe) ParchmentMuted else ObsidianVoid,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = if (corpse.isPlayerCorpse) "LOOT ALL ($totalStacks) — RECOVER BACKPACK" else "LOOT ALL ($totalStacks)",
+                    text = when {
+                        ownerLockedForMe -> "LOOT PROTECTED (${ownerLockSecs}s)"
+                        corpse.isPlayerCorpse -> "LOOT ALL ($totalStacks) — RECOVER BACKPACK"
+                        else -> "LOOT ALL ($totalStacks)"
+                    },
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

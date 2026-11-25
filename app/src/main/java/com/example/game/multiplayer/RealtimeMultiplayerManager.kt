@@ -1,6 +1,11 @@
 package com.example.game.multiplayer
 
+import com.example.game.model.BOSS_CORPSE_LIFETIME_MS
+import com.example.game.model.CorpseEntity
 import com.example.game.model.DEFAULT_REGION_ID
+import com.example.game.model.ItemStack
+import com.example.game.model.LOOT_OWNER_PROTECTION_MS
+import com.example.game.model.REGULAR_CORPSE_LIFETIME_MS
 import com.example.game.model.normalizeRegionId
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
@@ -64,6 +69,15 @@ class RealtimeMultiplayerManager(
 
     private val _playerActionFxEvents = MutableSharedFlow<RemotePlayerActionFxEvent>(extraBufferCapacity = 64)
     val playerActionFxEvents: SharedFlow<RemotePlayerActionFxEvent> = _playerActionFxEvents.asSharedFlow()
+
+    private val _lootSpawnEvents = MutableSharedFlow<SharedLootSpawnEvent>(extraBufferCapacity = 64)
+    val lootSpawnEvents: SharedFlow<SharedLootSpawnEvent> = _lootSpawnEvents.asSharedFlow()
+
+    private val _lootClaimEvents = MutableSharedFlow<SharedLootClaimEvent>(extraBufferCapacity = 64)
+    val lootClaimEvents: SharedFlow<SharedLootClaimEvent> = _lootClaimEvents.asSharedFlow()
+
+    private val _tradeSignalEvents = MutableSharedFlow<TradeSignalEvent>(extraBufferCapacity = 64)
+    val tradeSignalEvents: SharedFlow<TradeSignalEvent> = _tradeSignalEvents.asSharedFlow()
 
     private val refCounter = AtomicLong(1L)
     private var activeWebSocket: WebSocket? = null
@@ -491,6 +505,117 @@ class RealtimeMultiplayerManager(
             )
         )
     }
+
+    fun broadcastLootSpawn(corpse: CorpseEntity, nowMs: Long) {
+        if (corpse.isPlayerCorpse) return
+        if (corpse.gold <= 0 && corpse.items.isEmpty()) return
+        val ws = activeWebSocket ?: return
+        if (_uiState.value.status != ConnectionStatus.ONLINE) return
+        if (corpse.floor != currentFloor) return
+        sendBroadcast(
+            ws,
+            MultiplayerConfig.floorChannelTopic(corpse.floor),
+            "loot_spawn",
+            lootSpawnPayloadToMap(corpse, nowMs)
+        )
+    }
+
+    fun broadcastLootClaim(
+        corpseId: String,
+        floor: Int,
+        claimerId: String,
+        claimerName: String,
+        remainingGold: Int,
+        remainingItems: List<ItemStack>,
+        emptied: Boolean
+    ) {
+        val ws = activeWebSocket ?: return
+        if (_uiState.value.status != ConnectionStatus.ONLINE) return
+        if (floor != currentFloor) return
+        sendBroadcast(
+            ws,
+            MultiplayerConfig.floorChannelTopic(floor),
+            "loot_claim",
+            lootClaimPayloadToMap(
+                corpseId = corpseId,
+                floor = floor,
+                claimerId = claimerId,
+                claimerName = claimerName,
+                remainingGold = remainingGold,
+                remainingItems = remainingItems,
+                emptied = emptied
+            )
+        )
+    }
+
+    fun broadcastTradeSignal(signal: TradeSignalEvent) {
+        val ws = activeWebSocket ?: return
+        if (_uiState.value.status != ConnectionStatus.ONLINE) return
+        val payload = tradeSignalPayloadToMap(signal)
+        sendBroadcast(ws, MultiplayerConfig.WORLD_CHANNEL_TOPIC, "trade_signal", payload)
+    }
+
+    fun lootSpawnPayloadToMap(corpse: CorpseEntity, nowMs: Long): Map<String, Any?> {
+        val lockRem = if (corpse.publicAtMs > 0L && nowMs > 0L) {
+            (corpse.publicAtMs - nowMs).coerceIn(0L, LOOT_OWNER_PROTECTION_MS)
+        } else {
+            LOOT_OWNER_PROTECTION_MS
+        }
+        val lifeRem = if (corpse.expiresAtMs > 0L && nowMs > 0L) {
+            (corpse.expiresAtMs - nowMs).coerceIn(5_000L, BOSS_CORPSE_LIFETIME_MS)
+        } else {
+            REGULAR_CORPSE_LIFETIME_MS
+        }
+        return mapOf(
+            "cid" to corpse.id,
+            "floor" to corpse.floor,
+            "x" to corpse.x,
+            "y" to corpse.y,
+            "label" to corpse.label.take(48),
+            "oid" to (corpse.ownerPlayerId ?: latestLocalPayload?.playerId ?: ""),
+            "oname" to MultiplayerSanitizer.sanitizeName(corpse.ownerName ?: latestLocalPayload?.name),
+            "drop" to corpse.isDroppedBag,
+            "mtype" to corpse.monsterTypeName,
+            "gold" to corpse.gold.coerceAtLeast(0),
+            "items" to corpse.items.take(24).map { mapOf("id" to it.itemId, "c" to it.count) },
+            "lockMs" to lockRem,
+            "lifeMs" to lifeRem
+        )
+    }
+
+    fun lootClaimPayloadToMap(
+        corpseId: String,
+        floor: Int,
+        claimerId: String,
+        claimerName: String,
+        remainingGold: Int,
+        remainingItems: List<ItemStack>,
+        emptied: Boolean
+    ): Map<String, Any?> = mapOf(
+        "cid" to corpseId,
+        "floor" to floor,
+        "pid" to claimerId,
+        "pname" to MultiplayerSanitizer.sanitizeName(claimerName),
+        "gold" to remainingGold.coerceAtLeast(0),
+        "items" to remainingItems.take(24).map { mapOf("id" to it.itemId, "c" to it.count) },
+        "empty" to emptied
+    )
+
+    fun tradeSignalPayloadToMap(signal: TradeSignalEvent): Map<String, Any?> = mapOf(
+        "type" to signal.type.name,
+        "tid" to signal.tradeId,
+        "fromId" to signal.fromPlayerId,
+        "fromName" to MultiplayerSanitizer.sanitizeName(signal.fromPlayerName),
+        "fromLvl" to signal.fromLevel.coerceIn(1, 999),
+        "fromVoc" to signal.fromVocation.name,
+        "toId" to signal.toPlayerId,
+        "gold" to signal.gold.coerceAtLeast(0),
+        "items" to signal.items.take(24).map { mapOf("id" to it.itemId, "c" to it.count) },
+        "locked" to signal.locked,
+        "confirmed" to signal.confirmed,
+        "ver" to signal.offerVersion,
+        "reason" to signal.reason?.take(80)
+    )
 
     fun broadcastMonsterSync(floor: Int, monsters: List<SyncedMonsterSnapshot>) {
         val ws = activeWebSocket ?: return
@@ -1023,6 +1148,9 @@ class RealtimeMultiplayerManager(
                         else if (isWorldTopic) applyRemotePlayerLeave(innerBody, fromWorldChannel = true)
                     }
                     "player_fx" -> if (topic == expectedFloorTopic) applyRemotePlayerActionFx(innerBody)
+                    "loot_spawn" -> if (topic == expectedFloorTopic) applyRemoteLootSpawn(innerBody)
+                    "loot_claim" -> if (topic == expectedFloorTopic) applyRemoteLootClaim(innerBody)
+                    "trade_signal" -> if (isWorldTopic || topic == expectedFloorTopic) applyIncomingTradeSignal(innerBody)
                     "monster_sync" -> if (topic == expectedFloorTopic) applyMonsterSync(innerBody)
                     "monster_hit" -> if (topic == expectedFloorTopic) applyRemoteMonsterHit(innerBody)
                     "monster_attack" -> if (topic == expectedFloorTopic) applyRemoteMonsterAttack(innerBody)
@@ -1351,6 +1479,106 @@ class RealtimeMultiplayerManager(
                 projectileKindName = (body["proj"] as? String)?.take(24),
                 toX = clampedTo?.first,
                 toY = clampedTo?.second
+            )
+        )
+    }
+
+    private fun parseItemStacks(raw: Any?): List<ItemStack> {
+        val list = raw as? List<*> ?: return emptyList()
+        return list.mapNotNull { entry ->
+            val map = entry.asStringMap() ?: return@mapNotNull null
+            val id = MultiplayerSanitizer.sanitizeId((map["id"] as? String) ?: (map["itemId"] as? String))
+            val count = ((map["c"] ?: map["count"]).asIntOrNull() ?: 0).coerceIn(0, 9999)
+            if (id.isBlank() || count <= 0) null else ItemStack(id, count)
+        }.take(24)
+    }
+
+    private fun applyRemoteLootSpawn(body: Map<String, Any?>) {
+        val localId = latestLocalPayload?.playerId
+        val ownerId = MultiplayerSanitizer.sanitizeId(body["oid"] as? String)
+        if (ownerId.isNotBlank() && ownerId == localId) return
+        val cid = MultiplayerSanitizer.sanitizeId(body["cid"] as? String)
+        if (cid.isBlank()) return
+        val floor = body["floor"].asIntOrNull() ?: return
+        if (!MultiplayerSanitizer.isValidFloor(floor) || floor != currentFloor) return
+        val (cx, cy) = MultiplayerSanitizer.clampCoord(floor, body["x"].asIntOrNull() ?: return, body["y"].asIntOrNull() ?: return)
+        val gold = (body["gold"].asIntOrNull() ?: 0).coerceIn(0, 10_000_000)
+        val items = parseItemStacks(body["items"])
+        if (gold <= 0 && items.isEmpty()) return
+        val ownerName = MultiplayerSanitizer.sanitizeName(body["oname"] as? String)
+        val isDroppedBag = (body["drop"] as? Boolean) ?: false
+        val rawLabel = (body["label"] as? String)?.trim()?.take(48).orEmpty()
+        val label = rawLabel.ifBlank { if (isDroppedBag) "$ownerName's Dropped Bag" else "Slain Monster" }
+        val lockMs = (body["lockMs"].asLongOrNull() ?: LOOT_OWNER_PROTECTION_MS).coerceIn(0L, LOOT_OWNER_PROTECTION_MS)
+        val lifeMs = (body["lifeMs"].asLongOrNull() ?: REGULAR_CORPSE_LIFETIME_MS).coerceIn(5_000L, BOSS_CORPSE_LIFETIME_MS)
+
+        _lootSpawnEvents.tryEmit(
+            SharedLootSpawnEvent(
+                corpseId = cid,
+                floor = floor,
+                x = cx,
+                y = cy,
+                label = label,
+                ownerPlayerId = ownerId,
+                ownerName = ownerName,
+                isDroppedBag = isDroppedBag,
+                monsterTypeName = (body["mtype"] as? String)?.take(48),
+                gold = gold,
+                items = items,
+                lockRemainingMs = lockMs,
+                lifetimeRemainingMs = lifeMs
+            )
+        )
+    }
+
+    private fun applyRemoteLootClaim(body: Map<String, Any?>) {
+        val localId = latestLocalPayload?.playerId
+        val claimerId = MultiplayerSanitizer.sanitizeId(body["pid"] as? String)
+        if (claimerId.isNotBlank() && claimerId == localId) return
+        val cid = MultiplayerSanitizer.sanitizeId(body["cid"] as? String)
+        if (cid.isBlank()) return
+        val floor = body["floor"].asIntOrNull() ?: return
+        if (!MultiplayerSanitizer.isValidFloor(floor) || floor != currentFloor) return
+        val remainingGold = (body["gold"].asIntOrNull() ?: 0).coerceAtLeast(0)
+        val remainingItems = parseItemStacks(body["items"])
+        val emptied = (body["empty"] as? Boolean) ?: (remainingGold <= 0 && remainingItems.isEmpty())
+        _lootClaimEvents.tryEmit(
+            SharedLootClaimEvent(
+                corpseId = cid,
+                floor = floor,
+                claimerId = claimerId,
+                claimerName = MultiplayerSanitizer.sanitizeName(body["pname"] as? String),
+                remainingGold = remainingGold,
+                remainingItems = remainingItems,
+                emptied = emptied
+            )
+        )
+    }
+
+    private fun applyIncomingTradeSignal(body: Map<String, Any?>) {
+        val localId = latestLocalPayload?.playerId ?: return
+        val fromId = MultiplayerSanitizer.sanitizeId(body["fromId"] as? String)
+        val toId = MultiplayerSanitizer.sanitizeId(body["toId"] as? String)
+        if (fromId.isBlank() || toId.isBlank() || fromId == localId || toId != localId) return
+        val tradeId = MultiplayerSanitizer.sanitizeId(body["tid"] as? String)
+        if (tradeId.isBlank()) return
+        val typeRaw = (body["type"] as? String)?.uppercase().orEmpty()
+        val type = runCatching { TradeSignalType.valueOf(typeRaw) }.getOrNull() ?: return
+        _tradeSignalEvents.tryEmit(
+            TradeSignalEvent(
+                type = type,
+                tradeId = tradeId,
+                fromPlayerId = fromId,
+                fromPlayerName = MultiplayerSanitizer.sanitizeName(body["fromName"] as? String),
+                fromLevel = (body["fromLvl"].asIntOrNull() ?: 1).coerceIn(1, 999),
+                fromVocation = MultiplayerSanitizer.safeVocation(body["fromVoc"] as? String),
+                toPlayerId = toId,
+                gold = (body["gold"].asIntOrNull() ?: 0).coerceIn(0, 1_000_000_000),
+                items = parseItemStacks(body["items"]),
+                locked = (body["locked"] as? Boolean) ?: false,
+                confirmed = (body["confirmed"] as? Boolean) ?: false,
+                offerVersion = (body["ver"].asIntOrNull() ?: 0).coerceAtLeast(0),
+                reason = (body["reason"] as? String)?.trim()?.take(80)?.ifBlank { null }
             )
         )
     }

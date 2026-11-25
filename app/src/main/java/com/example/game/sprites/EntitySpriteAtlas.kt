@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.example.game.model.AdventurerPalette
 import com.example.game.model.Direction
+import com.example.game.model.FishingCatalog
 import com.example.game.model.ItemCatalog
 import com.example.game.model.ItemCategory
 import com.example.game.model.MonsterType
@@ -1024,14 +1025,59 @@ object EntitySpriteAtlas {
                 for (i in 0..10) px(buf, ITEM_S, 3 + i, 13 - i, 0xFF8C5A2B.toInt()); rect(buf, ITEM_S, 13, 3, 1, 9, 0xFFDCD3C2.toInt())
             }
             ItemCategory.FOOD -> {
-                val c = when (itemId) {
-                    "fresh_fish" -> 0xFF5A9BD4.toInt()
-                    "fresh_meat" -> 0xFFC94A38.toInt()
-                    "dragon_ham" -> 0xFFB8442A.toInt()
-                    else -> 0xFFE3C254.toInt()
+                if (FishingCatalog.tierForFish(itemId) != null) {
+                    val (body, belly, accent) = when (itemId) {
+                        "fresh_fish" -> Triple(0xFF4F8EC9.toInt(), 0xFFAAD2F2.toInt(), 0xFF2B5B8A.toInt())
+                        "silver_trout" -> Triple(0xFFB4C8D8.toInt(), 0xFFEFF6FC.toInt(), 0xFF6394B8.toInt())
+                        "marsh_pike" -> Triple(0xFF4B8A4E.toInt(), 0xFFA4D48A.toInt(), 0xFF254D2B.toInt())
+                        "sunfin_snapper" -> Triple(0xFFE08A28.toInt(), 0xFFFFD878.toInt(), 0xFFA84214.toInt())
+                        "glacier_salmon" -> Triple(0xFF3CC2D9.toInt(), 0xFFC7F6FF.toInt(), 0xFF1D6B8C.toInt())
+                        "emberfin_sturgeon" -> Triple(0xFF3A272B.toInt(), 0xFFFF6E24.toInt(), 0xFFFFCA45.toInt())
+                        else -> Triple(0xFF5A9BD4.toInt(), 0xFFBFDDF5.toInt(), 0xFF2E6396.toInt())
+                    }
+                    // Tapered fish body, dorsal fin, forked tail, and eye
+                    rect(buf, ITEM_S, 3, 6, 8, 4, body)
+                    rect(buf, ITEM_S, 4, 5, 6, 2, body)
+                    rect(buf, ITEM_S, 4, 9, 6, 2, belly)
+                    rect(buf, ITEM_S, 6, 3, 3, 2, accent) // dorsal fin
+                    rect(buf, ITEM_S, 11, 7, 2, 2, body) // tail stem
+                    rect(buf, ITEM_S, 13, 4, 2, 3, accent) // upper tail fin
+                    rect(buf, ITEM_S, 13, 9, 2, 3, accent) // lower tail fin
+                    px(buf, ITEM_S, 2, 7, body); px(buf, ITEM_S, 2, 8, belly) // snout
+                    px(buf, ITEM_S, 4, 7, 0xFF120F0E.toInt()) // eye
+                    px(buf, ITEM_S, 7, 7, accent); px(buf, ITEM_S, 9, 7, accent) // lateral markings
+                } else {
+                    val c = when (itemId) {
+                        "fresh_meat" -> 0xFFC94A38.toInt()
+                        "dragon_ham" -> 0xFFB8442A.toInt()
+                        else -> 0xFFE3C254.toInt()
+                    }
+                    rect(buf, ITEM_S, 3, 5, 10, 6, c); rect(buf, ITEM_S, 12, 4, 2, 8, c)
+                    if (itemId == "fresh_meat") rect(buf, ITEM_S, 11, 7, 3, 2, 0xFFEDE3CE.toInt())
                 }
-                rect(buf, ITEM_S, 3, 5, 10, 6, c); rect(buf, ITEM_S, 12, 4, 2, 8, c)
-                if (itemId == "fresh_meat") rect(buf, ITEM_S, 11, 7, 3, 2, 0xFFEDE3CE.toInt())
+            }
+            ItemCategory.FISHING_BAIT -> {
+                val (body, stripe, glow) = when (itemId) {
+                    "garden_worm" -> Triple(0xFFD9847A.toInt(), 0xFFA8524A.toInt(), 0xFFF2B6AC.toInt())
+                    "dew_nightcrawler" -> Triple(0xFF9C5E78.toInt(), 0xFF633248.toInt(), 0xFFD9A3B8.toInt())
+                    "mire_bloodworm" -> Triple(0xFFC92A38.toInt(), 0xFF7A121C.toInt(), 0xFFFF6E7A.toInt())
+                    "dune_sandworm" -> Triple(0xFFD9A252.toInt(), 0xFF8C5B1F.toInt(), 0xFFFFDF99.toInt())
+                    "frost_glowworm" -> Triple(0xFF3FD6E8.toInt(), 0xFF1E7E99.toInt(), 0xFFD4FCFF.toInt())
+                    "cinder_emberworm" -> Triple(0xFFFF5E1A.toInt(), 0xFF7D2210.toInt(), 0xFFFFE066.toInt())
+                    else -> Triple(0xFFD9847A.toInt(), 0xFFA8524A.toInt(), 0xFFF2B6AC.toInt())
+                }
+                // Curled S-shaped segmented worm silhouette
+                rect(buf, ITEM_S, 4, 3, 6, 2, body)
+                rect(buf, ITEM_S, 9, 4, 2, 3, body)
+                rect(buf, ITEM_S, 5, 6, 5, 2, body)
+                rect(buf, ITEM_S, 4, 8, 2, 3, body)
+                rect(buf, ITEM_S, 5, 10, 7, 2, body)
+                rect(buf, ITEM_S, 11, 9, 2, 2, glow) // head tip
+                // Realistic body segments & sheen
+                px(buf, ITEM_S, 6, 3, stripe); px(buf, ITEM_S, 8, 4, glow)
+                px(buf, ITEM_S, 7, 6, stripe); px(buf, ITEM_S, 9, 7, stripe)
+                px(buf, ITEM_S, 4, 9, glow); px(buf, ITEM_S, 7, 10, stripe)
+                px(buf, ITEM_S, 9, 10, glow); px(buf, ITEM_S, 10, 11, stripe)
             }
             ItemCategory.WEAPON_MELEE -> {
                 if (itemId == "wooden_club") {

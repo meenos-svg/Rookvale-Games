@@ -251,6 +251,26 @@ fun ItemInspectionDialog(
                             StatPill("Tier ${def.pickaxeTier} Pickaxe", TorchAmber)
                             StatPill("Req Mining ${def.requiredMiningLevel}", ExpEmerald)
                         }
+                        if (def.category == ItemCategory.FOOD && def.restoreAmount > 0) {
+                            StatPill("+${def.restoreAmount} HP", ExpEmerald)
+                            val mpHeal = def.restoreAmount / 2
+                            if (mpHeal > 0) StatPill("+$mpHeal MP", ManaSapphire)
+                            if (def.requiredFishingLevel > 0) {
+                                StatPill("Fishing Lv ${def.requiredFishingLevel}", TorchGold)
+                            }
+                        }
+                        if (def.category == ItemCategory.FISHING_BAIT) {
+                            val meetsFishing = state.isAdmin || state.skills.fishing.level >= def.requiredFishingLevel
+                            StatPill(
+                                text = "Req Fishing Lv ${def.requiredFishingLevel}",
+                                color = if (meetsFishing) ExpEmerald else HealthCrimson
+                            )
+                            def.baitTargetFishId?.let { fishId ->
+                                val fish = ItemCatalog.get(fishId)
+                                StatPill("Catches ${fish.name} (+${fish.restoreAmount} HP)", TorchGold)
+                            }
+                            StatPill("Used Only On Catch", ManaSapphire)
+                        }
                         val wtLabel = if (def.isTool) {
                             "${formatOz(def.carriedWeightOz())} oz (Tool Bag)"
                         } else {

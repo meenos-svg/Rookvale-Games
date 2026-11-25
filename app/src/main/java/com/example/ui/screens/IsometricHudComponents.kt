@@ -2027,14 +2027,16 @@ fun RegionalWorldMapContent(
     remotePlayers: List<RemotePlayerState>,
     onWalkToTile: (Int, Int) -> Unit,
     realmOnlinePlayers: List<RemotePlayerState> = remotePlayers,
-    connectionStatus: ConnectionStatus = ConnectionStatus.OFFLINE_SOLO
+    connectionStatus: ConnectionStatus = ConnectionStatus.OFFLINE_SOLO,
+    onTradePlayer: (RemotePlayerState) -> Unit = {}
 ) {
     EnhancedRegionalWorldMapContent(
         state = state,
         remotePlayers = remotePlayers,
         onWalkToTile = onWalkToTile,
         realmOnlinePlayers = realmOnlinePlayers,
-        connectionStatus = connectionStatus
+        connectionStatus = connectionStatus,
+        onTradePlayer = onTradePlayer
     )
 }
 

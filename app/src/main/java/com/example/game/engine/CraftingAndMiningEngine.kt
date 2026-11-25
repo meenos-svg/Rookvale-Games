@@ -6,12 +6,15 @@ import com.example.game.model.CraftingStationType
 import com.example.game.model.FloatingTextKind
 import com.example.game.model.GameWorldState
 import com.example.game.model.ItemCatalog
+import com.example.game.model.OreVeinKind
 import com.example.game.model.ProjectileKind
 import com.example.game.model.RecipeCatalog
 import com.example.game.model.SkillType
 import com.example.game.model.TREE_CHOP_COOLDOWN_MS
 import com.example.game.model.TREE_REGROW_TICKS
 import com.example.game.model.TileType
+import com.example.game.world.BiomeProgressionRules
+import com.example.game.world.OverlandBiomeTier
 import com.example.game.world.WorldMaps
 import kotlin.random.Random
 
@@ -35,7 +38,69 @@ object CraftingAndMiningEngine {
         return (BASE_MINE_SWING_COOLDOWN_MS - tierAdvantage * 130L).coerceAtLeast(MIN_MINE_SWING_COOLDOWN_MS)
     }
 
-    fun mineOreNode(state: GameWorldState, tx: Int, ty: Int, nowMs: Long): GameWorldState {
+    /**
+     * Rolls for bonus fishing worms unearthed while digging/mining an ore vein.
+     * Returns (wormItemId, count) or null if none surfaced on this strike.
+     */
+    fun rollWormForageForOre(
+        oreKind: OreVeinKind,
+        roll: Double = Random.nextDouble(),
+        countRoll: Double = Random.nextDouble()
+    ): Pair<String, Int>? {
+        val (wormId, chance) = when (oreKind) {
+            OreVeinKind.COPPER, OreVeinKind.TIN -> "garden_worm" to 0.38
+            OreVeinKind.BOG_IRON -> "dew_nightcrawler" to 0.40
+            OreVeinKind.MIRE_SILVER, OreVeinKind.PEAT_COAL -> "mire_bloodworm" to 0.42
+            OreVeinKind.VESPERITE -> "dune_sandworm" to 0.44
+            OreVeinKind.GLACIER_QUARTZ, OreVeinKind.FROST_IRON -> "frost_glowworm" to 0.46
+            OreVeinKind.CINDERITE -> "cinder_emberworm" to 0.48
+        }
+        if (roll > chance) return null
+        val count = if (countRoll < 0.42) 2 else 1
+        return wormId to count
+    }
+
+    /**
+     * Rolls for bonus fishing worms/grubs shaken loose from roots and bark while chopping a tree.
+     * Scales naturally with the overland biome (and upgrades Heartland finds to Dew Nightcrawlers
+     * once the player reaches Fishing Lv 15).
+     */
+    fun rollWormForageForTree(
+        floor: Int,
+        tx: Int,
+        ty: Int,
+        fishingLevel: Int,
+        roll: Double = Random.nextDouble(),
+        countRoll: Double = Random.nextDouble()
+    ): Pair<String, Int>? {
+        val biome = if (floor == 0) {
+            BiomeProgressionRules.biomeForGlobalTile(tx, ty)
+        } else {
+            BiomeProgressionRules.surfaceBiomeForDungeonFloor(floor)
+        }
+        val (wormId, chance) = when (biome) {
+            OverlandBiomeTier.ROOKVALE_HEARTLAND -> {
+                val id = if (fishingLevel >= 15 && countRoll >= 0.45) "dew_nightcrawler" else "garden_worm"
+                id to 0.36
+            }
+            OverlandBiomeTier.WHISPERING_MARSH -> "mire_bloodworm" to 0.40
+            OverlandBiomeTier.SUNSCORCH_BADLANDS -> "dune_sandworm" to 0.42
+            OverlandBiomeTier.FROSTPEAK_HIGHLANDS -> "frost_glowworm" to 0.44
+            OverlandBiomeTier.ASHEN_CALDERA -> "cinder_emberworm" to 0.46
+        }
+        if (roll > chance) return null
+        val count = if (countRoll < 0.40) 2 else 1
+        return wormId to count
+    }
+
+    fun mineOreNode(
+        state: GameWorldState,
+        tx: Int,
+        ty: Int,
+        nowMs: Long,
+        mineRollOverride: Double? = null,
+        wormRollOverride: Double? = null
+    ): GameWorldState {
         val key = Triple(state.floor, tx, ty)
         val node = state.oreNodes[key]
             ?: return state.addLogInternal("There is no ore vein there.")
@@ -104,7 +169,7 @@ object CraftingAndMiningEngine {
         val skillDelta = (updatedMiningLvl - node.kind.requiredMiningLevel).coerceAtLeast(0)
         val successChance = (0.62 + skillDelta * 0.02 + tierBonus).coerceAtMost(0.98)
 
-        if (Random.nextDouble() > successChance) {
+        if ((mineRollOverride ?: Random.nextDouble()) > successChance) {
             return next
                 .addFloatingInternal(state.floor, tx.toFloat(), ty.toFloat(), "Clink!", FloatingTextKind.BLOCK, nowMs)
                 .addLogInternal("Struck ${node.kind.displayName} with ${pickaxe.name}... chips fell loose.")
@@ -133,8 +198,31 @@ object CraftingAndMiningEngine {
             nowMs
         )
 
+        val wormFind = rollWormForageForOre(
+            oreKind = node.kind,
+            roll = wormRollOverride ?: Random.nextDouble()
+        )
+        val wormNote = if (wormFind != null) {
+            val (wormId, wormCount) = wormFind
+            val wormDef = ItemCatalog.get(wormId)
+            val fitCount = (next.remainingCapOz() / wormDef.weightOz).toInt().coerceIn(0, wormCount)
+            if (fitCount > 0) {
+                next = next.copy(
+                    backpack = GameEngine.addItemPublic(next.backpack, wormId, fitCount)
+                ).addFloatingInternal(
+                    state.floor,
+                    state.playerX.toFloat(),
+                    state.playerY.toFloat(),
+                    "+$fitCount ${wormDef.name}",
+                    FloatingTextKind.HEAL,
+                    nowMs
+                )
+                " Unearthed ${fitCount}x ${wormDef.name}!"
+            } else ""
+        } else ""
+
         val depleteSuffix = if (newCharges == 0) " Vein depleted." else ""
-        return next.addLogInternal("Mined ${actualYield}x ${oreDef.name} with ${pickaxe.name} (Mining ${next.skills.mining.level}).$depleteSuffix")
+        return next.addLogInternal("Mined ${actualYield}x ${oreDef.name} with ${pickaxe.name} (Mining ${next.skills.mining.level}).$wormNote$depleteSuffix")
     }
 
     fun regenerateOreNodesTick(state: GameWorldState): GameWorldState {
@@ -155,7 +243,13 @@ object CraftingAndMiningEngine {
         return if (changed) state.copy(oreNodes = updated) else state
     }
 
-    fun chopTree(state: GameWorldState, tx: Int, ty: Int, nowMs: Long): GameWorldState {
+    fun chopTree(
+        state: GameWorldState,
+        tx: Int,
+        ty: Int,
+        nowMs: Long,
+        wormRollOverride: Double? = null
+    ): GameWorldState {
         val floorMap = WorldMaps.getFloor(state.floor)
         if (floorMap.tileAt(tx, ty) != TileType.TREE) {
             return state.addLogInternal("There is no choppable tree there.")
@@ -189,7 +283,7 @@ object CraftingAndMiningEngine {
         val actualYield = if (desiredYield == 2 && state.remainingCapOz() >= logDef.weightOz * 2) 2 else 1
         val updatedTrees = state.choppedTrees.toMutableMap().apply { put(key, TREE_REGROW_TICKS) }
 
-        return state.copy(
+        var next = state.copy(
             playerFacing = GameEngine.directionToward(state.playerX, state.playerY, tx, ty),
             backpack = GameEngine.addItemPublic(state.backpack, logDef.id, actualYield),
             choppedTrees = updatedTrees,
@@ -213,7 +307,34 @@ object CraftingAndMiningEngine {
                 FloatingTextKind.XP,
                 nowMs
             )
-            .addLogInternal("Chopped ${actualYield}x ${logDef.name} with your Hatchet. Tree will regrow in ${TREE_REGROW_TICKS}s.")
+
+        val wormFind = rollWormForageForTree(
+            floor = state.floor,
+            tx = tx,
+            ty = ty,
+            fishingLevel = state.skills.fishing.level,
+            roll = wormRollOverride ?: Random.nextDouble()
+        )
+        val wormNote = if (wormFind != null) {
+            val (wormId, wormCount) = wormFind
+            val wormDef = ItemCatalog.get(wormId)
+            val fitCount = (next.remainingCapOz() / wormDef.weightOz).toInt().coerceIn(0, wormCount)
+            if (fitCount > 0) {
+                next = next.copy(
+                    backpack = GameEngine.addItemPublic(next.backpack, wormId, fitCount)
+                ).addFloatingInternal(
+                    state.floor,
+                    state.playerX.toFloat(),
+                    state.playerY.toFloat(),
+                    "+$fitCount ${wormDef.name}",
+                    FloatingTextKind.HEAL,
+                    nowMs
+                )
+                " Found ${fitCount}x ${wormDef.name} beneath the bark!"
+            } else ""
+        } else ""
+
+        return next.addLogInternal("Chopped ${actualYield}x ${logDef.name} with your Hatchet.$wormNote Tree will regrow in ${TREE_REGROW_TICKS}s.")
     }
 
     fun regenerateTreesTick(state: GameWorldState): GameWorldState {

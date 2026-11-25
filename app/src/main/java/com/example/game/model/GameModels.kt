@@ -71,6 +71,7 @@ const val TREE_CHOP_COOLDOWN_MS = 900L
 const val REGULAR_CORPSE_LIFETIME_MS = 90_000L
 const val BOSS_CORPSE_LIFETIME_MS = 180_000L
 const val CORPSE_EXPIRY_WARNING_MS = 15_000L
+const val LOOT_OWNER_PROTECTION_MS = 5_000L
 const val BOSS_RESPAWN_MS = 300_000L
 
 data class SpriteColorSwatch(
@@ -328,6 +329,7 @@ enum class ItemCategory {
     TOOL_PICKAXE,
     TOOL_HATCHET,
     FOOD,
+    FISHING_BAIT,
     RAW_ORE,
     METAL_INGOT,
     CRAFT_MATERIAL,
@@ -499,6 +501,9 @@ data class ItemDefinition(
     val ammoKind: AmmoKind? = null,
     val pickaxeTier: Int = 0,
     val requiredMiningLevel: Int = 0,
+    val requiredFishingLevel: Int = 0,
+    val fishingTier: Int = 0,
+    val baitTargetFishId: String? = null,
     val restoreAmount: Int = 0,
     val manaCost: Int = 0,
     val stackable: Boolean = false,
@@ -545,6 +550,16 @@ data class ItemDefinition(
     fun hasJewelryEnhancements(): Boolean =
         procChanceBonusPct > 0 || procPowerBonusPct > 0 || procExtraTargets > 0 || bonusMaxHp > 0
 }
+
+data class FishingTierSpec(
+    val tier: Int,
+    val baitId: String,
+    val fishId: String,
+    val requiredFishingLevel: Int,
+    val baseCatchChance: Double,
+    val catchXpPoints: Double,
+    val missXpPoints: Double
+)
 
 @JsonClass(generateAdapter = true)
 data class ItemStack(
@@ -1234,7 +1249,11 @@ data class CorpseEntity(
     val gold: Int = 0,
     val items: List<ItemStack> = emptyList(),
     val createdAtMs: Long = 0L,
-    val expiresAtMs: Long = 0L
+    val expiresAtMs: Long = 0L,
+    val ownerPlayerId: String? = null,
+    val ownerName: String? = null,
+    val publicAtMs: Long = 0L,
+    val isDroppedBag: Boolean = false
 ) {
     fun remainingMs(nowMs: Long): Long? =
         if (isPlayerCorpse || expiresAtMs <= 0L) null else (expiresAtMs - nowMs).coerceAtLeast(0L)
@@ -1245,6 +1264,34 @@ data class CorpseEntity(
     fun isExpiringSoon(nowMs: Long): Boolean {
         val rem = remainingMs(nowMs) ?: return false
         return rem in 1L..CORPSE_EXPIRY_WARNING_MS
+    }
+
+    /**
+     * Returns true when this corpse/dropped pouch is still within its 5-second owner-only window
+     * for [viewerPlayerId] (someone who did NOT slay the monster or drop the bag).
+     */
+    fun isOwnerLockedFor(viewerPlayerId: String?, nowMs: Long): Boolean {
+        if (isPlayerCorpse) return !ownerPlayerId.isNullOrBlank() && ownerPlayerId != viewerPlayerId
+        if (ownerPlayerId.isNullOrBlank() || publicAtMs <= 0L) return false
+        if (!viewerPlayerId.isNullOrBlank() && ownerPlayerId == viewerPlayerId) return false
+        return nowMs < publicAtMs
+    }
+
+    /**
+     * Milliseconds remaining until [viewerPlayerId] can pick up this loot (0 if already unlocked).
+     */
+    fun ownerLockRemainingMs(viewerPlayerId: String?, nowMs: Long): Long {
+        if (!isOwnerLockedFor(viewerPlayerId, nowMs)) return 0L
+        if (isPlayerCorpse) return Long.MAX_VALUE
+        return (publicAtMs - nowMs).coerceAtLeast(0L)
+    }
+
+    /**
+     * Milliseconds remaining before an owner's own loot becomes public for bystanders (0 if already public).
+     */
+    fun publicCountdownMs(nowMs: Long): Long {
+        if (isPlayerCorpse || ownerPlayerId.isNullOrBlank() || publicAtMs <= 0L) return 0L
+        return (publicAtMs - nowMs).coerceAtLeast(0L)
     }
 }
 
@@ -1349,6 +1396,7 @@ data class PlayerSaveData(
     val questFlags: Map<String, Boolean> = emptyMap(),
     val boundAttackRuneId: String? = null,
     val boundHealRuneId: String? = "healing_rune",
+    val selectedBaitId: String? = null,
     val customHotbarSlots: List<String?> = listOf(null, null),
     val regionId: String = DEFAULT_REGION_ID,
     val facingName: String = Direction.SOUTH.name
@@ -1382,6 +1430,7 @@ data class PersistentCharacterFingerprint(
     val hairColorIndex: Int,
     val boundAttackRuneId: String?,
     val boundHealRuneId: String?,
+    val selectedBaitId: String?,
     val customHotbarSlots: List<String?>,
     val questFlags: Map<String, Boolean>
 )
@@ -1702,9 +1751,11 @@ data class GameWorldState(
     val outboundMonsterAttacks: List<LocalMonsterAttackEvent> = emptyList(),
     val outboundPlayerEffects: List<LocalPlayerActionFxEvent> = emptyList(),
     val outboundSystemAlerts: List<String> = emptyList(),
+    val outboundLootSpawns: List<CorpseEntity> = emptyList(),
     val questFlags: Map<String, Boolean> = emptyMap(),
     val boundAttackRuneId: String? = "magic_dart_rune",
     val boundHealRuneId: String? = "healing_rune",
+    val selectedBaitId: String? = null,
     val customHotbarSlots: List<String?> = listOf(null, null)
 ) {
     val isInvulnerable: Boolean
@@ -1732,6 +1783,7 @@ data class GameWorldState(
         hairColorIndex = hairColorIndex,
         boundAttackRuneId = boundAttackRuneId,
         boundHealRuneId = boundHealRuneId,
+        selectedBaitId = selectedBaitId,
         customHotbarSlots = customHotbarSlots,
         questFlags = questFlags
     )
@@ -1821,6 +1873,15 @@ data class GameWorldState(
     }
 
     fun activeAmmoCount(): Int = equipment.ammoId?.let { itemCount(it) } ?: 0
+
+    fun activeFishingBaitDef(): ItemDefinition? =
+        selectedBaitId?.let { ItemCatalog.all[it] }?.takeIf { it.category == ItemCategory.FISHING_BAIT }
+
+    fun activeFishingBaitCount(): Int =
+        activeFishingBaitDef()?.let { itemCount(it.id) } ?: 0
+
+    fun carriedFishingBaitStacks(): List<ItemStack> =
+        backpack.filter { ItemCatalog.all[it.itemId]?.category == ItemCategory.FISHING_BAIT && it.count > 0 }
 
     val magicLevel: Int get() = skills.magic.level
     val magicXp: Double get() = skills.magic.points

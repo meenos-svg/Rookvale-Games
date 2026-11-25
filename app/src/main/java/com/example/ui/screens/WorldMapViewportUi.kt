@@ -479,7 +479,8 @@ fun EnhancedRegionalWorldMapContent(
     remotePlayers: List<RemotePlayerState>,
     onWalkToTile: (Int, Int) -> Unit,
     realmOnlinePlayers: List<RemotePlayerState> = remotePlayers,
-    connectionStatus: ConnectionStatus = ConnectionStatus.OFFLINE_SOLO
+    connectionStatus: ConnectionStatus = ConnectionStatus.OFFLINE_SOLO,
+    onTradePlayer: (RemotePlayerState) -> Unit = {}
 ) {
     val floorMap = remember(state.floor) { WorldMaps.getFloor(state.floor) }
     val isOverland = state.floor == 0
@@ -1488,24 +1489,44 @@ fun EnhancedRegionalWorldMapContent(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     }
-                                    if (sameFloor) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Surface(
-                                            color = ExpEmerald.copy(alpha = 0.18f),
+                                            color = TorchGold.copy(alpha = 0.20f),
                                             shape = RoundedCornerShape(4.dp),
-                                            border = BorderStroke(1.dp, ExpEmerald.copy(alpha = 0.7f)),
+                                            border = BorderStroke(1.dp, TorchGold.copy(alpha = 0.8f)),
                                             modifier = Modifier
-                                                .clickable {
-                                                    followPlayer = false
-                                                    camera = WorldMapViewportCamera.recenterOnPlayer(camera, rp.x, rp.y)
-                                                }
-                                                .testTag("world_map_locate_${rp.playerId}")
+                                                .clickable { onTradePlayer(rp) }
+                                                .testTag("world_map_trade_${rp.playerId}")
                                         ) {
                                             Text(
-                                                text = "Locate",
+                                                text = "Trade",
                                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.ExtraBold),
-                                                color = ExpEmerald,
+                                                color = TorchGold,
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                                             )
+                                        }
+                                        if (sameFloor) {
+                                            Surface(
+                                                color = ExpEmerald.copy(alpha = 0.18f),
+                                                shape = RoundedCornerShape(4.dp),
+                                                border = BorderStroke(1.dp, ExpEmerald.copy(alpha = 0.7f)),
+                                                modifier = Modifier
+                                                    .clickable {
+                                                        followPlayer = false
+                                                        camera = WorldMapViewportCamera.recenterOnPlayer(camera, rp.x, rp.y)
+                                                    }
+                                                    .testTag("world_map_locate_${rp.playerId}")
+                                            ) {
+                                                Text(
+                                                    text = "Locate",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.ExtraBold),
+                                                    color = ExpEmerald,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
