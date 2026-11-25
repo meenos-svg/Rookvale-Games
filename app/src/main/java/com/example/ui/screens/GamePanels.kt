@@ -151,6 +151,8 @@ fun SlideUpGamePanel(
         ActivePanel.ANVIL -> "Blacksmith Anvil"
         ActivePanel.FLETCHING_BENCH -> "Fletching Workbench"
         ActivePanel.RUNECRAFTING_TABLE -> stringResource(R.string.panel_runecrafting)
+        ActivePanel.BIOME_STALL -> state.activeBiomeStall?.displayName ?: "Biome Crafting Stall"
+        ActivePanel.RECIPE_CODEX -> "Biome Recipe Codex"
         ActivePanel.LOOT_CORPSE -> state.corpses.firstOrNull { it.id == state.inspectingCorpseId }?.label ?: "Corpse"
         ActivePanel.ORACLE -> "The Oracle"
         ActivePanel.WORLD_MAP -> if (state.floor == 0) "Rookvale World Map" else "Dungeon Map"
@@ -164,6 +166,8 @@ fun SlideUpGamePanel(
     var inspectedItem by remember { mutableStateOf<InspectedItemRequest?>(null) }
     val maxPanelHeight = when (state.activePanel) {
         ActivePanel.WORLD_MAP -> 380.dp
+        ActivePanel.RECIPE_CODEX -> 380.dp
+        ActivePanel.BIOME_STALL -> 370.dp
         ActivePanel.ADMIN_SCROLL -> 370.dp
         ActivePanel.SETTINGS -> 360.dp
         else -> 330.dp
@@ -266,6 +270,20 @@ fun SlideUpGamePanel(
                     )
                     ActivePanel.RUNECRAFTING_TABLE -> RunecraftingTableContent(
                         state = state,
+                        onCraft = onCraftRecipe,
+                        onInspectItem = { id -> inspectedItem = InspectedItemRequest(id) }
+                    )
+                    ActivePanel.BIOME_STALL -> BiomeCraftingStallContent(
+                        state = state,
+                        initialStation = state.activeBiomeStall,
+                        isCodexBrowseMode = false,
+                        onCraft = onCraftRecipe,
+                        onInspectItem = { id -> inspectedItem = InspectedItemRequest(id) }
+                    )
+                    ActivePanel.RECIPE_CODEX -> BiomeCraftingStallContent(
+                        state = state,
+                        initialStation = null,
+                        isCodexBrowseMode = true,
                         onCraft = onCraftRecipe,
                         onInspectItem = { id -> inspectedItem = InspectedItemRequest(id) }
                     )

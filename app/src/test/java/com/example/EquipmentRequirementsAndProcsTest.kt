@@ -94,23 +94,23 @@ class EquipmentRequirementsAndProcsTest {
         assertEquals(SkillType.SHIELDING to 32, vespMail.requiredSkill)
         assertEquals("Ember Thorns", vespMail.proc?.name)
 
-        // Tier 5: Level 40, Skill 42 (Cinderite weapons + shield + chest)
+        // Tier 5: Level 45, Skill 42 (Cinderite / Ashen weapons + shield + chest)
         val cindGreatsword = ItemCatalog.get("cinderite_greatsword")
         assertEquals(5, cindGreatsword.equipmentTier)
-        assertEquals(40, cindGreatsword.requiredLevel)
+        assertEquals(45, cindGreatsword.requiredLevel)
         assertEquals(SkillType.SWORD to 42, cindGreatsword.requiredSkill)
         assertEquals("Cataclysm Wave", cindGreatsword.proc?.name)
 
         val cindBastion = ItemCatalog.get("cinderite_bastion")
         assertEquals(5, cindBastion.equipmentTier)
-        assertEquals(40, cindBastion.requiredLevel)
+        assertEquals(45, cindBastion.requiredLevel)
         assertEquals(SkillType.SHIELDING to 42, cindBastion.requiredSkill)
         assertEquals("Aegis Retaliation", cindBastion.proc?.name)
         assertEquals(ProcTriggerType.ON_DEFEND, cindBastion.proc?.triggerType)
 
         val cindWarplate = ItemCatalog.get("cinderite_warplate")
         assertEquals(5, cindWarplate.equipmentTier)
-        assertEquals(40, cindWarplate.requiredLevel)
+        assertEquals(45, cindWarplate.requiredLevel)
         assertEquals(SkillType.SHIELDING to 42, cindWarplate.requiredSkill)
         assertEquals("Ember Thorns", cindWarplate.proc?.name)
     }

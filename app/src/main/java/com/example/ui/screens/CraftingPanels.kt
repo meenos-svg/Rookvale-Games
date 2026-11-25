@@ -36,10 +36,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.game.engine.CraftingAndMiningEngine
+import com.example.game.model.BiomeEquipmentClass
 import com.example.game.model.CraftingRecipe
+import com.example.game.model.CraftingStationType
 import com.example.game.model.CraftingTab
+import com.example.game.model.EquipmentSlot
 import com.example.game.model.GameWorldState
 import com.example.game.model.ItemCatalog
+import com.example.game.model.ItemCategory
 import com.example.game.model.RecipeCatalog
 import com.example.game.sprites.EntitySpriteAtlas
 import com.example.ui.theme.ExpEmerald
@@ -55,6 +61,211 @@ import com.example.ui.theme.StoneBorderLight
 import com.example.ui.theme.StoneSurface
 import com.example.ui.theme.TorchAmber
 import com.example.ui.theme.TorchGold
+
+private enum class BiomeRecipeFilter(val label: String) {
+    ALL("All"),
+    PICKAXES("Pickaxes"),
+    SMELTING("Smelting"),
+    WEAPONS("Weapons"),
+    DEFENSE("Shield & Armor")
+}
+
+internal fun biomeStationAccent(station: CraftingStationType): androidx.compose.ui.graphics.Color = when (station) {
+    CraftingStationType.ROOKVALE_TOWN_FORGE -> TorchAmber
+    CraftingStationType.STILT_TOWN_MIRE_BENCH -> androidx.compose.ui.graphics.Color(0xFF5CE88A)
+    CraftingStationType.SUNSCORCH_OASIS_SMELTERY -> androidx.compose.ui.graphics.Color(0xFFB48CFF)
+    CraftingStationType.FROSTPEAK_GREAT_HEARTH -> androidx.compose.ui.graphics.Color(0xFF68E8FF)
+    CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY -> androidx.compose.ui.graphics.Color(0xFFFF6E24)
+}
+
+@Composable
+fun BiomeCraftingStallContent(
+    state: GameWorldState,
+    initialStation: CraftingStationType?,
+    isCodexBrowseMode: Boolean,
+    onCraft: (String) -> Unit,
+    onInspectItem: (String) -> Unit = {}
+) {
+    val nearbyStall = remember(state.floor, state.playerX, state.playerY) {
+        CraftingAndMiningEngine.nearbyBiomeStation(state)
+    }
+    var selectedStation by remember(initialStation, nearbyStall) {
+        mutableStateOf(initialStation ?: nearbyStall ?: CraftingStationType.ROOKVALE_TOWN_FORGE)
+    }
+    var selectedFilter by remember { mutableStateOf(BiomeRecipeFilter.ALL) }
+    val atSelectedStall = remember(state.floor, state.playerX, state.playerY, selectedStation) {
+        CraftingAndMiningEngine.isNearBiomeStation(state, selectedStation)
+    }
+    val recipes = remember(selectedStation, selectedFilter) {
+        RecipeCatalog.recipesForBiomeStation(selectedStation).filter { recipe ->
+            val outDef = ItemCatalog.get(recipe.outputItemId)
+            when (selectedFilter) {
+                BiomeRecipeFilter.ALL -> true
+                BiomeRecipeFilter.PICKAXES -> outDef.category == ItemCategory.TOOL_PICKAXE
+                BiomeRecipeFilter.SMELTING -> outDef.category == ItemCategory.METAL_INGOT
+                BiomeRecipeFilter.WEAPONS -> outDef.equipSlot == EquipmentSlot.WEAPON || outDef.category == ItemCategory.AMMO
+                BiomeRecipeFilter.DEFENSE -> outDef.equipSlot == EquipmentSlot.SHIELD || outDef.equipSlot == EquipmentSlot.ARMOR
+            }
+        }
+    }
+    val stationAccent = biomeStationAccent(selectedStation)
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // 5 Biome Stall selector strip (browse any biome from Recipe Codex or inspect current stall)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            CraftingStationType.entries.forEach { station ->
+                val active = station == selectedStation
+                val isNearby = CraftingAndMiningEngine.isNearBiomeStation(state, station)
+                val accent = biomeStationAccent(station)
+                Surface(
+                    color = if (active) accent else StoneSurface,
+                    shape = RoundedCornerShape(6.dp),
+                    border = BorderStroke(
+                        width = if (isNearby) 1.5.dp else 1.dp,
+                        color = when {
+                            active -> accent
+                            isNearby -> ExpEmerald
+                            else -> StoneBorderLight
+                        }
+                    ),
+                    modifier = Modifier
+                        .clickable { selectedStation = station }
+                        .testTag("biome_stall_tab_${station.name.lowercase()}")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(
+                            text = station.shortName,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (active) ObsidianVoid else ParchmentLight
+                        )
+                        if (isNearby) {
+                            Text(
+                                text = "HERE",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp, fontWeight = FontWeight.ExtraBold),
+                                color = if (active) ObsidianVoid else ExpEmerald
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Location-lock status banner
+        Surface(
+            color = if (atSelectedStall) ExpEmerald.copy(alpha = 0.14f) else TorchAmber.copy(alpha = 0.12f),
+            shape = RoundedCornerShape(6.dp),
+            border = BorderStroke(1.dp, if (atSelectedStall) ExpEmerald.copy(alpha = 0.7f) else TorchAmber.copy(alpha = 0.65f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 2.dp)
+                .testTag("biome_stall_location_banner")
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = if (atSelectedStall) {
+                        "✓ AT ${selectedStation.displayName.uppercase()} • READY TO FORGE"
+                    } else {
+                        "🔒 ${selectedStation.displayName} (${selectedStation.biomeLabel})"
+                    },
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    color = if (atSelectedStall) ExpEmerald else TorchAmber,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (atSelectedStall) {
+                        "Mining Lv ${state.skills.mining.level} • Forge ${selectedStation.gearClassificationLabel} & next-tier pickaxes."
+                    } else if (isCodexBrowseMode) {
+                        "Browse recipes anywhere. Stand within 2 tiles of ${selectedStation.displayName} to craft."
+                    } else {
+                        "Must stand within 2 tiles of ${selectedStation.displayName} to forge ${selectedStation.gearClassificationLabel}."
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ParchmentMuted,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // Category sub-filters
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            BiomeRecipeFilter.entries.forEach { filter ->
+                val active = filter == selectedFilter
+                Surface(
+                    color = if (active) TorchGold else ObsidianVoid,
+                    shape = RoundedCornerShape(5.dp),
+                    border = BorderStroke(1.dp, if (active) TorchGold else StoneBorderDark),
+                    modifier = Modifier
+                        .clickable { selectedFilter = filter }
+                        .testTag("biome_filter_${filter.name.lowercase()}")
+                ) {
+                    Text(
+                        text = filter.label,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = if (active) ObsidianVoid else ParchmentLight,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+
+        if (recipes.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No ${selectedFilter.label.lowercase()} recipes at ${selectedStation.shortName}.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ParchmentMuted
+                )
+            }
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(recipes, key = { it.id }) { recipe ->
+                    val outDef = ItemCatalog.get(recipe.outputItemId)
+                    val label = when {
+                        !atSelectedStall -> "Locked"
+                        outDef.category == ItemCategory.METAL_INGOT -> "Smelt"
+                        else -> "Forge"
+                    }
+                    RecipeCraftCard(
+                        state = state,
+                        recipe = recipe,
+                        actionLabel = label,
+                        accentColor = stationAccent,
+                        allowClickWhenLocked = true,
+                        isAtRequiredStall = atSelectedStall,
+                        onCraft = { onCraft(recipe.id) },
+                        onInspect = { onInspectItem(recipe.outputItemId) }
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun SmeltingFurnaceContent(
@@ -372,6 +583,8 @@ private fun RecipeCraftCard(
     recipe: CraftingRecipe,
     actionLabel: String,
     accentColor: androidx.compose.ui.graphics.Color,
+    allowClickWhenLocked: Boolean = false,
+    isAtRequiredStall: Boolean = true,
     onCraft: () -> Unit,
     onInspect: () -> Unit
 ) {
@@ -380,11 +593,19 @@ private fun RecipeCraftCard(
     val hasAllIngredients = recipe.ingredients.all { state.hasItem(it.itemId, it.count) }
     val equipReqsMet = state.meetsEquipRequirements(outDef)
     val tierColor = if (outDef.equipmentTier > 0) tierBadgeColor(outDef.equipmentTier) else accentColor
+    val canExecuteNow = hasAllIngredients && isAtRequiredStall
 
     Surface(
         color = StoneSurface,
         shape = RoundedCornerShape(6.dp),
-        border = BorderStroke(1.dp, if (hasAllIngredients) accentColor.copy(alpha = 0.85f) else StoneBorderLight.copy(alpha = 0.5f)),
+        border = BorderStroke(
+            1.dp,
+            when {
+                canExecuteNow -> accentColor.copy(alpha = 0.85f)
+                !isAtRequiredStall -> TorchAmber.copy(alpha = 0.45f)
+                else -> StoneBorderLight.copy(alpha = 0.5f)
+            }
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("recipe_${recipe.id}")
@@ -401,7 +622,7 @@ private fun RecipeCraftCard(
                 modifier = Modifier
                     .size(38.dp)
                     .background(ObsidianVoid, RoundedCornerShape(4.dp))
-                    .border(1.dp, if (outDef.equipmentTier >= 4) tierColor.copy(alpha = 0.8f) else StoneBorderDark, RoundedCornerShape(4.dp))
+                    .border(1.dp, if (outDef.equipmentTier >= 3 || outDef.biomeClass != BiomeEquipmentClass.NONE) tierColor.copy(alpha = 0.8f) else StoneBorderDark, RoundedCornerShape(4.dp))
             )
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -417,7 +638,18 @@ private fun RecipeCraftCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
-                    if (outDef.equipmentTier > 0) {
+                    if (outDef.biomeClass != BiomeEquipmentClass.NONE) {
+                        val bColor = androidx.compose.ui.graphics.Color(outDef.biomeClass.accentColorHex)
+                        Text(
+                            text = outDef.biomeClass.displayName.substringBefore(" /"),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                            color = bColor,
+                            modifier = Modifier
+                                .background(bColor.copy(alpha = 0.16f), RoundedCornerShape(4.dp))
+                                .border(1.dp, bColor.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                        )
+                    } else if (outDef.equipmentTier > 0) {
                         Text(
                             text = "T${outDef.equipmentTier}",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
@@ -429,21 +661,34 @@ private fun RecipeCraftCard(
                         )
                     }
                 }
+                // Required biome stall pill (shown clearly in Recipe Codex or when browsing stalls)
+                if (!isAtRequiredStall) {
+                    Text(
+                        text = "Stall: ${recipe.requiredBiomeStation.displayName}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold),
+                        color = TorchAmber,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 // Stats + Requirements strip
                 val statsLine = buildString {
                     if (outDef.attack > 0) {
                         append("ATK ${outDef.attack}")
                         if (outDef.isTwoHanded) append(" • 2H")
-                        if (outDef.equipSlot == com.example.game.model.EquipmentSlot.WEAPON) append(" • ${outDef.speedLabel()}")
+                        if (outDef.equipSlot == EquipmentSlot.WEAPON) append(" • ${outDef.speedLabel()}")
                         append(" • ")
                     }
                     if (outDef.defense > 0) append("DEF ${outDef.defense} • ")
                     if (outDef.armor > 0) append("ARM ${outDef.armor} • ")
+                    if (outDef.poisonResistPercent > 0) append("+${outDef.poisonResistPercent}% Poison Res • ")
                     if (outDef.bonusMaxHp > 0) append("+${outDef.bonusMaxHp} HP • ")
                     if (outDef.procChanceBonusPct > 0) append("+${outDef.procChanceBonusPct}% Proc • ")
                     if (outDef.procPowerBonusPct > 0) append("+${outDef.procPowerBonusPct}% Pwr • ")
                     if (outDef.procExtraTargets > 0) append("+${outDef.procExtraTargets} Tgt • ")
-                    if (outDef.pickaxeTier > 0) append("Tier ${outDef.pickaxeTier} Pick • ")
+                    if (outDef.pickaxeTier > 0) {
+                        append("Tier ${outDef.pickaxeTier} Pick • Mining ${outDef.requiredMiningLevel} • ")
+                    }
                     if (outDef.equipSlot != null) {
                         append("Req Lv ${outDef.requiredLevel}")
                         outDef.requiredSkill?.let { (sk, lv) ->
@@ -489,17 +734,17 @@ private fun RecipeCraftCard(
             Spacer(Modifier.width(6.dp))
             Button(
                 onClick = onCraft,
-                enabled = hasAllIngredients,
+                enabled = if (allowClickWhenLocked) true else canExecuteNow,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = accentColor,
-                    contentColor = ObsidianVoid,
+                    containerColor = if (canExecuteNow) accentColor else StoneBorderDark,
+                    contentColor = if (canExecuteNow) ObsidianVoid else ParchmentMuted,
                     disabledContainerColor = StoneBorderDark,
                     disabledContentColor = ParchmentMuted
                 ),
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                 shape = RoundedCornerShape(6.dp),
                 modifier = Modifier
-                    .height(40.dp)
+                    .height(48.dp)
                     .testTag("craft_btn_${recipe.id}")
             ) {
                 Text(actionLabel, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))

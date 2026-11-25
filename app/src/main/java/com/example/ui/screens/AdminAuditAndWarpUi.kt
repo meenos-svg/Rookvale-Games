@@ -21,9 +21,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudQueue
-import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
@@ -53,20 +54,25 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.game.cloud.AdminAuditAction
 import com.example.game.cloud.AdminAuditEntry
 import com.example.game.cloud.AdminAuditSyncStatus
 import com.example.game.cloud.AdminAuditUiState
 import com.example.game.cloud.AdminTeleportCatalog
 import com.example.game.cloud.AdminTeleportPreset
+import com.example.game.cloud.AdminWarpCategory
 import com.example.game.model.GameWorldState
+import com.example.game.world.OverlandBiomeTier
 import com.example.game.world.WorldMaps
 import com.example.ui.theme.ExpEmerald
+import com.example.ui.theme.FireOrange
 import com.example.ui.theme.HealthCrimson
 import com.example.ui.theme.ManaSapphire
 import com.example.ui.theme.ObsidianVoid
 import com.example.ui.theme.ParchmentLight
 import com.example.ui.theme.ParchmentMuted
+import com.example.ui.theme.PoisonGreen
 import com.example.ui.theme.StoneBorderLight
 import com.example.ui.theme.StoneSurface
 import com.example.ui.theme.TorchAmber
@@ -77,6 +83,28 @@ import java.util.Locale
 
 private val AuditViolet = Color(0xFFA78BFA)
 private val AuditCyan = Color(0xFF38BDF8)
+
+private enum class AdminWarpFilter(
+    val label: String,
+    val testTagSuffix: String,
+    val category: AdminWarpCategory?
+) {
+    ALL("All", "all", null),
+    TOWNS_EMPIRES("Towns & Empires", "towns_empires", AdminWarpCategory.TOWNS_EMPIRES),
+    OVERLAND_CAMPS("Overland Camps", "overland_camps", AdminWarpCategory.OVERLAND_CAMPS),
+    DUNGEON_CAMPS("Dungeon Camps", "dungeon_camps", AdminWarpCategory.DUNGEON_CAMPS)
+}
+
+private fun biomeTierAccentColor(preset: AdminTeleportPreset): Color {
+    if (preset.isDungeon) return AuditViolet
+    return when (preset.biomeTier) {
+        OverlandBiomeTier.ROOKVALE_HEARTLAND -> ExpEmerald
+        OverlandBiomeTier.WHISPERING_MARSH -> PoisonGreen
+        OverlandBiomeTier.SUNSCORCH_BADLANDS -> TorchAmber
+        OverlandBiomeTier.FROSTPEAK_HIGHLANDS -> AuditCyan
+        OverlandBiomeTier.ASHEN_CALDERA -> FireOrange
+    }
+}
 
 /**
  * Admin Control Warp Tab: one-tap Overland & Dungeon landmark teleports plus
@@ -91,83 +119,77 @@ fun AdminWarpSection(
     var xInput by remember(state.playerX, state.floor) { mutableStateOf(state.playerX.toString()) }
     var yInput by remember(state.playerY, state.floor) { mutableStateOf(state.playerY.toString()) }
     var coordError by remember { mutableStateOf<String?>(null) }
+    var selectedFilter by remember { mutableStateOf(AdminWarpFilter.ALL) }
 
     val selectedFloorMap = remember(selectedFloor) { WorldMaps.getFloor(selectedFloor) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // 1. Overland Landmarks Card
-        Surface(
-            color = StoneSurface.copy(alpha = 0.92f),
-            shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(1.dp, StoneBorderLight),
-            modifier = Modifier.fillMaxWidth()
+        // Category Filter Chips Bar (All / Towns & Empires / Overland Camps / Dungeon Camps)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier.padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Explore,
-                        contentDescription = null,
-                        tint = TorchGold,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = "OVERLAND LANDMARKS",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
-                        color = TorchGold
-                    )
+            AdminWarpFilter.entries.forEach { filter ->
+                val count = AdminTeleportCatalog.presetsFor(filter.category).size
+                val accent = when (filter) {
+                    AdminWarpFilter.ALL -> TorchGold
+                    AdminWarpFilter.TOWNS_EMPIRES -> TorchGold
+                    AdminWarpFilter.OVERLAND_CAMPS -> ExpEmerald
+                    AdminWarpFilter.DUNGEON_CAMPS -> AuditViolet
                 }
-                AdminPresetGrid(
-                    presets = AdminTeleportCatalog.overlandLandmarks,
-                    onSelect = { preset ->
-                        coordError = null
-                        onTeleport(preset.floor, preset.x, preset.y, preset.label)
-                    }
+                AdminWarpFilterChip(
+                    label = "${filter.label} ($count)",
+                    selected = selectedFilter == filter,
+                    accentColor = accent,
+                    onClick = { selectedFilter = filter },
+                    testTag = "admin_warp_filter_${filter.testTagSuffix}"
                 )
             }
         }
 
-        // 2. Dungeon Floors Card
-        Surface(
-            color = StoneSurface.copy(alpha = 0.92f),
-            shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(1.dp, StoneBorderLight),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Place,
-                        contentDescription = null,
-                        tint = AuditViolet,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = "DUNGEON FLOORS",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
-                        color = AuditViolet
-                    )
+        // 1. Towns & Empires Card
+        if (selectedFilter == AdminWarpFilter.ALL || selectedFilter == AdminWarpFilter.TOWNS_EMPIRES) {
+            AdminWarpCategoryCard(
+                title = "TOWNS & EMPIRES (${AdminTeleportCatalog.townsAndEmpires.size})",
+                icon = Icons.Default.AccountBalance,
+                headerColor = TorchGold,
+                presets = AdminTeleportCatalog.townsAndEmpires,
+                onSelect = { preset ->
+                    coordError = null
+                    onTeleport(preset.floor, preset.x, preset.y, preset.label)
                 }
-                AdminPresetGrid(
-                    presets = AdminTeleportCatalog.dungeonFloors,
-                    accentBorder = AuditViolet.copy(alpha = 0.65f),
-                    onSelect = { preset ->
-                        coordError = null
-                        onTeleport(preset.floor, preset.x, preset.y, preset.label)
-                    }
-                )
-            }
+            )
+        }
+
+        // 2. Overland Forward & Frontier Camps Card
+        if (selectedFilter == AdminWarpFilter.ALL || selectedFilter == AdminWarpFilter.OVERLAND_CAMPS) {
+            AdminWarpCategoryCard(
+                title = "OVERLAND CAMPS (${AdminTeleportCatalog.overlandCamps.size})",
+                icon = Icons.Default.Flag,
+                headerColor = ExpEmerald,
+                presets = AdminTeleportCatalog.overlandCamps,
+                onSelect = { preset ->
+                    coordError = null
+                    onTeleport(preset.floor, preset.x, preset.y, preset.label)
+                }
+            )
+        }
+
+        // 3. Subterranean Dungeon Forward Camps Card
+        if (selectedFilter == AdminWarpFilter.ALL || selectedFilter == AdminWarpFilter.DUNGEON_CAMPS) {
+            AdminWarpCategoryCard(
+                title = "DUNGEON CAMPS (${AdminTeleportCatalog.dungeonCamps.size})",
+                icon = Icons.Default.Place,
+                headerColor = AuditViolet,
+                presets = AdminTeleportCatalog.dungeonCamps,
+                onSelect = { preset ->
+                    coordError = null
+                    onTeleport(preset.floor, preset.x, preset.y, preset.label)
+                }
+            )
         }
 
         // 3. Custom Coordinate Warp Card
@@ -342,31 +364,107 @@ fun AdminWarpSection(
 }
 
 @Composable
-private fun AdminPresetGrid(
+private fun AdminWarpFilterChip(
+    label: String,
+    selected: Boolean,
+    accentColor: Color,
+    onClick: () -> Unit,
+    testTag: String
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .clickable(onClick = onClick)
+            .testTag(testTag)
+    ) {
+        Surface(
+            color = if (selected) accentColor else ObsidianVoid,
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, if (selected) accentColor else StoneBorderLight)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.5.sp
+                ),
+                color = if (selected) ObsidianVoid else ParchmentLight,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun AdminWarpCategoryCard(
+    title: String,
+    icon: ImageVector,
+    headerColor: Color,
     presets: List<AdminTeleportPreset>,
-    accentBorder: Color = TorchAmber.copy(alpha = 0.65f),
     onSelect: (AdminTeleportPreset) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+    Surface(
+        color = StoneSurface.copy(alpha = 0.92f),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, StoneBorderLight),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = headerColor,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    color = headerColor
+                )
+            }
+            AdminPresetGrid(
+                presets = presets,
+                onSelect = onSelect
+            )
+        }
+    }
+}
+
+@Composable
+private fun AdminPresetGrid(
+    presets: List<AdminTeleportPreset>,
+    onSelect: (AdminTeleportPreset) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         presets.chunked(2).forEach { rowPresets ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 rowPresets.forEach { preset ->
+                    val tierAccent = biomeTierAccentColor(preset)
                     Surface(
-                        color = ObsidianVoid.copy(alpha = 0.9f),
+                        color = ObsidianVoid.copy(alpha = 0.92f),
                         shape = RoundedCornerShape(6.dp),
-                        border = BorderStroke(1.dp, accentBorder),
+                        border = BorderStroke(1.dp, tierAccent.copy(alpha = 0.65f)),
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 38.dp)
+                            .heightIn(min = 48.dp)
                             .clickable { onSelect(preset) }
                             .testTag("admin_warp_preset_${preset.id}")
                     ) {
                         Column(
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                            verticalArrangement = Arrangement.Center
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)
                         ) {
                             Text(
                                 text = preset.label,
@@ -378,12 +476,35 @@ private fun AdminPresetGrid(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Text(
-                                text = "F${preset.floor} • ${preset.x},${preset.y}",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
-                                color = ParchmentMuted,
-                                maxLines = 1
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Surface(
+                                    color = tierAccent.copy(alpha = 0.18f),
+                                    shape = RoundedCornerShape(4.dp),
+                                    border = BorderStroke(0.7.dp, tierAccent.copy(alpha = 0.72f))
+                                ) {
+                                    Text(
+                                        text = preset.levelRangeLabel,
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 8.sp
+                                        ),
+                                        color = tierAccent,
+                                        maxLines = 1,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "F${preset.floor} • ${preset.x},${preset.y}",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                                    color = ParchmentMuted,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }

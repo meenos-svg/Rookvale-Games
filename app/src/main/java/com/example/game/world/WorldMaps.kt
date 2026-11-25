@@ -1168,8 +1168,9 @@ object WorldMaps {
         for (x in 217..233) {
             if (x !in 221..229) grid.set(x, 211, TileType.WOOD_FENCE)
         }
-        // West Blacksmith Forge: Glowing Lava/Coal Smelting Furnace, Horned Anvil, Weapon Rack & Coal Barrels
+        // West Blacksmith Forge: Glowing Lava/Coal Smelting Furnace, Rookvale Town Forge Stall, Horned Anvil, Weapon Rack & Coal Barrels
         grid.set(219, 201, TileType.SMELTING_FURNACE)
+        grid.set(221, 201, TileType.BIOME_STALL_HEARTLAND)
         grid.set(223, 201, TileType.BLACKSMITH_ANVIL)
         grid.set(218, 206, TileType.WEAPON_RACK)
         grid.set(223, 206, TileType.CRATE_BARREL)
@@ -1570,7 +1571,9 @@ object WorldMaps {
         fillRect(g, 31, 7, 33, 9, TileType.LAVA)
         listOf(19 to 10, 29 to 10, 19 to 14, 29 to 14).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
 
-        // Vesperite Veins & Deep Cinderite Veins guarded in Floor -2 chambers
+        // Mire-Silver, Peat-Coal, Vesperite & Deep Cinderite Veins guarded in Floor -2 chambers
+        listOf(10 to 32, 37 to 32).forEach { (x, y) -> g[y][x] = TileType.ORE_MIRE_SILVER }
+        listOf(11 to 35, 36 to 35).forEach { (x, y) -> g[y][x] = TileType.ORE_PEAT_COAL }
         listOf(8 to 21, 8 to 28, 34 to 35).forEach { (x, y) -> g[y][x] = TileType.ORE_VESPERITE }
         listOf(18 to 8, 30 to 8, 42 to 27, 19 to 39).forEach { (x, y) -> g[y][x] = TileType.ORE_CINDERITE }
 
@@ -1687,7 +1690,9 @@ object WorldMaps {
         // Obsidian cover pillars for dodging Dragon fire breath
         listOf(17 to 13, 31 to 13, 17 to 19, 31 to 19).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
 
-        // Rich Cinderite Veins guarded by Wyrms & the Ancient Dragon
+        // Rich Glacier-Quartz, Frost-Iron & Cinderite Veins guarded by Wyrms & the Ancient Dragon
+        listOf(9 to 30, 14 to 36).forEach { (x, y) -> g[y][x] = TileType.ORE_GLACIER_QUARTZ }
+        listOf(10 to 36, 33 to 31).forEach { (x, y) -> g[y][x] = TileType.ORE_FROST_IRON }
         listOf(13 to 10, 35 to 10, 12 to 22, 36 to 22, 24 to 9).forEach { (x, y) -> g[y][x] = TileType.ORE_CINDERITE }
 
         // Subterranean Safe Vanguard Camp (PZ) at Southern Entry Bastion (x=19..29, y=35..41)
@@ -1790,6 +1795,7 @@ object WorldMaps {
         g[41][28] = TileType.WAR_BANNER
         g[40][21] = TileType.COBBLESTONE
         g[40][27] = TileType.COBBLESTONE
+        g[38][24] = TileType.BIOME_STALL_BADLANDS
 
         // Return Stairway Up to Floor 0 Grimmaw Crags Camp
         g[41][24] = TileType.STAIRS_UP
@@ -1886,6 +1892,7 @@ object WorldMaps {
         g[41][27] = TileType.WAR_BANNER
         g[40][21] = TileType.COBBLESTONE
         g[40][27] = TileType.COBBLESTONE
+        g[38][24] = TileType.BIOME_STALL_ASHEN
 
         // Return Stairway Up to Floor 0 Gorek Badlands War-Camp
         g[41][24] = TileType.STAIRS_UP

@@ -205,6 +205,8 @@ class RuneMagicSystemTest {
 
         // 1. Missing Magic Level blocks inscription
         val lowMagic = freshWorld(magicLevel = 2).copy(
+            playerX = 1420,
+            playerY = 601,
             activePanel = ActivePanel.RUNECRAFTING_TABLE,
             backpack = listOf(ItemStack("blank_rune", 5), ItemStack("spider_silk", 3))
         )

@@ -61,7 +61,7 @@ object GameEngine {
             )
         }
         val starterTools = listOf(
-            ItemStack("quarry_mattock", 1),
+            ItemStack("bronze_pickaxe", 1),
             ItemStack("rope", 1),
             ItemStack("fishing_rod", 1)
         )
@@ -238,13 +238,13 @@ object GameEngine {
         val hasAnyPickaxe = (migratedBackpack + migratedToolBag + normalizedDepot)
             .any { ItemCatalog.get(it.itemId).category == ItemCategory.TOOL_PICKAXE }
         val migratedDepot = if (isLegacyV1 && !hasAnyPickaxe) {
-            addItemPublic(normalizedDepot, "quarry_mattock", 1)
+            addItemPublic(normalizedDepot, "bronze_pickaxe", 1)
         } else {
             normalizedDepot
         }
 
         val notes = buildString {
-            if (isLegacyV1) append(" (Migrated V1 save — a Quarry Mattock awaits in Depot!)")
+            if (isLegacyV1) append(" (Migrated V1 save — a Bronze Pickaxe awaits in Depot!)")
             if (movedToolsCount > 0) append(" (Packed $movedToolsCount tool(s) into your Tool Bag!)")
             if (normalizedReaperVault.isNotEmpty()) {
                 val totalHeld = normalizedReaperVault.sumOf { it.count }
@@ -364,7 +364,7 @@ object GameEngine {
         // Auto-close any open modal/sheet (Fallen Backpack, Equipment, Backpack, Skills, Crafting, etc.)
         // immediately on map canvas tap so moving, targeting, or interacting works in a single tap.
         val dismissedState = if (state.activePanel != ActivePanel.NONE || state.inspectingCorpseId != null) {
-            state.copy(activePanel = ActivePanel.NONE, inspectingCorpseId = null)
+            state.copy(activePanel = ActivePanel.NONE, inspectingCorpseId = null, activeBiomeStall = null)
         } else {
             state
         }
@@ -498,6 +498,18 @@ object GameEngine {
             return if (dist <= 1) {
                 baseState.copy(activePanel = ActivePanel.RUNECRAFTING_TABLE, walkPath = emptyList())
                     .addLogInternal("Opened the Arcane Runecrafting Table.")
+            } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
+        }
+        val biomeStall = tile.biomeCraftingStation()
+        if (biomeStall != null) {
+            return if (dist <= CraftingAndMiningEngine.BIOME_STALL_INTERACT_RADIUS) {
+                baseState.copy(
+                    activePanel = ActivePanel.BIOME_STALL,
+                    activeBiomeStall = biomeStall,
+                    walkPath = emptyList(),
+                    longRangeGoal = null,
+                    longRangeWaypoints = emptyList()
+                ).addLogInternal("Stepped up to the ${biomeStall.displayName}.")
             } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
         }
 
@@ -765,6 +777,7 @@ object GameEngine {
                 autoFollowTarget = false,
                 activePanel = ActivePanel.NONE,
                 activeHarborPortId = null,
+                activeBiomeStall = null,
                 floorWarningBanner = banner,
                 questFlags = updatedFlags
             ).addLogInternal(msg)
@@ -818,10 +831,19 @@ object GameEngine {
             ActivePanel.REAPER_TEMPLE -> {
                 moved.floor != 0 || chebyshev(moved.playerX, moved.playerY, WorldMaps.REAPER_X, WorldMaps.REAPER_Y) > 3
             }
+            ActivePanel.BIOME_STALL -> {
+                val st = moved.activeBiomeStall
+                st == null || !CraftingAndMiningEngine.isNearBiomeStation(moved, st, CraftingAndMiningEngine.BIOME_STALL_INTERACT_RADIUS)
+            }
             else -> false
         }
         return if (shouldCloseStation) {
-            moved.copy(activePanel = ActivePanel.NONE, inspectingCorpseId = null, activeHarborPortId = null)
+            moved.copy(
+                activePanel = ActivePanel.NONE,
+                inspectingCorpseId = null,
+                activeHarborPortId = null,
+                activeBiomeStall = null
+            )
         } else moved
     }
 
@@ -1074,7 +1096,9 @@ object GameEngine {
             }
         } else {
             if (s.poisonTicks > 0) {
-                val pDmg = Random.nextInt(4, 9)
+                val basePoison = Random.nextInt(4, 9)
+                val resistPct = s.equipment.totalPoisonResistPercent()
+                val pDmg = (basePoison * (100 - resistPct) / 100.0).roundToInt().coerceAtLeast(1)
                 s = s.copy(hp = (s.hp - pDmg).coerceAtLeast(0), poisonTicks = s.poisonTicks - 1)
                     .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$pDmg", FloatingTextKind.POISON, nowMs)
                     .queuePlayerFx("-$pDmg", FloatingTextKind.POISON, PlayerActionState.IDLE)
@@ -2277,8 +2301,15 @@ object GameEngine {
                                 .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "-$reduced", FloatingTextKind.DAMAGE_PLAYER, nowMs)
                                 .queuePlayerFx("-$reduced", FloatingTextKind.DAMAGE_PLAYER, PlayerActionState.IDLE)
                             if (curM.type.inflictsPoison && Random.nextFloat() < 0.35f) {
-                                statusTag = "POISON"
-                                s = s.copy(poisonTicks = max(s.poisonTicks, 5)).addLogInternal("${curM.type.displayName} poisoned you!")
+                                val resistPct = s.equipment.totalPoisonResistPercent()
+                                if (resistPct > 0 && Random.nextInt(100) < resistPct) {
+                                    s = s.addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "RESISTED", FloatingTextKind.BLOCK, nowMs)
+                                        .addLogInternal("Your Mire-Woven gear resisted ${curM.type.displayName}'s poison!")
+                                } else {
+                                    statusTag = "POISON"
+                                    val ticks = (5 * (100 - resistPct) / 100.0).roundToInt().coerceAtLeast(2)
+                                    s = s.copy(poisonTicks = max(s.poisonTicks, ticks)).addLogInternal("${curM.type.displayName} poisoned you!")
+                                }
                             }
                             if (curM.type.inflictsFire && (isRanged || Random.nextFloat() < 0.40f)) {
                                 statusTag = "FIRE"

@@ -146,7 +146,7 @@ object WorldMapViewportCamera {
     ): List<com.example.game.world.WorldMapPin> {
         return pins.filter { pin ->
             val categoryEnabled = when (pin.category) {
-                WorldPinCategory.EMPIRE, WorldPinCategory.CITY, WorldPinCategory.CAMP -> showCities
+                WorldPinCategory.EMPIRE, WorldPinCategory.CITY, WorldPinCategory.CAMP, WorldPinCategory.FORGE -> showCities
                 WorldPinCategory.FERRY -> showFerries
                 WorldPinCategory.DUNGEON -> showDungeons
             }
@@ -440,7 +440,11 @@ private fun oreVeinMarkerColor(kind: OreVeinKind): Color = when (kind) {
     OreVeinKind.COPPER -> Color(0xFFFF9442)
     OreVeinKind.TIN -> Color(0xFFD6E4F0)
     OreVeinKind.BOG_IRON -> Color(0xFF7CA7C9)
+    OreVeinKind.MIRE_SILVER -> Color(0xFF66E8B8)
+    OreVeinKind.PEAT_COAL -> Color(0xFF5D6A62)
     OreVeinKind.VESPERITE -> Color(0xFFC29DFF)
+    OreVeinKind.GLACIER_QUARTZ -> Color(0xFF7AE8FF)
+    OreVeinKind.FROST_IRON -> Color(0xFF8FB8E8)
     OreVeinKind.CINDERITE -> Color(0xFFFFC13B)
 }
 
@@ -1029,6 +1033,7 @@ fun EnhancedRegionalWorldMapContent(
                                     WorldPinCategory.EMPIRE -> Color(0xFFFFD65A)
                                     WorldPinCategory.CITY -> TorchGold
                                     WorldPinCategory.CAMP -> Color(0xFFFF9843)
+                                    WorldPinCategory.FORGE -> Color(0xFFFF7A33)
                                     WorldPinCategory.FERRY -> Color(0xFF47B8FF)
                                     WorldPinCategory.DUNGEON -> TargetRed
                                 }
@@ -1036,25 +1041,42 @@ fun EnhancedRegionalWorldMapContent(
                                     WorldPinCategory.EMPIRE -> 5.8f
                                     WorldPinCategory.CITY -> 5.0f
                                     WorldPinCategory.CAMP -> 4.3f
+                                    WorldPinCategory.FORGE -> 5.2f
                                     WorldPinCategory.FERRY -> 4.2f
                                     WorldPinCategory.DUNGEON -> 4.0f
                                 }
                                 val pinRadius = (baseRadius + zoomFactor * 2.2f).coerceIn(4.0f, 8.2f)
-                                drawCircle(Color.Black.copy(alpha = 0.86f), radius = pinRadius + 1.8f, center = pos)
-                                drawCircle(pinColor, radius = pinRadius, center = pos)
-                                if (pin.category == WorldPinCategory.EMPIRE || pin.category == WorldPinCategory.CITY) {
-                                    drawCircle(Color.White.copy(alpha = 0.90f), radius = (pinRadius * 0.38f).coerceAtLeast(1.8f), center = pos)
+                                if (pin.category == WorldPinCategory.FORGE) {
+                                    // Crisp anvil/forge badge icon for Biome Crafting Stalls
+                                    drawCircle(Color.Black.copy(alpha = 0.88f), radius = pinRadius + 2.0f, center = pos)
+                                    drawCircle(Color(0xFF2B1A12), radius = pinRadius + 0.6f, center = pos)
+                                    drawCircle(pinColor, radius = pinRadius + 0.6f, center = pos, style = Stroke(width = 1.6f))
+                                    val r = pinRadius * 0.56f
+                                    drawLine(Color(0xFFFFD68A), Offset(pos.x - r, pos.y - r * 0.25f), Offset(pos.x + r, pos.y - r * 0.25f), strokeWidth = 2.4f)
+                                    drawLine(Color(0xFFFFB24C), Offset(pos.x, pos.y - r * 0.25f), Offset(pos.x, pos.y + r * 0.65f), strokeWidth = 2.0f)
+                                    drawLine(Color(0xFFFFB24C), Offset(pos.x - r * 0.65f, pos.y + r * 0.65f), Offset(pos.x + r * 0.65f, pos.y + r * 0.65f), strokeWidth = 2.0f)
+                                } else {
+                                    drawCircle(Color.Black.copy(alpha = 0.86f), radius = pinRadius + 1.8f, center = pos)
+                                    drawCircle(pinColor, radius = pinRadius, center = pos)
+                                    if (pin.category == WorldPinCategory.EMPIRE || pin.category == WorldPinCategory.CITY) {
+                                        drawCircle(Color.White.copy(alpha = 0.90f), radius = (pinRadius * 0.38f).coerceAtLeast(1.8f), center = pos)
+                                    }
                                 }
                                 val showPinLabel = when {
                                     pin.category == WorldPinCategory.EMPIRE -> true
-                                    (pin.category == WorldPinCategory.CITY || pin.category == WorldPinCategory.CAMP) &&
+                                    (pin.category == WorldPinCategory.CITY || pin.category == WorldPinCategory.CAMP || pin.category == WorldPinCategory.FORGE) &&
                                         camera.mapZoom >= WorldMapViewportCamera.CAMP_AND_LEVELS_MIN_ZOOM -> true
                                     camera.mapZoom >= 2.2f -> true
                                     else -> false
                                 }
                                 if (showPinLabel) {
+                                    val labelText = if (pin.category == WorldPinCategory.FORGE) {
+                                        "⚒ ${pin.label.take(22)}"
+                                    } else {
+                                        WorldMapViewportCamera.formatPinLabel(pin, camera.mapZoom)
+                                    }
                                     tryDrawBadgeLabel(
-                                        text = WorldMapViewportCamera.formatPinLabel(pin, camera.mapZoom),
+                                        text = labelText,
                                         anchorX = pos.x,
                                         anchorY = pos.y - pinRadius * 0.4f,
                                         textPaint = landmarkLabelPaint,
@@ -1303,6 +1325,7 @@ fun EnhancedRegionalWorldMapContent(
                                 WorldPinCategory.CITY -> TorchGold
                                 WorldPinCategory.CAMP -> Color(0xFFFF9843)
                                 WorldPinCategory.FERRY -> Color(0xFF47B8FF)
+                                WorldPinCategory.FORGE -> Color(0xFFFFB74D)
                                 WorldPinCategory.DUNGEON -> TargetRed
                             }
                             Surface(

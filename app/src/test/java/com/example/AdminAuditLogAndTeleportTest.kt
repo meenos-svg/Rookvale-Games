@@ -8,6 +8,7 @@ import com.example.game.cloud.AdminAuditSanitizer
 import com.example.game.cloud.AdminAuditSyncStatus
 import com.example.game.cloud.AdminAuditUiState
 import com.example.game.cloud.AdminTeleportCatalog
+import com.example.game.cloud.AdminWarpCategory
 import com.example.game.cloud.CloudKeyValueStore
 import com.example.game.cloud.CloudSession
 import com.example.game.cloud.LocalAdminAuditQueueStore
@@ -17,6 +18,7 @@ import com.example.game.model.MonsterEntity
 import com.example.game.model.MonsterType
 import com.example.game.model.Vocation
 import com.example.game.multiplayer.MultiplayerConfig
+import com.example.game.world.WorldBiomeBlueprint
 import com.example.game.world.WorldMaps
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
@@ -127,6 +129,79 @@ class AdminAuditLogAndTeleportTest {
         assertEquals(normalPlayer.floor, blocked.floor)
         assertEquals(normalPlayer.playerX, blocked.playerX)
         assertEquals(normalPlayer.playerY, blocked.playerY)
+    }
+
+    @Test
+    fun expandedAdminWarpCatalogCoversAllSettlementsCampsAndDungeonSafeZonesWithValidLandings() {
+        assertEquals(9, AdminTeleportCatalog.townsAndEmpires.size)
+        assertEquals(6, AdminTeleportCatalog.overlandCamps.size)
+        assertEquals(6, AdminTeleportCatalog.dungeonCamps.size)
+        assertEquals(15, AdminTeleportCatalog.overlandLandmarks.size)
+        assertEquals(6, AdminTeleportCatalog.dungeonFloors.size)
+        assertEquals(21, AdminTeleportCatalog.allPresets.size)
+
+        // Category filter lookup matches catalog lists exactly
+        assertEquals(AdminTeleportCatalog.allPresets, AdminTeleportCatalog.presetsFor(null))
+        assertEquals(AdminTeleportCatalog.townsAndEmpires, AdminTeleportCatalog.presetsFor(AdminWarpCategory.TOWNS_EMPIRES))
+        assertEquals(AdminTeleportCatalog.overlandCamps, AdminTeleportCatalog.presetsFor(AdminWarpCategory.OVERLAND_CAMPS))
+        assertEquals(AdminTeleportCatalog.dungeonCamps, AdminTeleportCatalog.presetsFor(AdminWarpCategory.DUNGEON_CAMPS))
+
+        // Every preset has a unique ID and a non-blank level range badge
+        val ids = AdminTeleportCatalog.allPresets.map { it.id }
+        assertEquals(ids.size, ids.toSet().size)
+        AdminTeleportCatalog.allPresets.forEach { preset ->
+            assertTrue("Missing level range badge on ${preset.id}", preset.levelRangeLabel.startsWith("Lv "))
+            if (preset.isDungeon) {
+                assertTrue("Dungeon camp badge should show PZ on ${preset.id}", preset.levelRangeLabel.contains("PZ"))
+            }
+        }
+
+        // Every biome settlement & forward camp in WorldBiomeBlueprint.secondarySettlements is represented
+        WorldBiomeBlueprint.secondarySettlements.forEach { settlement ->
+            val matched = AdminTeleportCatalog.overlandLandmarks.firstOrNull {
+                it.floor == 0 && it.x == settlement.centerX && it.y == settlement.centerY
+            }
+            assertNotNull(
+                "Admin Warp catalog must include settlement '${settlement.name}' (${settlement.centerX},${settlement.centerY})",
+                matched
+            )
+        }
+
+        // Every underground forward camp in WorldMaps.undergroundCamps lands inside its safe PZ
+        WorldMaps.undergroundCamps.forEach { camp ->
+            val matched = AdminTeleportCatalog.dungeonCamps.firstOrNull { it.floor == camp.floorId }
+            assertNotNull("Admin Warp catalog must include dungeon camp for floor ${camp.floorId}", matched)
+            assertTrue(
+                "Preset ${matched!!.id} X=${matched.x} outside camp ${camp.minX}..${camp.maxX}",
+                matched.x in camp.minX..camp.maxX
+            )
+            assertTrue(
+                "Preset ${matched.id} Y=${matched.y} outside camp ${camp.minY}..${camp.maxY}",
+                matched.y in camp.minY..camp.maxY
+            )
+            assertTrue(
+                "Preset ${matched.id} must land inside dungeon camp Protection Zone",
+                WorldMaps.getFloor(camp.floorId).isProtectionZone(matched.x, matched.y)
+            )
+        }
+
+        // Every single one of the 21 presets warps an Admin onto a walkable tile on the target floor
+        var admin = GameEngine.createNewWorld("Admin", Vocation.ADVENTURER, isAdmin = true)
+        AdminTeleportCatalog.allPresets.forEachIndexed { idx, preset ->
+            admin = GameEngine.teleportAdmin(
+                state = admin,
+                targetFloor = preset.floor,
+                targetX = preset.x,
+                targetY = preset.y,
+                destinationLabel = preset.label,
+                nowMs = 10_000L + idx * 100L
+            )
+            assertEquals("Floor mismatch after warping to ${preset.id}", preset.floor, admin.floor)
+            assertTrue(
+                "Landing tile (${admin.playerX},${admin.playerY}) on floor ${admin.floor} for ${preset.id} must be walkable",
+                WorldMaps.getFloor(admin.floor).tileAt(admin.playerX, admin.playerY).walkable
+            )
+        }
     }
 
     @Test

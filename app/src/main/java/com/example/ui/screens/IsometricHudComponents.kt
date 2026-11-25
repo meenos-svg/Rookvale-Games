@@ -41,6 +41,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoFixHigh
@@ -244,8 +245,17 @@ internal fun minimapTileColor(tile: TileType): Color = when (tile) {
     TileType.ORE_COPPER -> Color(0xFFE08234)
     TileType.ORE_TIN -> Color(0xFFA9B9C8)
     TileType.ORE_BOG_IRON -> Color(0xFF7D90A3)
+    TileType.ORE_MIRE_SILVER -> Color(0xFF5EE89E)
+    TileType.ORE_PEAT_COAL -> Color(0xFF474E57)
     TileType.ORE_VESPERITE -> Color(0xFFB599FF)
+    TileType.ORE_GLACIER_QUARTZ -> Color(0xFF68E8FF)
+    TileType.ORE_FROST_IRON -> Color(0xFF7CB4E8)
     TileType.ORE_CINDERITE -> Color(0xFFFFB22E)
+    TileType.BIOME_STALL_HEARTLAND -> Color(0xFFFF8C2B)
+    TileType.BIOME_STALL_MARSH -> Color(0xFF5CE88A)
+    TileType.BIOME_STALL_BADLANDS -> Color(0xFFB48CFF)
+    TileType.BIOME_STALL_FROSTPEAK -> Color(0xFF68E8FF)
+    TileType.BIOME_STALL_ASHEN -> Color(0xFFFF5E24)
     TileType.TIMBER_WALL, TileType.TIMBER_WINDOW_WALL -> Color(0xFFCBBCA4)
     TileType.TEMPLE_WALL -> Color(0xFFE0D6C3)
     TileType.GATE_PILLAR -> Color(0xFFAAA091)
@@ -345,142 +355,202 @@ private fun IsometricMinimapCard(
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.4.dp, if (rotateDragMode) TorchGold else StoneBorderLight),
         modifier = Modifier
-            .size(108.dp)
+            .width(108.dp)
             .testTag("minimap_overlay")
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(3.dp)
-                    .pointerInput(state.floor, state.playerX, state.playerY, radius) {
-                        detectTapGestures { tap ->
-                            val (wx, wy) = MinimapCoordinateMapper.screenTapToWorldTile(
-                                tapX = tap.x,
-                                tapY = tap.y,
-                                canvasW = size.width.toFloat(),
-                                canvasH = size.height.toFloat(),
-                                playerX = state.playerX,
-                                playerY = state.playerY,
-                                radius = radius,
-                                floorWidth = floorMap.width,
-                                floorHeight = floorMap.height,
-                                cameraYawDeg = cameraYawProvider()
-                            )
-                            onTapWalk(wx, wy)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(modifier = Modifier.size(108.dp)) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(3.dp)
+                        .pointerInput(state.floor, state.playerX, state.playerY, radius) {
+                            detectTapGestures { tap ->
+                                val (wx, wy) = MinimapCoordinateMapper.screenTapToWorldTile(
+                                    tapX = tap.x,
+                                    tapY = tap.y,
+                                    canvasW = size.width.toFloat(),
+                                    canvasH = size.height.toFloat(),
+                                    playerX = state.playerX,
+                                    playerY = state.playerY,
+                                    radius = radius,
+                                    floorWidth = floorMap.width,
+                                    floorHeight = floorMap.height,
+                                    cameraYawDeg = cameraYawProvider()
+                                )
+                                onTapWalk(wx, wy)
+                            }
                         }
-                    }
-            ) {
-                val widthPx = size.width.roundToInt().coerceAtLeast(1)
-                val heightPx = size.height.roundToInt().coerceAtLeast(1)
-                val cachedBitmap = minimapCache.getOrRender(
-                    widthPx = widthPx,
-                    heightPx = heightPx,
-                    floorMap = floorMap,
-                    state = state,
-                    remotePlayers = remotePlayers,
-                    radius = radius,
-                    cameraYawDeg = cameraYawProvider(),
-                    nowUptimeMs = SystemClock.uptimeMillis()
-                )
-                if (cachedBitmap != null) {
-                    drawImage(
-                        image = cachedBitmap,
-                        dstOffset = IntOffset.Zero,
-                        dstSize = IntSize(widthPx, heightPx),
-                        filterQuality = FilterQuality.Low
+                ) {
+                    val widthPx = size.width.roundToInt().coerceAtLeast(1)
+                    val heightPx = size.height.roundToInt().coerceAtLeast(1)
+                    val cachedBitmap = minimapCache.getOrRender(
+                        widthPx = widthPx,
+                        heightPx = heightPx,
+                        floorMap = floorMap,
+                        state = state,
+                        remotePlayers = remotePlayers,
+                        radius = radius,
+                        cameraYawDeg = cameraYawProvider(),
+                        nowUptimeMs = SystemClock.uptimeMillis()
                     )
+                    if (cachedBitmap != null) {
+                        drawImage(
+                            image = cachedBitmap,
+                            dstOffset = IntOffset.Zero,
+                            dstSize = IntSize(widthPx, heightPx),
+                            filterQuality = FilterQuality.Low
+                        )
+                    }
                 }
-            }
 
-            // Clickable North compass badge: tap to smoothly snap cameraYaw back to North (45°)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(3.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(if (isRotatedAwayFromNorth) TorchGold.copy(alpha = 0.25f) else ObsidianVoid.copy(alpha = 0.84f))
-                    .border(1.dp, if (isRotatedAwayFromNorth) TorchGold else TorchGold.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
-                    .clickable(onClick = onResetNorth)
-                    .padding(horizontal = 5.dp, vertical = 2.dp)
-                    .testTag("minimap_compass_north")
-            ) {
-                Text(
-                    text = "N",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold),
-                    color = TorchGold
-                )
-            }
-
-            // Expand Regional World Map button (top-right of minimap)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(3.dp)
-                    .size(22.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(ObsidianVoid.copy(alpha = 0.84f))
-                    .border(1.dp, StoneBorderLight, RoundedCornerShape(4.dp))
-                    .clickable(onClick = onExpandWorldMap)
-                    .testTag("minimap_expand_button"),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.OpenInFull, "Open Regional World Map", tint = TorchGold, modifier = Modifier.size(13.dp))
-            }
-
-            // Rotate-Drag Mode + / - Zoom controls (bottom-right of minimap)
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(3.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
+                // Clickable North compass badge: tap to smoothly snap cameraYaw back to North (45°)
                 Box(
                     modifier = Modifier
-                        .size(20.dp)
+                        .align(Alignment.TopStart)
+                        .padding(3.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(if (rotateDragMode) TorchGold.copy(alpha = 0.28f) else ObsidianVoid.copy(alpha = 0.84f))
-                        .border(1.dp, if (rotateDragMode) TorchGold else StoneBorderLight, RoundedCornerShape(4.dp))
-                        .clickable(onClick = onToggleRotateDragMode)
-                        .testTag("minimap_rotate_toggle"),
-                    contentAlignment = Alignment.Center
+                        .background(if (isRotatedAwayFromNorth) TorchGold.copy(alpha = 0.25f) else ObsidianVoid.copy(alpha = 0.84f))
+                        .border(1.dp, if (isRotatedAwayFromNorth) TorchGold else TorchGold.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
+                        .clickable(onClick = onResetNorth)
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                        .testTag("minimap_compass_north")
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.ScreenRotation,
-                        contentDescription = "Toggle 360 Camera Drag Rotate",
-                        tint = if (rotateDragMode) TorchGold else ParchmentLight,
-                        modifier = Modifier.size(12.dp)
+                    Text(
+                        text = "N",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold),
+                        color = TorchGold
                     )
                 }
-                MinimapTinyButton(
-                    icon = Icons.Default.Add,
-                    contentDesc = "Zoom In Minimap",
-                    enabled = canZoomIn,
-                    onClick = onZoomIn,
-                    testTag = "minimap_zoom_in"
-                )
-                MinimapTinyButton(
-                    icon = Icons.Default.Remove,
-                    contentDesc = "Zoom Out Minimap",
-                    enabled = canZoomOut,
-                    onClick = onZoomOut,
-                    testTag = "minimap_zoom_out"
-                )
+
+                // Expand Regional World Map button (top-right of minimap)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(3.dp)
+                        .size(22.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(ObsidianVoid.copy(alpha = 0.84f))
+                        .border(1.dp, StoneBorderLight, RoundedCornerShape(4.dp))
+                        .clickable(onClick = onExpandWorldMap)
+                        .testTag("minimap_expand_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.OpenInFull, "Open Regional World Map", tint = TorchGold, modifier = Modifier.size(13.dp))
+                }
+
+                // Rotate-Drag Mode + / - Zoom controls (bottom-right of minimap)
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (rotateDragMode) TorchGold.copy(alpha = 0.28f) else ObsidianVoid.copy(alpha = 0.84f))
+                            .border(1.dp, if (rotateDragMode) TorchGold else StoneBorderLight, RoundedCornerShape(4.dp))
+                            .clickable(onClick = onToggleRotateDragMode)
+                            .testTag("minimap_rotate_toggle"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ScreenRotation,
+                            contentDescription = "Toggle 360 Camera Drag Rotate",
+                            tint = if (rotateDragMode) TorchGold else ParchmentLight,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                    MinimapTinyButton(
+                        icon = Icons.Default.Add,
+                        contentDesc = "Zoom In Minimap",
+                        enabled = canZoomIn,
+                        onClick = onZoomIn,
+                        testTag = "minimap_zoom_in"
+                    )
+                    MinimapTinyButton(
+                        icon = Icons.Default.Remove,
+                        contentDesc = "Zoom Out Minimap",
+                        enabled = canZoomOut,
+                        onClick = onZoomOut,
+                        testTag = "minimap_zoom_out"
+                    )
+                }
+
+                // Floor indicator pill (bottom-left of minimap)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(3.dp)
+                        .background(ObsidianVoid.copy(alpha = 0.84f), RoundedCornerShape(3.dp))
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        text = "F${state.floor}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                        color = ParchmentLight
+                    )
+                }
             }
 
-            // Floor indicator pill (bottom-left of minimap)
+            // Hairline stone divider + live player coordinate strip
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(3.dp)
-                    .background(ObsidianVoid.copy(alpha = 0.84f), RoundedCornerShape(3.dp))
-                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(StoneBorderLight.copy(alpha = 0.55f))
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(ObsidianVoid.copy(alpha = 0.92f))
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                    .testTag("minimap_coordinates"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "F${state.floor}",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                    color = ParchmentLight
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "X:",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        ),
+                        color = TorchGold
+                    )
+                    Text(
+                        text = "${state.playerX}",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFeatureSettings = "tnum"
+                        ),
+                        color = ParchmentLight,
+                        maxLines = 1
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Y:",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        ),
+                        color = TorchGold
+                    )
+                    Text(
+                        text = "${state.playerY}",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFeatureSettings = "tnum"
+                        ),
+                        color = ParchmentLight,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
@@ -1047,6 +1117,7 @@ private fun TopRightUtilityAndBattleClusterContent(
                 UtilityIconChip(Icons.Default.Backpack, "Backpack", snapshot.activePanel == ActivePanel.BACKPACK, { onOpenPanel(ActivePanel.BACKPACK) }, "tab_backpack")
                 UtilityIconChip(Icons.Default.Shield, "Equipment", snapshot.activePanel == ActivePanel.EQUIPMENT, { onOpenPanel(ActivePanel.EQUIPMENT) }, "tab_equipment")
                 UtilityIconChip(Icons.Default.MilitaryTech, "Skills", snapshot.activePanel == ActivePanel.SKILLS, { onOpenPanel(ActivePanel.SKILLS) }, "tab_skills")
+                UtilityIconChip(Icons.AutoMirrored.Filled.MenuBook, "Recipe Codex", snapshot.activePanel == ActivePanel.RECIPE_CODEX, { onOpenPanel(ActivePanel.RECIPE_CODEX) }, "utility_recipe_codex_button", accentTint = TorchAmber)
                 UtilityIconChip(Icons.Default.CloudUpload, "Save", false, onSaveManual, "manual_save_button", accentTint = TorchGold)
                 UtilityIconChip(Icons.Default.Map, "World Map", snapshot.activePanel == ActivePanel.WORLD_MAP, { onOpenPanel(ActivePanel.WORLD_MAP) }, "utility_world_map_button")
                 UtilityIconChip(Icons.Default.Settings, "Settings", snapshot.activePanel == ActivePanel.SETTINGS, { onOpenPanel(ActivePanel.SETTINGS) }, "utility_settings_button")

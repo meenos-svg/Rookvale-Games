@@ -1,10 +1,11 @@
 package com.example.game.engine
 
 import com.example.game.model.ActivePanel
+import com.example.game.model.BiomeEquipmentClass
+import com.example.game.model.CraftingStationType
 import com.example.game.model.FloatingTextKind
 import com.example.game.model.GameWorldState
 import com.example.game.model.ItemCatalog
-import com.example.game.model.ItemStack
 import com.example.game.model.ProjectileKind
 import com.example.game.model.RecipeCatalog
 import com.example.game.model.SkillType
@@ -15,11 +16,24 @@ import com.example.game.world.WorldMaps
 import kotlin.random.Random
 
 /**
- * Pure-Kotlin world-anchored Ore Mining, Smelting Furnace, and Blacksmith Anvil mechanics.
- * Enforces Pickaxe tier requirements, Cap (oz) weight checks, vein depletion/regen, and
- * Mining skill progression.
+ * Pure-Kotlin world-anchored Ore Mining, Tree Chopping, and location-locked Biome Crafting Stall
+ * mechanics. Enforces Pickaxe tier & Mining skill requirements, faster gather speeds for higher-tier
+ * pickaxes on lower-tier veins, Cap (oz) weight checks, vein depletion/regen, and 2-tile physical
+ * proximity to each biome's dedicated crafting stall.
  */
 object CraftingAndMiningEngine {
+
+    const val BASE_MINE_SWING_COOLDOWN_MS: Long = 850L
+    const val MIN_MINE_SWING_COOLDOWN_MS: Long = 260L
+    const val BIOME_STALL_INTERACT_RADIUS: Int = 2
+
+    /**
+     * Higher-tier pickaxes swing faster on lower-tier ore veins (850ms at tier parity down to 260ms).
+     */
+    fun swingCooldownMs(pickaxeTier: Int, veinRequiredTier: Int): Long {
+        val tierAdvantage = (pickaxeTier - veinRequiredTier).coerceAtLeast(0)
+        return (BASE_MINE_SWING_COOLDOWN_MS - tierAdvantage * 130L).coerceAtLeast(MIN_MINE_SWING_COOLDOWN_MS)
+    }
 
     fun mineOreNode(state: GameWorldState, tx: Int, ty: Int, nowMs: Long): GameWorldState {
         val key = Triple(state.floor, tx, ty)
@@ -31,12 +45,33 @@ object CraftingAndMiningEngine {
                 .addLogInternal("This ${node.kind.displayName} is spent. It will regenerate soon.")
         }
 
-        val pickaxe = state.bestPickaxe()
-            ?: return state.addLogInternal("You need a ${node.kind.requiredPickaxeName} in your backpack to mine!")
-        if (pickaxe.pickaxeTier < node.kind.requiredPickaxeTier) {
+        val miningLvl = state.skills.mining.level
+        val anyPickaxe = state.bestPickaxe()
+            ?: return state
+                .addFloatingInternal(state.floor, tx.toFloat(), ty.toFloat(), "NEED PICKAXE", FloatingTextKind.INFO, nowMs)
+                .addLogInternal("You need a ${node.kind.requiredPickaxeName} (Mining ${node.kind.requiredMiningLevel}) in your backpack or hand to mine!")
+
+        if (miningLvl < node.kind.requiredMiningLevel) {
+            return state
+                .addFloatingInternal(state.floor, tx.toFloat(), ty.toFloat(), "MINING ${node.kind.requiredMiningLevel}", FloatingTextKind.INFO, nowMs)
+                .addLogInternal("${node.kind.displayName} requires Mining level ${node.kind.requiredMiningLevel} (you have $miningLvl).")
+        }
+
+        val pickaxe = state.bestValidPickaxeFor(miningLvl)
+        if (pickaxe == null || pickaxe.pickaxeTier < node.kind.requiredPickaxeTier) {
+            if (anyPickaxe.pickaxeTier >= node.kind.requiredPickaxeTier && miningLvl < anyPickaxe.requiredMiningLevel) {
+                return state
+                    .addFloatingInternal(state.floor, tx.toFloat(), ty.toFloat(), "MINING ${anyPickaxe.requiredMiningLevel}", FloatingTextKind.INFO, nowMs)
+                    .addLogInternal("${anyPickaxe.name} requires Mining level ${anyPickaxe.requiredMiningLevel} (you have $miningLvl).")
+            }
             return state
                 .addFloatingInternal(state.floor, tx.toFloat(), ty.toFloat(), "NEED T${node.kind.requiredPickaxeTier} PICK", FloatingTextKind.INFO, nowMs)
-                .addLogInternal("${node.kind.displayName} requires at least a ${node.kind.requiredPickaxeName} (Tier ${node.kind.requiredPickaxeTier}).")
+                .addLogInternal("${node.kind.displayName} requires at least a ${node.kind.requiredPickaxeName} (Tier ${node.kind.requiredPickaxeTier}, Mining ${node.kind.requiredMiningLevel}).")
+        }
+
+        val cooldownMs = swingCooldownMs(pickaxe.pickaxeTier, node.kind.requiredPickaxeTier)
+        if (nowMs > 0L && state.lastMineSwingMs > 0L && (nowMs - state.lastMineSwingMs) < cooldownMs) {
+            return state
         }
 
         val oreDef = ItemCatalog.get(node.kind.oreItemId)
@@ -46,8 +81,11 @@ object CraftingAndMiningEngine {
                 .addLogInternal("Too heavy to mine ${oreDef.name} (${oreDef.weightOz} oz needed)!")
         }
 
-        // Visual spark effect + advance Mining skill
-        var next = state.addProjectileInternal(
+        // Visual spark effect + advance Mining skill + track swing timestamp
+        var next = state.copy(
+            playerFacing = GameEngine.directionToward(state.playerX, state.playerY, tx, ty),
+            lastMineSwingMs = nowMs
+        ).addProjectileInternal(
             state.floor,
             state.playerX.toFloat(),
             state.playerY.toFloat(),
@@ -55,14 +93,16 @@ object CraftingAndMiningEngine {
             ty.toFloat(),
             ProjectileKind.MINING_SPARK,
             nowMs,
-            durationMs = 280L
+            durationMs = (cooldownMs * 0.45).toLong().coerceIn(140L, 300L)
         )
         next = GameEngine.advanceSkillPublic(next, SkillType.MINING, node.kind.miningXpPoints, nowMs)
 
         // Success & bonus double-ore chance scale with Mining skill and Pickaxe tier advantage
-        val miningLvl = next.skills.mining.level
-        val tierBonus = (pickaxe.pickaxeTier - node.kind.requiredPickaxeTier).coerceAtLeast(0) * 0.12
-        val successChance = (0.58 + (miningLvl - 10) * 0.025 + tierBonus).coerceAtMost(0.95)
+        val updatedMiningLvl = next.skills.mining.level
+        val tierAdvantage = (pickaxe.pickaxeTier - node.kind.requiredPickaxeTier).coerceAtLeast(0)
+        val tierBonus = tierAdvantage * 0.14
+        val skillDelta = (updatedMiningLvl - node.kind.requiredMiningLevel).coerceAtLeast(0)
+        val successChance = (0.62 + skillDelta * 0.02 + tierBonus).coerceAtMost(0.98)
 
         if (Random.nextDouble() > successChance) {
             return next
@@ -70,7 +110,7 @@ object CraftingAndMiningEngine {
                 .addLogInternal("Struck ${node.kind.displayName} with ${pickaxe.name}... chips fell loose.")
         }
 
-        val bonusChance = ((miningLvl - 10) * 0.015 + (pickaxe.pickaxeTier - 1) * 0.08).coerceIn(0.0, 0.45)
+        val bonusChance = (skillDelta * 0.015 + tierAdvantage * 0.10 + (pickaxe.pickaxeTier - 1) * 0.05).coerceIn(0.0, 0.55)
         val desiredYield = if (Random.nextDouble() < bonusChance) 2 else 1
         val actualYield = if (desiredYield == 2 && next.remainingCapOz() >= oreDef.weightOz * 2) 2 else 1
 
@@ -94,7 +134,7 @@ object CraftingAndMiningEngine {
         )
 
         val depleteSuffix = if (newCharges == 0) " Vein depleted." else ""
-        return next.addLogInternal("Mined ${actualYield}x ${oreDef.name} (Mining ${next.skills.mining.level}).$depleteSuffix")
+        return next.addLogInternal("Mined ${actualYield}x ${oreDef.name} with ${pickaxe.name} (Mining ${next.skills.mining.level}).$depleteSuffix")
     }
 
     fun regenerateOreNodesTick(state: GameWorldState): GameWorldState {
@@ -187,20 +227,40 @@ object CraftingAndMiningEngine {
         return state.copy(choppedTrees = updated)
     }
 
+    fun locationLockMessage(recipeId: String): String {
+        val recipe = RecipeCatalog.findById(recipeId) ?: return "Must be at the matching Biome Crafting Stall."
+        val outDef = ItemCatalog.get(recipe.outputItemId)
+        val gearLabel = when (outDef.biomeClass) {
+            BiomeEquipmentClass.HEARTLAND -> "Heartland gear"
+            BiomeEquipmentClass.MIRE_WOVEN -> "Mire-Woven gear"
+            BiomeEquipmentClass.VESPERITE_SUNSCORCH -> "Vesperite gear"
+            BiomeEquipmentClass.RIME_PLATE -> "Rime-Plate gear"
+            BiomeEquipmentClass.CINDERITE_ASHEN -> "Cinderite gear"
+            BiomeEquipmentClass.NONE -> outDef.name
+        }
+        return "Must be at the ${recipe.requiredBiomeStation.displayName} to forge $gearLabel"
+    }
+
     fun executeRecipe(state: GameWorldState, recipeId: String, nowMs: Long): GameWorldState {
         val recipe = RecipeCatalog.findById(recipeId) ?: return state
-        // Strictly enforce physical station presence — no crafting without matching open station!
-        if (state.activePanel != recipe.station) {
-            val stationName = when (recipe.station) {
-                ActivePanel.FURNACE -> "Smelting Furnace"
-                ActivePanel.FLETCHING_BENCH -> "Fletching Workbench"
-                ActivePanel.RUNECRAFTING_TABLE -> "Runecrafting Table"
-                else -> "Blacksmith Anvil"
-            }
-            return state.addLogInternal("You must stand beside a $stationName to craft this.")
+        val outDef = ItemCatalog.get(recipe.outputItemId)
+
+        // Strictly enforce physical proximity (within 2 tiles) to the recipe's required Biome Crafting Stall!
+        val atRequiredStall = isNearBiomeStation(state, recipe.requiredBiomeStation, BIOME_STALL_INTERACT_RADIUS)
+        if (!atRequiredStall) {
+            val msg = locationLockMessage(recipeId)
+            return state
+                .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "WRONG STALL", FloatingTextKind.INFO, nowMs)
+                .addLogInternal(msg)
         }
 
-        val outDef = ItemCatalog.get(recipe.outputItemId)
+        // Also ensure an appropriate crafting panel (or Recipe Codex while standing beside the stall) is open
+        val panelAllowed = state.activePanel == recipe.station ||
+            state.activePanel == ActivePanel.BIOME_STALL ||
+            state.activePanel == ActivePanel.RECIPE_CODEX
+        if (!panelAllowed) {
+            return state.addLogInternal(locationLockMessage(recipeId))
+        }
 
         // Validate Magic Level, Mana & Soul requirements for Runecrafting recipes
         if (recipe.requiredMagicLevel > 0 && state.magicLevel < recipe.requiredMagicLevel) {
@@ -213,7 +273,7 @@ object CraftingAndMiningEngine {
             return state.addLogInternal("Not enough Soul (${recipe.soulCost} Soul required). Rest at the Temple or hunt monsters to recover Soul.")
         }
 
-        // Verify all required ingredients are in backpack
+        // Verify all required ingredients are in backpack / tool bag
         for (req in recipe.ingredients) {
             if (!state.hasItem(req.itemId, req.count)) {
                 val missing = ItemCatalog.get(req.itemId).name
@@ -262,13 +322,57 @@ object CraftingAndMiningEngine {
 
         return next
             .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "$verb $qtyLabel", FloatingTextKind.SKILL_UP, nowMs)
-            .addLogInternal("$verb $qtyLabel$extraNote")
+            .addLogInternal("$verb $qtyLabel at ${recipe.requiredBiomeStation.displayName}$extraNote")
     }
 
-    fun isNearStation(state: GameWorldState, stationTile: com.example.game.model.TileType): Boolean {
+    /**
+     * Checks whether the player is physically standing within [radiusTiles] (Chebyshev distance)
+     * of the specified [CraftingStationType]. Rookvale Town Forge also encompasses the original
+     * Rookvale Smithy Furnace, Blacksmith Anvil, Fletching Workbench, and Runecrafting Table
+     * tiles so existing Rookvale workshops function seamlessly as the Heartland crafting hub.
+     */
+    fun isNearBiomeStation(
+        state: GameWorldState,
+        station: CraftingStationType,
+        radiusTiles: Int = BIOME_STALL_INTERACT_RADIUS
+    ): Boolean {
         val fl = WorldMaps.getFloor(state.floor)
-        for (dy in -1..1) {
-            for (dx in -1..1) {
+        val stallTile = station.stallTileType()
+        for (dy in -radiusTiles..radiusTiles) {
+            for (dx in -radiusTiles..radiusTiles) {
+                val tile = fl.tileAt(state.playerX + dx, state.playerY + dy)
+                if (tile == stallTile) return true
+                if (station == CraftingStationType.ROOKVALE_TOWN_FORGE &&
+                    (tile == TileType.SMELTING_FURNACE ||
+                        tile == TileType.BLACKSMITH_ANVIL ||
+                        tile == TileType.FLETCHING_BENCH ||
+                        tile == TileType.RUNECRAFTING_TABLE)
+                ) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /**
+     * Returns the Biome Crafting Stall the player is currently standing within [radiusTiles] of,
+     * or null if away from all biome crafting stalls.
+     */
+    fun nearbyBiomeStation(
+        state: GameWorldState,
+        radiusTiles: Int = BIOME_STALL_INTERACT_RADIUS
+    ): CraftingStationType? {
+        for (station in CraftingStationType.entries) {
+            if (isNearBiomeStation(state, station, radiusTiles)) return station
+        }
+        return null
+    }
+
+    fun isNearStation(state: GameWorldState, stationTile: TileType, radius: Int = 1): Boolean {
+        val fl = WorldMaps.getFloor(state.floor)
+        for (dy in -radius..radius) {
+            for (dx in -radius..radius) {
                 if (fl.tileAt(state.playerX + dx, state.playerY + dy) == stationTile) return true
             }
         }

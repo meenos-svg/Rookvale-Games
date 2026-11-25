@@ -204,7 +204,7 @@ fun GameScreen(
                 onOpenSkills = { onOpenPanel(ActivePanel.SKILLS) },
                 modifier = Modifier
                     .align(Alignment.CenterStart)
-                    .padding(top = 108.dp, bottom = 52.dp)
+                    .padding(top = 132.dp, bottom = 52.dp)
             )
 
             // TOP-CENTER LIVE FPS PILL, WEATHER BADGE, BOSS HP NAMEPLATE & FLOOR DESCENT BANNER

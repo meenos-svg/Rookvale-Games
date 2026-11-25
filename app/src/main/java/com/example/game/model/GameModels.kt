@@ -355,7 +355,9 @@ enum class ProcVisualStyle {
     CHAIN_ARC,
     METEOR_BURST,
     THORNS_PULSE,
-    SIPHON_WAVE
+    SIPHON_WAVE,
+    ACID_SPLASH,
+    FROST_SHATTER
 }
 
 enum class ProcBonusEffect(val label: String) {
@@ -365,7 +367,82 @@ enum class ProcBonusEffect(val label: String) {
     STAGGER_SLOW("Staggers & Slows"),
     MANA_SIPHON("Restores Mana"),
     AEGIS_WARD("Restores Guard HP"),
-    LIFE_SIPHON("Lifesteals 35% HP")
+    LIFE_SIPHON("Lifesteals 35% HP"),
+    VENOM_DOT("Inflicts Venom DoT"),
+    FROST_SHATTER_SLOW("Frost Shatter & Slow")
+}
+
+enum class BiomeEquipmentClass(
+    val displayName: String,
+    val shortBadge: String,
+    val biomeName: String,
+    val minLevel: Int,
+    val accentColorHex: Long
+) {
+    NONE("Standard", "STD", "Rookvale", 1, 0xFFD9A448L),
+    HEARTLAND("Heartland Forged", "HEARTLAND", "Rookvale Heartland", 1, 0xFFFFB84DL),
+    MIRE_WOVEN("Mire-Woven / Bog-Steel", "MIRE-WOVEN", "Whispering Marsh", 20, 0xFF66E688L),
+    VESPERITE_SUNSCORCH("Vesperite / Sunscorch", "VESPERITE", "Sunscorch & Grimmaw Quarry", 28, 0xFFB692FFL),
+    RIME_PLATE("Rime-Plate / Frostpeak", "RIME-PLATE", "Frostpeak Highlands", 36, 0xFF6BE8FFL),
+    CINDERITE_ASHEN("Cinderite / Ashen", "CINDERITE", "Ashen Caldera & Gorek Labyrinth", 45, 0xFFFF6A2BL)
+}
+
+enum class CraftingStationType(
+    val displayName: String,
+    val shortName: String,
+    val biomeLabel: String,
+    val settlementLabel: String,
+    val gearClassificationLabel: String,
+    val accentColorHex: Long
+) {
+    ROOKVALE_TOWN_FORGE(
+        displayName = "Rookvale Town Forge",
+        shortName = "Town Forge",
+        biomeLabel = "Rookvale Heartland (Lvl 1-20)",
+        settlementLabel = "Rookvale Capital",
+        gearClassificationLabel = "Heartland & Starter",
+        accentColorHex = 0xFFFFB84DL
+    ),
+    STILT_TOWN_MIRE_BENCH(
+        displayName = "Stilt-Town Mire Bench",
+        shortName = "Mire Bench",
+        biomeLabel = "Whispering Marsh (Lvl 20-32)",
+        settlementLabel = "Mirewatch Stilt Citadel",
+        gearClassificationLabel = "Mire-Woven / Bog-Steel",
+        accentColorHex = 0xFF66E688L
+    ),
+    SUNSCORCH_OASIS_SMELTERY(
+        displayName = "Sunscorch Oasis Bazaar & Quarry Smeltery",
+        shortName = "Oasis Smeltery",
+        biomeLabel = "Sunscorch Badlands & Grimmaw Quarry (Lvl 30-45)",
+        settlementLabel = "Sunspire Oasis Empire",
+        gearClassificationLabel = "Vesperite / Sunscorch",
+        accentColorHex = 0xFFB692FFL
+    ),
+    FROSTPEAK_GREAT_HEARTH(
+        displayName = "Frostpeak Citadel Great Hearth",
+        shortName = "Great Hearth",
+        biomeLabel = "Frostpeak Highlands (Lvl 42-58)",
+        settlementLabel = "Frostpeak Granite Citadel",
+        gearClassificationLabel = "Rime-Plate / Frostpeak",
+        accentColorHex = 0xFF6BE8FFL
+    ),
+    ASHEN_OBSIDIAN_FOUNDRY(
+        displayName = "Ashen Caldera Obsidian Foundry",
+        shortName = "Obsidian Foundry",
+        biomeLabel = "Ashen Caldera & Gorek Labyrinth (Lvl 55-75+)",
+        settlementLabel = "Ashen Bastion Empire",
+        gearClassificationLabel = "Cinderite / Ashen",
+        accentColorHex = 0xFFFF6A2BL
+    );
+
+    fun stallTileType(): TileType = when (this) {
+        ROOKVALE_TOWN_FORGE -> TileType.BIOME_STALL_HEARTLAND
+        STILT_TOWN_MIRE_BENCH -> TileType.BIOME_STALL_MARSH
+        SUNSCORCH_OASIS_SMELTERY -> TileType.BIOME_STALL_BADLANDS
+        FROSTPEAK_GREAT_HEARTH -> TileType.BIOME_STALL_FROSTPEAK
+        ASHEN_OBSIDIAN_FOUNDRY -> TileType.BIOME_STALL_ASHEN
+    }
 }
 
 /**
@@ -421,11 +498,14 @@ data class ItemDefinition(
     val requiredAmmoKind: AmmoKind? = null,
     val ammoKind: AmmoKind? = null,
     val pickaxeTier: Int = 0,
+    val requiredMiningLevel: Int = 0,
     val restoreAmount: Int = 0,
     val manaCost: Int = 0,
     val stackable: Boolean = false,
     val isTwoHanded: Boolean = false,
     val preferredVocation: Vocation? = null,
+    val biomeClass: BiomeEquipmentClass = BiomeEquipmentClass.NONE,
+    val poisonResistPercent: Int = 0,
     val proc: EquipmentProc? = null,
     val procChanceBonusPct: Int = 0,
     val procPowerBonusPct: Int = 0,
@@ -530,6 +610,8 @@ data class EquippedGear(
     fun totalProcPowerBonusPct(): Int = nonAmmoIds().sumOf { ItemCatalog.get(it).procPowerBonusPct }
     fun totalProcExtraTargets(): Int = nonAmmoIds().sumOf { ItemCatalog.get(it).procExtraTargets }
     fun totalBonusMaxHp(): Int = nonAmmoIds().sumOf { ItemCatalog.get(it).bonusMaxHp }
+    fun totalPoisonResistPercent(): Int =
+        nonAmmoIds().sumOf { ItemCatalog.get(it).poisonResistPercent }.coerceIn(0, 75)
     fun totalAccessoryAttackBonus(): Int =
         listOfNotNull(amuletId, ringId).sumOf { ItemCatalog.get(it).attack }
 }
@@ -548,13 +630,18 @@ enum class OreVeinKind(
     val requiredPickaxeName: String,
     val maxCharges: Int,
     val regenTicks: Int,
-    val miningXpPoints: Double
+    val miningXpPoints: Double,
+    val requiredMiningLevel: Int = 1
 ) {
-    COPPER("Copper Vein", "copper_ore", 1, "Quarry Mattock", 4, 24, 4.0),
-    TIN("Tin Vein", "tin_ore", 1, "Quarry Mattock", 4, 26, 4.5),
-    BOG_IRON("Bog Iron Vein", "bog_iron_ore", 2, "Sunbrass Pick", 4, 34, 6.5),
-    VESPERITE("Vesperite Vein", "vesperite_ore", 3, "Duskmetal Breaker", 4, 42, 9.0),
-    CINDERITE("Cinderite Vein", "cinderite_ore", 4, "Quenchsteel Delver", 3, 55, 12.5)
+    COPPER("Copper Vein", "copper_ore", 1, "Bronze Pickaxe", 4, 24, 4.0, requiredMiningLevel = 1),
+    TIN("Tin Vein", "tin_ore", 1, "Bronze Pickaxe", 4, 26, 4.5, requiredMiningLevel = 1),
+    BOG_IRON("Bog Iron Vein", "bog_iron_ore", 2, "Bog Iron Pickaxe", 4, 32, 6.5, requiredMiningLevel = 10),
+    MIRE_SILVER("Mire-Silver Vein", "mire_silver_ore", 3, "Tempered Steel Pickaxe", 4, 36, 9.0, requiredMiningLevel = 20),
+    PEAT_COAL("Peat-Coal Seam", "peat_coal_ore", 3, "Tempered Steel Pickaxe", 5, 30, 8.5, requiredMiningLevel = 20),
+    VESPERITE("Vesperite Vein", "vesperite_ore", 4, "Vesperite-Tipped Pickaxe", 4, 42, 12.0, requiredMiningLevel = 30),
+    GLACIER_QUARTZ("Glacier-Quartz Vein", "glacier_quartz_ore", 5, "Glacier-Forged Pickaxe", 4, 48, 15.5, requiredMiningLevel = 42),
+    FROST_IRON("Frost-Iron Vein", "frost_iron_ore", 5, "Glacier-Forged Pickaxe", 4, 46, 15.0, requiredMiningLevel = 42),
+    CINDERITE("Cinderite Vein", "cinderite_ore", 6, "Cinderite-Core Pickaxe", 3, 55, 19.5, requiredMiningLevel = 52)
 }
 
 enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
@@ -580,7 +667,11 @@ enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
     ORE_COPPER(false),
     ORE_TIN(false),
     ORE_BOG_IRON(false),
+    ORE_MIRE_SILVER(false),
+    ORE_PEAT_COAL(false),
     ORE_VESPERITE(false),
+    ORE_GLACIER_QUARTZ(false),
+    ORE_FROST_IRON(false),
     ORE_CINDERITE(false),
     DEPLETED_VEIN(false),
     DIRT_FLOOR(true),
@@ -626,14 +717,32 @@ enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
     GRANITE_WALL(false, true),
     OBSIDIAN_WALL(false, true),
     WAR_BANNER(false),
-    CAMPFIRE_BRAZIER(false);
+    CAMPFIRE_BRAZIER(false),
+    BIOME_STALL_HEARTLAND(false),
+    BIOME_STALL_MARSH(false),
+    BIOME_STALL_BADLANDS(false),
+    BIOME_STALL_FROSTPEAK(false),
+    BIOME_STALL_ASHEN(false);
 
     fun oreVeinKind(): OreVeinKind? = when (this) {
         ORE_COPPER -> OreVeinKind.COPPER
         ORE_TIN -> OreVeinKind.TIN
         ORE_BOG_IRON -> OreVeinKind.BOG_IRON
+        ORE_MIRE_SILVER -> OreVeinKind.MIRE_SILVER
+        ORE_PEAT_COAL -> OreVeinKind.PEAT_COAL
         ORE_VESPERITE -> OreVeinKind.VESPERITE
+        ORE_GLACIER_QUARTZ -> OreVeinKind.GLACIER_QUARTZ
+        ORE_FROST_IRON -> OreVeinKind.FROST_IRON
         ORE_CINDERITE -> OreVeinKind.CINDERITE
+        else -> null
+    }
+
+    fun biomeCraftingStation(): CraftingStationType? = when (this) {
+        BIOME_STALL_HEARTLAND -> CraftingStationType.ROOKVALE_TOWN_FORGE
+        BIOME_STALL_MARSH -> CraftingStationType.STILT_TOWN_MIRE_BENCH
+        BIOME_STALL_BADLANDS -> CraftingStationType.SUNSCORCH_OASIS_SMELTERY
+        BIOME_STALL_FROSTPEAK -> CraftingStationType.FROSTPEAK_GREAT_HEARTH
+        BIOME_STALL_ASHEN -> CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY
         else -> null
     }
 }
@@ -1327,7 +1436,9 @@ enum class ActivePanel {
     HARBOR_FERRY,
     REAPER_TEMPLE,
     ADMIN_SCROLL,
-    SETTINGS
+    SETTINGS,
+    BIOME_STALL,
+    RECIPE_CODEX
 }
 
 const val DEFAULT_TIME_OF_DAY_HOURS: Float = 19.5f
@@ -1391,6 +1502,7 @@ data class GameWorldState(
     val lastRingProcAtMs: Long = 0L,
     val statusLog: List<String> = listOf("Welcome to Rookvale! Train freely and visit The Oracle at Level 20."),
     val activePanel: ActivePanel = ActivePanel.NONE,
+    val activeBiomeStall: CraftingStationType? = null,
     val inspectingCorpseId: String? = null,
     val deathReport: DeathReport? = null,
     val showMinimap: Boolean = true,
@@ -1398,6 +1510,7 @@ data class GameWorldState(
     val lastCombatTickMs: Long = 0L,
     val lastPlayerAttackMs: Long = 0L,
     val lastTreeChopMs: Long = 0L,
+    val lastMineSwingMs: Long = 0L,
     val floorWarningBanner: FloorWarningBanner? = null,
     val inspectedPlayerId: String? = null,
     val inspectedPlayerUntilMs: Long = 0L,
@@ -1492,12 +1605,26 @@ data class GameWorldState(
 
     fun allCarriedItems(): List<ItemStack> = backpack + toolBag
 
-    fun bestPickaxe(): ItemDefinition? {
-        return (toolBag + backpack)
+    fun allPickaxes(): List<ItemDefinition> {
+        val equippedPick = equipment.weaponId?.let { ItemCatalog.get(it) }
+            ?.takeIf { it.category == ItemCategory.TOOL_PICKAXE }
+        val carriedPicks = (toolBag + backpack)
             .map { ItemCatalog.get(it.itemId) }
             .filter { it.category == ItemCategory.TOOL_PICKAXE }
-            .maxByOrNull { it.pickaxeTier }
+        return if (equippedPick != null) carriedPicks + equippedPick else carriedPicks
     }
+
+    fun bestPickaxe(): ItemDefinition? =
+        allPickaxes().maxByOrNull { it.pickaxeTier }
+
+    /**
+     * Selects the highest-tier pickaxe carried (Backpack, Tool Bag, or equipped hand) that the
+     * player's current Mining skill qualifies to swing, preferring faster higher-tier picks when unlocked.
+     */
+    fun bestValidPickaxeFor(miningLevel: Int = skills.mining.level): ItemDefinition? =
+        allPickaxes()
+            .filter { miningLevel >= it.requiredMiningLevel }
+            .maxByOrNull { it.pickaxeTier }
 
     fun hasHatchet(): Boolean {
         val equippedHatchet = equipment.weaponId?.let { ItemCatalog.get(it).category == ItemCategory.TOOL_HATCHET } == true

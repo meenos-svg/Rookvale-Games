@@ -410,12 +410,12 @@ data class PaperDollAppearance(
             val palette = materialPaletteForId(id, def?.category)
             val kind = when {
                 id.contains("club") || id.contains("mace") || id.contains("cudgel") ||
-                    id.contains("warmaul") || id.contains("worldbreaker") -> WeaponVisualKind.CLUB
+                    id.contains("warmaul") || id.contains("warhammer") || id.contains("worldbreaker") -> WeaponVisualKind.CLUB
                 id.contains("dirk") || id.contains("dagger") -> WeaponVisualKind.DAGGER
                 id.contains("claymore") || id.contains("greatsword") -> WeaponVisualKind.CLAYMORE
-                id.contains("longblade") -> WeaponVisualKind.SWORD
+                id.contains("longblade") || id.contains("longsword") -> WeaponVisualKind.SWORD
                 id.contains("rapier") -> WeaponVisualKind.RAPIER
-                id.contains("falchion") -> WeaponVisualKind.FALCHION
+                id.contains("falchion") || id.contains("sabre") -> WeaponVisualKind.FALCHION
                 id.contains("glaive") || id.contains("halberd") -> WeaponVisualKind.GLAIVE
                 id.contains("axe") || id.contains("cleaver") || id.contains("hatchet") -> WeaponVisualKind.AXE
                 id.contains("arbalest") || id.contains("crossbow") || id.contains("siegebow") -> WeaponVisualKind.ARBALEST
@@ -434,7 +434,9 @@ data class PaperDollAppearance(
             val id = offhandId.lowercase().trim()
             return when {
                 id.contains("cinderite") || id.contains("bastion") -> OffhandVisualKind.DRAGON_SHIELD to MaterialPalettes.CINDERITE
+                id.contains("rime_plate") || id.contains("frostpeak") -> OffhandVisualKind.KITE_SHIELD to MaterialPalettes.RIME_PLATE
                 id.contains("vesperite") || id.contains("bulwark") -> OffhandVisualKind.KITE_SHIELD to MaterialPalettes.VESPERITE
+                id.contains("bog_steel") || id.contains("mire_woven") -> OffhandVisualKind.KITE_SHIELD to MaterialPalettes.MIRE_WOVEN
                 id.contains("dragon") || id.contains("wyrm") -> OffhandVisualKind.DRAGON_SHIELD to MaterialPalettes.WYRMSCALE
                 id.contains("steel") || id.contains("dwarven") || id.contains("kite") || id.contains("heater") ->
                     OffhandVisualKind.KITE_SHIELD to MaterialPalettes.DWARVEN_STEEL
@@ -452,7 +454,9 @@ data class PaperDollAppearance(
             val id = armorId?.lowercase()?.trim().orEmpty()
             return when {
                 id.contains("cinderite") || id.contains("warplate") -> ArmorVisualKind.WYRMSCALE to MaterialPalettes.CINDERITE
+                id.contains("rime_plate") || id.contains("frostpeak") -> ArmorVisualKind.PLATE to MaterialPalettes.RIME_PLATE
                 id.contains("vesperite") || id.contains("aegis") -> ArmorVisualKind.PLATE to MaterialPalettes.VESPERITE
+                id.contains("mire_woven") || id.contains("bog_steel") -> ArmorVisualKind.LEATHER to MaterialPalettes.MIRE_WOVEN
                 id.contains("dragon") || id.contains("wyrm") -> ArmorVisualKind.WYRMSCALE to MaterialPalettes.WYRMSCALE
                 id.contains("brass") || id.contains("plate") || id.contains("mail") -> ArmorVisualKind.PLATE to MaterialPalettes.BRASS_PLATE
                 id.contains("robe") || id.contains("mystic") -> ArmorVisualKind.ROBE to MaterialPalettes.MAGE_ROBE
@@ -500,7 +504,9 @@ data class PaperDollAppearance(
 
         private fun materialPaletteForId(id: String, category: ItemCategory?): MaterialPalette = when {
             id.contains("cinderite") -> MaterialPalettes.CINDERITE
+            id.contains("rime_plate") || id.contains("frostpeak") || id.contains("glacier") -> MaterialPalettes.RIME_PLATE
             id.contains("vesperite") -> MaterialPalettes.VESPERITE
+            id.contains("mire_woven") || id.contains("bog_steel") -> MaterialPalettes.MIRE_WOVEN
             id.contains("moonforge") || id.contains("starlight") -> MaterialPalettes.MOONFORGE
             id.contains("wyrm") || id.contains("dragon") || id.contains("drake") -> MaterialPalettes.WYRMSCALE_BLADE
             id.contains("cinder") || id.contains("fire") || id.contains("inferno") -> MaterialPalettes.CINDER_FLAME
@@ -592,6 +598,14 @@ object MaterialPalettes {
         accent = Color(0xFF73F0FF),
         glow = Color(0xFF68E8FF)
     )
+    /** Whispering Marsh Mire-Woven / Bog-Steel: mossy swamp-silver alloy with venomous emerald glow. */
+    val MIRE_WOVEN = MaterialPalette(
+        primary = Color(0xFF426B54),
+        highlight = Color(0xFF8BE8B5),
+        shadow = Color(0xFF1F382B),
+        accent = Color(0xFF66F27E),
+        glow = Color(0xFF4AE86E)
+    )
     /** Tier 4 Vesperite: violet-silver crystalline forged metal with luminous amethyst sheen. */
     val VESPERITE = MaterialPalette(
         primary = Color(0xFF9C84E8),
@@ -599,6 +613,14 @@ object MaterialPalettes {
         shadow = Color(0xFF47377A),
         accent = Color(0xFFD6C2FF),
         glow = Color(0xFFB58CFF)
+    )
+    /** Frostpeak Highlands Rime-Plate: glacial frost-iron steel inlaid with crystalline cyan quartz. */
+    val RIME_PLATE = MaterialPalette(
+        primary = Color(0xFF7CAFD4),
+        highlight = Color(0xFFE0F8FF),
+        shadow = Color(0xFF335573),
+        accent = Color(0xFF6CE6FF),
+        glow = Color(0xFF5AD8FF)
     )
     /** Tier 5 Cinderite: obsidian-forged metal inlaid with glowing volcanic-gold fissures. */
     val CINDERITE = MaterialPalette(

@@ -1,5 +1,6 @@
 package com.example.game.world
 
+import com.example.game.model.CraftingStationType
 import com.example.game.model.OreVeinKind
 import com.example.game.model.TileType
 import com.example.game.model.WORLD_CHUNK_SIZE
@@ -66,10 +67,19 @@ data class WorldMapPin(
     val minZoomToShow: Float = 1.0f
 )
 
+data class BiomeCraftingStallSpot(
+    val station: CraftingStationType,
+    val settlementName: String,
+    val floor: Int,
+    val x: Int,
+    val y: Int
+)
+
 enum class WorldPinCategory {
     EMPIRE,
     CITY,
     CAMP,
+    FORGE,
     FERRY,
     DUNGEON
 }
@@ -374,9 +384,53 @@ object WorldBiomeBlueprint {
     )
 
     /**
+     * Canonical primary Biome Crafting Stall coordinates across all 5 overland biome tiers.
+     * Players must stand within 2 tiles of a biome's crafting stall to forge its recipes.
+     */
+    val biomeCraftingStalls: List<BiomeCraftingStallSpot> = listOf(
+        BiomeCraftingStallSpot(
+            station = CraftingStationType.ROOKVALE_TOWN_FORGE,
+            settlementName = "Rookvale City",
+            floor = 0,
+            x = 1421,
+            y = 601
+        ),
+        BiomeCraftingStallSpot(
+            station = CraftingStationType.STILT_TOWN_MIRE_BENCH,
+            settlementName = "Mirewatch Stilt Citadel",
+            floor = 0,
+            x = 550,
+            y = 591
+        ),
+        BiomeCraftingStallSpot(
+            station = CraftingStationType.SUNSCORCH_OASIS_SMELTERY,
+            settlementName = "Sunspire Oasis Empire",
+            floor = 0,
+            x = 380,
+            y = 786
+        ),
+        BiomeCraftingStallSpot(
+            station = CraftingStationType.FROSTPEAK_GREAT_HEARTH,
+            settlementName = "Frostpeak Granite Citadel",
+            floor = 0,
+            x = 1401,
+            y = 200
+        ),
+        BiomeCraftingStallSpot(
+            station = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY,
+            settlementName = "Ashen Bastion Empire",
+            floor = 0,
+            x = 391,
+            y = 256
+        )
+    )
+
+    /**
      * Deterministic biome-tiered outer-overworld mining veins:
-     * - Heartland & Marsh (Lvl 1-32): Copper, Tin & Bog Iron
-     * - Sunscorch Badlands & Frostpeak Highlands (Lvl 30-58): Vesperite & Bog Iron
+     * - Heartland (Lvl 1-20): Copper, Tin & Bog Iron
+     * - Whispering Marsh (Lvl 20-32): Mire-Silver, Peat-Coal & Bog Iron
+     * - Sunscorch Badlands (Lvl 30-45): Vesperite & Bog Iron
+     * - Frostpeak Highlands (Lvl 42-58): Glacier-Quartz & Frost-Iron
      * - Ashen Caldera & Blighted Wastes (Lvl 55-75+): Cinderite & Vesperite
      */
     val outerOverworldOres: List<OverworldOrePlacement> = listOf(
@@ -384,27 +438,27 @@ object WorldBiomeBlueprint {
         OverworldOrePlacement(1025, 538, OreVeinKind.COPPER),
         OverworldOrePlacement(1042, 548, OreVeinKind.TIN),
         OverworldOrePlacement(1118, 635, OreVeinKind.BOG_IRON),
-        // Whispering Marsh & Mirelands (Lvl 20-32 — Bog Iron, Tin & Copper)
-        OverworldOrePlacement(255, 495, OreVeinKind.BOG_IRON),
-        OverworldOrePlacement(268, 522, OreVeinKind.BOG_IRON),
-        OverworldOrePlacement(332, 540, OreVeinKind.BOG_IRON),
-        OverworldOrePlacement(220, 560, OreVeinKind.TIN),
-        OverworldOrePlacement(498, 558, OreVeinKind.COPPER),
-        OverworldOrePlacement(510, 548, OreVeinKind.TIN),
-        OverworldOrePlacement(680, 995, OreVeinKind.COPPER),
-        OverworldOrePlacement(748, 1012, OreVeinKind.TIN),
+        // Whispering Marsh & Mirelands (Lvl 20-32 — Mire-Silver, Peat-Coal & Bog Iron)
+        OverworldOrePlacement(255, 495, OreVeinKind.MIRE_SILVER),
+        OverworldOrePlacement(268, 522, OreVeinKind.PEAT_COAL),
+        OverworldOrePlacement(332, 540, OreVeinKind.MIRE_SILVER),
+        OverworldOrePlacement(220, 560, OreVeinKind.PEAT_COAL),
+        OverworldOrePlacement(498, 558, OreVeinKind.MIRE_SILVER),
+        OverworldOrePlacement(510, 548, OreVeinKind.PEAT_COAL),
+        OverworldOrePlacement(680, 995, OreVeinKind.PEAT_COAL),
+        OverworldOrePlacement(748, 1012, OreVeinKind.MIRE_SILVER),
         OverworldOrePlacement(1018, 1022, OreVeinKind.BOG_IRON),
         // Sunscorch Badlands & Arid Dunes (Lvl 30-45 — Vesperite veins + Bog Iron)
         OverworldOrePlacement(315, 765, OreVeinKind.BOG_IRON),
         OverworldOrePlacement(424, 822, OreVeinKind.VESPERITE),
         OverworldOrePlacement(284, 1005, OreVeinKind.VESPERITE),
         OverworldOrePlacement(215, 1034, OreVeinKind.VESPERITE),
-        // Frostpeak Highlands & Boreal Woods (Lvl 42-58 — High-tier Vesperite veins)
-        OverworldOrePlacement(1278, 238, OreVeinKind.BOG_IRON),
-        OverworldOrePlacement(1292, 248, OreVeinKind.VESPERITE),
-        OverworldOrePlacement(1352, 228, OreVeinKind.VESPERITE),
-        OverworldOrePlacement(1442, 236, OreVeinKind.VESPERITE),
-        OverworldOrePlacement(1460, 248, OreVeinKind.VESPERITE),
+        // Frostpeak Highlands & Boreal Woods (Lvl 42-58 — Glacier-Quartz & Frost-Iron veins)
+        OverworldOrePlacement(1278, 238, OreVeinKind.FROST_IRON),
+        OverworldOrePlacement(1292, 248, OreVeinKind.GLACIER_QUARTZ),
+        OverworldOrePlacement(1352, 228, OreVeinKind.GLACIER_QUARTZ),
+        OverworldOrePlacement(1442, 236, OreVeinKind.FROST_IRON),
+        OverworldOrePlacement(1460, 248, OreVeinKind.GLACIER_QUARTZ),
         // Ashen Caldera & Blighted Wastes (Lvl 55-75+ — Cinderite & Vesperite veins)
         OverworldOrePlacement(278, 224, OreVeinKind.VESPERITE),
         OverworldOrePlacement(286, 232, OreVeinKind.CINDERITE),
@@ -422,7 +476,11 @@ object WorldBiomeBlueprint {
             OreVeinKind.COPPER -> TileType.ORE_COPPER
             OreVeinKind.TIN -> TileType.ORE_TIN
             OreVeinKind.BOG_IRON -> TileType.ORE_BOG_IRON
+            OreVeinKind.MIRE_SILVER -> TileType.ORE_MIRE_SILVER
+            OreVeinKind.PEAT_COAL -> TileType.ORE_PEAT_COAL
             OreVeinKind.VESPERITE -> TileType.ORE_VESPERITE
+            OreVeinKind.GLACIER_QUARTZ -> TileType.ORE_GLACIER_QUARTZ
+            OreVeinKind.FROST_IRON -> TileType.ORE_FROST_IRON
             OreVeinKind.CINDERITE -> TileType.ORE_CINDERITE
         }
         ((ore.y.toLong() shl 32) or (ore.x.toLong() and 0xFFFFFFFFL)) to tile
@@ -473,6 +531,21 @@ object WorldBiomeBlueprint {
                         subtitle = "$styleTag • ${s.levelRangeLabel}",
                         levelRange = s.levelRangeLabel,
                         minZoomToShow = minZoom
+                    )
+                )
+            }
+            // 5 Dedicated Biome Crafting Stalls (auto-reveal forge icons & names when zoomed in)
+            for (stall in biomeCraftingStalls) {
+                add(
+                    WorldMapPin(
+                        id = "forge_${stall.station.name.lowercase()}",
+                        label = stall.station.displayName,
+                        x = stall.x,
+                        y = stall.y,
+                        category = WorldPinCategory.FORGE,
+                        subtitle = "${stall.station.biomeLabel.substringBefore(" (")} Forge • ${stall.settlementName}",
+                        levelRange = stall.station.biomeLabel.substringAfter("(").substringBefore(")"),
+                        minZoomToShow = 1.6f
                     )
                 )
             }
@@ -918,30 +991,34 @@ object WorldBiomeBlueprint {
                     if (dx == 0 && dy == 0) return TileType.FOUNTAIN
                     if (dx == -4 && dy == -3) return TileType.MINI_DEPOT
                     if ((dx == -5 || dx == 5) && dy == 3) return TileType.MARKET_AWNING
-                    if (dx == 4 && dy == -3) return TileType.BLACKSMITH_ANVIL
+                    if (dx == 4 && dy == -3) return TileType.BIOME_STALL_HEARTLAND
                     return if (abs(dx) <= 4 && abs(dy) <= 4) TileType.TEMPLE_FLOOR else TileType.COBBLESTONE
                 }
                 BiomeIdeology.MARSHLAND -> {
-                    // Central roaring campfire, raised plank walkways & stilt hut alcoves
+                    // Central roaring campfire, raised plank walkways, stilt huts & Stilt-Town Mire Bench
                     if (dx == 0 && dy == 0) return TileType.CAMPFIRE_BRAZIER
                     if (dx == -4 && dy == -3) return TileType.MINI_DEPOT
                     if (s.tier != SettlementTier.FORWARD_CAMP) {
                         if ((dx == -8 || dx == 8) && dy in -4..4 && dy != 0) return TileType.TIMBER_WALL
-                        if (dx == 5 && dy == -4) return TileType.SMELTING_FURNACE
+                        if (dx == 5 && dy == -4) return TileType.BIOME_STALL_MARSH
                         if (dx == 6 && dy == -4) return TileType.BLACKSMITH_ANVIL
+                    } else if (dx == 4 && dy == -3) {
+                        return TileType.BIOME_STALL_MARSH
                     }
                     if ((dx == -3 || dx == 3) && dy == 4) return TileType.CRATE_BARREL
                     return TileType.WOOD_PLANK_FLOOR
                 }
                 BiomeIdeology.BADLANDS -> {
-                    // Oasis well, shaded desert bazaar awnings & sandstone trade plaza
+                    // Oasis well, shaded desert bazaar awnings & Sunscorch Oasis Bazaar & Quarry Smeltery
                     if (dx == 0 && dy == 0) return TileType.FOUNTAIN
                     if (dx == -5 && dy == -4) return TileType.MINI_DEPOT
                     if ((dx == -6 || dx == 6) && (dy == -2 || dy == 2)) return TileType.MARKET_AWNING
                     if (s.tier == SettlementTier.EMPIRE) {
-                        if (dx == 5 && dy == -4) return TileType.SMELTING_FURNACE
+                        if (dx == 5 && dy == -4) return TileType.BIOME_STALL_BADLANDS
                         if (dx == 6 && dy == -4) return TileType.BLACKSMITH_ANVIL
                         if ((dx == -9 || dx == 9) && dy == 0) return TileType.SANDSTONE_WALL
+                    } else if (dx == 4 && dy == -3) {
+                        return TileType.BIOME_STALL_BADLANDS
                     }
                     return when {
                         abs(dx) <= 5 && abs(dy) <= 5 -> TileType.TEMPLE_FLOOR
@@ -950,11 +1027,12 @@ object WorldBiomeBlueprint {
                     }
                 }
                 BiomeIdeology.FROSTPEAK -> {
-                    // Heavy granite hearth-forges, timber palisades & roaring braziers
+                    // Heavy granite hearth-forges, timber palisades & Frostpeak Citadel Great Hearth
                     if (dx == 0 && dy == 0) return TileType.CAMPFIRE_BRAZIER
                     if (dx == -5 && dy == -4) return TileType.MINI_DEPOT
                     if (dx == 4 && dy == -4) return TileType.SMELTING_FURNACE
-                    if (dx == 5 && dy == -4) return TileType.BLACKSMITH_ANVIL
+                    if (dx == 5 && dy == -4) return TileType.BIOME_STALL_FROSTPEAK
+                    if (dx == 6 && dy == -4) return TileType.BLACKSMITH_ANVIL
                     if (dx == -4 && dy == 4) return TileType.WEAPON_RACK
                     if (s.tier == SettlementTier.EMPIRE && (dx == -8 || dx == 8) && (dy == -6 || dy == 6)) {
                         return TileType.GRANITE_WALL
@@ -962,11 +1040,11 @@ object WorldBiomeBlueprint {
                     return if (abs(dx) <= 5 && abs(dy) <= 5) TileType.COBBLESTONE else TileType.DIRT_FLOOR
                 }
                 BiomeIdeology.ASHEN_BLIGHT -> {
-                    // Obsidian/iron fortress, crimson war banners, glowing braziers & armory
+                    // Obsidian/iron fortress, crimson war banners, glowing braziers & Obsidian Foundry
                     if (dx == 0 && dy == 0) return TileType.CAMPFIRE_BRAZIER
                     if ((dx == -4 || dx == 4) && dy == 0) return TileType.WAR_BANNER
                     if (dx == -5 && dy == -4) return TileType.MINI_DEPOT
-                    if (dx == 5 && dy == -4) return TileType.SMELTING_FURNACE
+                    if (dx == 5 && dy == -4) return TileType.BIOME_STALL_ASHEN
                     if (dx == 6 && dy == -4) return TileType.BLACKSMITH_ANVIL
                     if (dx == 4 && dy == 4) return TileType.WEAPON_RACK
                     return if (abs(dx) <= 6 && abs(dy) <= 6) TileType.OBSIDIAN_FLOOR else TileType.COBBLESTONE

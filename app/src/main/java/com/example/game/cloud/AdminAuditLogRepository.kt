@@ -2,6 +2,9 @@ package com.example.game.cloud
 
 import android.content.Context
 import com.example.game.multiplayer.MultiplayerConfig
+import com.example.game.world.BiomeProgressionRules
+import com.example.game.world.OverlandBiomeTier
+import com.example.game.world.WorldBiomeBlueprint
 import com.example.game.world.WorldMaps
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -64,40 +67,256 @@ data class AdminAuditUiState(
         get() = if (selectedFilter == null) entries else entries.filter { it.actionType == selectedFilter }
 }
 
+enum class AdminWarpCategory(val label: String, val shortLabel: String) {
+    TOWNS_EMPIRES("Towns & Empires", "Towns"),
+    OVERLAND_CAMPS("Overland Camps", "Camps"),
+    DUNGEON_CAMPS("Dungeon Camps", "Dungeons")
+}
+
 data class AdminTeleportPreset(
     val id: String,
     val label: String,
     val floor: Int,
     val x: Int,
     val y: Int,
-    val isDungeon: Boolean = false
+    val isDungeon: Boolean = false,
+    val category: AdminWarpCategory = if (isDungeon) AdminWarpCategory.DUNGEON_CAMPS else AdminWarpCategory.TOWNS_EMPIRES,
+    val levelRangeLabel: String = "Lv 1-20",
+    val biomeTier: OverlandBiomeTier = OverlandBiomeTier.ROOKVALE_HEARTLAND
 )
 
 /**
- * Curated overland & dungeon landmark warp targets for the Admin Control Warp tab.
+ * Curated overland & dungeon landmark warp targets for the Admin Control Warp tab,
+ * organized into Towns & Empires, Overland Forward/Frontier Camps, and Dungeon Camps.
  */
 object AdminTeleportCatalog {
-    val overlandLandmarks: List<AdminTeleportPreset> = listOf(
-        AdminTeleportPreset("rookvale_plaza", "Rookvale Plaza", 0, WorldMaps.TEMPLE_SPAWN_X, WorldMaps.TEMPLE_SPAWN_Y),
-        AdminTeleportPreset("reaper_temple", "Reaper Temple", 0, WorldMaps.REAPER_X, WorldMaps.REAPER_Y + 4),
-        AdminTeleportPreset("mirewatch", "Mirewatch", 0, 545, 595),
-        AdminTeleportPreset("sunspire", "Sunspire Oasis", 0, 375, 790),
-        AdminTeleportPreset("sunleaf", "Sunleaf Village", 0, 960, 995),
-        AdminTeleportPreset("ember_watch", "Ember Watch", 0, 1458, 952),
-        AdminTeleportPreset("grimmaw_camp", "Grimmaw Camp", 0, WorldMaps.ROOKVALE_ORIGIN_X + 88, WorldMaps.ROOKVALE_ORIGIN_Y + 320),
-        AdminTeleportPreset("gorek_camp", "Gorek Camp", 0, WorldMaps.ROOKVALE_ORIGIN_X + 312, WorldMaps.ROOKVALE_ORIGIN_Y + 320)
+
+    private fun compactLevelLabel(tier: OverlandBiomeTier): String =
+        tier.levelRangeLabel.replace("Lvl ", "Lv ")
+
+    private fun settlementPreset(
+        id: String,
+        settlementId: String,
+        label: String,
+        category: AdminWarpCategory,
+        tier: OverlandBiomeTier,
+        fallbackX: Int,
+        fallbackY: Int
+    ): AdminTeleportPreset {
+        val zone = WorldBiomeBlueprint.secondarySettlements.firstOrNull { it.id == settlementId }
+        return AdminTeleportPreset(
+            id = id,
+            label = label,
+            floor = 0,
+            x = zone?.centerX ?: fallbackX,
+            y = zone?.centerY ?: fallbackY,
+            isDungeon = false,
+            category = category,
+            levelRangeLabel = compactLevelLabel(tier),
+            biomeTier = tier
+        )
+    }
+
+    private fun dungeonCampPreset(
+        id: String,
+        label: String,
+        floor: Int,
+        fallbackX: Int,
+        fallbackY: Int,
+        openEndedTop: Boolean = false
+    ): AdminTeleportPreset {
+        val camp = WorldMaps.undergroundCampForFloor(floor)
+        val tier = BiomeProgressionRules.surfaceBiomeForDungeonFloor(floor)
+        val baseLevel = BiomeProgressionRules.dungeonBaseLevel(tier.minLevel, floor)
+        val levelLabel = if (openEndedTop) {
+            "Lv ${baseLevel}+ • PZ"
+        } else {
+            "Lv ${baseLevel}-${baseLevel + 5} • PZ"
+        }
+        val targetX = camp?.let { (it.minX + it.maxX) / 2 } ?: fallbackX
+        val targetY = camp?.let { ((it.minY + it.maxY) / 2).coerceIn(it.minY, it.maxY) } ?: fallbackY
+        // Keep exact legacy F-1..F-6 safe-zone landing offsets inside each underground camp PZ
+        val finalX = if (camp != null && fallbackX in camp.minX..camp.maxX) fallbackX else targetX
+        val finalY = if (camp != null && fallbackY in camp.minY..camp.maxY) fallbackY else targetY
+        return AdminTeleportPreset(
+            id = id,
+            label = label,
+            floor = floor,
+            x = finalX,
+            y = finalY,
+            isDungeon = true,
+            category = AdminWarpCategory.DUNGEON_CAMPS,
+            levelRangeLabel = levelLabel,
+            biomeTier = tier
+        )
+    }
+
+    val townsAndEmpires: List<AdminTeleportPreset> = listOf(
+        AdminTeleportPreset(
+            id = "rookvale_plaza",
+            label = "Rookvale Plaza",
+            floor = 0,
+            x = WorldMaps.TEMPLE_SPAWN_X,
+            y = WorldMaps.TEMPLE_SPAWN_Y,
+            category = AdminWarpCategory.TOWNS_EMPIRES,
+            levelRangeLabel = compactLevelLabel(OverlandBiomeTier.ROOKVALE_HEARTLAND),
+            biomeTier = OverlandBiomeTier.ROOKVALE_HEARTLAND
+        ),
+        AdminTeleportPreset(
+            id = "reaper_temple",
+            label = "Reaper Temple",
+            floor = 0,
+            x = WorldMaps.REAPER_X,
+            y = WorldMaps.REAPER_Y + 4,
+            category = AdminWarpCategory.TOWNS_EMPIRES,
+            levelRangeLabel = compactLevelLabel(OverlandBiomeTier.ROOKVALE_HEARTLAND),
+            biomeTier = OverlandBiomeTier.ROOKVALE_HEARTLAND
+        ),
+        settlementPreset(
+            id = "mirewatch",
+            settlementId = "mirewatch_fortress",
+            label = "Mirewatch Citadel",
+            category = AdminWarpCategory.TOWNS_EMPIRES,
+            tier = OverlandBiomeTier.WHISPERING_MARSH,
+            fallbackX = 545,
+            fallbackY = 595
+        ),
+        settlementPreset(
+            id = "sunleaf",
+            settlementId = "sunleaf_village",
+            label = "Sunleaf Village",
+            category = AdminWarpCategory.TOWNS_EMPIRES,
+            tier = OverlandBiomeTier.WHISPERING_MARSH,
+            fallbackX = 960,
+            fallbackY = 995
+        ),
+        settlementPreset(
+            id = "sunspire",
+            settlementId = "sunspire_oasis",
+            label = "Sunspire Empire",
+            category = AdminWarpCategory.TOWNS_EMPIRES,
+            tier = OverlandBiomeTier.SUNSCORCH_BADLANDS,
+            fallbackX = 375,
+            fallbackY = 790
+        ),
+        settlementPreset(
+            id = "frostpeak_citadel",
+            settlementId = "frostpeak_citadel",
+            label = "Frostpeak Citadel",
+            category = AdminWarpCategory.TOWNS_EMPIRES,
+            tier = OverlandBiomeTier.FROSTPEAK_HIGHLANDS,
+            fallbackX = 1396,
+            fallbackY = 204
+        ),
+        settlementPreset(
+            id = "ashen_bastion",
+            settlementId = "ashen_bastion",
+            label = "Ashen Bastion",
+            category = AdminWarpCategory.TOWNS_EMPIRES,
+            tier = OverlandBiomeTier.ASHEN_CALDERA,
+            fallbackX = 386,
+            fallbackY = 260
+        ),
+        settlementPreset(
+            id = "duskport_town",
+            settlementId = "duskport_town",
+            label = "Duskport Keep",
+            category = AdminWarpCategory.TOWNS_EMPIRES,
+            tier = OverlandBiomeTier.ASHEN_CALDERA,
+            fallbackX = 904,
+            fallbackY = 250
+        ),
+        settlementPreset(
+            id = "ember_watch",
+            settlementId = "ember_outpost",
+            label = "Ember Watch",
+            category = AdminWarpCategory.TOWNS_EMPIRES,
+            tier = OverlandBiomeTier.ASHEN_CALDERA,
+            fallbackX = 1462,
+            fallbackY = 952
+        )
     )
 
-    val dungeonFloors: List<AdminTeleportPreset> = listOf(
-        AdminTeleportPreset("floor_m1", "F-1 Sewers", -1, 28, 11, isDungeon = true),
-        AdminTeleportPreset("floor_m2", "F-2 Caverns", -2, 24, 37, isDungeon = true),
-        AdminTeleportPreset("floor_m3", "F-3 Crypt", -3, 24, 9, isDungeon = true),
-        AdminTeleportPreset("floor_m4", "F-4 Wyrm Lair", -4, 24, 39, isDungeon = true),
-        AdminTeleportPreset("floor_m5", "F-5 Grimmaw", -5, 24, 40, isDungeon = true),
-        AdminTeleportPreset("floor_m6", "F-6 Labyrinth", -6, 24, 40, isDungeon = true)
+    val overlandCamps: List<AdminTeleportPreset> = listOf(
+        settlementPreset(
+            id = "spirewood_crossing",
+            settlementId = "spirewood_crossing",
+            label = "Spirewood Camp",
+            category = AdminWarpCategory.OVERLAND_CAMPS,
+            tier = OverlandBiomeTier.ROOKVALE_HEARTLAND,
+            fallbackX = 1042,
+            fallbackY = 592
+        ),
+        settlementPreset(
+            id = "boghollow_camp",
+            settlementId = "boghollow_camp",
+            label = "Boghollow Camp",
+            category = AdminWarpCategory.OVERLAND_CAMPS,
+            tier = OverlandBiomeTier.WHISPERING_MARSH,
+            fallbackX = 358,
+            fallbackY = 560
+        ),
+        settlementPreset(
+            id = "scorchwind_camp",
+            settlementId = "scorchwind_camp",
+            label = "Scorchwind Camp",
+            category = AdminWarpCategory.OVERLAND_CAMPS,
+            tier = OverlandBiomeTier.SUNSCORCH_BADLANDS,
+            fallbackX = 315,
+            fallbackY = 912
+        ),
+        settlementPreset(
+            id = "boreal_watch_camp",
+            settlementId = "boreal_watch_camp",
+            label = "Boreal Watch Camp",
+            category = AdminWarpCategory.OVERLAND_CAMPS,
+            tier = OverlandBiomeTier.FROSTPEAK_HIGHLANDS,
+            fallbackX = 1268,
+            fallbackY = 258
+        ),
+        AdminTeleportPreset(
+            id = "grimmaw_camp",
+            label = "Grimmaw Camp",
+            floor = 0,
+            x = WorldMaps.ROOKVALE_ORIGIN_X + 88,
+            y = WorldMaps.ROOKVALE_ORIGIN_Y + 320,
+            category = AdminWarpCategory.OVERLAND_CAMPS,
+            levelRangeLabel = compactLevelLabel(OverlandBiomeTier.SUNSCORCH_BADLANDS),
+            biomeTier = OverlandBiomeTier.SUNSCORCH_BADLANDS
+        ),
+        AdminTeleportPreset(
+            id = "gorek_camp",
+            label = "Gorek War-Camp",
+            floor = 0,
+            x = WorldMaps.ROOKVALE_ORIGIN_X + 312,
+            y = WorldMaps.ROOKVALE_ORIGIN_Y + 320,
+            category = AdminWarpCategory.OVERLAND_CAMPS,
+            levelRangeLabel = compactLevelLabel(OverlandBiomeTier.ASHEN_CALDERA),
+            biomeTier = OverlandBiomeTier.ASHEN_CALDERA
+        )
     )
+
+    val dungeonCamps: List<AdminTeleportPreset> = listOf(
+        dungeonCampPreset("floor_m1", "F-1 Sewers Camp", -1, 28, 11),
+        dungeonCampPreset("floor_m2", "F-2 Caverns Camp", -2, 24, 37),
+        dungeonCampPreset("floor_m3", "F-3 Crypt Camp", -3, 24, 9),
+        dungeonCampPreset("floor_m4", "F-4 Wyrm Camp", -4, 24, 39),
+        dungeonCampPreset("floor_m5", "F-5 Grimmaw Camp", -5, 24, 40),
+        dungeonCampPreset("floor_m6", "F-6 Labyrinth Camp", -6, 24, 40, openEndedTop = true)
+    )
+
+    val overlandLandmarks: List<AdminTeleportPreset> = townsAndEmpires + overlandCamps
+
+    val dungeonFloors: List<AdminTeleportPreset> = dungeonCamps
 
     val allPresets: List<AdminTeleportPreset> = overlandLandmarks + dungeonFloors
+
+    fun presetsFor(category: AdminWarpCategory?): List<AdminTeleportPreset> = when (category) {
+        null -> allPresets
+        AdminWarpCategory.TOWNS_EMPIRES -> townsAndEmpires
+        AdminWarpCategory.OVERLAND_CAMPS -> overlandCamps
+        AdminWarpCategory.DUNGEON_CAMPS -> dungeonCamps
+    }
 }
 
 /**

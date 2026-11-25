@@ -60,7 +60,7 @@ class ExampleUnitTest {
         // Sunbrass Dirk + Wooden Shield equipped; tools packed inside Tool Bag, not Main Bag
         assertEquals("sunbrass_dirk", heroA.equipment.weaponId)
         assertEquals("wooden_shield", heroA.equipment.shieldId)
-        assertTrue(heroA.toolBag.any { it.itemId == "quarry_mattock" })
+        assertTrue(heroA.toolBag.any { it.itemId == "bronze_pickaxe" })
         assertTrue(heroA.toolBag.any { it.itemId == "rope" })
         assertTrue(heroA.toolBag.any { it.itemId == "fishing_rod" })
         assertFalse(heroA.backpack.any { ItemCatalog.get(it.itemId).isTool })
@@ -77,8 +77,10 @@ class ExampleUnitTest {
         assertEquals(2, afterBuy.toolBag.filter { it.itemId == "rope" }.sumOf { it.count })
         assertFalse(afterBuy.backpack.any { it.itemId == "rope" })
 
-        // Forging a Tier 2 Sunbrass Pick at Anvil auto-routes into toolBag
+        // Forging a Tier 2 Sunbrass Pick at Rookvale Anvil auto-routes into toolBag
         val readyForge = hero.copy(
+            playerX = 1420,
+            playerY = 601,
             activePanel = ActivePanel.ANVIL,
             backpack = listOf(ItemStack("sunbrass_ingot", 2), ItemStack("brindle_hide", 1))
         )
@@ -381,12 +383,13 @@ class ExampleUnitTest {
         assertEquals(cinderNodeEntry.value.chargesLeft, rejected.oreNodes[cinderNodeEntry.key]!!.chargesLeft)
 
         var state = atCinderT1.copy(
-            toolBag = listOf(ItemStack("quenchsteel_delver", 1)),
+            toolBag = listOf(ItemStack("cinderite_core_pickaxe", 1)),
+            skills = atCinderT1.skills.copy(mining = SkillProgress(52, 0.0)),
             maxCapOz = 900.0
         )
         var attempts = 0
         while (!state.oreNodes[cinderNodeEntry.key]!!.isDepleted && attempts < 40) {
-            state = CraftingAndMiningEngine.mineOreNode(state, cX, cY, 2000L + attempts * 500L)
+            state = CraftingAndMiningEngine.mineOreNode(state, cX, cY, 2000L + attempts * 1000L)
             attempts++
         }
         assertTrue("Cinderite Seam should deplete after mining", state.oreNodes[cinderNodeEntry.key]!!.isDepleted)
@@ -414,7 +417,7 @@ class ExampleUnitTest {
 
         val capBefore = base.usedCapOz()
         val smelted = CraftingAndMiningEngine.executeRecipe(
-            base.copy(activePanel = ActivePanel.FURNACE),
+            base.copy(playerX = 1420, playerY = 601, activePanel = ActivePanel.FURNACE),
             "smelt_sunbrass",
             2000L
         )
@@ -424,7 +427,7 @@ class ExampleUnitTest {
         assertTrue("Smelting should compress Cap weight", smelted.usedCapOz() < capBefore)
 
         val forged = CraftingAndMiningEngine.executeRecipe(
-            smelted.copy(activePanel = ActivePanel.ANVIL),
+            smelted.copy(playerX = 1420, playerY = 601, activePanel = ActivePanel.ANVIL),
             "forge_sunbrass_dirk",
             3000L
         )

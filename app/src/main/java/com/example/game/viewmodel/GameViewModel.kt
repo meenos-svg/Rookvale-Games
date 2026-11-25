@@ -1342,15 +1342,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openPanel(panel: ActivePanel) {
         _world.update {
+            val nextPanel = if (it.activePanel == panel) ActivePanel.NONE else panel
             it.copy(
-                activePanel = if (it.activePanel == panel) ActivePanel.NONE else panel,
-                inspectingCorpseId = if (panel != ActivePanel.LOOT_CORPSE) null else it.inspectingCorpseId
+                activePanel = nextPanel,
+                inspectingCorpseId = if (nextPanel != ActivePanel.LOOT_CORPSE) null else it.inspectingCorpseId,
+                activeBiomeStall = if (nextPanel != ActivePanel.BIOME_STALL) null else it.activeBiomeStall
             )
         }
     }
 
     fun closePanel() {
-        _world.update { it.copy(activePanel = ActivePanel.NONE, inspectingCorpseId = null) }
+        _world.update { it.copy(activePanel = ActivePanel.NONE, inspectingCorpseId = null, activeBiomeStall = null) }
     }
 
     fun craftRecipe(recipeId: String) {

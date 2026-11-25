@@ -58,7 +58,7 @@ class RookvaleLoreExpansionTest {
 
     @Test
     fun fiveOriginalOreTiersSpawnAcrossOutskirtsAndDeepDungeonsAndSmeltCleanly() {
-        assertEquals(5, OreVeinKind.entries.size)
+        assertEquals(9, OreVeinKind.entries.size)
         val state = GameEngine.createNewWorld("Roland")
         val heartlandKinds = state.oreNodes
             .filterKeys { (f, x, y) -> f == 0 && WorldBiomeBlueprint.isInRookvaleHeartland(x, y) }
@@ -89,14 +89,23 @@ class RookvaleLoreExpansionTest {
         assertTrue("Floor -2 must contain Cinderite veins", OreVeinKind.CINDERITE in f2Kinds)
         assertTrue("Floor -6 Gorek Labyrinth must contain Cinderite veins", OreVeinKind.CINDERITE in f6Kinds)
 
-        // Verify Vesperite & Cinderite smelting recipes
+        // Verify Vesperite & Cinderite smelting recipes at their respective biome stalls
+        val vesperiteStall = WorldBiomeBlueprint.biomeCraftingStalls.first { it.station.name == "SUNSCORCH_OASIS_SMELTERY" }
+        val cinderiteStall = WorldBiomeBlueprint.biomeCraftingStalls.first { it.station.name == "ASHEN_OBSIDIAN_FOUNDRY" }
         val smeltingState = state.copy(
-            activePanel = ActivePanel.FURNACE,
+            floor = 0,
+            playerX = vesperiteStall.x,
+            playerY = vesperiteStall.y + 1,
+            activePanel = ActivePanel.BIOME_STALL,
             backpack = listOf(ItemStack("vesperite_ore", 2), ItemStack("cinderite_ore", 2))
         )
         val afterVesperite = CraftingAndMiningEngine.executeRecipe(smeltingState, "smelt_vesperite", 1000L)
         assertEquals(1, afterVesperite.itemCount("vesperite_bar"))
-        val afterCinderite = CraftingAndMiningEngine.executeRecipe(afterVesperite, "smelt_cinderite", 2000L)
+        val atAshenFoundry = afterVesperite.copy(
+            playerX = cinderiteStall.x,
+            playerY = cinderiteStall.y + 1
+        )
+        val afterCinderite = CraftingAndMiningEngine.executeRecipe(atAshenFoundry, "smelt_cinderite", 2000L)
         assertEquals(1, afterCinderite.itemCount("cinderite_bar"))
     }
 

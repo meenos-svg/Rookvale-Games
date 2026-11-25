@@ -66,7 +66,11 @@ object EquipmentProcEngine {
                     centerY = cy,
                     preferredTargetId = primaryTarget.id,
                     basePower = basePower.toDouble(),
-                    isMagic = isMagicWeapon || weaponProc.visualStyle == ProcVisualStyle.CHAIN_ARC || weaponProc.visualStyle == ProcVisualStyle.ARCANE_NOVA,
+                    isMagic = isMagicWeapon ||
+                        weaponProc.visualStyle == ProcVisualStyle.CHAIN_ARC ||
+                        weaponProc.visualStyle == ProcVisualStyle.ARCANE_NOVA ||
+                        weaponProc.visualStyle == ProcVisualStyle.ACID_SPLASH ||
+                        weaponProc.visualStyle == ProcVisualStyle.FROST_SHATTER,
                     nowMs = nowMs,
                     rng = rng
                 )
@@ -338,14 +342,19 @@ object EquipmentProcEngine {
                     monsters = s.monsters.map { m ->
                         if (m.id != liveTarget.id) m
                         else {
-                            val nextBurnTicks = if (proc.bonusEffect == ProcBonusEffect.IGNITE_BURN) max(m.burnTicks, 3) else m.burnTicks
-                            val nextBurnDmg = if (proc.bonusEffect == ProcBonusEffect.IGNITE_BURN) {
+                            val appliesDot = proc.bonusEffect == ProcBonusEffect.IGNITE_BURN || proc.bonusEffect == ProcBonusEffect.VENOM_DOT
+                            val nextBurnTicks = if (appliesDot) max(m.burnTicks, if (proc.bonusEffect == ProcBonusEffect.VENOM_DOT) 4 else 3) else m.burnTicks
+                            val nextBurnDmg = if (appliesDot) {
                                 max(m.burnDamagePerTick, (finalDmg * 0.30).roundToInt().coerceAtLeast(5))
                             } else {
                                 m.burnDamagePerTick
                             }
                             val nextShatter = if (proc.bonusEffect == ProcBonusEffect.ARMOR_SHATTER) max(m.shatterTicks, 4) else m.shatterTicks
-                            val nextSlow = if (proc.bonusEffect == ProcBonusEffect.STAGGER_SLOW) max(m.slowTicks, 3) else m.slowTicks
+                            val nextSlow = when (proc.bonusEffect) {
+                                ProcBonusEffect.FROST_SHATTER_SLOW -> max(m.slowTicks, 4)
+                                ProcBonusEffect.STAGGER_SLOW -> max(m.slowTicks, 3)
+                                else -> m.slowTicks
+                            }
                             m.copy(
                                 targetPlayerId = m.targetPlayerId ?: localId,
                                 contributors = m.contributors + localId,
@@ -395,8 +404,10 @@ object EquipmentProcEngine {
                 } else ""
             }
             ProcBonusEffect.IGNITE_BURN -> " (Ignited)"
+            ProcBonusEffect.VENOM_DOT -> " (Venomized)"
             ProcBonusEffect.ARMOR_SHATTER -> " (Armor Shattered)"
             ProcBonusEffect.STAGGER_SLOW -> " (Staggered)"
+            ProcBonusEffect.FROST_SHATTER_SLOW -> " (Frost Slowed)"
             ProcBonusEffect.NONE -> ""
         }
 

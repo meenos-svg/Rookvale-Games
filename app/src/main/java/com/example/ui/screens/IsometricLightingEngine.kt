@@ -491,6 +491,19 @@ object IsometricLightingEngine {
                     priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
                 )
             )
+            TileType.ORE_MIRE_SILVER -> outLights.add(
+                ScenePointLight(
+                    screenX = cx,
+                    screenY = cy - unitH * 0.42f,
+                    radiusPx = unitW * 1.25f,
+                    coreColor = Color(0xFFA8FFD8),
+                    outerColor = Color(0xFF2ED994),
+                    intensity = 0.44f,
+                    flickerSeed = seed,
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_AMBIENT
+                )
+            )
             TileType.ORE_VESPERITE -> outLights.add(
                 ScenePointLight(
                     screenX = cx,
@@ -499,6 +512,19 @@ object IsometricLightingEngine {
                     coreColor = Color(0xFFE6D6FF),
                     outerColor = Color(0xFF8E63FF),
                     intensity = 0.48f,
+                    flickerSeed = seed,
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_AMBIENT
+                )
+            )
+            TileType.ORE_GLACIER_QUARTZ -> outLights.add(
+                ScenePointLight(
+                    screenX = cx,
+                    screenY = cy - unitH * 0.45f,
+                    radiusPx = unitW * 1.45f,
+                    coreColor = Color(0xFFD6FAFF),
+                    outerColor = Color(0xFF47C8FF),
+                    intensity = 0.54f,
                     flickerSeed = seed,
                     isArcane = true,
                     priority = ScenePointLight.PRIORITY_AMBIENT
@@ -514,6 +540,69 @@ object IsometricLightingEngine {
                     intensity = 0.56f,
                     flickerSeed = seed * 1.2f,
                     priority = ScenePointLight.PRIORITY_AMBIENT
+                )
+            )
+            TileType.BIOME_STALL_HEARTLAND -> outLights.add(
+                ScenePointLight(
+                    screenX = cx,
+                    screenY = cy - unitH * 0.35f,
+                    radiusPx = unitW * 2.55f,
+                    coreColor = Color(0xFFFFCC73),
+                    outerColor = TorchAmber,
+                    intensity = 0.96f,
+                    flickerSeed = seed * 1.3f,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
+                )
+            )
+            TileType.BIOME_STALL_MARSH -> outLights.add(
+                ScenePointLight(
+                    screenX = cx,
+                    screenY = cy - unitH * 0.35f,
+                    radiusPx = unitW * 2.55f,
+                    coreColor = Color(0xFFA2FF8C),
+                    outerColor = Color(0xFF28C96D),
+                    intensity = 0.94f,
+                    flickerSeed = seed * 1.2f,
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
+                )
+            )
+            TileType.BIOME_STALL_BADLANDS -> outLights.add(
+                ScenePointLight(
+                    screenX = cx,
+                    screenY = cy - unitH * 0.35f,
+                    radiusPx = unitW * 2.60f,
+                    coreColor = Color(0xFFE5C8FF),
+                    outerColor = Color(0xFF9F6CFF),
+                    intensity = 0.96f,
+                    flickerSeed = seed * 1.1f,
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
+                )
+            )
+            TileType.BIOME_STALL_FROSTPEAK -> outLights.add(
+                ScenePointLight(
+                    screenX = cx,
+                    screenY = cy - unitH * 0.35f,
+                    radiusPx = unitW * 2.70f,
+                    coreColor = Color(0xFFB5F4FF),
+                    outerColor = Color(0xFF3EB8FF),
+                    intensity = 1.00f,
+                    flickerSeed = seed * 1.1f,
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
+                )
+            )
+            TileType.BIOME_STALL_ASHEN -> outLights.add(
+                ScenePointLight(
+                    screenX = cx,
+                    screenY = cy - unitH * 0.35f,
+                    radiusPx = unitW * 2.85f,
+                    coreColor = Color(0xFFFFB24D),
+                    outerColor = Color(0xFFE63E12),
+                    intensity = 1.08f,
+                    flickerSeed = seed * 1.5f,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
                 )
             )
             TileType.FOUNTAIN -> outLights.add(

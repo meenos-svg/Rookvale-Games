@@ -653,7 +653,12 @@ object EntitySpriteAtlas {
         val def = ItemCatalog.get(itemId)
         val tierTint = when {
             itemId.contains("cinderite") -> 0xFFFFAA2B.toInt()
+            itemId.contains("rime_plate") || itemId.contains("frostpeak") || itemId.contains("glacier") || itemId.contains("frost_iron") -> 0xFF72E4FF.toInt()
             itemId.contains("vesperite") -> 0xFFB48CFF.toInt()
+            itemId.contains("mire_woven") || itemId.contains("bog_steel") || itemId.contains("mire_silver") -> 0xFF5EE89E.toInt()
+            itemId.contains("peat_coal") -> 0xFF474E57.toInt()
+            itemId.contains("tempered_steel") -> 0xFF9AC2E6.toInt()
+            itemId.contains("bronze_pickaxe") -> 0xFFE39B42.toInt()
             itemId.contains("moonforge") || itemId.contains("starlight") || itemId.contains("starstone") -> 0xFFB599FF.toInt()
             itemId.contains("wyrm") || itemId.contains("drake") || itemId.contains("cinderheart") || itemId.contains("fire") -> 0xFFFF6E24.toInt()
             itemId.contains("quenchsteel") || itemId.contains("colossus") || itemId.contains("tallowbone") -> 0xFF9AC2E6.toInt()
@@ -669,7 +674,11 @@ object EntitySpriteAtlas {
                     "copper_ore", "ochre_nugget" -> 0xFFE08234.toInt()
                     "tin_ore" -> 0xFFA9B9C8.toInt()
                     "bog_iron_ore", "bogstone_shard" -> 0xFF7B8B9E.toInt()
+                    "mire_silver_ore" -> 0xFF5EE89E.toInt()
+                    "peat_coal_ore" -> 0xFF3D424A.toInt()
                     "vesperite_ore", "cinder_pitch" -> 0xFFA782FF.toInt()
+                    "glacier_quartz_ore" -> 0xFF68E8FF.toInt()
+                    "frost_iron_ore" -> 0xFF7CB4E8.toInt()
                     "cinderite_ore", "pale_starstone" -> 0xFFFFAA2B.toInt()
                     else -> 0xFF9B7BFF.toInt()
                 }
@@ -815,7 +824,7 @@ object EntitySpriteAtlas {
                 if (itemId == "wooden_club") {
                     for (i in 0..9) px(buf, ITEM_S, 3 + i, 12 - i, 0xFF7D4E26.toInt())
                     rect(buf, ITEM_S, 9, 2, 5, 5, 0xFF5C3818.toInt())
-                } else if (itemId.contains("warmaul") || itemId.contains("worldbreaker")) {
+                } else if (itemId.contains("warmaul") || itemId.contains("worldbreaker") || itemId.contains("mace") || itemId.contains("warhammer")) {
                     for (i in 0..9) px(buf, ITEM_S, 3 + i, 12 - i, 0xFF4E4047.toInt())
                     rect(buf, ITEM_S, 7, 2, 7, 5, tierTint)
                     rect(buf, ITEM_S, 9, 3, 3, 2, 0xFFFFFFFF.toInt())
@@ -853,7 +862,9 @@ object EntitySpriteAtlas {
             ItemCategory.SHIELD -> {
                 val (col, trim) = when (itemId) {
                     "cinderite_bastion" -> 0xFF33211E.toInt() to 0xFFFF8826.toInt()
+                    "rime_plate_wall_shield" -> 0xFF456D8A.toInt() to 0xFF88ECFF.toInt()
                     "vesperite_bulwark" -> 0xFF6B4EB8.toInt() to 0xFFD9C7FF.toInt()
+                    "bog_steel_targe" -> 0xFF2D543C.toInt() to 0xFF68F09B.toInt()
                     "dragon_shield" -> 0xFF288C46.toInt() to 0xFFE6B44C.toInt()
                     "steel_shield" -> 0xFF7B8694.toInt() to 0xFFE6B44C.toInt()
                     else -> 0xFF8C5A2B.toInt() to 0xFFE6B44C.toInt()
@@ -865,7 +876,9 @@ object EntitySpriteAtlas {
             ItemCategory.ARMOR -> {
                 val (col, trim) = when (itemId) {
                     "cinderite_warplate" -> 0xFF2F1F1C.toInt() to 0xFFFF7A29.toInt()
+                    "rime_plate_cuirass" -> 0xFF456D8A.toInt() to 0xFF88ECFF.toInt()
                     "vesperite_aegis_mail" -> 0xFF684EB2.toInt() to 0xFFD9C7FF.toInt()
+                    "mire_woven_brigandine" -> 0xFF2D543C.toInt() to 0xFF68F09B.toInt()
                     "dragon_mail" -> 0xFF268F4A.toInt() to 0xFFE6B44C.toInt()
                     "brass_armor" -> 0xFFB8963E.toInt() to 0xFFE6C86E.toInt()
                     "mystic_robe" -> 0xFF3361BD.toInt() to 0xFF9AC5FF.toInt()

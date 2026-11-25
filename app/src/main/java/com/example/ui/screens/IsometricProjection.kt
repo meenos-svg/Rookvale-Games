@@ -250,10 +250,19 @@ object IsometricTileDrawer {
         TileType.BLACKSMITH_ANVIL,
         TileType.FLETCHING_BENCH,
         TileType.RUNECRAFTING_TABLE,
+        TileType.BIOME_STALL_HEARTLAND,
+        TileType.BIOME_STALL_MARSH,
+        TileType.BIOME_STALL_BADLANDS,
+        TileType.BIOME_STALL_FROSTPEAK,
+        TileType.BIOME_STALL_ASHEN,
         TileType.ORE_COPPER,
         TileType.ORE_TIN,
         TileType.ORE_BOG_IRON,
+        TileType.ORE_MIRE_SILVER,
+        TileType.ORE_PEAT_COAL,
         TileType.ORE_VESPERITE,
+        TileType.ORE_GLACIER_QUARTZ,
+        TileType.ORE_FROST_IRON,
         TileType.ORE_CINDERITE,
         TileType.DEPLETED_VEIN,
         TileType.FOUNTAIN,
@@ -571,7 +580,11 @@ object IsometricTileDrawer {
                 else -> TileType.WOOD_PLANK_FLOOR
             }
             TileType.FOUNTAIN, TileType.MARKET_AWNING, TileType.SMELTING_FURNACE, TileType.BLACKSMITH_ANVIL,
-            TileType.FLETCHING_BENCH, TileType.LANTERN_POST, TileType.GATE_PILLAR -> TileType.COBBLESTONE
+            TileType.FLETCHING_BENCH, TileType.LANTERN_POST, TileType.GATE_PILLAR,
+            TileType.BIOME_STALL_HEARTLAND, TileType.BIOME_STALL_FROSTPEAK -> TileType.COBBLESTONE
+            TileType.BIOME_STALL_MARSH -> TileType.WOOD_PLANK_FLOOR
+            TileType.BIOME_STALL_BADLANDS -> if (floorMap.floorId == 0) TileType.SAND else TileType.COBBLESTONE
+            TileType.BIOME_STALL_ASHEN -> TileType.OBSIDIAN_FLOOR
             TileType.TIMBER_WALL, TileType.TIMBER_WINDOW_WALL -> TileType.COBBLESTONE
             TileType.SANDSTONE_WALL -> TileType.SAND
             TileType.GRANITE_WALL -> TileType.COBBLESTONE
@@ -1346,13 +1359,70 @@ object IsometricTileDrawer {
                 }
             }
             TileType.MOORED_BOAT -> drawMooredRowboat(scope, path, cam, cx, cy, nowMs, tx, ty, quality)
+            TileType.BIOME_STALL_HEARTLAND, TileType.BIOME_STALL_MARSH, TileType.BIOME_STALL_BADLANDS,
+            TileType.BIOME_STALL_FROSTPEAK, TileType.BIOME_STALL_ASHEN -> {
+                val (baseTop, baseFaceX, baseFaceY) = when (tile) {
+                    TileType.BIOME_STALL_HEARTLAND -> Triple(Color(0xFF9C7245), Color(0xFF5D4B3B), Color(0xFF735D4A))
+                    TileType.BIOME_STALL_MARSH -> Triple(Color(0xFF5A7348), Color(0xFF334229), Color(0xFF445737))
+                    TileType.BIOME_STALL_BADLANDS -> Triple(Color(0xFFDAB472), Color(0xFF8C693B), Color(0xFFB0874E))
+                    TileType.BIOME_STALL_FROSTPEAK -> Triple(Color(0xFF8B99A8), Color(0xFF47525E), Color(0xFF637180))
+                    else -> Triple(Color(0xFF3A2D45), Color(0xFF1D1524), Color(0xFF2B2036))
+                }
+                val (forgeGlow, coreGlow, canopyColor) = when (tile) {
+                    TileType.BIOME_STALL_HEARTLAND -> Triple(Color(0xFFFF7A26), Color(0xFFFFE580), Color(0xFFB54132))
+                    TileType.BIOME_STALL_MARSH -> Triple(Color(0xFF58E88E), Color(0xFFD6FFE6), Color(0xFF3A5E35))
+                    TileType.BIOME_STALL_BADLANDS -> Triple(Color(0xFFA77BFF), Color(0xFFECE0FF), Color(0xFFC98A3A))
+                    TileType.BIOME_STALL_FROSTPEAK -> Triple(Color(0xFF68E8FF), Color(0xFFE8FFFF), Color(0xFF51738F))
+                    else -> Triple(Color(0xFFFF5E1F), Color(0xFFFFEB8A), Color(0xFF5E2228))
+                }
+                val pulse = 0.78f + 0.22f * sin(nowMs * 0.0075 + tx * 1.1 + ty * 0.7).toFloat()
+                // Primary biome hearth / forge workbench body
+                drawRotatedPrism(
+                    scope, path, cam, cx, cy, fracU = 0.84f, fracV = 0.80f, heightPx = unitH * 0.86f,
+                    topColor = baseTop, faceXColor = baseFaceX, faceYColor = baseFaceY,
+                    quality = quality, isOverland = isOverland
+                )
+                // Raised crucible / chimney / awning crown
+                drawRotatedPrism(
+                    scope, path, cam, cx, cy - unitH * 0.82f, fracU = 0.62f, fracV = 0.56f, heightPx = unitH * 0.42f,
+                    topColor = canopyColor, faceXColor = baseFaceX, faceYColor = baseFaceY,
+                    quality = quality, isOverland = isOverland
+                )
+                // Glowing forge hearth / cauldron / crucible core
+                val hearthCenter = Offset(cx, cy - unitH * 0.56f)
+                scope.drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(forgeGlow.copy(alpha = 0.48f * pulse), Color.Transparent),
+                        center = hearthCenter,
+                        radius = cam.tileW * 0.44f
+                    ),
+                    radius = cam.tileW * 0.44f,
+                    center = hearthCenter
+                )
+                scope.drawCircle(forgeGlow.copy(alpha = 0.94f), cam.tileW * 0.12f, hearthCenter)
+                scope.drawCircle(coreGlow.copy(alpha = pulse), cam.tileW * 0.06f, Offset(cx, cy - unitH * 0.58f))
+                // Hammer/anvil metallic crest bar
+                scope.drawLine(
+                    color = Color(0xFFDCE6F0),
+                    start = Offset(cx - cam.tileW * 0.14f, cy - unitH * 1.06f),
+                    end = Offset(cx + cam.tileW * 0.14f, cy - unitH * 1.06f),
+                    strokeWidth = (cam.tileW * 0.055f).coerceAtLeast(2.4f),
+                    cap = StrokeCap.Round
+                )
+            }
             TileType.ORE_COPPER, TileType.ORE_TIN, TileType.ORE_BOG_IRON,
-            TileType.ORE_VESPERITE, TileType.ORE_CINDERITE, TileType.DEPLETED_VEIN -> {
+            TileType.ORE_MIRE_SILVER, TileType.ORE_PEAT_COAL,
+            TileType.ORE_VESPERITE, TileType.ORE_GLACIER_QUARTZ, TileType.ORE_FROST_IRON,
+            TileType.ORE_CINDERITE, TileType.DEPLETED_VEIN -> {
                 val (rockTop, rockFaceX, rockFaceY) = when (tile) {
                     TileType.ORE_COPPER -> Triple(Color(0xFF73675D), Color(0xFF473F38), Color(0xFF5C524A))
                     TileType.ORE_TIN -> Triple(Color(0xFF757678), Color(0xFF494A4D), Color(0xFF5E6063))
                     TileType.ORE_BOG_IRON -> Triple(Color(0xFF58605C), Color(0xFF353B38), Color(0xFF454C49))
+                    TileType.ORE_MIRE_SILVER -> Triple(Color(0xFF465C4D), Color(0xFF28382D), Color(0xFF374A3D))
+                    TileType.ORE_PEAT_COAL -> Triple(Color(0xFF4C473C), Color(0xFF2B2821), Color(0xFF3B372E))
                     TileType.ORE_VESPERITE -> Triple(Color(0xFF4F4668), Color(0xFF2D273D), Color(0xFF3D3552))
+                    TileType.ORE_GLACIER_QUARTZ -> Triple(Color(0xFF5A7387), Color(0xFF364857), Color(0xFF485F70))
+                    TileType.ORE_FROST_IRON -> Triple(Color(0xFF596878), Color(0xFF35404D), Color(0xFF475463))
                     TileType.ORE_CINDERITE -> Triple(Color(0xFF34282C), Color(0xFF1D1519), Color(0xFF281E22))
                     else -> Triple(Color(0xFF635E5A), Color(0xFF3D3A37), Color(0xFF4F4B47))
                 }
@@ -1360,16 +1430,27 @@ object IsometricTileDrawer {
                     TileType.ORE_COPPER -> Color(0xFFE08234) to Color(0xFFFFCA85)
                     TileType.ORE_TIN -> Color(0xFFA9B9C8) to Color(0xFFF0F6FC)
                     TileType.ORE_BOG_IRON -> Color(0xFF7D90A3) to Color(0xFFC5D6E8)
+                    TileType.ORE_MIRE_SILVER -> Color(0xFF5EE89E) to Color(0xFFD9FFF0)
+                    TileType.ORE_PEAT_COAL -> Color(0xFF23272E) to Color(0xFF6B7380)
                     TileType.ORE_VESPERITE -> Color(0xFFA782FF) to Color(0xFFF0E6FF)
+                    TileType.ORE_GLACIER_QUARTZ -> Color(0xFF68E8FF) to Color(0xFFE8FFFF)
+                    TileType.ORE_FROST_IRON -> Color(0xFF7CB4E8) to Color(0xFFE0F2FF)
                     TileType.ORE_CINDERITE -> Color(0xFFFFAA2B) to Color(0xFFFFF2A6)
                     else -> Color(0xFF5C5854) to Color(0xFF78736E)
                 }
                 val heightMult = when (tile) {
                     TileType.ORE_VESPERITE -> 0.78f
+                    TileType.ORE_GLACIER_QUARTZ -> 0.84f
+                    TileType.ORE_FROST_IRON -> 0.76f
                     TileType.ORE_CINDERITE -> 0.82f
+                    TileType.ORE_MIRE_SILVER -> 0.72f
                     TileType.DEPLETED_VEIN -> 0.44f
                     else -> 0.68f
                 }
+                val isLuminousOre = tile == TileType.ORE_VESPERITE ||
+                    tile == TileType.ORE_CINDERITE ||
+                    tile == TileType.ORE_GLACIER_QUARTZ ||
+                    tile == TileType.ORE_MIRE_SILVER
                 drawRotatedPrism(
                     scope, path, cam, cx, cy, fracU = 0.74f, fracV = 0.70f, heightPx = unitH * heightMult,
                     topColor = rockTop, faceXColor = rockFaceX, faceYColor = rockFaceY,
@@ -1377,7 +1458,7 @@ object IsometricTileDrawer {
                 )
                 if (tile != TileType.DEPLETED_VEIN) {
                     val shimmer = 0.76f + 0.24f * sin(nowMs * 0.0055 + tx * 1.3 + ty * 0.9).toFloat()
-                    if (tile == TileType.ORE_VESPERITE || tile == TileType.ORE_CINDERITE) {
+                    if (isLuminousOre) {
                         val auraCenter = Offset(cx, cy - unitH * 0.48f)
                         scope.drawCircle(
                             brush = Brush.radialGradient(
@@ -1395,7 +1476,7 @@ object IsometricTileDrawer {
                     scope.drawCircle(veinColor.copy(alpha = 0.92f), cam.tileW * 0.062f, Offset(cx + cam.tileW * 0.10f, cy - unitH * 0.36f))
                     scope.drawCircle(glintColor.copy(alpha = shimmer), cam.tileW * 0.028f, Offset(cx + cam.tileW * 0.09f, cy - unitH * 0.39f))
                     scope.drawCircle(veinColor.copy(alpha = 0.85f), cam.tileW * 0.052f, Offset(cx + cam.tileW * 0.01f, cy - unitH * 0.62f))
-                    if (tile == TileType.ORE_VESPERITE || tile == TileType.ORE_CINDERITE) {
+                    if (isLuminousOre) {
                         // Protruding crystalline / molten spire crest
                         scope.drawLine(
                             color = glintColor.copy(alpha = 0.92f * shimmer),

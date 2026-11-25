@@ -74,7 +74,11 @@ object TileSpriteAtlas {
         TileType.ORE_COPPER -> drawOreVein(0xFFD97D2B.toInt(), 0xFFFFC178.toInt(), 0xFF695547.toInt())
         TileType.ORE_TIN -> drawOreVein(0xFF9BA8B4.toInt(), 0xFFE6EEF5.toInt(), 0xFF575654.toInt())
         TileType.ORE_BOG_IRON -> drawOreVein(0xFF6D7A8A.toInt(), 0xFFAAB8C7.toInt(), 0xFF444845.toInt())
+        TileType.ORE_MIRE_SILVER -> drawOreVein(0xFF5EE89E.toInt(), 0xFFD9FFF0.toInt(), 0xFF34473A.toInt(), frame)
+        TileType.ORE_PEAT_COAL -> drawOreVein(0xFF2B2E33.toInt(), 0xFF6E7580.toInt(), 0xFF3E3A30.toInt())
         TileType.ORE_VESPERITE -> drawOreVein(0xFF9A7BFF.toInt(), 0xFFE6DCFF.toInt(), 0xFF39324D.toInt(), frame)
+        TileType.ORE_GLACIER_QUARTZ -> drawOreVein(0xFF68E8FF.toInt(), 0xFFE8FFFF.toInt(), 0xFF475C6E.toInt(), frame)
+        TileType.ORE_FROST_IRON -> drawOreVein(0xFF7CB4E8.toInt(), 0xFFD9EEFF.toInt(), 0xFF455261.toInt(), frame)
         TileType.ORE_CINDERITE -> drawOreVein(0xFFFFB22E.toInt(), 0xFFFFF09E.toInt(), 0xFF282024.toInt(), frame)
         TileType.DEPLETED_VEIN -> drawDepletedVein()
         TileType.DIRT_FLOOR -> drawDirtFloor()
@@ -119,6 +123,11 @@ object TileSpriteAtlas {
         TileType.OBSIDIAN_WALL -> drawObliqueWall(0xFF3E354A.toInt(), 0xFF261F30.toInt(), 0xFF14101A.toInt(), 0xFF1D1726.toInt())
         TileType.WAR_BANNER -> drawObliqueWall(0xFF9E2525.toInt(), 0xFF701919.toInt(), 0xFF381010.toInt(), 0xFFD9A738.toInt())
         TileType.CAMPFIRE_BRAZIER -> drawSmeltingFurnace(frame)
+        TileType.BIOME_STALL_HEARTLAND -> drawBiomeStall(0xFF8C5B32.toInt(), 0xFF6B6359.toInt(), 0xFFFF8C2B.toInt(), frame)
+        TileType.BIOME_STALL_MARSH -> drawBiomeStall(0xFF4F6B43.toInt(), 0xFF3C4D34.toInt(), 0xFF5CE88A.toInt(), frame)
+        TileType.BIOME_STALL_BADLANDS -> drawBiomeStall(0xFFD6B072.toInt(), 0xFFA67E47.toInt(), 0xFFA77BFF.toInt(), frame)
+        TileType.BIOME_STALL_FROSTPEAK -> drawBiomeStall(0xFF7D8C9C.toInt(), 0xFF515E6B.toInt(), 0xFF68E8FF.toInt(), frame)
+        TileType.BIOME_STALL_ASHEN -> drawBiomeStall(0xFF362A3E.toInt(), 0xFF201826.toInt(), 0xFFFF6E24.toInt(), frame)
     }
 
     private fun drawGrass(): ImageBitmap {
@@ -313,6 +322,20 @@ object TileSpriteAtlas {
         val innerFire = if (frame == 0) 0xFFFFD447.toInt() else 0xFFFFF099.toInt()
         rect(buf, 10, 18, 10, 8, outerFire)
         rect(buf, 12, 20 - frame, 6, 5 + frame, innerFire)
+        return toImageBitmap(buf)
+    }
+
+    private fun drawBiomeStall(topTrim: Int, bodyColor: Int, emberGlow: Int, frame: Int): ImageBitmap {
+        val buf = newPixels(0xFF4F4842.toInt())
+        rect(buf, 4, 25, 25, 6, 0xFF1F1C1A.toInt())
+        rect(buf, 3, 5, 24, 10, topTrim)
+        rect(buf, 3, 15, 24, 13, bodyColor)
+        rect(buf, 27, 7, 3, 21, darken(bodyColor, 24))
+        // Glowing hearth/crucible mouth + anvil silhouette
+        rect(buf, 7, 17, 16, 9, 0xFF1C1614.toInt())
+        rect(buf, 9, 19 - frame, 12, 6 + frame, emberGlow)
+        rect(buf, 11, 20, 8, 3, 0xFFFFF4C2.toInt())
+        rect(buf, 8, 8, 14, 4, lighten(topTrim, 18))
         return toImageBitmap(buf)
     }
 

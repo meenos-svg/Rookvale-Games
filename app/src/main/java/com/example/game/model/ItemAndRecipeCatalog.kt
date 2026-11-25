@@ -18,7 +18,8 @@ data class CraftingRecipe(
     val tab: CraftingTab = CraftingTab.KNIGHT,
     val requiredMagicLevel: Int = 0,
     val manaCost: Int = 0,
-    val soulCost: Int = 0
+    val soulCost: Int = 0,
+    val requiredBiomeStation: CraftingStationType = CraftingStationType.ROOKVALE_TOWN_FORGE
 )
 
 object ItemCatalog {
@@ -40,23 +41,37 @@ object ItemCatalog {
         ItemDefinition("dragon_ham", "Wyrm Haunch", ItemCategory.FOOD, 12.0, buyPrice = 0, sellPrice = 28, restoreAmount = 85, stackable = true, description = "Rich roasted meat. Restores 85 HP and 45 MP."),
         ItemDefinition("cheese", "Cellar Curd", ItemCategory.FOOD, 4.0, buyPrice = 6, sellPrice = 2, restoreAmount = 22, stackable = true, description = "Simple dungeon rations. Restores 22 HP."),
 
-        // --- Original Rookvale Pickaxe Tiers ---
-        ItemDefinition("quarry_mattock", "Quarry Mattock", ItemCategory.TOOL_PICKAXE, 22.0, buyPrice = 75, sellPrice = 25, pickaxeTier = 1, description = "Tier 1 pickaxe. Extracts Copper & Tin Veins."),
-        ItemDefinition("sunbrass_pick", "Sunbrass Pick", ItemCategory.TOOL_PICKAXE, 26.0, sellPrice = 70, pickaxeTier = 2, description = "Tier 2 forged pick. Extracts up to Bog Iron Veins."),
-        ItemDefinition("duskmetal_breaker", "Duskmetal Breaker", ItemCategory.TOOL_PICKAXE, 30.0, sellPrice = 140, pickaxeTier = 3, description = "Tier 3 forged pick. Extracts up to Vesperite Veins (+15% yield)."),
-        ItemDefinition("quenchsteel_delver", "Quenchsteel Delver", ItemCategory.TOOL_PICKAXE, 34.0, sellPrice = 260, pickaxeTier = 4, description = "Tier 4 master pick. Extracts Cinderite Veins (+30% yield)."),
+        // --- 6 Tiered Biome Pickaxes (Starter Bronze -> Cinderite-Core) + Legacy IDs ---
+        ItemDefinition("bronze_pickaxe", "Bronze Pickaxe", ItemCategory.TOOL_PICKAXE, 22.0, buyPrice = 75, sellPrice = 25, pickaxeTier = 1, requiredMiningLevel = 1, biomeClass = BiomeEquipmentClass.HEARTLAND, description = "Tier 1 starter pickaxe (Mining 1). Extracts Copper & Tin Veins in Rookvale Heartland."),
+        ItemDefinition("bog_iron_pickaxe", "Bog Iron Pickaxe", ItemCategory.TOOL_PICKAXE, 25.0, sellPrice = 85, pickaxeTier = 2, requiredMiningLevel = 10, biomeClass = BiomeEquipmentClass.HEARTLAND, description = "Tier 2 Heartland pickaxe (Mining 10). Extracts up to Bog Iron Veins and swings faster on Copper & Tin."),
+        ItemDefinition("tempered_steel_pickaxe", "Tempered Steel Pickaxe", ItemCategory.TOOL_PICKAXE, 28.0, sellPrice = 165, pickaxeTier = 3, requiredMiningLevel = 20, biomeClass = BiomeEquipmentClass.MIRE_WOVEN, description = "Tier 3 Marsh pickaxe (Mining 20). Extracts Mire-Silver & Peat-Coal and speeds up Heartland mining."),
+        ItemDefinition("vesperite_tipped_pickaxe", "Vesperite-Tipped Pickaxe", ItemCategory.TOOL_PICKAXE, 31.0, sellPrice = 290, pickaxeTier = 4, requiredMiningLevel = 30, biomeClass = BiomeEquipmentClass.VESPERITE_SUNSCORCH, description = "Tier 4 Sunscorch pickaxe (Mining 30). Extracts crystalline Vesperite Veins with high-speed swings on softer rock."),
+        ItemDefinition("glacier_forged_pickaxe", "Glacier-Forged Pickaxe", ItemCategory.TOOL_PICKAXE, 34.0, sellPrice = 440, pickaxeTier = 5, requiredMiningLevel = 42, biomeClass = BiomeEquipmentClass.RIME_PLATE, description = "Tier 5 Frostpeak pickaxe (Mining 42). Cleaves Glacier-Quartz & Frost-Iron Veins cleanly."),
+        ItemDefinition("cinderite_core_pickaxe", "Cinderite-Core Pickaxe", ItemCategory.TOOL_PICKAXE, 38.0, sellPrice = 640, pickaxeTier = 6, requiredMiningLevel = 52, biomeClass = BiomeEquipmentClass.CINDERITE_ASHEN, description = "Tier 6 apex volcanic pickaxe (Mining 52). Extracts glowing Cinderite Veins in Ashen Caldera & Gorek Labyrinth."),
+        // Legacy Rookvale Pickaxe IDs (kept for save compatibility)
+        ItemDefinition("quarry_mattock", "Quarry Mattock", ItemCategory.TOOL_PICKAXE, 22.0, buyPrice = 75, sellPrice = 25, pickaxeTier = 1, requiredMiningLevel = 1, description = "Tier 1 legacy pickaxe (Mining 1). Extracts Copper & Tin Veins."),
+        ItemDefinition("sunbrass_pick", "Sunbrass Pick", ItemCategory.TOOL_PICKAXE, 26.0, sellPrice = 70, pickaxeTier = 2, requiredMiningLevel = 10, description = "Tier 2 legacy pick (Mining 10). Extracts up to Bog Iron Veins."),
+        ItemDefinition("duskmetal_breaker", "Duskmetal Breaker", ItemCategory.TOOL_PICKAXE, 30.0, sellPrice = 140, pickaxeTier = 3, requiredMiningLevel = 20, description = "Tier 3 legacy pick (Mining 20). Extracts up to Mire-Silver & Peat-Coal."),
+        ItemDefinition("quenchsteel_delver", "Quenchsteel Delver", ItemCategory.TOOL_PICKAXE, 34.0, sellPrice = 260, pickaxeTier = 4, requiredMiningLevel = 30, description = "Tier 4 legacy pick (Mining 30). Extracts up to Vesperite Veins."),
 
-        // --- Five Original Rookvale Raw Ores & Smelted Bars ---
-        ItemDefinition("copper_ore", "Copper Ore", ItemCategory.RAW_ORE, 12.0, sellPrice = 10, stackable = true, description = "Warm burnished copper ore chipped from outskirts limestone ridges."),
-        ItemDefinition("tin_ore", "Tin Ore", ItemCategory.RAW_ORE, 12.0, sellPrice = 11, stackable = true, description = "Silvery-pewter ore mined from outer Rookvale shale outcrops."),
-        ItemDefinition("bog_iron_ore", "Bog Iron Ore", ItemCategory.RAW_ORE, 17.0, sellPrice = 19, stackable = true, description = "Heavy oxidized ferrous nodules pried from marshes and outer crags."),
-        ItemDefinition("vesperite_ore", "Vesperite Ore", ItemCategory.RAW_ORE, 20.0, sellPrice = 42, stackable = true, description = "Luminous violet-silver crystalline ore mined in Floor -1 and The Grimmaw Quarry."),
-        ItemDefinition("cinderite_ore", "Cinderite Ore", ItemCategory.RAW_ORE, 23.0, sellPrice = 68, stackable = true, description = "Glowing volcanic-gold and obsidian ore extracted from Floor -2 and The Gorek Labyrinth."),
+        // --- Nine Biome Raw Ores & Smelted Bars ---
+        ItemDefinition("copper_ore", "Copper Ore", ItemCategory.RAW_ORE, 12.0, sellPrice = 10, stackable = true, description = "Warm burnished copper ore chipped from Rookvale Heartland limestone ridges."),
+        ItemDefinition("tin_ore", "Tin Ore", ItemCategory.RAW_ORE, 12.0, sellPrice = 11, stackable = true, description = "Silvery-pewter ore mined from Rookvale Heartland shale outcrops."),
+        ItemDefinition("bog_iron_ore", "Bog Iron Ore", ItemCategory.RAW_ORE, 17.0, sellPrice = 19, stackable = true, description = "Heavy oxidized ferrous nodules pried from Heartland ridges and fens."),
+        ItemDefinition("mire_silver_ore", "Mire-Silver Ore", ItemCategory.RAW_ORE, 18.0, sellPrice = 29, stackable = true, description = "Pale greenish-silver marsh ore extracted from Whispering Marsh veins."),
+        ItemDefinition("peat_coal_ore", "Peat-Coal", ItemCategory.RAW_ORE, 14.0, sellPrice = 22, stackable = true, description = "Dense compressed marshland carbon mined in Whispering Marsh seams."),
+        ItemDefinition("vesperite_ore", "Vesperite Ore", ItemCategory.RAW_ORE, 20.0, sellPrice = 42, stackable = true, description = "Luminous violet-silver crystalline ore mined in Sunscorch Badlands & Grimmaw Quarry."),
+        ItemDefinition("glacier_quartz_ore", "Glacier-Quartz Ore", ItemCategory.RAW_ORE, 21.0, sellPrice = 54, stackable = true, description = "Translucent cyan frost crystal carved from Frostpeak Highlands ridges."),
+        ItemDefinition("frost_iron_ore", "Frost-Iron Ore", ItemCategory.RAW_ORE, 22.0, sellPrice = 52, stackable = true, description = "Cold-tempered glacial iron ore mined in Frostpeak Highlands & Boreal caverns."),
+        ItemDefinition("cinderite_ore", "Cinderite Ore", ItemCategory.RAW_ORE, 23.0, sellPrice = 68, stackable = true, description = "Glowing volcanic-gold and obsidian ore extracted from Ashen Caldera & Gorek Labyrinth."),
 
         ItemDefinition("sunbrass_ingot", "Sunbrass Bar", ItemCategory.METAL_INGOT, 16.0, sellPrice = 26, stackable = true, description = "Refined Sunbrass bronze bar smelted from Copper Ore and Tin Ore."),
         ItemDefinition("duskmetal_ingot", "Bog-Iron Bar", ItemCategory.METAL_INGOT, 20.0, sellPrice = 46, stackable = true, description = "Dense forged iron bar smelted from 2 Bog Iron Ore."),
+        ItemDefinition("tempered_steel_ingot", "Tempered Steel Bar", ItemCategory.METAL_INGOT, 19.0, sellPrice = 58, stackable = true, description = "High-carbon steel bar smelted from Bog Iron Ore and Peat-Coal."),
+        ItemDefinition("mire_silver_ingot", "Mire-Silver Bar", ItemCategory.METAL_INGOT, 18.0, sellPrice = 72, stackable = true, description = "Acid-resistant silvery-green bar smelted from Mire-Silver Ore and Peat-Coal at the Stilt-Town Mire Bench."),
         ItemDefinition("quenchsteel_ingot", "Quenchsteel Bar", ItemCategory.METAL_INGOT, 22.0, sellPrice = 85, stackable = true, description = "Tempered alloy bar smelted from Bog Iron Ore and Vesperite Ore."),
         ItemDefinition("vesperite_bar", "Vesperite Bar", ItemCategory.METAL_INGOT, 22.0, sellPrice = 115, stackable = true, description = "Crystalline violet-silver Tier 4 bar smelted from 2 Vesperite Ore."),
+        ItemDefinition("rime_plate_ingot", "Rime-Iron Bar", ItemCategory.METAL_INGOT, 23.0, sellPrice = 152, stackable = true, description = "Frost-imbued steel bar smelted from Frost-Iron Ore and Glacier-Quartz at the Frostpeak Citadel Great Hearth."),
         ItemDefinition("cinderite_bar", "Cinderite Bar", ItemCategory.METAL_INGOT, 25.0, sellPrice = 195, stackable = true, description = "Volcanic obsidian-gold Tier 5 bar smelted from 2 Cinderite Ore."),
         ItemDefinition("moonforge_ingot", "Moonforge Bar", ItemCategory.METAL_INGOT, 24.0, sellPrice = 165, stackable = true, description = "Radiant deep-forged bar alloyed from Vesperite Ore and Cinderite Ore."),
 
@@ -137,81 +152,171 @@ object ItemCatalog {
             description = "Serrated 2H greatsword edged with Draketalon. Knight Tier 4 mastery."
         ),
 
-        // --- TIER 4 (VESPERITE) & TIER 5 (CINDERITE) ORIGINAL ROOKVALE WEAPONS (ALL 5 COMBAT CLASSES) ---
+        // --- BIOME CLASSIFICATION 1: MIRE-WOVEN / BOG-STEEL MELEE (Whispering Marsh, Lv 20+) ---
+        ItemDefinition(
+            "bog_steel_sabre", "Bog-Steel Sabre", ItemCategory.WEAPON_MELEE, 32.0, sellPrice = 440,
+            attack = 37, defense = 22, attackIntervalMs = 950L, equipmentTier = 3, requiredLevel = 20,
+            requiredSkill = SkillType.SWORD to 22, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.MIRE_WOVEN,
+            proc = EquipmentProc(
+                name = "Venom Splash", triggerChancePercent = 18, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 1.8f, maxTargets = 3, damageMultiplier = 0.80f, elementColor = 0xFF66E688L,
+                bonusEffect = ProcBonusEffect.VENOM_DOT, visualStyle = ProcVisualStyle.ACID_SPLASH,
+                summary = "Sprays caustic marsh venom across up to 3 nearby foes, inflicting corrosive DoT."
+            ),
+            description = "Mire-Woven / Bog-Steel 1H sabre forged at Stilt-Town Mire Bench."
+        ),
+        ItemDefinition(
+            "bog_steel_waraxe", "Bog-Steel Waraxe", ItemCategory.WEAPON_MELEE, 36.0, sellPrice = 460,
+            attack = 39, defense = 18, attackIntervalMs = 1050L, equipmentTier = 3, requiredLevel = 20,
+            requiredSkill = SkillType.AXE to 22, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.MIRE_WOVEN,
+            proc = EquipmentProc(
+                name = "Acid Cleave", triggerChancePercent = 18, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 1.8f, maxTargets = 3, damageMultiplier = 0.84f, elementColor = 0xFF5CE070L,
+                bonusEffect = ProcBonusEffect.VENOM_DOT, visualStyle = ProcVisualStyle.ACID_SPLASH,
+                summary = "Cleaves a bubbling acid arc hitting up to 3 enemies with venom DoT."
+            ),
+            description = "Mire-Woven / Bog-Steel 1H bearded waraxe edged in Mire-Silver."
+        ),
+        ItemDefinition(
+            "bog_steel_mace", "Bog-Steel Flail", ItemCategory.WEAPON_MELEE, 52.0, sellPrice = 490,
+            attack = 45, defense = 20, attackIntervalMs = 1200L, equipmentTier = 3, requiredLevel = 20,
+            requiredSkill = SkillType.CLUB to 22, isTwoHanded = true, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.MIRE_WOVEN,
+            proc = EquipmentProc(
+                name = "Mire Rupture", triggerChancePercent = 20, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 1.9f, maxTargets = 4, damageMultiplier = 0.86f, elementColor = 0xFF72F084L,
+                bonusEffect = ProcBonusEffect.VENOM_DOT, visualStyle = ProcVisualStyle.ACID_SPLASH,
+                summary = "Smashes a toxic marsh eruption splashing acid across up to 4 foes."
+            ),
+            description = "Mire-Woven / Bog-Steel 2H spiked warflail forged in Whispering Marsh."
+        ),
+
+        // --- BIOME CLASSIFICATION 2: VESPERITE / SUNSCORCH MELEE (Sunscorch & Grimmaw Quarry, Lv 28+) ---
         // Sword
         ItemDefinition(
             "vesperite_longblade", "Vesperite Longblade", ItemCategory.WEAPON_MELEE, 34.0, sellPrice = 740,
             attack = 46, defense = 26, attackIntervalMs = 950L, equipmentTier = 4, requiredLevel = 28,
             requiredSkill = SkillType.SWORD to 32, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.VESPERITE_SUNSCORCH,
             proc = EquipmentProc(
                 name = "Astral Cleave", triggerChancePercent = 20, triggerType = ProcTriggerType.ON_ATTACK,
                 aoeRadiusTiles = 1.8f, maxTargets = 4, damageMultiplier = 0.85f, elementColor = 0xFFB692FFL,
                 bonusEffect = ProcBonusEffect.ARMOR_SHATTER, visualStyle = ProcVisualStyle.SHOCKWAVE_RING,
                 summary = "Sweeps a luminous violet blade arc through up to 4 foes, shattering armor."
             ),
-            description = "Tier 4 crystalline violet-silver 1H longblade forged from Vesperite Bars. Pairs with a shield."
-        ),
-        ItemDefinition(
-            "cinderite_greatsword", "Cinderite Greatsword", ItemCategory.WEAPON_MELEE, 64.0, sellPrice = 1180,
-            attack = 64, defense = 30, attackIntervalMs = 1200L, equipmentTier = 5, requiredLevel = 40,
-            requiredSkill = SkillType.SWORD to 42, isTwoHanded = true, preferredVocation = Vocation.KNIGHT,
-            proc = EquipmentProc(
-                name = "Cataclysm Wave", triggerChancePercent = 25, triggerType = ProcTriggerType.ON_ATTACK,
-                aoeRadiusTiles = 2.4f, maxTargets = 5, damageMultiplier = 1.15f, elementColor = 0xFFFF6B2BL,
-                bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.ARCANE_NOVA,
-                summary = "Unleashes an expanding volcanic wave scorching up to 5 monsters."
-            ),
-            description = "Tier 5 obsidian-and-gold 2H greatsword blazing with volcanic Cinderite heat."
+            description = "Vesperite / Sunscorch 1H longblade forged at the Sunscorch Oasis Bazaar & Quarry Smeltery."
         ),
         // Axe
         ItemDefinition(
             "vesperite_cleaver", "Vesperite Cleaver", ItemCategory.WEAPON_MELEE, 38.0, sellPrice = 760,
             attack = 48, defense = 22, attackIntervalMs = 1050L, equipmentTier = 4, requiredLevel = 28,
             requiredSkill = SkillType.AXE to 32, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.VESPERITE_SUNSCORCH,
             proc = EquipmentProc(
                 name = "Shatter Pulse", triggerChancePercent = 20, triggerType = ProcTriggerType.ON_ATTACK,
                 aoeRadiusTiles = 1.8f, maxTargets = 4, damageMultiplier = 0.90f, elementColor = 0xFFA282FFL,
                 bonusEffect = ProcBonusEffect.ARMOR_SHATTER, visualStyle = ProcVisualStyle.SHOCKWAVE_RING,
                 summary = "Releases a resonant crystalline pulse that sunders enemy armor."
             ),
-            description = "Tier 4 amethyst-silver 1H bearded battle-cleaver honed in the Grimmaw Quarry."
-        ),
-        ItemDefinition(
-            "cinderite_greataxe", "Cinderite Greataxe", ItemCategory.WEAPON_MELEE, 70.0, sellPrice = 1240,
-            attack = 68, defense = 24, attackIntervalMs = 1300L, equipmentTier = 5, requiredLevel = 40,
-            requiredSkill = SkillType.AXE to 42, isTwoHanded = true, preferredVocation = Vocation.KNIGHT,
-            proc = EquipmentProc(
-                name = "Magma Eruption", triggerChancePercent = 24, triggerType = ProcTriggerType.ON_ATTACK,
-                aoeRadiusTiles = 2.3f, maxTargets = 5, damageMultiplier = 1.20f, elementColor = 0xFFFF5126L,
-                bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.METEOR_BURST,
-                summary = "Ruptures molten ground beneath nearby enemies, igniting up to 5 foes."
-            ),
-            description = "Tier 5 double-bit volcanic 2H greataxe prized by Gorek warlords."
+            description = "Vesperite / Sunscorch 1H battle-cleaver honed in the Grimmaw Quarry."
         ),
         // Club / Mace
         ItemDefinition(
             "vesperite_warmaul", "Vesperite Warmaul", ItemCategory.WEAPON_MELEE, 58.0, sellPrice = 790,
             attack = 56, defense = 24, attackIntervalMs = 1250L, equipmentTier = 4, requiredLevel = 28,
             requiredSkill = SkillType.CLUB to 32, isTwoHanded = true, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.VESPERITE_SUNSCORCH,
             proc = EquipmentProc(
                 name = "Thunderous Slam", triggerChancePercent = 22, triggerType = ProcTriggerType.ON_ATTACK,
                 aoeRadiusTiles = 2.0f, maxTargets = 4, damageMultiplier = 0.95f, elementColor = 0xFF7EC8FFL,
                 bonusEffect = ProcBonusEffect.STAGGER_SLOW, visualStyle = ProcVisualStyle.SHOCKWAVE_RING,
                 summary = "Smashes a seismic tremor that staggers and slows surrounding monsters."
             ),
-            description = "Tier 4 faceted violet-quartz 2H warmaul built to shatter granite armor."
+            description = "Vesperite / Sunscorch 2H warmaul built to shatter granite armor."
+        ),
+
+        // --- BIOME CLASSIFICATION 3: RIME-PLATE / FROSTPEAK MELEE (Frostpeak Highlands, Lv 36+) ---
+        ItemDefinition(
+            "rime_plate_longsword", "Rime-Plate Longsword", ItemCategory.WEAPON_MELEE, 36.0, sellPrice = 960,
+            attack = 55, defense = 29, attackIntervalMs = 950L, equipmentTier = 5, requiredLevel = 36,
+            requiredSkill = SkillType.SWORD to 37, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.RIME_PLATE,
+            proc = EquipmentProc(
+                name = "Frost Shatter", triggerChancePercent = 22, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.1f, maxTargets = 4, damageMultiplier = 1.00f, elementColor = 0xFF6BE8FFL,
+                bonusEffect = ProcBonusEffect.FROST_SHATTER_SLOW, visualStyle = ProcVisualStyle.FROST_SHATTER,
+                summary = "Shatters glacial shards across up to 4 nearby enemies, damaging and slowing them."
+            ),
+            description = "Rime-Plate / Frostpeak 1H longsword forged at the Frostpeak Citadel Great Hearth."
+        ),
+        ItemDefinition(
+            "frostpeak_battleaxe", "Frostpeak Battleaxe", ItemCategory.WEAPON_MELEE, 42.0, sellPrice = 990,
+            attack = 57, defense = 24, attackIntervalMs = 1050L, equipmentTier = 5, requiredLevel = 36,
+            requiredSkill = SkillType.AXE to 37, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.RIME_PLATE,
+            proc = EquipmentProc(
+                name = "Glacial Cleave", triggerChancePercent = 22, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.1f, maxTargets = 4, damageMultiplier = 1.05f, elementColor = 0xFF7BF0FFL,
+                bonusEffect = ProcBonusEffect.FROST_SHATTER_SLOW, visualStyle = ProcVisualStyle.FROST_SHATTER,
+                summary = "Hews a freezing wave that shatters ice across 4 foes and chills their stride."
+            ),
+            description = "Rime-Plate / Frostpeak 1H glacier-iron battleaxe tempered in boreal snow."
+        ),
+        ItemDefinition(
+            "frostpeak_warhammer", "Frostpeak Warhammer", ItemCategory.WEAPON_MELEE, 66.0, sellPrice = 1050,
+            attack = 64, defense = 27, attackIntervalMs = 1250L, equipmentTier = 5, requiredLevel = 36,
+            requiredSkill = SkillType.CLUB to 37, isTwoHanded = true, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.RIME_PLATE,
+            proc = EquipmentProc(
+                name = "Permafrost Slam", triggerChancePercent = 24, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.3f, maxTargets = 5, damageMultiplier = 1.10f, elementColor = 0xFF8CF5FFL,
+                bonusEffect = ProcBonusEffect.FROST_SHATTER_SLOW, visualStyle = ProcVisualStyle.FROST_SHATTER,
+                summary = "Crushes the frost-locked ground, bursting ice shards that damage and slow 5 foes."
+            ),
+            description = "Rime-Plate / Frostpeak 2H glacier-quartz warhammer forged in Frostpeak Citadel."
+        ),
+
+        // --- BIOME CLASSIFICATION 4: CINDERITE / ASHEN MELEE (Ashen Caldera & Gorek Labyrinth, Lv 45+) ---
+        ItemDefinition(
+            "cinderite_greatsword", "Cinderite Greatsword", ItemCategory.WEAPON_MELEE, 64.0, sellPrice = 1180,
+            attack = 64, defense = 30, attackIntervalMs = 1200L, equipmentTier = 5, requiredLevel = 45,
+            requiredSkill = SkillType.SWORD to 42, isTwoHanded = true, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.CINDERITE_ASHEN,
+            proc = EquipmentProc(
+                name = "Cataclysm Wave", triggerChancePercent = 25, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.4f, maxTargets = 5, damageMultiplier = 1.15f, elementColor = 0xFFFF6B2BL,
+                bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.ARCANE_NOVA,
+                summary = "Unleashes an expanding volcanic wave scorching up to 5 monsters."
+            ),
+            description = "Cinderite / Ashen 2H greatsword forged at the Ashen Caldera Obsidian Foundry."
+        ),
+        ItemDefinition(
+            "cinderite_greataxe", "Cinderite Greataxe", ItemCategory.WEAPON_MELEE, 70.0, sellPrice = 1240,
+            attack = 68, defense = 24, attackIntervalMs = 1300L, equipmentTier = 5, requiredLevel = 45,
+            requiredSkill = SkillType.AXE to 42, isTwoHanded = true, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.CINDERITE_ASHEN,
+            proc = EquipmentProc(
+                name = "Magma Eruption", triggerChancePercent = 24, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.3f, maxTargets = 5, damageMultiplier = 1.20f, elementColor = 0xFFFF5126L,
+                bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.METEOR_BURST,
+                summary = "Ruptures molten ground beneath nearby enemies, igniting up to 5 foes."
+            ),
+            description = "Cinderite / Ashen 2H volcanic greataxe prized by Gorek warlords."
         ),
         ItemDefinition(
             "cinderite_worldbreaker", "Cinderite Worldbreaker", ItemCategory.WEAPON_MELEE, 76.0, sellPrice = 1320,
-            attack = 72, defense = 28, attackIntervalMs = 1400L, equipmentTier = 5, requiredLevel = 40,
+            attack = 72, defense = 28, attackIntervalMs = 1400L, equipmentTier = 5, requiredLevel = 45,
             requiredSkill = SkillType.CLUB to 42, isTwoHanded = true, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.CINDERITE_ASHEN,
             proc = EquipmentProc(
                 name = "Meteor Impact", triggerChancePercent = 25, triggerType = ProcTriggerType.ON_ATTACK,
                 aoeRadiusTiles = 2.5f, maxTargets = 6, damageMultiplier = 1.25f, elementColor = 0xFFFF9E2CL,
                 bonusEffect = ProcBonusEffect.STAGGER_SLOW, visualStyle = ProcVisualStyle.METEOR_BURST,
                 summary = "Drops a cataclysmic molten shockwave staggering up to 6 monsters."
             ),
-            description = "Tier 5 colossal obsidian-and-molten-gold 2H maul of earth-splitting force."
+            description = "Cinderite / Ashen 2H obsidian-and-molten-gold maul of earth-splitting force."
         ),
 
         // --- Multi-Tier Forged & Fletched Weapons: PALADIN (Distance) ---
@@ -258,32 +363,58 @@ object ItemCatalog {
             ),
             description = "Colossal 2H dragon-limbed arbalest. Paladin Tier 4 mastery."
         ),
-        // Distance Tier 4 & Tier 5
+        // Biome Distance: Mire-Woven, Vesperite, Frostpeak, Cinderite
+        ItemDefinition(
+            "mire_woven_longbow", "Mire-Woven Longbow", ItemCategory.WEAPON_DISTANCE, 26.0, sellPrice = 470,
+            attack = 38, range = 5, attackIntervalMs = 920L, equipmentTier = 3, requiredLevel = 20,
+            requiredSkill = SkillType.DISTANCE to 22, requiredAmmoKind = AmmoKind.SHAFTS, isTwoHanded = true,
+            preferredVocation = Vocation.PALADIN, biomeClass = BiomeEquipmentClass.MIRE_WOVEN,
+            proc = EquipmentProc(
+                name = "Venom Volley", triggerChancePercent = 18, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 1.9f, maxTargets = 3, damageMultiplier = 0.82f, elementColor = 0xFF66E688L,
+                bonusEffect = ProcBonusEffect.VENOM_DOT, visualStyle = ProcVisualStyle.ACID_SPLASH,
+                summary = "Bursts venomous marsh darts across up to 3 nearby foes with corrosive DoT."
+            ),
+            description = "Mire-Woven / Bog-Steel 2H marshwood longbow strung with gossamer silk."
+        ),
         ItemDefinition(
             "vesperite_recurve_bow", "Vesperite Recurve Bow", ItemCategory.WEAPON_DISTANCE, 28.0, sellPrice = 770,
             attack = 46, range = 5, attackIntervalMs = 900L, equipmentTier = 4, requiredLevel = 28,
             requiredSkill = SkillType.DISTANCE to 32, requiredAmmoKind = AmmoKind.SHAFTS, isTwoHanded = true,
-            preferredVocation = Vocation.PALADIN,
+            preferredVocation = Vocation.PALADIN, biomeClass = BiomeEquipmentClass.VESPERITE_SUNSCORCH,
             proc = EquipmentProc(
                 name = "Starfall Volley", triggerChancePercent = 20, triggerType = ProcTriggerType.ON_ATTACK,
                 aoeRadiusTiles = 2.0f, maxTargets = 4, damageMultiplier = 0.85f, elementColor = 0xFFC8A6FFL,
                 bonusEffect = ProcBonusEffect.NONE, visualStyle = ProcVisualStyle.METEOR_BURST,
                 summary = "Rains crystalline violet arrows on up to 4 monsters around the target."
             ),
-            description = "Tier 4 laminated silver-violet 2H recurve bow loosing rapid crystalline volleys."
+            description = "Vesperite / Sunscorch 2H recurve bow loosing rapid crystalline volleys."
+        ),
+        ItemDefinition(
+            "frostpeak_frostbow", "Frostpeak Frostbow", ItemCategory.WEAPON_DISTANCE, 30.0, sellPrice = 1010,
+            attack = 54, range = 6, attackIntervalMs = 920L, equipmentTier = 5, requiredLevel = 36,
+            requiredSkill = SkillType.DISTANCE to 37, requiredAmmoKind = AmmoKind.SHAFTS, isTwoHanded = true,
+            preferredVocation = Vocation.PALADIN, biomeClass = BiomeEquipmentClass.RIME_PLATE,
+            proc = EquipmentProc(
+                name = "Hailstone Volley", triggerChancePercent = 22, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.2f, maxTargets = 5, damageMultiplier = 1.02f, elementColor = 0xFF6BE8FFL,
+                bonusEffect = ProcBonusEffect.FROST_SHATTER_SLOW, visualStyle = ProcVisualStyle.FROST_SHATTER,
+                summary = "Detonates razor frost shards across up to 5 monsters, chilling and slowing them."
+            ),
+            description = "Rime-Plate / Frostpeak 2H glacier-quartz recurve bow forged at the Great Hearth."
         ),
         ItemDefinition(
             "cinderite_ashen_bow", "Cinderite Ashen Bow", ItemCategory.WEAPON_DISTANCE, 32.0, sellPrice = 1220,
-            attack = 62, range = 6, attackIntervalMs = 950L, equipmentTier = 5, requiredLevel = 40,
+            attack = 62, range = 6, attackIntervalMs = 950L, equipmentTier = 5, requiredLevel = 45,
             requiredSkill = SkillType.DISTANCE to 42, requiredAmmoKind = AmmoKind.SHAFTS, isTwoHanded = true,
-            preferredVocation = Vocation.PALADIN,
+            preferredVocation = Vocation.PALADIN, biomeClass = BiomeEquipmentClass.CINDERITE_ASHEN,
             proc = EquipmentProc(
                 name = "Ember Rain", triggerChancePercent = 24, triggerType = ProcTriggerType.ON_ATTACK,
                 aoeRadiusTiles = 2.4f, maxTargets = 5, damageMultiplier = 1.10f, elementColor = 0xFFFF7A29L,
                 bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.METEOR_BURST,
                 summary = "Showers blazing ember arrows across 5 monsters, igniting burning flames."
             ),
-            description = "Tier 5 charred obsidian 2H warbow strung with glowing ember-gold cord."
+            description = "Cinderite / Ashen 2H obsidian warbow strung with glowing ember-gold cord."
         ),
 
         // --- Multi-Tier Forged Weapons: MAGE (Magic) ---
@@ -325,30 +456,58 @@ object ItemCatalog {
             ),
             description = "Volcanic 2H staff crowned with an Ember Heart. Mage Tier 4 mastery."
         ),
-        // Magic Tier 4 & Tier 5
+        // Biome Magic Staves: Mire-Woven, Vesperite, Frostpeak, Cinderite
+        ItemDefinition(
+            "mire_woven_staff", "Mire-Woven Spire", ItemCategory.WEAPON_WAND, 24.0, sellPrice = 485,
+            attack = 40, range = 5, attackIntervalMs = 950L, manaCost = 8, equipmentTier = 3, requiredLevel = 20,
+            requiredSkill = SkillType.MAGIC to 22, isTwoHanded = true, preferredVocation = Vocation.MAGE,
+            biomeClass = BiomeEquipmentClass.MIRE_WOVEN,
+            proc = EquipmentProc(
+                name = "Acid Nova", triggerChancePercent = 20, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.0f, maxTargets = 4, damageMultiplier = 0.88f, elementColor = 0xFF66E688L,
+                bonusEffect = ProcBonusEffect.VENOM_DOT, visualStyle = ProcVisualStyle.ACID_SPLASH,
+                summary = "Detonates an acid cloud around the target, poisoning up to 4 enemies."
+            ),
+            description = "Mire-Woven / Bog-Steel 2H marsh-silver staff brimming with caustic bog essence."
+        ),
         ItemDefinition(
             "vesperite_conduit_staff", "Vesperite Conduit Staff", ItemCategory.WEAPON_WAND, 26.0, sellPrice = 790,
             attack = 49, range = 5, attackIntervalMs = 950L, manaCost = 10, equipmentTier = 4, requiredLevel = 28,
             requiredSkill = SkillType.MAGIC to 32, isTwoHanded = true, preferredVocation = Vocation.MAGE,
+            biomeClass = BiomeEquipmentClass.VESPERITE_SUNSCORCH,
             proc = EquipmentProc(
                 name = "Void Chain", triggerChancePercent = 22, triggerType = ProcTriggerType.ON_ATTACK,
                 aoeRadiusTiles = 2.2f, maxTargets = 4, damageMultiplier = 0.95f, elementColor = 0xFF9F7BFFL,
                 bonusEffect = ProcBonusEffect.MANA_SIPHON, visualStyle = ProcVisualStyle.CHAIN_ARC,
                 summary = "Chains crackling violet void-lightning across up to 4 foes and siphons Mana."
             ),
-            description = "Tier 4 twin-pronged silver 2H staff cradling a floating Vesperite crystal."
+            description = "Vesperite / Sunscorch 2H silver staff cradling a floating Vesperite crystal."
+        ),
+        ItemDefinition(
+            "glacier_quartz_staff", "Glacier-Quartz Staff", ItemCategory.WEAPON_WAND, 29.0, sellPrice = 1040,
+            attack = 58, range = 6, attackIntervalMs = 980L, manaCost = 12, equipmentTier = 5, requiredLevel = 36,
+            requiredSkill = SkillType.MAGIC to 37, isTwoHanded = true, preferredVocation = Vocation.MAGE,
+            biomeClass = BiomeEquipmentClass.RIME_PLATE,
+            proc = EquipmentProc(
+                name = "Boreal Shatter", triggerChancePercent = 24, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.3f, maxTargets = 5, damageMultiplier = 1.10f, elementColor = 0xFF6BE8FFL,
+                bonusEffect = ProcBonusEffect.FROST_SHATTER_SLOW, visualStyle = ProcVisualStyle.FROST_SHATTER,
+                summary = "Erupts a crystalline frost nova that damages and slows up to 5 enemies."
+            ),
+            description = "Rime-Plate / Frostpeak 2H glacial spire crowned with uncut Glacier-Quartz."
         ),
         ItemDefinition(
             "cinderite_soulspire", "Cinderite Soulspire", ItemCategory.WEAPON_WAND, 32.0, sellPrice = 1260,
-            attack = 66, range = 6, attackIntervalMs = 1050L, manaCost = 14, equipmentTier = 5, requiredLevel = 40,
+            attack = 66, range = 6, attackIntervalMs = 1050L, manaCost = 14, equipmentTier = 5, requiredLevel = 45,
             requiredSkill = SkillType.MAGIC to 42, isTwoHanded = true, preferredVocation = Vocation.MAGE,
+            biomeClass = BiomeEquipmentClass.CINDERITE_ASHEN,
             proc = EquipmentProc(
                 name = "Inferno Nova", triggerChancePercent = 25, triggerType = ProcTriggerType.ON_ATTACK,
                 aoeRadiusTiles = 2.5f, maxTargets = 6, damageMultiplier = 1.25f, elementColor = 0xFFFF8826L,
                 bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.ARCANE_NOVA,
                 summary = "Erupts a blazing ring of soulfire around the target, scorching up to 6 foes."
             ),
-            description = "Tier 5 twisted obsidian 2H spire crowned with a blazing volcanic-gold soul orb."
+            description = "Cinderite / Ashen 2H obsidian spire crowned with a blazing volcanic-gold soul orb."
         ),
 
         // --- Craftable Ammunition (Ammo Slot) ---
@@ -426,26 +585,52 @@ object ItemCatalog {
             description = "Forged from fire-hardened scales of the Ancient Dragon."
         ),
         ItemDefinition(
+            "bog_steel_shield", "Bog-Steel Buckler", ItemCategory.SHIELD, 54.0, sellPrice = 540,
+            defense = 35, equipmentTier = 3, requiredLevel = 20, requiredSkill = SkillType.SHIELDING to 22,
+            biomeClass = BiomeEquipmentClass.MIRE_WOVEN, poisonResistPercent = 25,
+            proc = EquipmentProc(
+                name = "Mire Mist Ward", triggerChancePercent = 18, triggerType = ProcTriggerType.ON_DEFEND,
+                aoeRadiusTiles = 1.7f, maxTargets = 3, damageMultiplier = 0.96f, elementColor = 0xFF66E688L,
+                bonusEffect = ProcBonusEffect.VENOM_DOT, visualStyle = ProcVisualStyle.ACID_SPLASH,
+                summary = "Vents caustic marsh vapor when struck, poisoning up to 3 adjacent foes (+25% Poison Resist)."
+            ),
+            description = "Mire-Woven / Bog-Steel marsh shield granting +25% Poison Resistance and reactive acid mist."
+        ),
+        ItemDefinition(
             "vesperite_bulwark", "Vesperite Bulwark", ItemCategory.SHIELD, 64.0, sellPrice = 840,
             defense = 40, equipmentTier = 4, requiredLevel = 28, requiredSkill = SkillType.SHIELDING to 32,
+            biomeClass = BiomeEquipmentClass.VESPERITE_SUNSCORCH,
             proc = EquipmentProc(
                 name = "Aegis Retaliation", triggerChancePercent = 18, triggerType = ProcTriggerType.ON_DEFEND,
                 aoeRadiusTiles = 1.7f, maxTargets = 4, damageMultiplier = 1.12f, elementColor = 0xFFB692FFL,
                 bonusEffect = ProcBonusEffect.AEGIS_WARD, visualStyle = ProcVisualStyle.ARCANE_NOVA,
                 summary = "Emits a violet crystalline shockwave when struck, striking up to 4 adjacent foes & restoring HP."
             ),
-            description = "Tier 4 faceted Vesperite tower shield radiating a resonant ward."
+            description = "Vesperite / Sunscorch tower shield radiating a resonant crystalline ward."
+        ),
+        ItemDefinition(
+            "rime_plate_aegis", "Rime-Plate Aegis", ItemCategory.SHIELD, 68.0, sellPrice = 1100,
+            defense = 44, equipmentTier = 5, requiredLevel = 36, requiredSkill = SkillType.SHIELDING to 37,
+            biomeClass = BiomeEquipmentClass.RIME_PLATE,
+            proc = EquipmentProc(
+                name = "Glacial Barrier", triggerChancePercent = 20, triggerType = ProcTriggerType.ON_DEFEND,
+                aoeRadiusTiles = 1.9f, maxTargets = 5, damageMultiplier = 1.20f, elementColor = 0xFF6BE8FFL,
+                bonusEffect = ProcBonusEffect.FROST_SHATTER_SLOW, visualStyle = ProcVisualStyle.FROST_SHATTER,
+                summary = "Bursts jagged frost plates when struck, damaging and slowing up to 5 adjacent foes."
+            ),
+            description = "Rime-Plate / Frostpeak glacier-forged kite shield tempered at Frostpeak Citadel."
         ),
         ItemDefinition(
             "cinderite_bastion", "Cinderite Bastion", ItemCategory.SHIELD, 72.0, sellPrice = 1360,
-            defense = 48, equipmentTier = 5, requiredLevel = 40, requiredSkill = SkillType.SHIELDING to 42,
+            defense = 48, equipmentTier = 5, requiredLevel = 45, requiredSkill = SkillType.SHIELDING to 42,
+            biomeClass = BiomeEquipmentClass.CINDERITE_ASHEN,
             proc = EquipmentProc(
                 name = "Aegis Retaliation", triggerChancePercent = 20, triggerType = ProcTriggerType.ON_DEFEND,
                 aoeRadiusTiles = 1.9f, maxTargets = 5, damageMultiplier = 1.28f, elementColor = 0xFFFF7A29L,
                 bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.ARCANE_NOVA,
                 summary = "Triggers a blazing volcanic retaliation wave when struck, igniting up to 5 adjacent foes."
             ),
-            description = "Tier 5 obsidian-and-molten-gold fortress shield forged in volcanic fire."
+            description = "Cinderite / Ashen obsidian-and-molten-gold fortress shield forged in volcanic fire."
         ),
 
         ItemDefinition("leather_helmet", "Leather Cap", ItemCategory.HELMET, 15.0, buyPrice = 35, sellPrice = 14, armor = 2, equipmentTier = 1, requiredLevel = 1, requiredSkill = SkillType.SHIELDING to 1, description = "Light hardened leather headgear."),
@@ -476,26 +661,52 @@ object ItemCatalog {
             description = "Legendary emerald scale cuirass wreathed in reactive fire."
         ),
         ItemDefinition(
+            "mire_woven_brigandine", "Mire-Woven Brigandine", ItemCategory.ARMOR, 80.0, sellPrice = 690,
+            armor = 17, equipmentTier = 3, requiredLevel = 20, requiredSkill = SkillType.SHIELDING to 22,
+            biomeClass = BiomeEquipmentClass.MIRE_WOVEN, poisonResistPercent = 35,
+            proc = EquipmentProc(
+                name = "Caustic Carapace", triggerChancePercent = 18, triggerType = ProcTriggerType.ON_DEFEND,
+                aoeRadiusTiles = 1.7f, maxTargets = 4, damageMultiplier = 1.00f, elementColor = 0xFF66E688L,
+                bonusEffect = ProcBonusEffect.VENOM_DOT, visualStyle = ProcVisualStyle.ACID_SPLASH,
+                summary = "Splashes marsh acid outward when hit, poisoning up to 4 adjacent foes (+35% Poison Resist)."
+            ),
+            description = "Mire-Woven / Bog-Steel marsh-silver coat granting +35% Poison Resistance."
+        ),
+        ItemDefinition(
             "vesperite_aegis_mail", "Vesperite Aegis Mail", ItemCategory.ARMOR, 92.0, sellPrice = 1040,
             armor = 21, equipmentTier = 4, requiredLevel = 28, requiredSkill = SkillType.SHIELDING to 32,
+            biomeClass = BiomeEquipmentClass.VESPERITE_SUNSCORCH,
             proc = EquipmentProc(
                 name = "Ember Thorns", triggerChancePercent = 18, triggerType = ProcTriggerType.ON_DEFEND,
                 aoeRadiusTiles = 1.7f, maxTargets = 4, damageMultiplier = 1.15f, elementColor = 0xFFA47BFFL,
                 bonusEffect = ProcBonusEffect.ARMOR_SHATTER, visualStyle = ProcVisualStyle.THORNS_PULSE,
                 summary = "Shatters violet crystal thorns outward when hit, weakening up to 4 adjacent foes."
             ),
-            description = "Tier 4 articulated Vesperite plate mail lined with resonant crystal shards."
+            description = "Vesperite / Sunscorch articulated plate mail lined with resonant crystal shards."
+        ),
+        ItemDefinition(
+            "rime_plate_cuirass", "Rime-Plate Cuirass", ItemCategory.ARMOR, 98.0, sellPrice = 1320,
+            armor = 24, equipmentTier = 5, requiredLevel = 36, requiredSkill = SkillType.SHIELDING to 37,
+            biomeClass = BiomeEquipmentClass.RIME_PLATE,
+            proc = EquipmentProc(
+                name = "Frost Nova Ward", triggerChancePercent = 20, triggerType = ProcTriggerType.ON_DEFEND,
+                aoeRadiusTiles = 1.9f, maxTargets = 5, damageMultiplier = 1.22f, elementColor = 0xFF6BE8FFL,
+                bonusEffect = ProcBonusEffect.FROST_SHATTER_SLOW, visualStyle = ProcVisualStyle.FROST_SHATTER,
+                summary = "Detonates a freezing nova when struck, damaging and slowing up to 5 adjacent foes."
+            ),
+            description = "Rime-Plate / Frostpeak heavy glacier-iron plate forged at the Frostpeak Great Hearth."
         ),
         ItemDefinition(
             "cinderite_warplate", "Cinderite Warplate", ItemCategory.ARMOR, 102.0, sellPrice = 1580,
-            armor = 26, equipmentTier = 5, requiredLevel = 40, requiredSkill = SkillType.SHIELDING to 42,
+            armor = 26, equipmentTier = 5, requiredLevel = 45, requiredSkill = SkillType.SHIELDING to 42,
+            biomeClass = BiomeEquipmentClass.CINDERITE_ASHEN,
             proc = EquipmentProc(
                 name = "Ember Thorns", triggerChancePercent = 20, triggerType = ProcTriggerType.ON_DEFEND,
                 aoeRadiusTiles = 1.9f, maxTargets = 5, damageMultiplier = 1.30f, elementColor = 0xFFFF5522L,
                 bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.THORNS_PULSE,
                 summary = "Unleashes incandescent magma thorns when struck, igniting up to 5 adjacent monsters."
             ),
-            description = "Tier 5 forged obsidian-and-gold warplate radiating volcanic fury."
+            description = "Cinderite / Ashen obsidian-and-gold warplate forged at the Ashen Caldera Obsidian Foundry."
         ),
 
         ItemDefinition("leather_legs", "Leather Legs", ItemCategory.LEGS, 18.0, buyPrice = 45, sellPrice = 18, armor = 2, equipmentTier = 1, requiredLevel = 1, requiredSkill = SkillType.SHIELDING to 1, description = "Stitched greaves for dungeon travel."),
@@ -616,13 +827,13 @@ object ItemCatalog {
         )
     ).associateBy { it.id }
 
-    // Alaric sells ONLY supplies, Blank Runes, tools (Quarry Mattock, Hatchet, Rope, Fishing Rod), potions & basic armor — NO finished runes or weapons!
+    // Alaric sells ONLY supplies, Blank Runes, tools (Bronze Pickaxe, Hatchet, Rope, Fishing Rod), potions & basic armor — NO finished runes or weapons!
     val shopInventoryIds: List<String> = listOf(
         "health_potion",
         "mana_potion",
         "blank_rune",
         "hatchet",
-        "quarry_mattock",
+        "bronze_pickaxe",
         "rope",
         "fishing_rod",
         "steel_shield",
@@ -649,105 +860,158 @@ object RecipeCatalog {
             id = "smelt_sunbrass",
             outputItemId = "sunbrass_ingot",
             ingredients = listOf(ItemStack("copper_ore", 1), ItemStack("tin_ore", 1)),
-            station = ActivePanel.FURNACE
+            station = ActivePanel.FURNACE,
+            requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE
         ),
         CraftingRecipe(
             id = "smelt_duskmetal",
             outputItemId = "duskmetal_ingot",
             ingredients = listOf(ItemStack("bog_iron_ore", 2)),
-            station = ActivePanel.FURNACE
+            station = ActivePanel.FURNACE,
+            requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE
+        ),
+        CraftingRecipe(
+            id = "smelt_tempered_steel",
+            outputItemId = "tempered_steel_ingot",
+            ingredients = listOf(ItemStack("bog_iron_ore", 2), ItemStack("peat_coal_ore", 1)),
+            station = ActivePanel.FURNACE,
+            requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH
+        ),
+        CraftingRecipe(
+            id = "smelt_mire_silver",
+            outputItemId = "mire_silver_ingot",
+            ingredients = listOf(ItemStack("mire_silver_ore", 2), ItemStack("peat_coal_ore", 1)),
+            station = ActivePanel.FURNACE,
+            requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH
         ),
         CraftingRecipe(
             id = "smelt_quenchsteel",
             outputItemId = "quenchsteel_ingot",
             ingredients = listOf(ItemStack("bog_iron_ore", 2), ItemStack("vesperite_ore", 1)),
-            station = ActivePanel.FURNACE
+            station = ActivePanel.FURNACE,
+            requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY
         ),
         CraftingRecipe(
             id = "smelt_vesperite",
             outputItemId = "vesperite_bar",
             ingredients = listOf(ItemStack("vesperite_ore", 2)),
-            station = ActivePanel.FURNACE
+            station = ActivePanel.FURNACE,
+            requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY
+        ),
+        CraftingRecipe(
+            id = "smelt_rime_plate",
+            outputItemId = "rime_plate_ingot",
+            ingredients = listOf(ItemStack("frost_iron_ore", 2), ItemStack("glacier_quartz_ore", 1)),
+            station = ActivePanel.FURNACE,
+            requiredBiomeStation = CraftingStationType.FROSTPEAK_GREAT_HEARTH
         ),
         CraftingRecipe(
             id = "smelt_cinderite",
             outputItemId = "cinderite_bar",
             ingredients = listOf(ItemStack("cinderite_ore", 2)),
-            station = ActivePanel.FURNACE
+            station = ActivePanel.FURNACE,
+            requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY
         ),
         CraftingRecipe(
             id = "smelt_moonforge",
             outputItemId = "moonforge_ingot",
             ingredients = listOf(ItemStack("vesperite_ore", 1), ItemStack("cinderite_ore", 1)),
-            station = ActivePanel.FURNACE
+            station = ActivePanel.FURNACE,
+            requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY
         )
     )
 
     val forgingRecipes: List<CraftingRecipe> = listOf(
-        // --- Knight Melee Weapons (Tiers 1-5) ---
-        CraftingRecipe("forge_sunbrass_dirk", "sunbrass_dirk", 1, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("jagged_ivory", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        CraftingRecipe("forge_rookvale_gladius", "rookvale_gladius", 1, listOf(ItemStack("sunbrass_ingot", 2), ItemStack("brindle_hide", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        CraftingRecipe("forge_duskmetal_falchion", "duskmetal_falchion", 1, listOf(ItemStack("duskmetal_ingot", 2), ItemStack("ancient_bone", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        CraftingRecipe("forge_bog_cleaver", "bog_cleaver_axe", 1, listOf(ItemStack("duskmetal_ingot", 3), ItemStack("brindle_hide", 3)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        CraftingRecipe("forge_quenchsteel_bastard", "quenchsteel_bastard", 1, listOf(ItemStack("quenchsteel_ingot", 2), ItemStack("ghoul_gem", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        CraftingRecipe("forge_colossus_glaive", "colossus_glaive", 1, listOf(ItemStack("quenchsteel_ingot", 3), ItemStack("colossus_tendon", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        CraftingRecipe("forge_moonforge_rapier", "moonforge_rapier", 1, listOf(ItemStack("moonforge_ingot", 2), ItemStack("runic_slate", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        CraftingRecipe("forge_wyrmtooth_claymore", "wyrmtooth_claymore", 1, listOf(ItemStack("moonforge_ingot", 3), ItemStack("dragon_tooth", 1), ItemStack("wyrmscale_plate", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        // Tier 4 Vesperite Melee (Sword, Axe, Club/Maul)
-        CraftingRecipe("forge_vesperite_longblade", "vesperite_longblade", 1, listOf(ItemStack("vesperite_bar", 3), ItemStack("grimmaw_stone_core", 1)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        CraftingRecipe("forge_vesperite_cleaver", "vesperite_cleaver", 1, listOf(ItemStack("vesperite_bar", 3), ItemStack("grimmaw_stone_core", 1), ItemStack("colossus_tendon", 1)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        CraftingRecipe("forge_vesperite_warmaul", "vesperite_warmaul", 1, listOf(ItemStack("vesperite_bar", 4), ItemStack("grimmaw_stone_core", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        // Tier 5 Cinderite Melee (Sword, Axe, Club/Maul)
-        CraftingRecipe("forge_cinderite_greatsword", "cinderite_greatsword", 1, listOf(ItemStack("cinderite_bar", 4), ItemStack("gorek_obsidian_horn", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        CraftingRecipe("forge_cinderite_greataxe", "cinderite_greataxe", 1, listOf(ItemStack("cinderite_bar", 4), ItemStack("gorek_obsidian_horn", 2), ItemStack("ember_heart", 1)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
-        CraftingRecipe("forge_cinderite_worldbreaker", "cinderite_worldbreaker", 1, listOf(ItemStack("cinderite_bar", 5), ItemStack("gorek_obsidian_horn", 2), ItemStack("grimmaw_stone_core", 1)), ActivePanel.ANVIL, CraftingTab.KNIGHT),
+        // --- Knight Melee Weapons (Heartland Starter -> Mire-Woven -> Vesperite -> Rime-Plate -> Cinderite) ---
+        CraftingRecipe("forge_sunbrass_dirk", "sunbrass_dirk", 1, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("jagged_ivory", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_rookvale_gladius", "rookvale_gladius", 1, listOf(ItemStack("sunbrass_ingot", 2), ItemStack("brindle_hide", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_duskmetal_falchion", "duskmetal_falchion", 1, listOf(ItemStack("duskmetal_ingot", 2), ItemStack("ancient_bone", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_bog_cleaver", "bog_cleaver_axe", 1, listOf(ItemStack("duskmetal_ingot", 3), ItemStack("brindle_hide", 3)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        // Whispering Marsh: Mire-Woven / Bog-Steel Melee (Sword, Axe, Club/Flail)
+        CraftingRecipe("forge_bog_steel_sabre", "bog_steel_sabre", 1, listOf(ItemStack("mire_silver_ingot", 2), ItemStack("bile_gland", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH),
+        CraftingRecipe("forge_bog_steel_waraxe", "bog_steel_waraxe", 1, listOf(ItemStack("mire_silver_ingot", 2), ItemStack("bile_gland", 2), ItemStack("duskmetal_ingot", 1)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH),
+        CraftingRecipe("forge_bog_steel_mace", "bog_steel_mace", 1, listOf(ItemStack("mire_silver_ingot", 3), ItemStack("bile_gland", 2), ItemStack("ancient_bone", 1)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH),
+        CraftingRecipe("forge_quenchsteel_bastard", "quenchsteel_bastard", 1, listOf(ItemStack("quenchsteel_ingot", 2), ItemStack("ghoul_gem", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_colossus_glaive", "colossus_glaive", 1, listOf(ItemStack("quenchsteel_ingot", 3), ItemStack("colossus_tendon", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        // Sunscorch Badlands & Grimmaw Quarry: Vesperite / Sunscorch Melee (Sword, Axe, Club/Maul)
+        CraftingRecipe("forge_vesperite_longblade", "vesperite_longblade", 1, listOf(ItemStack("vesperite_bar", 3), ItemStack("grimmaw_stone_core", 1)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_vesperite_cleaver", "vesperite_cleaver", 1, listOf(ItemStack("vesperite_bar", 3), ItemStack("grimmaw_stone_core", 1), ItemStack("colossus_tendon", 1)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_vesperite_warmaul", "vesperite_warmaul", 1, listOf(ItemStack("vesperite_bar", 4), ItemStack("grimmaw_stone_core", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        // Frostpeak Highlands: Rime-Plate / Frostpeak Melee (Sword, Axe, Club/Warhammer)
+        CraftingRecipe("forge_rime_plate_longsword", "rime_plate_longsword", 1, listOf(ItemStack("rime_plate_ingot", 3), ItemStack("glacier_quartz_ore", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.FROSTPEAK_GREAT_HEARTH),
+        CraftingRecipe("forge_frostpeak_battleaxe", "frostpeak_battleaxe", 1, listOf(ItemStack("rime_plate_ingot", 3), ItemStack("glacier_quartz_ore", 2), ItemStack("colossus_tendon", 1)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.FROSTPEAK_GREAT_HEARTH),
+        CraftingRecipe("forge_frostpeak_warhammer", "frostpeak_warhammer", 1, listOf(ItemStack("rime_plate_ingot", 4), ItemStack("glacier_quartz_ore", 3)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.FROSTPEAK_GREAT_HEARTH),
+        // Ashen Caldera & Gorek Labyrinth: Cinderite / Ashen & Moonforge Melee
+        CraftingRecipe("forge_moonforge_rapier", "moonforge_rapier", 1, listOf(ItemStack("moonforge_ingot", 2), ItemStack("runic_slate", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_wyrmtooth_claymore", "wyrmtooth_claymore", 1, listOf(ItemStack("moonforge_ingot", 3), ItemStack("dragon_tooth", 1), ItemStack("wyrmscale_plate", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_cinderite_greatsword", "cinderite_greatsword", 1, listOf(ItemStack("cinderite_bar", 4), ItemStack("gorek_obsidian_horn", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_cinderite_greataxe", "cinderite_greataxe", 1, listOf(ItemStack("cinderite_bar", 4), ItemStack("gorek_obsidian_horn", 2), ItemStack("ember_heart", 1)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_cinderite_worldbreaker", "cinderite_worldbreaker", 1, listOf(ItemStack("cinderite_bar", 5), ItemStack("gorek_obsidian_horn", 2), ItemStack("grimmaw_stone_core", 1)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
 
-        // --- Paladin Distance Weapons (Tiers 1-5) ---
-        CraftingRecipe("forge_ashwood_shortbow", "ashwood_shortbow", 1, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("spider_silk", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN),
-        CraftingRecipe("forge_ivory_javelin", "ivory_javelin", 1, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("jagged_ivory", 3)), ActivePanel.ANVIL, CraftingTab.PALADIN),
-        CraftingRecipe("forge_brindle_recurve", "brindle_recurve", 1, listOf(ItemStack("duskmetal_ingot", 2), ItemStack("brindle_hide", 2), ItemStack("spider_silk", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN),
-        CraftingRecipe("forge_quenchsteel_arbalest", "quenchsteel_arbalest", 1, listOf(ItemStack("quenchsteel_ingot", 2), ItemStack("colossus_tendon", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN),
-        CraftingRecipe("forge_moonforge_warbow", "moonforge_warbow", 1, listOf(ItemStack("moonforge_ingot", 2), ItemStack("colossus_tendon", 2), ItemStack("spider_silk", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN),
-        CraftingRecipe("forge_draketalon_siegebow", "draketalon_siegebow", 1, listOf(ItemStack("moonforge_ingot", 3), ItemStack("dragon_tooth", 1), ItemStack("colossus_tendon", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN),
-        CraftingRecipe("forge_vesperite_recurve_bow", "vesperite_recurve_bow", 1, listOf(ItemStack("vesperite_bar", 3), ItemStack("grimmaw_stone_core", 1), ItemStack("spider_silk", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN),
-        CraftingRecipe("forge_cinderite_ashen_bow", "cinderite_ashen_bow", 1, listOf(ItemStack("cinderite_bar", 4), ItemStack("gorek_obsidian_horn", 2), ItemStack("colossus_tendon", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN),
+        // --- Paladin Distance Weapons ---
+        CraftingRecipe("forge_ashwood_shortbow", "ashwood_shortbow", 1, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("spider_silk", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_ivory_javelin", "ivory_javelin", 1, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("jagged_ivory", 3)), ActivePanel.ANVIL, CraftingTab.PALADIN, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_brindle_recurve", "brindle_recurve", 1, listOf(ItemStack("duskmetal_ingot", 2), ItemStack("brindle_hide", 2), ItemStack("spider_silk", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_mire_woven_longbow", "mire_woven_longbow", 1, listOf(ItemStack("mire_silver_ingot", 2), ItemStack("spider_silk", 3), ItemStack("bile_gland", 1)), ActivePanel.ANVIL, CraftingTab.PALADIN, requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH),
+        CraftingRecipe("forge_quenchsteel_arbalest", "quenchsteel_arbalest", 1, listOf(ItemStack("quenchsteel_ingot", 2), ItemStack("colossus_tendon", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_vesperite_recurve_bow", "vesperite_recurve_bow", 1, listOf(ItemStack("vesperite_bar", 3), ItemStack("grimmaw_stone_core", 1), ItemStack("spider_silk", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_frostpeak_frostbow", "frostpeak_frostbow", 1, listOf(ItemStack("rime_plate_ingot", 3), ItemStack("glacier_quartz_ore", 2), ItemStack("spider_silk", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN, requiredBiomeStation = CraftingStationType.FROSTPEAK_GREAT_HEARTH),
+        CraftingRecipe("forge_moonforge_warbow", "moonforge_warbow", 1, listOf(ItemStack("moonforge_ingot", 2), ItemStack("colossus_tendon", 2), ItemStack("spider_silk", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_draketalon_siegebow", "draketalon_siegebow", 1, listOf(ItemStack("moonforge_ingot", 3), ItemStack("dragon_tooth", 1), ItemStack("colossus_tendon", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_cinderite_ashen_bow", "cinderite_ashen_bow", 1, listOf(ItemStack("cinderite_bar", 4), ItemStack("gorek_obsidian_horn", 2), ItemStack("colossus_tendon", 2)), ActivePanel.ANVIL, CraftingTab.PALADIN, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
 
-        // --- Mage Arcane Weapons (Tiers 1-5) ---
-        CraftingRecipe("forge_sunbrass_scepter", "sunbrass_scepter", 1, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("vesper_wing", 2)), ActivePanel.ANVIL, CraftingTab.MAGE),
-        CraftingRecipe("forge_bilewood_conduit", "bilewood_conduit", 1, listOf(ItemStack("duskmetal_ingot", 1), ItemStack("bile_gland", 3)), ActivePanel.ANVIL, CraftingTab.MAGE),
-        CraftingRecipe("forge_tallowbone_crosier", "tallowbone_crosier", 1, listOf(ItemStack("quenchsteel_ingot", 1), ItemStack("ancient_bone", 2), ItemStack("ghoul_gem", 2)), ActivePanel.ANVIL, CraftingTab.MAGE),
-        CraftingRecipe("forge_moonforge_spire", "moonforge_spire", 1, listOf(ItemStack("moonforge_ingot", 2), ItemStack("runic_slate", 2)), ActivePanel.ANVIL, CraftingTab.MAGE),
-        CraftingRecipe("forge_cinderheart_rod", "cinderheart_rod", 1, listOf(ItemStack("moonforge_ingot", 2), ItemStack("ember_heart", 2), ItemStack("wyrmscale_plate", 1)), ActivePanel.ANVIL, CraftingTab.MAGE),
-        CraftingRecipe("forge_vesperite_conduit_staff", "vesperite_conduit_staff", 1, listOf(ItemStack("vesperite_bar", 3), ItemStack("grimmaw_stone_core", 1), ItemStack("runic_slate", 2)), ActivePanel.ANVIL, CraftingTab.MAGE),
-        CraftingRecipe("forge_cinderite_soulspire", "cinderite_soulspire", 1, listOf(ItemStack("cinderite_bar", 4), ItemStack("gorek_obsidian_horn", 2), ItemStack("ember_heart", 2)), ActivePanel.ANVIL, CraftingTab.MAGE),
+        // --- Mage Arcane Weapons ---
+        CraftingRecipe("forge_sunbrass_scepter", "sunbrass_scepter", 1, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("vesper_wing", 2)), ActivePanel.ANVIL, CraftingTab.MAGE, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_bilewood_conduit", "bilewood_conduit", 1, listOf(ItemStack("duskmetal_ingot", 1), ItemStack("bile_gland", 3)), ActivePanel.ANVIL, CraftingTab.MAGE, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_mire_woven_staff", "mire_woven_staff", 1, listOf(ItemStack("mire_silver_ingot", 2), ItemStack("bile_gland", 2), ItemStack("ghoul_gem", 1)), ActivePanel.ANVIL, CraftingTab.MAGE, requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH),
+        CraftingRecipe("forge_tallowbone_crosier", "tallowbone_crosier", 1, listOf(ItemStack("quenchsteel_ingot", 1), ItemStack("ancient_bone", 2), ItemStack("ghoul_gem", 2)), ActivePanel.ANVIL, CraftingTab.MAGE, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_vesperite_conduit_staff", "vesperite_conduit_staff", 1, listOf(ItemStack("vesperite_bar", 3), ItemStack("grimmaw_stone_core", 1), ItemStack("runic_slate", 2)), ActivePanel.ANVIL, CraftingTab.MAGE, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_glacier_quartz_staff", "glacier_quartz_staff", 1, listOf(ItemStack("rime_plate_ingot", 3), ItemStack("glacier_quartz_ore", 3), ItemStack("runic_slate", 1)), ActivePanel.ANVIL, CraftingTab.MAGE, requiredBiomeStation = CraftingStationType.FROSTPEAK_GREAT_HEARTH),
+        CraftingRecipe("forge_moonforge_spire", "moonforge_spire", 1, listOf(ItemStack("moonforge_ingot", 2), ItemStack("runic_slate", 2)), ActivePanel.ANVIL, CraftingTab.MAGE, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_cinderheart_rod", "cinderheart_rod", 1, listOf(ItemStack("moonforge_ingot", 2), ItemStack("ember_heart", 2), ItemStack("wyrmscale_plate", 1)), ActivePanel.ANVIL, CraftingTab.MAGE, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_cinderite_soulspire", "cinderite_soulspire", 1, listOf(ItemStack("cinderite_bar", 4), ItemStack("gorek_obsidian_horn", 2), ItemStack("ember_heart", 2)), ActivePanel.ANVIL, CraftingTab.MAGE, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
 
         // --- Forged Ammunition Batches ---
-        CraftingRecipe("forge_ochre_shafts", "ochre_shafts", 20, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("vesper_wing", 1)), ActivePanel.ANVIL, CraftingTab.AMMO),
-        CraftingRecipe("forge_venom_shafts", "venom_shafts", 20, listOf(ItemStack("duskmetal_ingot", 1), ItemStack("bile_gland", 1)), ActivePanel.ANVIL, CraftingTab.AMMO),
-        CraftingRecipe("forge_quenchsteel_quarrels", "quenchsteel_quarrels", 25, listOf(ItemStack("quenchsteel_ingot", 1), ItemStack("ancient_bone", 1)), ActivePanel.ANVIL, CraftingTab.AMMO),
-        CraftingRecipe("forge_starlight_quarrels", "starlight_quarrels", 25, listOf(ItemStack("vesperite_bar", 1), ItemStack("ember_heart", 1)), ActivePanel.ANVIL, CraftingTab.AMMO),
+        CraftingRecipe("forge_ochre_shafts", "ochre_shafts", 20, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("vesper_wing", 1)), ActivePanel.ANVIL, CraftingTab.AMMO, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_venom_shafts", "venom_shafts", 20, listOf(ItemStack("duskmetal_ingot", 1), ItemStack("bile_gland", 1)), ActivePanel.ANVIL, CraftingTab.AMMO, requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH),
+        CraftingRecipe("forge_quenchsteel_quarrels", "quenchsteel_quarrels", 25, listOf(ItemStack("quenchsteel_ingot", 1), ItemStack("ancient_bone", 1)), ActivePanel.ANVIL, CraftingTab.AMMO, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_starlight_quarrels", "starlight_quarrels", 25, listOf(ItemStack("vesperite_bar", 1), ItemStack("ember_heart", 1)), ActivePanel.ANVIL, CraftingTab.AMMO, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
 
-        // --- Pickaxe Upgrades & High-Tier Shields / Armor ---
-        CraftingRecipe("forge_sunbrass_pick", "sunbrass_pick", 1, listOf(ItemStack("sunbrass_ingot", 2), ItemStack("brindle_hide", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS),
-        CraftingRecipe("forge_duskmetal_breaker", "duskmetal_breaker", 1, listOf(ItemStack("duskmetal_ingot", 2), ItemStack("ancient_bone", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS),
-        CraftingRecipe("forge_quenchsteel_delver", "quenchsteel_delver", 1, listOf(ItemStack("quenchsteel_ingot", 3), ItemStack("colossus_tendon", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS),
-        CraftingRecipe("forge_wyrmscale_shield", "dragon_shield", 1, listOf(ItemStack("moonforge_ingot", 2), ItemStack("wyrmscale_plate", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS),
-        CraftingRecipe("forge_wyrmscale_cuirass", "dragon_mail", 1, listOf(ItemStack("moonforge_ingot", 3), ItemStack("wyrmscale_plate", 3)), ActivePanel.ANVIL, CraftingTab.TOOLS),
-        CraftingRecipe("forge_vesperite_bulwark", "vesperite_bulwark", 1, listOf(ItemStack("vesperite_bar", 3), ItemStack("grimmaw_stone_core", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS),
-        CraftingRecipe("forge_vesperite_aegis_mail", "vesperite_aegis_mail", 1, listOf(ItemStack("vesperite_bar", 4), ItemStack("grimmaw_stone_core", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS),
-        CraftingRecipe("forge_cinderite_bastion", "cinderite_bastion", 1, listOf(ItemStack("cinderite_bar", 4), ItemStack("gorek_obsidian_horn", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS),
-        CraftingRecipe("forge_cinderite_warplate", "cinderite_warplate", 1, listOf(ItemStack("cinderite_bar", 5), ItemStack("gorek_obsidian_horn", 2), ItemStack("ember_heart", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS),
+        // --- Biome-Progression Pickaxe Chain (Each biome stall forges the next tier's Pickaxe!) ---
+        CraftingRecipe("forge_bronze_pickaxe", "bronze_pickaxe", 1, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("wood_log", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_bog_iron_pickaxe", "bog_iron_pickaxe", 1, listOf(ItemStack("sunbrass_ingot", 2), ItemStack("brindle_hide", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_tempered_steel_pickaxe", "tempered_steel_pickaxe", 1, listOf(ItemStack("duskmetal_ingot", 3), ItemStack("brindle_hide", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_vesperite_tipped_pickaxe", "vesperite_tipped_pickaxe", 1, listOf(ItemStack("mire_silver_ingot", 3), ItemStack("tempered_steel_ingot", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH),
+        CraftingRecipe("forge_glacier_forged_pickaxe", "glacier_forged_pickaxe", 1, listOf(ItemStack("vesperite_bar", 3), ItemStack("grimmaw_stone_core", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_cinderite_core_pickaxe", "cinderite_core_pickaxe", 1, listOf(ItemStack("rime_plate_ingot", 3), ItemStack("glacier_quartz_ore", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.FROSTPEAK_GREAT_HEARTH),
+        CraftingRecipe("forge_cinderite_core_pickaxe_ashen", "cinderite_core_pickaxe", 1, listOf(ItemStack("cinderite_bar", 2), ItemStack("gorek_obsidian_horn", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        // Legacy Pickaxe Recipes (kept at Rookvale Town Forge for save/test compatibility)
+        CraftingRecipe("forge_sunbrass_pick", "sunbrass_pick", 1, listOf(ItemStack("sunbrass_ingot", 2), ItemStack("brindle_hide", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_duskmetal_breaker", "duskmetal_breaker", 1, listOf(ItemStack("duskmetal_ingot", 2), ItemStack("ancient_bone", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_quenchsteel_delver", "quenchsteel_delver", 1, listOf(ItemStack("quenchsteel_ingot", 3), ItemStack("colossus_tendon", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+
+        // --- Biome Shields & Armor ---
+        CraftingRecipe("forge_bog_steel_shield", "bog_steel_shield", 1, listOf(ItemStack("mire_silver_ingot", 2), ItemStack("bile_gland", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH),
+        CraftingRecipe("forge_mire_woven_brigandine", "mire_woven_brigandine", 1, listOf(ItemStack("mire_silver_ingot", 3), ItemStack("spider_silk", 3), ItemStack("bile_gland", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH),
+        CraftingRecipe("forge_vesperite_bulwark", "vesperite_bulwark", 1, listOf(ItemStack("vesperite_bar", 3), ItemStack("grimmaw_stone_core", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_vesperite_aegis_mail", "vesperite_aegis_mail", 1, listOf(ItemStack("vesperite_bar", 4), ItemStack("grimmaw_stone_core", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_rime_plate_aegis", "rime_plate_aegis", 1, listOf(ItemStack("rime_plate_ingot", 3), ItemStack("glacier_quartz_ore", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.FROSTPEAK_GREAT_HEARTH),
+        CraftingRecipe("forge_rime_plate_cuirass", "rime_plate_cuirass", 1, listOf(ItemStack("rime_plate_ingot", 4), ItemStack("glacier_quartz_ore", 3)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.FROSTPEAK_GREAT_HEARTH),
+        CraftingRecipe("forge_wyrmscale_shield", "dragon_shield", 1, listOf(ItemStack("moonforge_ingot", 2), ItemStack("wyrmscale_plate", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_wyrmscale_cuirass", "dragon_mail", 1, listOf(ItemStack("moonforge_ingot", 3), ItemStack("wyrmscale_plate", 3)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_cinderite_bastion", "cinderite_bastion", 1, listOf(ItemStack("cinderite_bar", 4), ItemStack("gorek_obsidian_horn", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_cinderite_warplate", "cinderite_warplate", 1, listOf(ItemStack("cinderite_bar", 5), ItemStack("gorek_obsidian_horn", 2), ItemStack("ember_heart", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
 
         // --- Enchanted Necklaces & Rings (Tiers 1..5) ---
-        CraftingRecipe("forge_sunbrass_signet", "sunbrass_signet", 1, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("jagged_ivory", 1)), ActivePanel.ANVIL, CraftingTab.JEWELRY),
-        CraftingRecipe("forge_bog_iron_ward_pendant", "bog_iron_ward_pendant", 1, listOf(ItemStack("duskmetal_ingot", 1), ItemStack("spider_silk", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY),
-        CraftingRecipe("forge_duskmetal_vampire_band", "duskmetal_vampire_band", 1, listOf(ItemStack("duskmetal_ingot", 1), ItemStack("bile_gland", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY),
-        CraftingRecipe("forge_stormglass_pendant", "stormglass_pendant", 1, listOf(ItemStack("quenchsteel_ingot", 2), ItemStack("ghoul_gem", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY),
-        CraftingRecipe("forge_frostfang_coil", "frostfang_coil", 1, listOf(ItemStack("quenchsteel_ingot", 2), ItemStack("ancient_bone", 2), ItemStack("ghoul_gem", 1)), ActivePanel.ANVIL, CraftingTab.JEWELRY),
-        CraftingRecipe("forge_vesperite_resonance_necklace", "vesperite_resonance_necklace", 1, listOf(ItemStack("vesperite_bar", 2), ItemStack("grimmaw_stone_core", 1), ItemStack("runic_slate", 1)), ActivePanel.ANVIL, CraftingTab.JEWELRY),
-        CraftingRecipe("forge_vesperite_catalyst_ring", "vesperite_catalyst_ring", 1, listOf(ItemStack("vesperite_bar", 2), ItemStack("grimmaw_stone_core", 1)), ActivePanel.ANVIL, CraftingTab.JEWELRY),
-        CraftingRecipe("forge_cinderheart_sovereign_torc", "cinderheart_sovereign_torc", 1, listOf(ItemStack("cinderite_bar", 3), ItemStack("gorek_obsidian_horn", 1), ItemStack("ember_heart", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY),
-        CraftingRecipe("forge_cinderite_overlord_band", "cinderite_overlord_band", 1, listOf(ItemStack("cinderite_bar", 3), ItemStack("gorek_obsidian_horn", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY)
+        CraftingRecipe("forge_sunbrass_signet", "sunbrass_signet", 1, listOf(ItemStack("sunbrass_ingot", 1), ItemStack("jagged_ivory", 1)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_bog_iron_ward_pendant", "bog_iron_ward_pendant", 1, listOf(ItemStack("duskmetal_ingot", 1), ItemStack("spider_silk", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE),
+        CraftingRecipe("forge_duskmetal_vampire_band", "duskmetal_vampire_band", 1, listOf(ItemStack("duskmetal_ingot", 1), ItemStack("bile_gland", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH),
+        CraftingRecipe("forge_stormglass_pendant", "stormglass_pendant", 1, listOf(ItemStack("quenchsteel_ingot", 2), ItemStack("ghoul_gem", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_frostfang_coil", "frostfang_coil", 1, listOf(ItemStack("quenchsteel_ingot", 2), ItemStack("ancient_bone", 2), ItemStack("ghoul_gem", 1)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.FROSTPEAK_GREAT_HEARTH),
+        CraftingRecipe("forge_vesperite_resonance_necklace", "vesperite_resonance_necklace", 1, listOf(ItemStack("vesperite_bar", 2), ItemStack("grimmaw_stone_core", 1), ItemStack("runic_slate", 1)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_vesperite_catalyst_ring", "vesperite_catalyst_ring", 1, listOf(ItemStack("vesperite_bar", 2), ItemStack("grimmaw_stone_core", 1)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
+        CraftingRecipe("forge_cinderheart_sovereign_torc", "cinderheart_sovereign_torc", 1, listOf(ItemStack("cinderite_bar", 3), ItemStack("gorek_obsidian_horn", 1), ItemStack("ember_heart", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_cinderite_overlord_band", "cinderite_overlord_band", 1, listOf(ItemStack("cinderite_bar", 3), ItemStack("gorek_obsidian_horn", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY)
     )
 
     val fletchingRecipes: List<CraftingRecipe> = listOf(
@@ -757,7 +1021,8 @@ object RecipeCatalog {
             outputCount = 20,
             ingredients = listOf(ItemStack("wood_log", 1), ItemStack("wild_feather", 2)),
             station = ActivePanel.FLETCHING_BENCH,
-            tab = CraftingTab.AMMO
+            tab = CraftingTab.AMMO,
+            requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE
         ),
         CraftingRecipe(
             id = "fletch_ochre_shafts",
@@ -765,7 +1030,8 @@ object RecipeCatalog {
             outputCount = 20,
             ingredients = listOf(ItemStack("wood_log", 1), ItemStack("jagged_ivory", 2)),
             station = ActivePanel.FLETCHING_BENCH,
-            tab = CraftingTab.AMMO
+            tab = CraftingTab.AMMO,
+            requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE
         ),
         CraftingRecipe(
             id = "fletch_venom_shafts",
@@ -773,7 +1039,8 @@ object RecipeCatalog {
             outputCount = 20,
             ingredients = listOf(ItemStack("wood_log", 1), ItemStack("bile_gland", 1), ItemStack("wild_feather", 2)),
             station = ActivePanel.FLETCHING_BENCH,
-            tab = CraftingTab.AMMO
+            tab = CraftingTab.AMMO,
+            requiredBiomeStation = CraftingStationType.STILT_TOWN_MIRE_BENCH
         ),
         CraftingRecipe(
             id = "fletch_ashwood_shortbow",
@@ -781,7 +1048,8 @@ object RecipeCatalog {
             outputCount = 1,
             ingredients = listOf(ItemStack("wood_log", 2), ItemStack("spider_silk", 2)),
             station = ActivePanel.FLETCHING_BENCH,
-            tab = CraftingTab.PALADIN
+            tab = CraftingTab.PALADIN,
+            requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE
         ),
         CraftingRecipe(
             id = "fletch_hunting_bow",
@@ -789,7 +1057,8 @@ object RecipeCatalog {
             outputCount = 1,
             ingredients = listOf(ItemStack("wood_log", 3), ItemStack("spider_silk", 2), ItemStack("brindle_hide", 2)),
             station = ActivePanel.FLETCHING_BENCH,
-            tab = CraftingTab.PALADIN
+            tab = CraftingTab.PALADIN,
+            requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE
         ),
         CraftingRecipe(
             id = "fletch_vesperite_recurve_bow",
@@ -797,7 +1066,8 @@ object RecipeCatalog {
             outputCount = 1,
             ingredients = listOf(ItemStack("vesperite_bar", 3), ItemStack("wood_log", 2), ItemStack("spider_silk", 2)),
             station = ActivePanel.FLETCHING_BENCH,
-            tab = CraftingTab.PALADIN
+            tab = CraftingTab.PALADIN,
+            requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY
         ),
         CraftingRecipe(
             id = "fletch_cinderite_ashen_bow",
@@ -805,7 +1075,8 @@ object RecipeCatalog {
             outputCount = 1,
             ingredients = listOf(ItemStack("cinderite_bar", 4), ItemStack("gorek_obsidian_horn", 1), ItemStack("colossus_tendon", 2)),
             station = ActivePanel.FLETCHING_BENCH,
-            tab = CraftingTab.PALADIN
+            tab = CraftingTab.PALADIN,
+            requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY
         )
     )
 
@@ -819,7 +1090,8 @@ object RecipeCatalog {
             tab = CraftingTab.MAGE,
             requiredMagicLevel = 1,
             manaCost = 20,
-            soulCost = 2
+            soulCost = 2,
+            requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE
         ),
         CraftingRecipe(
             id = "rune_healing",
@@ -830,7 +1102,8 @@ object RecipeCatalog {
             tab = CraftingTab.MAGE,
             requiredMagicLevel = 4,
             manaCost = 30,
-            soulCost = 3
+            soulCost = 3,
+            requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE
         ),
         CraftingRecipe(
             id = "rune_hmm",
@@ -841,7 +1114,8 @@ object RecipeCatalog {
             tab = CraftingTab.MAGE,
             requiredMagicLevel = 7,
             manaCost = 45,
-            soulCost = 4
+            soulCost = 4,
+            requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE
         ),
         CraftingRecipe(
             id = "rune_fireball",
@@ -852,7 +1126,8 @@ object RecipeCatalog {
             tab = CraftingTab.MAGE,
             requiredMagicLevel = 12,
             manaCost = 70,
-            soulCost = 6
+            soulCost = 6,
+            requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE
         ),
         CraftingRecipe(
             id = "rune_sd",
@@ -863,7 +1138,8 @@ object RecipeCatalog {
             tab = CraftingTab.MAGE,
             requiredMagicLevel = 15,
             manaCost = 100,
-            soulCost = 10
+            soulCost = 10,
+            requiredBiomeStation = CraftingStationType.ROOKVALE_TOWN_FORGE
         ),
         CraftingRecipe(
             id = "rune_vesperite_conduit_staff",
@@ -874,7 +1150,8 @@ object RecipeCatalog {
             tab = CraftingTab.MAGE,
             requiredMagicLevel = 15,
             manaCost = 110,
-            soulCost = 8
+            soulCost = 8,
+            requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY
         ),
         CraftingRecipe(
             id = "rune_cinderite_soulspire",
@@ -885,9 +1162,16 @@ object RecipeCatalog {
             tab = CraftingTab.MAGE,
             requiredMagicLevel = 18,
             manaCost = 150,
-            soulCost = 12
+            soulCost = 12,
+            requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY
         )
     )
+
+    val allBiomeRecipes: List<CraftingRecipe>
+        get() = smeltingRecipes + forgingRecipes
+
+    fun recipesForBiomeStation(station: CraftingStationType): List<CraftingRecipe> =
+        allBiomeRecipes.filter { it.requiredBiomeStation == station }
 
     fun findById(recipeId: String): CraftingRecipe? =
         smeltingRecipes.firstOrNull { it.id == recipeId }

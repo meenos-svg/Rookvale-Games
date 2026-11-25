@@ -1952,7 +1952,10 @@ private fun DrawScope.drawProcAoeEffects(
                     outerColor = baseColor,
                     intensity = 0.52f * fade,
                     flickerSeed = (fx.id % 19L).toFloat(),
-                    isArcane = fx.visualStyle == ProcVisualStyle.ARCANE_NOVA || fx.visualStyle == ProcVisualStyle.CHAIN_ARC,
+                    isArcane = fx.visualStyle == ProcVisualStyle.ARCANE_NOVA ||
+                        fx.visualStyle == ProcVisualStyle.CHAIN_ARC ||
+                        fx.visualStyle == ProcVisualStyle.ACID_SPLASH ||
+                        fx.visualStyle == ProcVisualStyle.FROST_SHATTER,
                     priority = ScenePointLight.PRIORITY_COMBAT_FX
                 )
             )
@@ -2088,6 +2091,39 @@ private fun DrawScope.drawProcAoeEffects(
                 drawIsoRing(irx, iry, baseColor.copy(alpha = fade * 0.92f), 4.4f * strokeScale)
                 if (particleLevel >= ParticleDetailLevel.MODERATE) {
                     drawIsoRing(rx * 0.72f, ry * 0.72f, Color(0xFFFF9EB8).copy(alpha = fade * 0.55f), 2.4f * strokeScale)
+                }
+            }
+
+            ProcVisualStyle.ACID_SPLASH -> {
+                // Corrosive Mire-Woven venom splash pool + bubbling acid droplets
+                drawIsoFill(rx * 0.94f, ry * 0.94f, baseColor.copy(alpha = fade * 0.26f))
+                drawIsoRing(rx, ry, baseColor.copy(alpha = fade * 0.90f), 4.2f * strokeScale)
+                if (particleLevel >= ParticleDetailLevel.MODERATE) {
+                    val drops = if (particleLevel == ParticleDetailLevel.HD_ENHANCED) 8 else 5
+                    for (i in 0 until drops) {
+                        val angle = (i.toFloat() / drops) * (Math.PI.toFloat() * 2f) + t * 0.9f
+                        val dx = center.x + kotlin.math.cos(angle) * rx * 0.78f
+                        val dy = center.y + kotlin.math.sin(angle) * ry * 0.78f - hh * (0.25f + t * 0.45f)
+                        drawCircle(Color(0xFFA6FF70).copy(alpha = fade * 0.88f), 4.0f * strokeScale, Offset(dx, dy))
+                    }
+                }
+            }
+
+            ProcVisualStyle.FROST_SHATTER -> {
+                // Rime-Plate crystalline frost shatter burst + icy hexagonal rays
+                drawIsoFill(rx * 0.88f, ry * 0.88f, baseColor.copy(alpha = fade * 0.22f))
+                drawIsoRing(rx, ry, baseColor.copy(alpha = fade * 0.94f), 4.6f * strokeScale)
+                drawIsoRing(rx * 0.60f, ry * 0.60f, Color(0xFFE8FFFF).copy(alpha = fade * 0.72f), 2.4f * strokeScale)
+                if (particleLevel >= ParticleDetailLevel.MODERATE) {
+                    val shards = if (particleLevel == ParticleDetailLevel.HD_ENHANCED) 8 else 6
+                    for (i in 0 until shards) {
+                        val angle = (i.toFloat() / shards) * (Math.PI.toFloat() * 2f)
+                        val ix = center.x + kotlin.math.cos(angle) * rx * 0.35f
+                        val iy = center.y + kotlin.math.sin(angle) * ry * 0.35f
+                        val ox = center.x + kotlin.math.cos(angle) * rx * 1.12f
+                        val oy = center.y + kotlin.math.sin(angle) * ry * 1.12f
+                        drawLine(Color(0xFFE0FCFF).copy(alpha = fade * 0.92f), Offset(ix, iy), Offset(ox, oy), strokeWidth = 3.0f * strokeScale, cap = StrokeCap.Round)
+                    }
                 }
             }
         }

@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.game.model.BiomeEquipmentClass
 import com.example.game.model.EquipmentProc
 import com.example.game.model.EquipmentSlot
 import com.example.game.model.GameWorldState
@@ -98,6 +99,8 @@ internal fun procBonusEffectLabel(effect: ProcBonusEffect): String = when (effec
     ProcBonusEffect.MANA_SIPHON -> "Mana Siphon (+MP)"
     ProcBonusEffect.AEGIS_WARD -> "Aegis Ward (+HP)"
     ProcBonusEffect.LIFE_SIPHON -> "Life Siphon (+HP)"
+    ProcBonusEffect.VENOM_DOT -> "Corrosive Venom (DoT)"
+    ProcBonusEffect.FROST_SHATTER_SLOW -> "Frost Shatter Slow"
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -156,7 +159,22 @@ fun ItemInspectionDialog(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (def.equipmentTier > 0) {
+                            if (def.biomeClass != BiomeEquipmentClass.NONE) {
+                                val bCol = Color(def.biomeClass.accentColorHex)
+                                Text(
+                                    text = def.biomeClass.displayName.uppercase(),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.5.sp
+                                    ),
+                                    color = bCol,
+                                    modifier = Modifier
+                                        .background(bCol.copy(alpha = 0.16f), RoundedCornerShape(4.dp))
+                                        .border(1.dp, bCol.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                                        .testTag("item_inspect_biome_badge")
+                                )
+                            } else if (def.equipmentTier > 0) {
                                 Text(
                                     text = tierBadgeLabel(def.equipmentTier),
                                     style = MaterialTheme.typography.labelSmall.copy(
@@ -226,8 +244,12 @@ fun ItemInspectionDialog(
                             if (def.isTwoHanded) StatPill("Two-Handed", TorchAmber)
                             if (def.category == ItemCategory.WEAPON_WAND) StatPill("Magic Conduit", SoulViolet)
                         }
+                        if (def.poisonResistPercent > 0) {
+                            StatPill("Poison Resist +${def.poisonResistPercent}%", Color(0xFF5CE88A))
+                        }
                         if (def.pickaxeTier > 0) {
                             StatPill("Tier ${def.pickaxeTier} Pickaxe", TorchAmber)
+                            StatPill("Req Mining ${def.requiredMiningLevel}", ExpEmerald)
                         }
                         val wtLabel = if (def.isTool) {
                             "${formatOz(def.carriedWeightOz())} oz (Tool Bag)"
@@ -241,12 +263,13 @@ fun ItemInspectionDialog(
                     val showReqs = def.equipSlot != null ||
                         def.requiredLevel > 1 ||
                         def.requiredSkill != null ||
-                        def.requiredMagicLevel > 0
+                        def.requiredMagicLevel > 0 ||
+                        def.requiredMiningLevel > 0
                     if (showReqs) {
                         RequirementsSection(
                             state = state,
                             def = def,
-                            meetsAll = meetsAll,
+                            meetsAll = meetsAll && (def.requiredMiningLevel <= 0 || state.skills.mining.level >= def.requiredMiningLevel),
                             isGrandfatheredEquipped = equippedSlot != null && !meetsAll
                         )
                     }
@@ -408,6 +431,15 @@ private fun RequirementsSection(
                     RequirementBadge(
                         label = if (mlvMet) "MLv ${def.requiredMagicLevel}" else "MLv ${def.requiredMagicLevel} (You: ${state.magicLevel})",
                         met = mlvMet
+                    )
+                }
+
+                if (def.requiredMiningLevel > 0) {
+                    val mineLvl = state.skills.mining.level
+                    val mineMet = mineLvl >= def.requiredMiningLevel
+                    RequirementBadge(
+                        label = if (mineMet) "Mining ${def.requiredMiningLevel}" else "Mining ${def.requiredMiningLevel} (You: $mineLvl)",
+                        met = mineMet
                     )
                 }
             }
