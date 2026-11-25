@@ -72,10 +72,10 @@ class MonsterProgressionTest {
         assertTrue(surface.isProtectionZone(WorldMaps.ORACLE_X, WorldMaps.ORACLE_Y))
         assertFalse(surface.isProtectionZone(18, 48))
 
-        // Locate Floor -1 -> Floor -2 stairs down portal and step onto it
-        val portalToF2 = WorldMaps.portals.first { it.fromFloor == -1 && it.toFloor == -2 && !it.requiresRope }
+        // Locate Floor 0 -> Floor -2 Watchwood Caverns stairs down portal and step onto it
+        val portalToF2 = WorldMaps.portals.first { it.fromFloor == 0 && it.toFloor == -2 && !it.requiresRope }
         val heroAboveF2 = GameEngine.createNewWorld("Roland").copy(
-            floor = -1,
+            floor = 0,
             playerX = portalToF2.fromX - 1,
             playerY = portalToF2.fromY
         )
@@ -84,11 +84,11 @@ class MonsterProgressionTest {
         val banner = descended.floorWarningBanner
         assertNotNull("Descending must trigger a floor warning banner", banner)
         assertEquals(-2, banner!!.floorId)
-        assertEquals("Deep Caverns", banner.floorName)
+        assertEquals("Watchwood Caverns", banner.floorName)
         assertEquals("High", banner.dangerLevel)
         assertTrue(
             "Console log must contain descent danger warning",
-            descended.statusLog.last().contains("You descend to Floor -2: Deep Caverns. Danger Level: High!")
+            descended.statusLog.last().contains("You descend to Floor -2: Watchwood Caverns. Danger Level: High!")
         )
 
         // Banner automatically clears after 3.5 seconds

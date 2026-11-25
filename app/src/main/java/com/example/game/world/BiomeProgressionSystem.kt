@@ -92,7 +92,7 @@ enum class OverlandBiomeTier(
  * floors off their surface biome (`surfaceMinLevel + abs(floor) * 6`).
  */
 object BiomeProgressionRules {
-    const val MIN_DUNGEON_FLOOR: Int = -10
+    const val MIN_DUNGEON_FLOOR: Int = -15
     const val DUNGEON_DEPTH_STEP_LEVELS: Int = 6
 
     fun biomeForRegion(regionId: String): OverlandBiomeTier = when (normalizeRegionId(regionId)) {
@@ -108,41 +108,52 @@ object BiomeProgressionRules {
         biomeForRegion(WorldRegionMeta.forGlobalTile(x, y).regionId)
 
     /**
-     * Canonical surface biome anchor for each underground dungeon floor so deeper floors
-     * and outer-continent biome dungeons scale strictly from their host biome.
+     * Canonical surface biome anchor for each underground dungeon floor so deeper floors,
+     * separated Rookvale caves (-1, -2, -11..-14), and outer-continent biome dungeons scale
+     * strictly from their host biome.
      */
     fun surfaceBiomeForDungeonFloor(floorId: Int): OverlandBiomeTier = when (floorId) {
-        -1 -> OverlandBiomeTier.ROOKVALE_HEARTLAND // Rookvale Upper Catacombs (Lvl 7-12)
-        -2 -> OverlandBiomeTier.ROOKVALE_HEARTLAND // Rookvale Deep Caverns (Lvl 13-18, strictly inside Lv 1-20)
-        -3 -> OverlandBiomeTier.SUNSCORCH_BADLANDS
-        -4 -> OverlandBiomeTier.FROSTPEAK_HIGHLANDS
-        -5 -> OverlandBiomeTier.SUNSCORCH_BADLANDS // Grimmaw Quarry anchored to Sunscorch/Frostpeak frontier
-        -6 -> OverlandBiomeTier.ASHEN_CALDERA      // Gorek Labyrinth anchored to Ashen Caldera
-        -7 -> OverlandBiomeTier.WHISPERING_MARSH   // The Sunken Mire Vaults (Lvl 26-31)
-        -8 -> OverlandBiomeTier.WHISPERING_MARSH   // The Overgrown Ziggurat Vault (Lvl 32-37)
-        -9 -> OverlandBiomeTier.FROSTPEAK_HIGHLANDS // The Blightwood Barrow Catacombs (Lvl 48-53)
-        -10 -> OverlandBiomeTier.ASHEN_CALDERA     // The Ashen Caldera Foundry (Lvl 67-72+)
+        -1 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Briar Catacombs (Lvl 7-12)
+        -2 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Watchwood Caverns (Lvl 13-18, Deep Delve entry)
+        -3 -> OverlandBiomeTier.SUNSCORCH_BADLANDS   // Abyssal Crypt (Lvl 48-53)
+        -4 -> OverlandBiomeTier.FROSTPEAK_HIGHLANDS  // Obsidian Wyrm Sanctum (Lvl 66-71)
+        -5 -> OverlandBiomeTier.SUNSCORCH_BADLANDS   // Grimmaw Quarry (Lvl 60-65)
+        -6 -> OverlandBiomeTier.ASHEN_CALDERA        // Gorek Labyrinth (Lvl 91-96+)
+        -7 -> OverlandBiomeTier.WHISPERING_MARSH     // The Sunken Mire Vaults (Lvl 26-31)
+        -8 -> OverlandBiomeTier.WHISPERING_MARSH     // The Overgrown Ziggurat Vault (Lvl 32-37)
+        -9 -> OverlandBiomeTier.FROSTPEAK_HIGHLANDS  // The Blightwood Barrow Catacombs (Lvl 48-53)
+        -10 -> OverlandBiomeTier.ASHEN_CALDERA       // The Ashen Caldera Foundry (Lvl 67-72+)
+        -11 -> OverlandBiomeTier.ROOKVALE_HEARTLAND  // NW Copper Quarry Mines (Lvl 5-10)
+        -12 -> OverlandBiomeTier.ROOKVALE_HEARTLAND  // North Mountain Cavern (Lvl 7-12)
+        -13 -> OverlandBiomeTier.ROOKVALE_HEARTLAND  // Dark Forest Sinkhole (Lvl 9-14)
+        -14 -> OverlandBiomeTier.ROOKVALE_HEARTLAND  // Crag Deep Hollow (Lvl 13-18)
+        -15 -> OverlandBiomeTier.ASHEN_CALDERA       // The Ember Sanctum (Lvl 67-72+)
         else -> OverlandBiomeTier.ROOKVALE_HEARTLAND
     }
 
     /**
      * Effective progression depth multiplier for a dungeon floor.
      * Classic descending floors (-1..-6) scale directly by `abs(floorId)`; dedicated
-     * outer-biome continental dungeons (-7..-10) scale at depth 1 or 2 above their host biome.
+     * continental & separated site dungeons (-7..-15) scale at depth 1 or 2 above their host biome.
      */
     fun effectiveDungeonDepth(floorId: Int): Int = when (floorId) {
-        -7 -> 1
-        -8 -> 2
-        -9 -> 1
-        -10 -> 2
+        -7, -9, -11, -12, -13 -> 1
+        -8, -10, -14, -15 -> 2
         else -> abs(floorId).coerceAtLeast(1)
     }
 
     /**
-     * Core dungeon progression formula: `surfaceMinLevel + effectiveDungeonDepth(floorId) * 6`.
-     * Regular encounters span `[base, base + 4]`; dungeon bosses scale to `base + 5`.
+     * Core dungeon progression formula: `surfaceMinLevel + effectiveDungeonDepth(floorId) * 6`,
+     * with fine-tuned early Rookvale starter bands for NW Quarry (-11: Lvl 5-10) and Dark Forest
+     * Sinkhole (-13: Lvl 9-14). Regular encounters span `[base, base + 4]`; bosses scale to `base + 5`.
      */
     fun dungeonBaseLevel(surfaceMinLevel: Int, floorId: Int): Int {
+        if (surfaceMinLevel == OverlandBiomeTier.ROOKVALE_HEARTLAND.minLevel) {
+            when (floorId) {
+                -11 -> return 5
+                -13 -> return 9
+            }
+        }
         val depth = effectiveDungeonDepth(floorId)
         return (surfaceMinLevel.coerceAtLeast(1) + depth * DUNGEON_DEPTH_STEP_LEVELS)
     }
@@ -160,7 +171,7 @@ object BiomeProgressionRules {
     fun dungeonRecommendedLevelLabel(floorId: Int, surfaceMinLevel: Int = surfaceBiomeForDungeonFloor(floorId).minLevel): String {
         val base = dungeonBaseLevel(surfaceMinLevel, floorId)
         val top = base + 5
-        return if (floorId == -6 || floorId == -10) "Lvl $base-${top}+" else "Lvl $base-$top"
+        return if (floorId == -6 || floorId == -10 || floorId == -15) "Lvl $base-${top}+" else "Lvl $base-$top"
     }
 
     /**

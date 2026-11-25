@@ -255,8 +255,8 @@ object BiomeMonsterSpawner {
     }
 
     /**
-     * Maps each underground dungeon floor (`-1..-10`) to its natural ecological [BiomeType].
-     * Both Floor -1 (Lv 7-12) and Floor -2 (Lv 13-18) belong to Rookvale Heartland's Lv 1-20 tier.
+     * Maps each underground dungeon floor (`-1..-15`) to its natural ecological [BiomeType].
+     * All six Rookvale dungeons (-1, -2, -11..-14) belong strictly to Rookvale Heartland's Lv 1-20 tier.
      */
     fun biomeForDungeonFloor(floorId: Int): BiomeType = when (floorId) {
         -1 -> BiomeType.HEARTLAND_WILDS
@@ -269,6 +269,11 @@ object BiomeMonsterSpawner {
         -8 -> BiomeType.EMERALD_JUNGLE
         -9 -> BiomeType.BLIGHTWOOD_REACH
         -10 -> BiomeType.ASHEN_CALDERA
+        -11 -> BiomeType.HEARTLAND_WILDS
+        -12 -> BiomeType.HEARTLAND_WILDS
+        -13 -> BiomeType.HEARTLAND_WILDS
+        -14 -> BiomeType.HEARTLAND_FRONTIER
+        -15 -> BiomeType.ASHEN_CALDERA
         else -> BiomeType.HEARTLAND_WILDS
     }
 

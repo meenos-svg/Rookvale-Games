@@ -226,10 +226,10 @@ object WorldMaps {
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 242, ROOKVALE_ORIGIN_Y + 179, "SCHOLAR'S MARKET PLAZA"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 152, ROOKVALE_ORIGIN_Y + 172, "WEST GARDEN COURTYARD"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 134, "NORTH STARTER MEADOWS"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, "NW COPPER QUARRY (FLOOR -1)"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 85, "MOUNTAIN CAVERN (FLOOR -1)"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 67, "DEEP ABYSSAL CAVERN (FLOOR -2)"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 207, "DARK FOREST SINKHOLE (FLOOR -1)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, "NW COPPER QUARRY MINES (FLOOR -11)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 85, "NORTH MOUNTAIN CAVERN (FLOOR -12)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 67, "CRAG DEEP HOLLOW (FLOOR -14)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 207, "DARK FOREST SINKHOLE (FLOOR -13)"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 88, ROOKVALE_ORIGIN_Y + 320, "BRIAR OUTLAW CAMP (LVL 12-16)"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, "BRIAR CATACOMBS (FLOOR -1)"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 320, "WATCHWOOD OUTLAW CAMP (LVL 15-20)"))
@@ -256,7 +256,7 @@ object WorldMaps {
             add(LandmarkLabel(0, 1320, 260, "FROSTPEAK GRIMMAW QUARRY (FLOOR -5)"))
             add(LandmarkLabel(0, 242, 1020, "BADLANDS GOREK LABYRINTH (FLOOR -6)"))
             add(LandmarkLabel(0, 720, 1020, "OVERGROWN ZIGGURAT VAULT (FLOOR -8)"))
-            add(LandmarkLabel(0, 1510, 975, "EMBER SANCTUM DESCENT (FLOOR -10)"))
+            add(LandmarkLabel(0, 1510, 975, "THE EMBER SANCTUM (FLOOR -15)"))
 
             // Dungeon Floor Landmarks & Subterranean Safe Forward Camps
             undergroundCamps.forEach { camp ->
@@ -274,29 +274,27 @@ object WorldMaps {
     }
 
     val portals: List<FloorPortal> = listOf(
-        // Outer Heartland Starter Ruins <-> Floor -1 (ZERO portals inside Rookvale City limits!)
-        // SW Briar Outlaw Camp Catacombs <-> Floor -1 Vanguard Gatehouse
+        // --- 6 Completely Separate Rookvale Heartland Dungeons (Strictly 1-to-1, Lv 1-20, ZERO inside Rookvale City!) ---
+        // 1. SW Briar Outlaw Camp <-> Floor -1 Briar Catacombs (Lvl 7-12, standalone)
         FloorPortal(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 316, -1, 28, 11, requiresRope = false),
         FloorPortal(-1, 28, 10, 0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, requiresRope = false),
-        // Rookvale NW Quarry Rope-Hole <-> Floor -1 (both west rope-spots return to NW Quarry outside city)
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 96, -1, 14, 15, requiresRope = false),
-        FloorPortal(-1, 14, 14, 0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, requiresRope = true),
-        FloorPortal(-1, 10, 10, 0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, requiresRope = true),
-        // Rookvale Mountain Cavern Stairs <-> Floor -1
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 84, -1, 38, 11, requiresRope = false),
-        FloorPortal(-1, 38, 10, 0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 85, requiresRope = false),
-        // Rookvale Dark Forest Sinkhole Rope-Hole <-> Floor -1
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 206, -1, 38, 29, requiresRope = false),
-        FloorPortal(-1, 38, 28, 0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 207, requiresRope = true),
-
-        // Outer Heartland Deep Caverns <-> Floor -2 (Rookvale Lvl 13-18)
-        // NE Crag Hills Deep Cavern <-> Floor -2
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 66, -2, 11, 24, requiresRope = false),
-        FloorPortal(-2, 10, 24, 0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 67, requiresRope = false),
-        // SE Watchwood Outlaw Camp Caverns <-> Floor -2 Forward Camp
+        // 2. SE Watchwood Outlaw Camp <-> Floor -2 Watchwood Caverns (Lvl 13-18, sole Deep Delve entry to -3/-4)
         FloorPortal(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 316, -2, 24, 37, requiresRope = false),
+        FloorPortal(-2, 24, 38, 0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 317, requiresRope = false),
+        // 3. NW Copper Quarry Rope-Hole <-> Floor -11 NW Copper Quarry Mines (Lvl 5-10, standalone)
+        FloorPortal(0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 96, -11, 24, 40, requiresRope = false),
+        FloorPortal(-11, 24, 41, 0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, requiresRope = true),
+        // 4. North Mountain Cavern Stairs <-> Floor -12 North Mountain Cavern (Lvl 7-12, standalone)
+        FloorPortal(0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 84, -12, 24, 40, requiresRope = false),
+        FloorPortal(-12, 24, 41, 0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 85, requiresRope = false),
+        // 5. East Dark Forest Sinkhole Rope-Hole <-> Floor -13 Dark Forest Sinkhole (Lvl 9-14, standalone)
+        FloorPortal(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 206, -13, 24, 40, requiresRope = false),
+        FloorPortal(-13, 24, 41, 0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 207, requiresRope = true),
+        // 6. NE Crag Hills Stairs <-> Floor -14 Crag Deep Hollow (Lvl 13-18, standalone)
+        FloorPortal(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 66, -14, 24, 40, requiresRope = false),
+        FloorPortal(-14, 24, 41, 0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 67, requiresRope = false),
 
-        // Outer-Continent Dedicated Biome Dungeons (Bidirectional!)
+        // --- 7 Separate Outer-Continent Dedicated Biome Dungeons (Strictly 1-to-1 Bidirectional!) ---
         // Frostpeak Grimmaw Ridge <-> Floor -5 The Grimmaw Quarry
         FloorPortal(0, 1320, 260, -5, 24, 40, requiresRope = false),
         FloorPortal(-5, 24, 41, 0, 1320, 261, requiresRope = false),
@@ -312,15 +310,14 @@ object WorldMaps {
         // Blightwood Barrow (Northern Frontier) <-> Floor -9 The Blightwood Barrow Catacombs
         FloorPortal(0, 1020, 175, -9, 24, 40, requiresRope = false),
         FloorPortal(-9, 24, 41, 0, 1020, 176, requiresRope = false),
-        // Ashen Caldera Shaft & Ember Sanctum <-> Floor -10 The Ashen Caldera Foundry
+        // Ashen Caldera Shaft <-> Floor -10 The Ashen Caldera Foundry
         FloorPortal(0, 318, 252, -10, 24, 40, requiresRope = false),
-        FloorPortal(0, 1510, 975, -10, 24, 40, requiresRope = false),
         FloorPortal(-10, 24, 41, 0, 318, 253, requiresRope = false),
+        // Ember Isles Volcanic Descent <-> Floor -15 The Ember Sanctum
+        FloorPortal(0, 1510, 975, -15, 24, 40, requiresRope = false),
+        FloorPortal(-15, 24, 41, 0, 1510, 976, requiresRope = false),
 
-        // Floor -1 <-> Floor -2 (Rope-Hole Down / Rope-Spot Up)
-        FloorPortal(-1, 24, 38, -2, 24, 37, requiresRope = false),
-        FloorPortal(-2, 24, 38, -1, 24, 37, requiresRope = true),
-
+        // --- Classic Deep Delve Chain (Exclusive to Watchwood Caverns Floor -2) ---
         // Floor -2 <-> Floor -3 (Crypt Stairs + Eastern Rope Pit)
         FloorPortal(-2, 24, 8, -3, 24, 9, requiresRope = false),
         FloorPortal(-3, 24, 8, -2, 24, 9, requiresRope = false),
@@ -448,7 +445,7 @@ object WorldMaps {
         -4 -> 24 to 39
         -5 -> 24 to 40
         -6 -> 24 to 40
-        -7, -8, -9, -10 -> 24 to 40
+        in -15..-7 -> 24 to 40
         else -> TEMPLE_SPAWN_X to TEMPLE_SPAWN_Y
     }
 
@@ -1441,18 +1438,13 @@ object WorldMaps {
         g[10][26] = TileType.COBBLESTONE
         g[10][30] = TileType.COBBLESTONE
 
-        // Portals (exact coordinates preserved & guaranteed walkable)
+        // Sole dedicated return stairway back up to SW Briar Outlaw Camp (1284, 717)
         g[10][28] = TileType.STAIRS_UP
-        g[10][38] = TileType.STAIRS_UP
-        g[10][10] = TileType.ROPE_SPOT_UP
-        g[14][14] = TileType.ROPE_SPOT_UP
-        g[28][38] = TileType.ROPE_SPOT_UP
-        g[38][24] = TileType.ROPE_HOLE_DOWN
 
         return WorldFloor(
             floorId = -1,
-            name = "Heartland Catacombs & Caves",
-            subtitle = "Starter Ruins • Floor -1 • Forward Camp PZ",
+            name = "Briar Catacombs",
+            subtitle = "Briar Outlaw Ruins • Floor -1 • Forward Camp PZ",
             width = s,
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),
@@ -1548,16 +1540,16 @@ object WorldMaps {
         g[38][21] = TileType.COBBLESTONE
         g[38][27] = TileType.COBBLESTONE
 
-        // Portals (exact coordinates preserved & guaranteed walkable)
-        g[38][24] = TileType.ROPE_SPOT_UP
-        g[24][10] = TileType.STAIRS_UP // Direct return stairway up to NE Crag Hills on Floor 0!
+        // Portals: dedicated return stairway back up to SE Watchwood Outlaw Camp (1516, 717)
+        // plus exclusive Deep Delve portals down to Floor -3 (Abyssal Crypt) & Floor -4 (Wyrm Sanctum)
+        g[38][24] = TileType.STAIRS_UP
         g[8][24] = TileType.STAIRS_DOWN
         g[24][40] = TileType.ROPE_HOLE_DOWN
 
         return WorldFloor(
             floorId = -2,
-            name = "Deep Caverns",
-            subtitle = "Rookvale Deep Caverns • Floor -2 • Forward Camp PZ",
+            name = "Watchwood Caverns",
+            subtitle = "Watchwood Outlaw Caverns • Floor -2 • Deep Delve Entry • Forward Camp PZ",
             width = s,
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),

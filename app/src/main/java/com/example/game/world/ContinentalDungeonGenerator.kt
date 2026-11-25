@@ -4,7 +4,20 @@ import com.example.game.model.MonsterType
 import com.example.game.model.TileType
 
 /**
- * Specification for a deterministic outer-biome multi-room continental dungeon floor.
+ * Distinct procedural floorplan archetypes so every separate dungeon entrance across Rookvale
+ * Heartland and the outer continent carves its own memorable room & corridor architecture.
+ */
+enum class DungeonLayoutArchetype {
+    CROSSROADS_CHASM, // Symmetric guard chambers, central crossroads, triple-bridged hazard chasm (-7..-10)
+    SHAFT_GALLERY,    // Main mine shaft with 4 staggered ore galleries, outer drifts & flooded sumps (-11)
+    TWIN_RIDGE_RING,  // Split east/west mountain ridge loops encircling a central chasm & sky-bridge (-12)
+    ROOT_WARREN,      // Asymmetric mossy root dens & winding earthen burrows over a subterranean creek (-13)
+    STEPPED_VAULTS,   // Three ascending granite fortress tiers with barred guardrooms & moat crossing (-14)
+    CALDERA_SANCTUM   // Obsidian rim ring, molten caldera lake, 4 cardinal bridges & ritual island (-15)
+}
+
+/**
+ * Specification for a deterministic multi-room procedural dungeon floor.
  */
 data class ContinentalDungeonSpec(
     val floorId: Int,
@@ -29,7 +42,10 @@ data class ContinentalDungeonSpec(
     val stallTile: TileType,
     val primaryOre: TileType,
     val secondaryOre: TileType,
-    val seed: Int
+    val seed: Int,
+    val layoutArchetype: DungeonLayoutArchetype = DungeonLayoutArchetype.CROSSROADS_CHASM,
+    val exitTileType: TileType = TileType.STAIRS_UP,
+    val requiresRopeToExit: Boolean = false
 )
 
 /**
@@ -50,12 +66,12 @@ data class GeneratedContinentalDungeon(
 
 /**
  * Procedural deterministic multi-room & corridor dungeon generator for Rookvale's
- * expanded outer-continent biomes (Floors -7 through -10).
+ * separated Heartland dungeons (Floors -11..-14), Ember Sanctum (Floor -15), and
+ * expanded outer-continent biomes (Floors -7..-10).
  *
  * Guarantees:
  * - Safe Southern Forward Camp Protection Zone with Healer, Supply Alchemist & Biome Stall
- * - Interconnected multi-chamber layout with narrow 2–3 tile corridors & iron-barred gates
- * - Subterranean hazard chasm crossed by stone/wood bridges leading into a Boss Sanctum
+ * - Distinct archetype geometry with narrow corridors, iron-barred gates, bridges & chambers
  * - Biome-appropriate mining veins tucked in guarded alcoves
  * - Biome-driven regular patrols (via [BiomeMonsterSpawner]) + Boss encounter with 100% reachability
  * - Purely deterministic & session-based (never serialized into Supabase `save_data`)
@@ -94,7 +110,8 @@ object ContinentalDungeonGenerator {
             stallTile = TileType.BIOME_STALL_MARSH,
             primaryOre = TileType.ORE_MIRE_SILVER,
             secondaryOre = TileType.ORE_PEAT_COAL,
-            seed = 701
+            seed = 701,
+            layoutArchetype = DungeonLayoutArchetype.CROSSROADS_CHASM
         ),
         ContinentalDungeonSpec(
             floorId = -8,
@@ -119,7 +136,8 @@ object ContinentalDungeonGenerator {
             stallTile = TileType.BIOME_STALL_MARSH,
             primaryOre = TileType.ORE_MIRE_SILVER,
             secondaryOre = TileType.ORE_VESPERITE,
-            seed = 809
+            seed = 809,
+            layoutArchetype = DungeonLayoutArchetype.CROSSROADS_CHASM
         ),
         ContinentalDungeonSpec(
             floorId = -9,
@@ -144,7 +162,8 @@ object ContinentalDungeonGenerator {
             stallTile = TileType.BIOME_STALL_FROSTPEAK,
             primaryOre = TileType.ORE_GLACIER_QUARTZ,
             secondaryOre = TileType.ORE_VESPERITE,
-            seed = 919
+            seed = 919,
+            layoutArchetype = DungeonLayoutArchetype.CROSSROADS_CHASM
         ),
         ContinentalDungeonSpec(
             floorId = -10,
@@ -169,7 +188,144 @@ object ContinentalDungeonGenerator {
             stallTile = TileType.BIOME_STALL_ASHEN,
             primaryOre = TileType.ORE_CINDERITE,
             secondaryOre = TileType.ORE_VESPERITE,
-            seed = 1031
+            seed = 1031,
+            layoutArchetype = DungeonLayoutArchetype.CROSSROADS_CHASM
+        ),
+        // --- Newly Separated Individual Rookvale Heartland Dungeons (Strictly Lv 1-20) ---
+        ContinentalDungeonSpec(
+            floorId = -11,
+            name = "NW Copper Quarry Mines",
+            subtitle = "Rookvale Quarry Shafts • Floor -11 • Forward Camp PZ",
+            hostBiome = BiomeType.HEARTLAND_WILDS,
+            surfaceTier = OverlandBiomeTier.ROOKVALE_HEARTLAND,
+            dangerLevel = "Low",
+            dangerSeverity = 1,
+            entrySurfaceX = WorldMaps.ROOKVALE_ORIGIN_X + 92,
+            entrySurfaceY = WorldMaps.ROOKVALE_ORIGIN_Y + 96,
+            campName = "QUARRY MINES CAMP (PZ)",
+            healerName = "Quarry Medic Linna",
+            merchantName = "Ore Peddler Garret",
+            bossType = MonsterType.BROODMOTHER_ARACHNE,
+            bossLandmarkName = "FOREMAN'S QUARRY HOLLOW",
+            wallTile = TileType.CAVE_WALL,
+            floorTile = TileType.DIRT_FLOOR,
+            accentFloorTile = TileType.COBBLESTONE,
+            hazardTile = TileType.WATER,
+            bridgeTile = TileType.WOOD_BRIDGE,
+            stallTile = TileType.BIOME_STALL_HEARTLAND,
+            primaryOre = TileType.ORE_COPPER,
+            secondaryOre = TileType.ORE_TIN,
+            seed = 1103,
+            layoutArchetype = DungeonLayoutArchetype.SHAFT_GALLERY,
+            exitTileType = TileType.ROPE_SPOT_UP,
+            requiresRopeToExit = true
+        ),
+        ContinentalDungeonSpec(
+            floorId = -12,
+            name = "North Mountain Cavern",
+            subtitle = "Rookvale Crag Ridge • Floor -12 • Forward Camp PZ",
+            hostBiome = BiomeType.HEARTLAND_WILDS,
+            surfaceTier = OverlandBiomeTier.ROOKVALE_HEARTLAND,
+            dangerLevel = "Moderate",
+            dangerSeverity = 1,
+            entrySurfaceX = WorldMaps.ROOKVALE_ORIGIN_X + 264,
+            entrySurfaceY = WorldMaps.ROOKVALE_ORIGIN_Y + 84,
+            campName = "MOUNTAIN CAVERN CAMP (PZ)",
+            healerName = "Ridge Cleric Dara",
+            merchantName = "Mountaineer Orin",
+            bossType = MonsterType.BROODMOTHER_ARACHNE,
+            bossLandmarkName = "RIDGE CAVERN LAIR",
+            wallTile = TileType.STONE_WALL,
+            floorTile = TileType.DIRT_FLOOR,
+            accentFloorTile = TileType.CRYPT_FLOOR,
+            hazardTile = TileType.WATER,
+            bridgeTile = TileType.STONE_BRIDGE,
+            stallTile = TileType.BIOME_STALL_HEARTLAND,
+            primaryOre = TileType.ORE_COPPER,
+            secondaryOre = TileType.ORE_BOG_IRON,
+            seed = 1217,
+            layoutArchetype = DungeonLayoutArchetype.TWIN_RIDGE_RING
+        ),
+        ContinentalDungeonSpec(
+            floorId = -13,
+            name = "Dark Forest Sinkhole",
+            subtitle = "Rookvale Deep Woods • Floor -13 • Forward Camp PZ",
+            hostBiome = BiomeType.HEARTLAND_WILDS,
+            surfaceTier = OverlandBiomeTier.ROOKVALE_HEARTLAND,
+            dangerLevel = "Moderate",
+            dangerSeverity = 1,
+            entrySurfaceX = WorldMaps.ROOKVALE_ORIGIN_X + 312,
+            entrySurfaceY = WorldMaps.ROOKVALE_ORIGIN_Y + 206,
+            campName = "SINKHOLE WARREN CAMP (PZ)",
+            healerName = "Herbalist Mela",
+            merchantName = "Woods Supplier Fenn",
+            bossType = MonsterType.BROODMOTHER_ARACHNE,
+            bossLandmarkName = "DEEP ROOT NEST",
+            wallTile = TileType.CAVE_WALL,
+            floorTile = TileType.DIRT_FLOOR,
+            accentFloorTile = TileType.DARK_GRASS,
+            hazardTile = TileType.WATER,
+            bridgeTile = TileType.WOOD_BRIDGE,
+            stallTile = TileType.BIOME_STALL_HEARTLAND,
+            primaryOre = TileType.ORE_BOG_IRON,
+            secondaryOre = TileType.ORE_TIN,
+            seed = 1321,
+            layoutArchetype = DungeonLayoutArchetype.ROOT_WARREN,
+            exitTileType = TileType.ROPE_SPOT_UP,
+            requiresRopeToExit = true
+        ),
+        ContinentalDungeonSpec(
+            floorId = -14,
+            name = "Crag Deep Hollow",
+            subtitle = "NE Crag Frontier Vaults • Floor -14 • Forward Camp PZ",
+            hostBiome = BiomeType.HEARTLAND_FRONTIER,
+            surfaceTier = OverlandBiomeTier.ROOKVALE_HEARTLAND,
+            dangerLevel = "High",
+            dangerSeverity = 2,
+            entrySurfaceX = WorldMaps.ROOKVALE_ORIGIN_X + 308,
+            entrySurfaceY = WorldMaps.ROOKVALE_ORIGIN_Y + 66,
+            campName = "CRAG HOLLOW CAMP (PZ)",
+            healerName = "Warden Priest Kell",
+            merchantName = "Quartermaster Syra",
+            bossType = MonsterType.IGNIS_LORD_OF_THE_PIT,
+            bossLandmarkName = "CRAG VAULT SANCTUM",
+            wallTile = TileType.GRANITE_WALL,
+            floorTile = TileType.CRYPT_FLOOR,
+            accentFloorTile = TileType.COBBLESTONE,
+            hazardTile = TileType.WATER,
+            bridgeTile = TileType.STONE_BRIDGE,
+            stallTile = TileType.BIOME_STALL_HEARTLAND,
+            primaryOre = TileType.ORE_BOG_IRON,
+            secondaryOre = TileType.ORE_TIN,
+            seed = 1429,
+            layoutArchetype = DungeonLayoutArchetype.STEPPED_VAULTS
+        ),
+        // --- Separated Volcanic Ember Isles Dungeon ---
+        ContinentalDungeonSpec(
+            floorId = -15,
+            name = "The Ember Sanctum",
+            subtitle = "Ember Isles Volcanic Vault • Floor -15 • Vanguard Camp PZ",
+            hostBiome = BiomeType.ASHEN_CALDERA,
+            surfaceTier = OverlandBiomeTier.ASHEN_CALDERA,
+            dangerLevel = "Extreme",
+            dangerSeverity = 4,
+            entrySurfaceX = 1510,
+            entrySurfaceY = 975,
+            campName = "EMBER SANCTUM CAMP (PZ)",
+            healerName = "Pyre Cleric Aurelia",
+            merchantName = "Ember Supplier Cael",
+            bossType = MonsterType.ELDER_DRAGON,
+            bossLandmarkName = "EMBER WYRM SANCTUM",
+            wallTile = TileType.OBSIDIAN_WALL,
+            floorTile = TileType.OBSIDIAN_FLOOR,
+            accentFloorTile = TileType.VOLCANIC_ASH,
+            hazardTile = TileType.LAVA,
+            bridgeTile = TileType.STONE_BRIDGE,
+            stallTile = TileType.BIOME_STALL_ASHEN,
+            primaryOre = TileType.ORE_CINDERITE,
+            secondaryOre = TileType.ORE_VESPERITE,
+            seed = 1543,
+            layoutArchetype = DungeonLayoutArchetype.CALDERA_SANCTUM
         )
     )
 
@@ -193,9 +349,6 @@ object ContinentalDungeonGenerator {
             }
         }
 
-        val j1 = (hash(spec.seed, 1) % 3) - 1 // -1..1 subtle chamber variation
-        val j2 = (hash(spec.seed, 2) % 3) - 1
-
         // 1. Southern Safe Forward Camp PZ (x=20..28, y=37..42)
         val camp = UndergroundCampZone(
             floorId = spec.floorId,
@@ -213,76 +366,17 @@ object ContinentalDungeonGenerator {
         )
         fillRect(camp.minX, camp.minY, camp.maxX, camp.maxY, spec.accentFloorTile)
 
-        // 2. Entry Gatehouse Corridor (narrow 3-tile north exit with Iron-Barred Gate)
-        fillRect(23, 32, 25, 36, spec.floorTile)
-        g[36][23] = TileType.IRON_BAR_GATE
-        g[36][24] = TileType.IRON_BAR_GATE
-        g[36][25] = TileType.IRON_BAR_GATE
-
-        // 3. Lower Branching Corridors & Flanking Guard Chambers (SW & SE)
-        fillRect(10, 33, 22, 34, spec.floorTile)
-        fillRect(26, 33, 38, 34, spec.floorTile)
-        fillRect(8 + j1, 29, 16, 36, spec.accentFloorTile)  // SW Chamber
-        fillRect(32, 29, 40 + j2, 36, spec.accentFloorTile) // SE Chamber
-
-        // 4. Central Crossroads Chamber & Winding North-South Passages
-        fillRect(11, 22, 13, 28, spec.floorTile) // West Wing Corridor
-        fillRect(35, 22, 37, 28, spec.floorTile) // East Wing Corridor
-        fillRect(14, 24, 19, 26, spec.floorTile) // West Cross-Passage
-        fillRect(29, 24, 34, 26, spec.floorTile) // East Cross-Passage
-        fillRect(20, 22, 28, 28, spec.accentFloorTile) // Central Chamber
-        fillRect(23, 29, 25, 31, spec.floorTile) // Center-South Link
-        // Decorative pillars inside central chamber
-        listOf(21 to 23, 27 to 23, 21 to 27, 27 to 27).forEach { (px, py) ->
-            g[py][px] = spec.wallTile
-        }
-        // Iron-barred chokepoint entering central chamber
-        g[30][23] = TileType.IRON_BAR_GATE
-        g[30][24] = TileType.IRON_BAR_GATE
-        g[30][25] = TileType.IRON_BAR_GATE
-
-        // 5. Subterranean Hazard Chasm (y=18..21) + Triple Bridges (West, Center, East)
-        fillRect(10, 18, 38, 21, spec.hazardTile)
-        fillRect(23, 18, 25, 21, spec.bridgeTile)
-        fillRect(11, 18, 13, 21, spec.bridgeTile)
-        fillRect(35, 18, 37, 21, spec.bridgeTile)
-
-        // Northern Flanking Alcoves (ore vaults + side corridors)
-        fillRect(9, 12, 15, 17, spec.floorTile)
-        fillRect(33, 12, 39, 17, spec.floorTile)
-        fillRect(16, 14, 17, 15, spec.floorTile)
-        fillRect(31, 14, 32, 15, spec.floorTile)
-
-        // 6. Boss Sanctum Chamber (x=17..31, y=7..16)
-        fillRect(17, 7, 31, 16, spec.accentFloorTile)
-        g[17][23] = TileType.IRON_BAR_GATE
-        g[17][24] = TileType.IRON_BAR_GATE
-        g[17][25] = TileType.IRON_BAR_GATE
-        // Corner hazard pools & pillars inside Boss Sanctum
-        g[8][18] = spec.hazardTile; g[8][30] = spec.hazardTile
-        listOf(20 to 10, 28 to 10, 20 to 14, 28 to 14).forEach { (px, py) ->
-            g[py][px] = spec.wallTile
+        // 2. Carve Archetype-Specific Dungeon Chambers, Corridors, Hazards, Veins & Torches
+        val patrolSlots: List<Pair<Int, Int>> = when (spec.layoutArchetype) {
+            DungeonLayoutArchetype.CROSSROADS_CHASM -> carveCrossroadsChasm(g, spec, ::fillRect)
+            DungeonLayoutArchetype.SHAFT_GALLERY -> carveShaftGallery(g, spec, ::fillRect)
+            DungeonLayoutArchetype.TWIN_RIDGE_RING -> carveTwinRidgeRing(g, spec, ::fillRect)
+            DungeonLayoutArchetype.ROOT_WARREN -> carveRootWarren(g, spec, ::fillRect)
+            DungeonLayoutArchetype.STEPPED_VAULTS -> carveSteppedVaults(g, spec, ::fillRect)
+            DungeonLayoutArchetype.CALDERA_SANCTUM -> carveCalderaSanctum(g, spec, ::fillRect)
         }
 
-        // 7. Biome-Appropriate Mining Veins tucked in guarded chamber alcoves
-        listOf(
-            9 to 30, 39 to 30, 10 to 13, 38 to 13
-        ).forEach { (vx, vy) ->
-            if (g[vy][vx].walkable) g[vy][vx] = spec.primaryOre
-        }
-        listOf(
-            9 to 35, 39 to 35, 19 to 8, 29 to 8
-        ).forEach { (vx, vy) ->
-            if (g[vy][vx].walkable) g[vy][vx] = spec.secondaryOre
-        }
-
-        // 8. Flickering Wall Torches along corridors & sanctum walls
-        listOf(
-            24 to 43, 22 to 36, 26 to 36, 14 to 28, 34 to 28,
-            19 to 25, 29 to 25, 22 to 17, 26 to 17, 16 to 11, 32 to 11, 24 to 6
-        ).forEach { (tx, ty) -> g[ty][tx] = TileType.TORCH_WALL }
-
-        // 9. Safe Forward Camp Fixtures (Campfires, Banners, Biome Crafting Stall, Return Stairs)
+        // 3. Safe Forward Camp Fixtures (Campfires, Banners, Biome Crafting Stall, Return Exit)
         g[38][21] = TileType.CAMPFIRE_BRAZIER
         g[38][27] = TileType.CAMPFIRE_BRAZIER
         g[41][21] = TileType.WAR_BANNER
@@ -291,7 +385,7 @@ object ContinentalDungeonGenerator {
         g[40][27] = TileType.COBBLESTONE
         g[38][24] = spec.stallTile
         g[LANDING_Y][LANDING_X] = TileType.COBBLESTONE
-        g[STAIRS_UP_Y][STAIRS_UP_X] = TileType.STAIRS_UP
+        g[STAIRS_UP_Y][STAIRS_UP_X] = spec.exitTileType
 
         val floor = WorldFloor(
             floorId = spec.floorId,
@@ -306,18 +400,7 @@ object ContinentalDungeonGenerator {
             dangerSeverity = spec.dangerSeverity
         )
 
-        // 10. Biome-Driven Patrol Spawns across Chambers + Terminal Boss Encounter
-        val patrolSlots = listOf(
-            12 to 33, // SW Chamber
-            14 to 31, // SW Chamber North
-            36 to 33, // SE Chamber
-            34 to 31, // SE Chamber North
-            12 to 25, // West Corridor
-            36 to 25, // East Corridor
-            24 to 25, // Central Crossroads
-            12 to 15, // NW Alcove Guard
-            36 to 15  // NE Alcove Guard
-        )
+        // 4. Biome-Driven Patrol Spawns across Chambers + Terminal Boss Encounter
         val spawns = buildList {
             patrolSlots.forEachIndexed { idx, (px, py) ->
                 if (!camp.contains(px, py) && floor.tileAt(px, py).walkable) {
@@ -344,6 +427,374 @@ object ContinentalDungeonGenerator {
             landingX = LANDING_X,
             landingY = LANDING_Y
         )
+    }
+
+    private fun carveCrossroadsChasm(
+        g: Array<Array<TileType>>,
+        spec: ContinentalDungeonSpec,
+        fillRect: (Int, Int, Int, Int, TileType) -> Unit
+    ): List<Pair<Int, Int>> {
+        val j1 = (hash(spec.seed, 1) % 3) - 1
+        val j2 = (hash(spec.seed, 2) % 3) - 1
+
+        // Entry Gatehouse Corridor
+        fillRect(23, 32, 25, 36, spec.floorTile)
+        g[36][23] = TileType.IRON_BAR_GATE; g[36][24] = TileType.IRON_BAR_GATE; g[36][25] = TileType.IRON_BAR_GATE
+
+        // Lower Branching Corridors & Flanking Guard Chambers (SW & SE)
+        fillRect(10, 33, 22, 34, spec.floorTile)
+        fillRect(26, 33, 38, 34, spec.floorTile)
+        fillRect(8 + j1, 29, 16, 36, spec.accentFloorTile)
+        fillRect(32, 29, 40 + j2, 36, spec.accentFloorTile)
+
+        // Central Crossroads Chamber & Winding North-South Passages
+        fillRect(11, 22, 13, 28, spec.floorTile)
+        fillRect(35, 22, 37, 28, spec.floorTile)
+        fillRect(14, 24, 19, 26, spec.floorTile)
+        fillRect(29, 24, 34, 26, spec.floorTile)
+        fillRect(20, 22, 28, 28, spec.accentFloorTile)
+        fillRect(23, 29, 25, 31, spec.floorTile)
+        listOf(21 to 23, 27 to 23, 21 to 27, 27 to 27).forEach { (px, py) -> g[py][px] = spec.wallTile }
+        g[30][23] = TileType.IRON_BAR_GATE; g[30][24] = TileType.IRON_BAR_GATE; g[30][25] = TileType.IRON_BAR_GATE
+
+        // Subterranean Hazard Chasm + Triple Bridges
+        fillRect(10, 18, 38, 21, spec.hazardTile)
+        fillRect(23, 18, 25, 21, spec.bridgeTile)
+        fillRect(11, 18, 13, 21, spec.bridgeTile)
+        fillRect(35, 18, 37, 21, spec.bridgeTile)
+
+        // Northern Flanking Alcoves
+        fillRect(9, 12, 15, 17, spec.floorTile)
+        fillRect(33, 12, 39, 17, spec.floorTile)
+        fillRect(16, 14, 17, 15, spec.floorTile)
+        fillRect(31, 14, 32, 15, spec.floorTile)
+
+        // Boss Sanctum Chamber
+        fillRect(17, 7, 31, 16, spec.accentFloorTile)
+        g[17][23] = TileType.IRON_BAR_GATE; g[17][24] = TileType.IRON_BAR_GATE; g[17][25] = TileType.IRON_BAR_GATE
+        g[8][18] = spec.hazardTile; g[8][30] = spec.hazardTile
+        listOf(20 to 10, 28 to 10, 20 to 14, 28 to 14).forEach { (px, py) -> g[py][px] = spec.wallTile }
+
+        placeVeins(g, spec, listOf(9 to 30, 39 to 30, 10 to 13, 38 to 13), listOf(9 to 35, 39 to 35, 19 to 8, 29 to 8))
+        placeTorches(
+            g,
+            listOf(
+                24 to 43, 22 to 36, 26 to 36, 14 to 28, 34 to 28,
+                19 to 25, 29 to 25, 22 to 17, 26 to 17, 16 to 11, 32 to 11, 24 to 6
+            )
+        )
+
+        return listOf(
+            12 to 33, 14 to 31, 36 to 33, 34 to 31,
+            12 to 25, 36 to 25, 24 to 25, 12 to 15, 36 to 15
+        )
+    }
+
+    private fun carveShaftGallery(
+        g: Array<Array<TileType>>,
+        spec: ContinentalDungeonSpec,
+        fillRect: (Int, Int, Int, Int, TileType) -> Unit
+    ): List<Pair<Int, Int>> {
+        // Main timber-shored vertical mine shaft north of Forward Camp
+        fillRect(22, 15, 26, 36, spec.floorTile)
+        g[36][23] = TileType.IRON_BAR_GATE; g[36][24] = TileType.IRON_BAR_GATE; g[36][25] = TileType.IRON_BAR_GATE
+        listOf(22 to 31, 26 to 31, 22 to 21, 26 to 21).forEach { (px, py) -> g[py][px] = spec.wallTile }
+
+        // Four staggered horizontal ore galleries branching off the main shaft
+        fillRect(7, 30, 21, 34, spec.floorTile)
+        fillRect(7, 29, 13, 35, spec.accentFloorTile) // SW Ore Heading
+        fillRect(27, 27, 41, 31, spec.floorTile)
+        fillRect(35, 26, 41, 32, spec.accentFloorTile) // SE Ore Heading
+        fillRect(7, 19, 21, 23, spec.floorTile)
+        fillRect(7, 18, 13, 24, spec.accentFloorTile) // NW Ore Heading
+        fillRect(27, 16, 41, 20, spec.floorTile)
+        fillRect(35, 15, 41, 21, spec.accentFloorTile) // NE Ore Heading
+
+        // Outer vertical ventilation drifts connecting West & East headings
+        fillRect(9, 24, 11, 29, spec.floorTile)
+        fillRect(37, 21, 39, 26, spec.floorTile)
+
+        // Flooded mine sumps crossed by wooden plank bridges
+        fillRect(21, 24, 27, 26, spec.hazardTile)
+        fillRect(23, 24, 25, 26, spec.bridgeTile)
+        fillRect(8, 26, 12, 27, spec.hazardTile)
+        fillRect(9, 26, 11, 27, spec.bridgeTile)
+        fillRect(36, 23, 40, 24, spec.hazardTile)
+        fillRect(37, 23, 39, 24, spec.bridgeTile)
+
+        // Northern Foreman's Quarry Boss Chamber
+        fillRect(16, 7, 32, 14, spec.accentFloorTile)
+        g[15][23] = TileType.IRON_BAR_GATE; g[15][24] = TileType.IRON_BAR_GATE; g[15][25] = TileType.IRON_BAR_GATE
+        listOf(19 to 9, 29 to 9, 19 to 13, 29 to 13).forEach { (px, py) -> g[py][px] = spec.wallTile }
+
+        placeVeins(
+            g,
+            spec,
+            listOf(7 to 30, 41 to 27, 7 to 19, 41 to 16),
+            listOf(7 to 34, 41 to 31, 7 to 23, 41 to 20)
+        )
+        placeTorches(
+            g,
+            listOf(
+                24 to 43, 21 to 36, 27 to 36, 14 to 29, 34 to 26,
+                21 to 28, 27 to 28, 14 to 18, 34 to 15, 22 to 15, 26 to 15, 24 to 6
+            )
+        )
+
+        return listOf(
+            11 to 32, 16 to 32, 37 to 29, 32 to 29,
+            24 to 29, 11 to 21, 16 to 21, 37 to 18, 32 to 18
+        )
+    }
+
+    private fun carveTwinRidgeRing(
+        g: Array<Array<TileType>>,
+        spec: ContinentalDungeonSpec,
+        fillRect: (Int, Int, Int, Int, TileType) -> Unit
+    ): List<Pair<Int, Int>> {
+        // South Split Vestibule
+        fillRect(23, 35, 25, 36, spec.floorTile)
+        g[36][23] = TileType.IRON_BAR_GATE; g[36][24] = TileType.IRON_BAR_GATE; g[36][25] = TileType.IRON_BAR_GATE
+        fillRect(19, 32, 29, 35, spec.floorTile)
+
+        // West Mountain Ridge Loop
+        fillRect(8, 32, 19, 34, spec.floorTile)
+        fillRect(7, 17, 14, 33, spec.accentFloorTile)
+        listOf(9 to 21, 12 to 25, 9 to 29).forEach { (px, py) -> g[py][px] = spec.wallTile }
+        fillRect(8, 15, 19, 17, spec.floorTile)
+
+        // East Mountain Ridge Loop
+        fillRect(29, 32, 40, 34, spec.floorTile)
+        fillRect(34, 17, 41, 33, spec.accentFloorTile)
+        listOf(39 to 21, 36 to 25, 39 to 29).forEach { (px, py) -> g[py][px] = spec.wallTile }
+        fillRect(29, 15, 40, 17, spec.floorTile)
+
+        // Huge Central Subterranean Chasm + Crag Spires + Narrow Sky-Bridge
+        fillRect(16, 19, 32, 30, spec.hazardTile)
+        listOf(19 to 22, 29 to 22, 19 to 27, 29 to 27).forEach { (px, py) -> g[py][px] = spec.wallTile }
+        fillRect(23, 17, 25, 31, spec.bridgeTile)
+        g[31][23] = TileType.IRON_BAR_GATE; g[31][24] = TileType.IRON_BAR_GATE; g[31][25] = TileType.IRON_BAR_GATE
+        g[17][23] = TileType.IRON_BAR_GATE; g[17][24] = TileType.IRON_BAR_GATE; g[17][25] = TileType.IRON_BAR_GATE
+
+        // Northern Ridge Cavern Boss Hall
+        fillRect(16, 7, 32, 16, spec.accentFloorTile)
+        listOf(19 to 10, 29 to 10, 19 to 14, 29 to 14).forEach { (px, py) -> g[py][px] = spec.wallTile }
+
+        placeVeins(
+            g,
+            spec,
+            listOf(7 to 18, 41 to 18, 14 to 24, 34 to 24),
+            listOf(7 to 31, 41 to 31, 17 to 8, 31 to 8)
+        )
+        placeTorches(
+            g,
+            listOf(
+                24 to 43, 22 to 36, 26 to 36, 15 to 31, 33 to 31,
+                6 to 24, 42 to 24, 15 to 14, 33 to 14, 22 to 17, 26 to 17, 24 to 6
+            )
+        )
+
+        return listOf(
+            11 to 32, 10 to 27, 10 to 23, 11 to 18,
+            37 to 32, 38 to 27, 38 to 23, 37 to 18, 24 to 25
+        )
+    }
+
+    private fun carveRootWarren(
+        g: Array<Array<TileType>>,
+        spec: ContinentalDungeonSpec,
+        fillRect: (Int, Int, Int, Int, TileType) -> Unit
+    ): List<Pair<Int, Int>> {
+        // Asymmetric root tunnel curving west out of Forward Camp
+        fillRect(22, 33, 26, 36, spec.floorTile)
+        g[36][23] = TileType.IRON_BAR_GATE; g[36][24] = TileType.IRON_BAR_GATE; g[36][25] = TileType.IRON_BAR_GATE
+        fillRect(12, 32, 23, 34, spec.floorTile)
+
+        // SW Root Den & Central Mossy Hollow
+        fillRect(7, 27, 16, 35, spec.accentFloorTile)
+        fillRect(15, 28, 18, 30, spec.floorTile)
+        fillRect(17, 23, 31, 30, spec.floorTile)
+        fillRect(19, 24, 29, 29, spec.accentFloorTile)
+        listOf(21 to 26, 27 to 27).forEach { (px, py) -> g[py][px] = spec.wallTile }
+
+        // SE Spur & East Mire Pocket
+        fillRect(27, 31, 38, 34, spec.floorTile)
+        fillRect(32, 22, 41, 33, spec.floorTile)
+        fillRect(34, 23, 39, 28, spec.accentFloorTile)
+
+        // Subterranean Forest Creek + 3 Staggered Timber Bridges
+        fillRect(8, 19, 39, 21, spec.hazardTile)
+        fillRect(11, 19, 13, 21, spec.bridgeTile)
+        fillRect(26, 19, 28, 21, spec.bridgeTile)
+        fillRect(36, 19, 38, 21, spec.bridgeTile)
+        // Connect south banks cleanly to bridges
+        fillRect(11, 22, 13, 26, spec.floorTile)
+        fillRect(26, 22, 28, 22, spec.floorTile)
+
+        // Northern Fungal Burrows flanking Boss Nest
+        fillRect(8, 12, 17, 18, spec.accentFloorTile)
+        fillRect(31, 12, 40, 18, spec.floorTile)
+        fillRect(18, 14, 19, 16, spec.floorTile)
+        fillRect(29, 14, 30, 16, spec.floorTile)
+        fillRect(26, 17, 28, 18, spec.floorTile)
+
+        // Deep Root Nest Boss Arena
+        fillRect(17, 7, 31, 16, spec.accentFloorTile)
+        g[17][26] = TileType.IRON_BAR_GATE; g[17][27] = TileType.IRON_BAR_GATE; g[17][28] = TileType.IRON_BAR_GATE
+        listOf(20 to 9, 28 to 9, 20 to 14, 28 to 14).forEach { (px, py) -> g[py][px] = spec.wallTile }
+
+        placeVeins(
+            g,
+            spec,
+            listOf(8 to 34, 40 to 32, 9 to 13, 39 to 13),
+            listOf(8 to 28, 40 to 23, 18 to 8, 30 to 8)
+        )
+        placeTorches(
+            g,
+            listOf(
+                24 to 43, 21 to 36, 27 to 36, 17 to 31, 31 to 29,
+                10 to 22, 25 to 22, 39 to 22, 16 to 11, 32 to 11, 24 to 6
+            )
+        )
+
+        return listOf(
+            12 to 31, 10 to 29, 24 to 27, 20 to 25,
+            36 to 29, 37 to 25, 13 to 15, 35 to 15, 27 to 24
+        )
+    }
+
+    private fun carveSteppedVaults(
+        g: Array<Array<TileType>>,
+        spec: ContinentalDungeonSpec,
+        fillRect: (Int, Int, Int, Int, TileType) -> Unit
+    ): List<Pair<Int, Int>> {
+        // Gatehouse into Tier 1 Lower Barracks
+        fillRect(23, 35, 25, 36, spec.floorTile)
+        g[36][23] = TileType.IRON_BAR_GATE; g[36][24] = TileType.IRON_BAR_GATE; g[36][25] = TileType.IRON_BAR_GATE
+
+        // Tier 1: Fortified Lower Barracks with barred internal partitions
+        fillRect(9, 30, 39, 35, spec.floorTile)
+        for (y in 30..35) {
+            g[y][18] = if (y in 32..33) TileType.IRON_BAR_GATE else spec.wallTile
+            g[y][30] = if (y in 32..33) TileType.IRON_BAR_GATE else spec.wallTile
+        }
+
+        // Ascent Corridors to Tier 2
+        fillRect(12, 27, 14, 29, spec.accentFloorTile)
+        fillRect(34, 27, 36, 29, spec.accentFloorTile)
+        fillRect(23, 27, 25, 29, spec.accentFloorTile)
+        g[29][23] = TileType.IRON_BAR_GATE; g[29][24] = TileType.IRON_BAR_GATE; g[29][25] = TileType.IRON_BAR_GATE
+
+        // Tier 2: Twin Granite Bastion Vaults flanking a sunken central trench
+        fillRect(8, 20, 18, 27, spec.accentFloorTile)
+        fillRect(30, 20, 40, 27, spec.accentFloorTile)
+        listOf(10 to 22, 16 to 22, 32 to 22, 38 to 22).forEach { (px, py) -> g[py][px] = spec.wallTile }
+        fillRect(19, 21, 29, 26, spec.hazardTile)
+        fillRect(23, 20, 25, 27, spec.bridgeTile)
+        fillRect(19, 23, 29, 24, spec.bridgeTile)
+
+        // Upper Vault Approaches to Tier 3
+        fillRect(12, 13, 15, 19, spec.floorTile)
+        fillRect(33, 13, 36, 19, spec.floorTile)
+        fillRect(23, 17, 25, 19, spec.floorTile)
+        g[17][23] = TileType.IRON_BAR_GATE; g[17][24] = TileType.IRON_BAR_GATE; g[17][25] = TileType.IRON_BAR_GATE
+
+        // Tier 3: Crag Vault Boss Sanctum
+        fillRect(16, 7, 32, 16, spec.accentFloorTile)
+        listOf(19 to 9, 29 to 9, 19 to 14, 29 to 14).forEach { (px, py) -> g[py][px] = spec.wallTile }
+
+        placeVeins(
+            g,
+            spec,
+            listOf(9 to 31, 39 to 31, 8 to 21, 40 to 21),
+            listOf(8 to 26, 40 to 26, 17 to 8, 31 to 8)
+        )
+        placeTorches(
+            g,
+            listOf(
+                24 to 43, 22 to 36, 26 to 36, 18 to 30, 30 to 30,
+                11 to 28, 37 to 28, 19 to 20, 29 to 20, 22 to 17, 26 to 17, 24 to 6
+            )
+        )
+
+        return listOf(
+            13 to 33, 24 to 33, 35 to 33, 13 to 24,
+            35 to 24, 24 to 23, 13 to 21, 35 to 21, 24 to 18
+        )
+    }
+
+    private fun carveCalderaSanctum(
+        g: Array<Array<TileType>>,
+        spec: ContinentalDungeonSpec,
+        fillRect: (Int, Int, Int, Int, TileType) -> Unit
+    ): List<Pair<Int, Int>> {
+        // Southern Basalt Entry Causeway
+        fillRect(22, 34, 26, 36, spec.floorTile)
+        g[36][23] = TileType.IRON_BAR_GATE; g[36][24] = TileType.IRON_BAR_GATE; g[36][25] = TileType.IRON_BAR_GATE
+
+        // Outer Obsidian Rim Ring + Flanking Forge Bastions
+        fillRect(8, 31, 40, 34, spec.floorTile)
+        fillRect(6, 15, 12, 32, spec.accentFloorTile)
+        fillRect(36, 15, 42, 32, spec.accentFloorTile)
+        fillRect(8, 13, 40, 15, spec.floorTile)
+
+        // Molten Lava Caldera Lake
+        fillRect(13, 16, 35, 30, spec.hazardTile)
+
+        // Central Volcanic Ritual Island + Four Cardinal Basalt Bridges
+        fillRect(19, 19, 29, 27, spec.accentFloorTile)
+        listOf(20 to 20, 28 to 20, 20 to 26, 28 to 26).forEach { (px, py) -> g[py][px] = spec.wallTile }
+        fillRect(23, 27, 25, 31, spec.bridgeTile) // South Bridge
+        fillRect(23, 15, 25, 19, spec.bridgeTile) // North Bridge
+        fillRect(12, 22, 19, 24, spec.bridgeTile) // West Bridge
+        fillRect(29, 22, 36, 24, spec.bridgeTile) // East Bridge
+
+        // Northern Ember Wyrm Sanctum
+        fillRect(16, 6, 32, 13, spec.accentFloorTile)
+        g[14][23] = TileType.IRON_BAR_GATE; g[14][24] = TileType.IRON_BAR_GATE; g[14][25] = TileType.IRON_BAR_GATE
+        g[7][17] = spec.hazardTile; g[7][31] = spec.hazardTile
+        listOf(19 to 8, 29 to 8, 19 to 12, 29 to 12).forEach { (px, py) -> g[py][px] = spec.wallTile }
+
+        placeVeins(
+            g,
+            spec,
+            listOf(7 to 17, 41 to 17, 9 to 33, 39 to 33),
+            listOf(7 to 29, 41 to 29, 18 to 7, 30 to 7)
+        )
+        placeTorches(
+            g,
+            listOf(
+                24 to 43, 21 to 36, 27 to 36, 5 to 23, 43 to 23,
+                12 to 35, 36 to 35, 15 to 10, 33 to 10, 22 to 14, 26 to 14, 24 to 5
+            )
+        )
+
+        return listOf(
+            12 to 32, 36 to 32, 9 to 24, 9 to 19,
+            39 to 24, 39 to 19, 24 to 23, 22 to 21, 26 to 25
+        )
+    }
+
+    private fun placeVeins(
+        g: Array<Array<TileType>>,
+        spec: ContinentalDungeonSpec,
+        primarySpots: List<Pair<Int, Int>>,
+        secondarySpots: List<Pair<Int, Int>>
+    ) {
+        primarySpots.forEach { (vx, vy) ->
+            if (g[vy][vx].walkable) g[vy][vx] = spec.primaryOre
+        }
+        secondarySpots.forEach { (vx, vy) ->
+            if (g[vy][vx].walkable) g[vy][vx] = spec.secondaryOre
+        }
+    }
+
+    private fun placeTorches(g: Array<Array<TileType>>, spots: List<Pair<Int, Int>>) {
+        spots.forEach { (tx, ty) ->
+            if (ty in 1 until (GRID_SIZE - 1) && tx in 1 until (GRID_SIZE - 1)) {
+                g[ty][tx] = TileType.TORCH_WALL
+            }
+        }
     }
 
     private fun hash(a: Int, b: Int): Int {

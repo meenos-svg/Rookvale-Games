@@ -235,12 +235,12 @@ class BiomeSpawningAndContinentalDungeonsTest {
     @Test
     fun dedicatedContinentalDungeonsFloorsMinus7ToMinus10AreReachableAndExcludedFromCloudSaves() {
         val generated = ContinentalDungeonGenerator.generatedDungeons
-        assertEquals(4, generated.size)
+        assertEquals(9, generated.size)
 
         val allMonsters = WorldMaps.initialMonsters()
         val allOres = WorldMaps.initialOreNodes()
 
-        for (floorId in listOf(-7, -8, -9, -10)) {
+        for (floorId in listOf(-7, -8, -9, -10, -11, -12, -13, -14, -15)) {
             assertTrue("MultiplayerSanitizer must accept Floor $floorId", MultiplayerSanitizer.isValidFloor(floorId))
             val floor = WorldMaps.getFloor(floorId)
             val camp = WorldMaps.undergroundCampForFloor(floorId)
@@ -259,10 +259,10 @@ class BiomeSpawningAndContinentalDungeonsTest {
             assertTrue("Floor $floorId must host Healer NPC", floorNpcs.any { it.role == NpcRole.TEMPLE_PRIEST })
             assertTrue("Floor $floorId must host Supply Alchemist NPC", floorNpcs.any { it.role == NpcRole.SHOP_ALCHEMIST })
 
-            // Verify 100% BFS reachability from entry landing to exit stairs, every monster, and boss
+            // Verify 100% BFS reachability from entry landing to exit stairs/rope, every monster, and boss
             val reachable = reachableTiles(floor, entryPortal!!.toX, entryPortal.toY)
-            assertTrue("Floor $floorId must have substantial connected chambers", reachable.size >= 250)
-            assertTrue("Floor $floorId return stairs must be reachable", (exitPortal!!.fromX to exitPortal.fromY) in reachable)
+            assertTrue("Floor $floorId must have substantial connected chambers (got ${reachable.size})", reachable.size >= 250)
+            assertTrue("Floor $floorId return exit must be reachable", (exitPortal!!.fromX to exitPortal.fromY) in reachable)
 
             val floorMonsters = allMonsters.filter { it.floor == floorId }
             assertTrue("Floor $floorId must have biome patrols + boss", floorMonsters.size >= 8)
@@ -285,17 +285,19 @@ class BiomeSpawningAndContinentalDungeonsTest {
             assertTrue("Floor $floorId must include biome mining nodes", floorOres.size >= 4)
         }
 
-        // Verify Supabase slim character save supports Floor -10 and NEVER serializes dungeon/monster entities
-        val heroInCaldera = GameEngine.createNewWorld("Delver").copy(floor = -10, playerX = 24, playerY = 40)
-        val save = GameEngine.toSaveData(heroInCaldera)
-        assertEquals(-10, save.floor)
-        val encoded = CloudSavePayloadCodec.encode(save)
-        val raw = encoded.toString()
-        assertFalse("Cloud save_data must never serialize monsters", raw.contains("\"monsters\""))
-        assertFalse("Cloud save_data must never serialize pendingRespawns", raw.contains("\"pendingRespawns\""))
-        assertFalse("Cloud save_data must never serialize oreNodes", raw.contains("\"oreNodes\""))
-        val decoded = CloudSavePayloadCodec.decode(encoded, "slot_delver", "Delver")
-        assertEquals("Decoded floor must preserve Floor -10", -10, decoded.floor)
+        // Verify Supabase slim character save supports Floors -10 and -15 and NEVER serializes dungeon/monster entities
+        for (testFloor in listOf(-10, -11, -15)) {
+            val hero = GameEngine.createNewWorld("Delver").copy(floor = testFloor, playerX = 24, playerY = 40)
+            val save = GameEngine.toSaveData(hero)
+            assertEquals(testFloor, save.floor)
+            val encoded = CloudSavePayloadCodec.encode(save)
+            val raw = encoded.toString()
+            assertFalse("Cloud save_data must never serialize monsters", raw.contains("\"monsters\""))
+            assertFalse("Cloud save_data must never serialize pendingRespawns", raw.contains("\"pendingRespawns\""))
+            assertFalse("Cloud save_data must never serialize oreNodes", raw.contains("\"oreNodes\""))
+            val decoded = CloudSavePayloadCodec.decode(encoded, "slot_delver", "Delver")
+            assertEquals("Decoded floor must preserve Floor $testFloor", testFloor, decoded.floor)
+        }
     }
 
     @Test
@@ -400,5 +402,97 @@ class BiomeSpawningAndContinentalDungeonsTest {
                 m.level in 13..20
             )
         }
+    }
+
+    @Test
+    fun allThirteenOverlandDungeonEntrancesMapOneToOneWithUniqueLayoutsAndExclusiveDeepDelve() {
+        // 1. Every single overland dungeon entrance (6 Rookvale + 7 Outer Continent = 13) maps to its OWN unique floor ID
+        val overlandEntries = WorldMaps.portals.filter { it.fromFloor == 0 && it.toFloor < 0 }
+        assertEquals("Must have exactly 13 separate overland dungeon entrances", 13, overlandEntries.size)
+        val targetFloorIds = overlandEntries.map { it.toFloor }
+        assertEquals(
+            "Every overland dungeon entrance must target a unique dedicated dungeon floor ID",
+            overlandEntries.size,
+            targetFloorIds.toSet().size
+        )
+
+        // 2. Every dungeon floor returns strictly 1-to-1 to the EXACT same overland entrance spot (dist <= 2)
+        for (entry in overlandEntries) {
+            val exits = WorldMaps.portals.filter { it.fromFloor == entry.toFloor && it.toFloor == 0 }
+            assertEquals(
+                "Dungeon Floor ${entry.toFloor} must have exactly 1 surface exit back to its entrance",
+                1,
+                exits.size
+            )
+            val exit = exits.first()
+            val returnDist = hypot((exit.toX - entry.fromX).toDouble(), (exit.toY - entry.fromY).toDouble())
+            assertTrue(
+                "Floor ${entry.toFloor} exit (${exit.toX},${exit.toY}) must return beside entrance (${entry.fromX},${entry.fromY}), dist=$returnDist",
+                returnDist <= 2.0
+            )
+            val exitTile = WorldMaps.getFloor(entry.toFloor).tileAt(exit.fromX, exit.fromY)
+            val expectedTile = if (exit.requiresRope) TileType.ROPE_SPOT_UP else TileType.STAIRS_UP
+            assertEquals(
+                "Floor ${entry.toFloor} exit tile must match requiresRope=${exit.requiresRope}",
+                expectedTile,
+                exitTile
+            )
+        }
+
+        // 3. All 6 separate Rookvale Heartland dungeons (-1, -2, -11, -12, -13, -14) stay strictly in Lv 1..20
+        val allMonsters = WorldMaps.initialMonsters()
+        val rookvaleDungeonFloors = listOf(-1, -2, -11, -12, -13, -14)
+        for (fId in rookvaleDungeonFloors) {
+            val monsters = allMonsters.filter { it.floor == fId }
+            assertTrue("Rookvale dungeon Floor $fId must spawn monsters", monsters.isNotEmpty())
+            monsters.forEach { m ->
+                assertTrue(
+                    "Rookvale dungeon Floor $fId ${m.type} level ${m.level} must stay strictly within Lv 1..20",
+                    m.level in 1..20
+                )
+            }
+        }
+
+        // 4. Deep descent to Floor -3 and Floor -4 exists EXCLUSIVELY in Watchwood Caverns (Floor -2)
+        val descentsToF3 = WorldMaps.portals.filter { it.toFloor == -3 && it.fromFloor > -3 }
+        assertTrue("Watchwood Caverns (-2) must descend into Abyssal Crypt (-3)", descentsToF3.isNotEmpty())
+        assertTrue(
+            "ONLY Watchwood Caverns (-2) may descend into Abyssal Crypt (-3), found: $descentsToF3",
+            descentsToF3.all { it.fromFloor == -2 }
+        )
+        for (standaloneRookvaleFloor in listOf(-1, -11, -12, -13, -14)) {
+            val crossDungeonPortals = WorldMaps.portals.filter {
+                it.fromFloor == standaloneRookvaleFloor && it.toFloor < 0
+            }
+            assertTrue(
+                "Standalone Rookvale dungeon Floor $standaloneRookvaleFloor must have zero cross-dungeon links, found: $crossDungeonPortals",
+                crossDungeonPortals.isEmpty()
+            )
+        }
+
+        // 5. All 5 newly separated procedural dungeons (-11..-15) generate genuinely unique tile floorplans
+        fun walkabilitySignature(floorId: Int): String {
+            val fl = WorldMaps.getFloor(floorId)
+            return buildString(fl.width * fl.height) {
+                for (y in 0 until fl.height) {
+                    for (x in 0 until fl.width) {
+                        append(if (fl.tileAt(x, y).walkable) '.' else '#')
+                    }
+                }
+            }
+        }
+        val newFloorSignatures = listOf(-10, -11, -12, -13, -14, -15).map { walkabilitySignature(it) }
+        assertEquals(
+            "Every newly separated dungeon archetype (-11..-15) must have a unique walkable layout distinct from -10 and each other",
+            newFloorSignatures.size,
+            newFloorSignatures.toSet().size
+        )
+
+        // 6. Ember Sanctum (-15) is completely separated from Ashen Caldera Foundry (-10)
+        val emberEntry = overlandEntries.first { it.fromX == 1510 && it.fromY == 975 }
+        val calderaEntry = overlandEntries.first { it.fromX == 318 && it.fromY == 252 }
+        assertEquals(-15, emberEntry.toFloor)
+        assertEquals(-10, calderaEntry.toFloor)
+        assertTrue("World Map must expose all 13 separate dungeon pins", WorldBiomeBlueprint.worldMapPins.count { it.category == WorldPinCategory.DUNGEON } == 13)
     }
 }

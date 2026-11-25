@@ -297,8 +297,8 @@ object AdminTeleportCatalog {
     )
 
     val dungeonCamps: List<AdminTeleportPreset> = listOf(
-        dungeonCampPreset("floor_m1", "F-1 Catacombs Camp", -1, 28, 11),
-        dungeonCampPreset("floor_m2", "F-2 Caverns Camp", -2, 24, 37),
+        dungeonCampPreset("floor_m1", "F-1 Briar Catacombs", -1, 28, 11),
+        dungeonCampPreset("floor_m2", "F-2 Watchwood Caverns", -2, 24, 37),
         dungeonCampPreset("floor_m3", "F-3 Crypt Camp", -3, 24, 9),
         dungeonCampPreset("floor_m4", "F-4 Wyrm Camp", -4, 24, 39),
         dungeonCampPreset("floor_m5", "F-5 Grimmaw Camp", -5, 24, 40),
@@ -306,7 +306,12 @@ object AdminTeleportCatalog {
         dungeonCampPreset("floor_m7", "F-7 Mire Vaults Camp", -7, 24, 40),
         dungeonCampPreset("floor_m8", "F-8 Ziggurat Camp", -8, 24, 40),
         dungeonCampPreset("floor_m9", "F-9 Barrow Camp", -9, 24, 40),
-        dungeonCampPreset("floor_m10", "F-10 Caldera Camp", -10, 24, 40, openEndedTop = true)
+        dungeonCampPreset("floor_m10", "F-10 Caldera Camp", -10, 24, 40, openEndedTop = true),
+        dungeonCampPreset("floor_m11", "F-11 Quarry Mines", -11, 24, 40),
+        dungeonCampPreset("floor_m12", "F-12 Mountain Cavern", -12, 24, 40),
+        dungeonCampPreset("floor_m13", "F-13 Forest Sinkhole", -13, 24, 40),
+        dungeonCampPreset("floor_m14", "F-14 Crag Hollow", -14, 24, 40),
+        dungeonCampPreset("floor_m15", "F-15 Ember Sanctum", -15, 24, 40, openEndedTop = true)
     )
 
     val overlandLandmarks: List<AdminTeleportPreset> = townsAndEmpires + overlandCamps
