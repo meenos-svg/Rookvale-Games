@@ -184,7 +184,7 @@ object ArticulatedHumanoidRenderer {
         val botMid = facing.project(ox, oy, u, sway * 0.4f, -7.2f - abs(sway) * 0.5f, 4.4f + bobUp * 0.3f)
 
         val pal = appearance.armorPalette
-        path.reset()
+        path.rewind()
         path.moveTo(topL.x, topL.y)
         path.lineTo(topR.x, topR.y)
         path.lineTo(botR.x, botR.y)
@@ -402,7 +402,7 @@ object ArticulatedHumanoidRenderer {
         val beltL = Offset(waist.x - botHalfW * 1.03f, waist.y - 0.8f * u)
         val beltR = Offset(waist.x + botHalfW * 1.03f, waist.y - 0.8f * u)
         val beltDip = Offset(waist.x, waist.y + 1.4f * u)
-        path.reset()
+        path.rewind()
         path.moveTo(beltL.x, beltL.y)
         path.quadraticTo(beltDip.x, beltDip.y, beltR.x, beltR.y)
         drawPath(path, INK, style = Stroke(width = 3.5f * u, cap = StrokeCap.Round))
@@ -586,7 +586,7 @@ object ArticulatedHumanoidRenderer {
                     val base = facing.project(ox, oy, u, side * 5.6f, 0.2f, 38.4f + bobUp)
                     val mid = facing.project(ox, oy, u, side * 9.5f, 1.2f, 41.2f + bobUp)
                     val tip = facing.project(ox, oy, u, side * 8.4f, 2.2f, 46.2f + bobUp)
-                    path.reset()
+                    path.rewind()
                     path.moveTo(base.x, base.y + 1.4f * u)
                     path.quadraticTo(mid.x, mid.y + 1.4f * u, tip.x, tip.y)
                     path.quadraticTo(mid.x, mid.y - 1.6f * u, base.x, base.y - 1.6f * u)
@@ -634,7 +634,7 @@ object ArticulatedHumanoidRenderer {
                 val hoodPeak = facing.project(ox, oy, u, 0f, -3.4f, 44.2f + bobUp)
                 val hoodL = Offset(headCenter.x - headR * 1.24f, headCenter.y + headR * 0.45f)
                 val hoodR = Offset(headCenter.x + headR * 1.24f, headCenter.y + headR * 0.45f)
-                path.reset()
+                path.rewind()
                 path.moveTo(hoodPeak.x, hoodPeak.y)
                 path.quadraticTo(headCenter.x + headR * 1.35f, headCenter.y - headR * 0.4f, hoodR.x, hoodR.y)
                 path.quadraticTo(headCenter.x, headCenter.y + headR * 0.95f, hoodL.x, hoodL.y)
@@ -673,7 +673,7 @@ object ArticulatedHumanoidRenderer {
                 val tip = facing.project(ox, oy, u, -2.0f, -3.5f, 51.5f + bobUp)
                 val baseL = Offset(brimCenter.x - headR * 0.92f, brimCenter.y - 0.4f * u)
                 val baseR = Offset(brimCenter.x + headR * 0.92f, brimCenter.y - 0.4f * u)
-                path.reset()
+                path.rewind()
                 path.moveTo(baseL.x, baseL.y)
                 path.quadraticTo(brimCenter.x - headR * 0.3f, brimCenter.y - headR * 1.2f, tip.x, tip.y)
                 path.quadraticTo(brimCenter.x + headR * 0.6f, brimCenter.y - headR * 0.9f, baseR.x, baseR.y)
@@ -799,7 +799,7 @@ object ArticulatedHumanoidRenderer {
             OffhandVisualKind.KITE_SHIELD, OffhandVisualKind.DRAGON_SHIELD -> {
                 val hw = 6.0f * u * foreshortenW
                 val hh = 8.4f * u
-                path.reset()
+                path.rewind()
                 path.moveTo(hand.x - hw, hand.y - hh * 0.72f)
                 path.quadraticTo(hand.x, hand.y - hh * 1.02f, hand.x + hw, hand.y - hh * 0.72f)
                 path.quadraticTo(hand.x + hw * 0.92f, hand.y + hh * 0.32f, hand.x, hand.y + hh * 1.05f)
@@ -1065,7 +1065,7 @@ object ArticulatedHumanoidRenderer {
                 drawLine(stringColor, pullBack, limbBot, strokeWidth = (if (pal.glow != null) 1.25f else 1.0f) * u)
 
                 // Curved volumetric wooden / Vesperite / Cinderite bow limbs
-                path.reset()
+                path.rewind()
                 path.moveTo(limbTop.x, limbTop.y)
                 path.quadraticTo(bowBelly.x, bowBelly.y, limbBot.x, limbBot.y)
                 if (useRim && pal.glow != null) {

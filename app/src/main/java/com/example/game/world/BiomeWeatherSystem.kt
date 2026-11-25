@@ -289,12 +289,12 @@ object BiomeWeatherSystem {
             particleScale = 1.06f
         )
         GraphicsQuality.HD -> WeatherVisualProfile(
-            particleCount = 120,
+            particleCount = 104,
             enableGroundRipples = true,
             enableSubtleVeil = true,
             enableAtmosphericGradient = true,
-            enableAgslShader = true,
-            particleScale = 1.12f
+            enableAgslShader = false,
+            particleScale = 1.10f
         )
     }
 

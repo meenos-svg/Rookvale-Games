@@ -144,7 +144,8 @@ fun AdminGoldenCrownIcon(
 fun DrawScope.drawIsometricAdminCrown(
     leftX: Float,
     centerY: Float,
-    heightPx: Float
+    heightPx: Float,
+    reusablePath: Path? = null
 ) {
     val h = heightPx.coerceAtLeast(8f)
     val w = h * 1.32f
@@ -152,19 +153,19 @@ fun DrawScope.drawIsometricAdminCrown(
     val bottom = centerY + h * 0.5f
     val baseTop = top + h * 0.72f
     val baseBottom = bottom - h * 0.06f
+    val path = reusablePath ?: Path()
 
     // Subtle dark drop shadow for crisp legibility over bright tiles/snow/grass
-    val shadowPath = Path().apply {
-        moveTo(leftX + w * 0.12f, baseTop + 1.2f)
-        lineTo(leftX + w * 0.05f, top + h * 0.25f + 1.2f)
-        lineTo(leftX + w * 0.30f, top + h * 0.52f + 1.2f)
-        lineTo(leftX + w * 0.50f, top + h * 0.10f + 1.2f)
-        lineTo(leftX + w * 0.70f, top + h * 0.52f + 1.2f)
-        lineTo(leftX + w * 0.95f, top + h * 0.25f + 1.2f)
-        lineTo(leftX + w * 0.88f, baseTop + 1.2f)
-        close()
-    }
-    drawPath(shadowPath, Color.Black.copy(alpha = 0.65f))
+    path.rewind()
+    path.moveTo(leftX + w * 0.12f, baseTop + 1.2f)
+    path.lineTo(leftX + w * 0.05f, top + h * 0.25f + 1.2f)
+    path.lineTo(leftX + w * 0.30f, top + h * 0.52f + 1.2f)
+    path.lineTo(leftX + w * 0.50f, top + h * 0.10f + 1.2f)
+    path.lineTo(leftX + w * 0.70f, top + h * 0.52f + 1.2f)
+    path.lineTo(leftX + w * 0.95f, top + h * 0.25f + 1.2f)
+    path.lineTo(leftX + w * 0.88f, baseTop + 1.2f)
+    path.close()
+    drawPath(path, Color.Black.copy(alpha = 0.65f))
     drawRoundRect(
         color = Color.Black.copy(alpha = 0.65f),
         topLeft = Offset(leftX + w * 0.10f, baseTop + 1.0f),
@@ -172,45 +173,38 @@ fun DrawScope.drawIsometricAdminCrown(
         cornerRadius = CornerRadius(h * 0.10f, h * 0.10f)
     )
 
-    // Crown body with warm golden bevel gradient
-    val crownPath = Path().apply {
-        moveTo(leftX + w * 0.12f, baseTop)
-        lineTo(leftX + w * 0.05f, top + h * 0.24f)
-        lineTo(leftX + w * 0.30f, top + h * 0.50f)
-        lineTo(leftX + w * 0.50f, top + h * 0.09f)
-        lineTo(leftX + w * 0.70f, top + h * 0.50f)
-        lineTo(leftX + w * 0.95f, top + h * 0.24f)
-        lineTo(leftX + w * 0.88f, baseTop)
-        close()
-    }
-    val goldBrush = Brush.verticalGradient(
-        colors = listOf(CrownGoldHighlight, CrownGoldMid, CrownGoldDeep),
-        startY = top,
-        endY = baseBottom
-    )
-    drawPath(crownPath, brush = goldBrush)
-
-    // Warm inner highlight facet along left & center spires
-    val highlightPath = Path().apply {
-        moveTo(leftX + w * 0.18f, baseTop - h * 0.04f)
-        lineTo(leftX + w * 0.12f, top + h * 0.34f)
-        lineTo(leftX + w * 0.31f, top + h * 0.56f)
-        lineTo(leftX + w * 0.50f, top + h * 0.20f)
-        lineTo(leftX + w * 0.50f, baseTop - h * 0.04f)
-        close()
-    }
-    drawPath(highlightPath, CrownGoldHighlight.copy(alpha = 0.42f))
+    // Crown body with warm golden finish (zero per-frame gradient allocation)
+    path.rewind()
+    path.moveTo(leftX + w * 0.12f, baseTop)
+    path.lineTo(leftX + w * 0.05f, top + h * 0.24f)
+    path.lineTo(leftX + w * 0.30f, top + h * 0.50f)
+    path.lineTo(leftX + w * 0.50f, top + h * 0.09f)
+    path.lineTo(leftX + w * 0.70f, top + h * 0.50f)
+    path.lineTo(leftX + w * 0.95f, top + h * 0.24f)
+    path.lineTo(leftX + w * 0.88f, baseTop)
+    path.close()
+    drawPath(path, color = CrownGoldMid)
 
     // Burnished bronze rim outline
     drawPath(
-        path = crownPath,
+        path = path,
         color = CrownBronzeRim,
         style = Stroke(width = (h * 0.085f).coerceAtLeast(0.9f), join = StrokeJoin.Round)
     )
 
+    // Warm inner highlight facet along left & center spires
+    path.rewind()
+    path.moveTo(leftX + w * 0.18f, baseTop - h * 0.04f)
+    path.lineTo(leftX + w * 0.12f, top + h * 0.34f)
+    path.lineTo(leftX + w * 0.31f, top + h * 0.56f)
+    path.lineTo(leftX + w * 0.50f, top + h * 0.20f)
+    path.lineTo(leftX + w * 0.50f, baseTop - h * 0.04f)
+    path.close()
+    drawPath(path, CrownGoldHighlight.copy(alpha = 0.48f))
+
     // Crown headband base with highlight stripe
     drawRoundRect(
-        brush = goldBrush,
+        color = CrownGoldDeep,
         topLeft = Offset(leftX + w * 0.10f, baseTop - h * 0.02f),
         size = Size(w * 0.80f, (baseBottom - baseTop + h * 0.02f).coerceAtLeast(2.2f)),
         cornerRadius = CornerRadius(h * 0.09f, h * 0.09f)

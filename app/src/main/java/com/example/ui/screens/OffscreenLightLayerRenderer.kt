@@ -123,10 +123,11 @@ object LightGlowSpriteAtlas {
 /**
  * Half-resolution (`0.5x`) offscreen dynamic point-light layer renderer for High & HD tiers.
  *
- * Accumulates all visible dynamic point lights (wall torches, pillars, lava pools, arcane runes,
- * boss telegraphs, and equipment proc glows) using pre-baked soft radial glow sprites onto a single
- * reusable `0.5x` offscreen bitmap and composites the entire layer onto the world canvas in one
- * hardware-accelerated bilinear screen-blended pass (~4x lower GPU fill cost, zero per-frame GC).
+ * Caps simultaneous point lights to the closest prioritized sources around the camera viewport
+ * (max 14 in HD, 10 in High, 6 in Medium dungeons) and renders each light in a single clean
+ * `SCREEN`-blended sprite draw onto a reusable `0.5x` offscreen bitmap—eliminating excessive
+ * overlapping `BlendMode.Plus` / `PorterDuff.Mode.ADD` double-draws and compositing the entire
+ * light layer in one hardware-accelerated bilinear pass.
  */
 class HalfResLightLayerRenderer(
     val resolutionScale: Float = HALF_RES_SCALE
@@ -137,15 +138,20 @@ class HalfResLightLayerRenderer(
     private var allocatedW: Int = 0
     private var allocatedH: Int = 0
 
-    // Pre-allocated drawing tools (zero per-frame heap allocations)
-    private val additivePaint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
-        xfermode = PorterDuffXfermode(PorterDuff.Mode.ADD)
-    }
+    // Pre-allocated drawing tools and light-selection scratch buffers (zero per-frame heap allocations)
     private val screenPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
         xfermode = PorterDuffXfermode(PorterDuff.Mode.SCREEN)
     }
     private val dstRect = RectF()
     private val colorFilterCache = HashMap<Int, PorterDuffColorFilter>(32)
+    private val selectedLights = ArrayList<ScenePointLight>(IsometricLightingEngine.MAX_SIMULTANEOUS_POINT_LIGHTS)
+    private val selectedScores = FloatArray(IsometricLightingEngine.MAX_SIMULTANEOUS_POINT_LIGHTS)
+
+    var lastRenderedLightCount: Int = 0
+        private set
+
+    val usesAdditiveOverlapPass: Boolean
+        get() = false
 
     val currentBufferWidth: Int get() = allocatedW
     val currentBufferHeight: Int get() = allocatedH
@@ -167,23 +173,49 @@ class HalfResLightLayerRenderer(
     }
 
     /**
-     * Renders all [lights] onto the half-res offscreen buffer and composites them in a single
-     * bilinear screen-blended pass over [scope].
+     * Selects up to [maxLightsOverride] (or [quality.maxDynamicPointLights], hard-capped at 14)
+     * closest prioritized lights, renders them in a single clean `SCREEN` pass onto the half-res
+     * offscreen buffer, and composites the layer in one bilinear `BlendMode.Screen` pass over [scope].
      *
-     * @return number of lights rendered into the layer.
+     * @return number of lights rendered into the layer (always `<= 14`).
      */
     fun renderAndCompositeLights(
         scope: DrawScope,
         lights: List<ScenePointLight>,
         quality: GraphicsQuality,
         nowMs: Long,
-        lightMultiplier: Float
+        lightMultiplier: Float,
+        maxLightsOverride: Int? = null
     ): Int {
-        if (lights.isEmpty() || lightMultiplier <= 0.05f) return 0
+        if (lights.isEmpty() || lightMultiplier <= 0.05f) {
+            lastRenderedLightCount = 0
+            return 0
+        }
         val w = scope.size.width
         val h = scope.size.height
-        if (w <= 0f || h <= 0f) return 0
-        if (!ensureLayerSize(w, h)) return 0
+        if (w <= 0f || h <= 0f) {
+            lastRenderedLightCount = 0
+            return 0
+        }
+        val cap = (maxLightsOverride ?: quality.maxDynamicPointLights)
+            .coerceIn(0, IsometricLightingEngine.MAX_SIMULTANEOUS_POINT_LIGHTS)
+        if (cap == 0) {
+            lastRenderedLightCount = 0
+            return 0
+        }
+
+        val selectedCount = IsometricLightingEngine.selectClosestPrioritizedLights(
+            lights = lights,
+            viewportW = w,
+            viewportH = h,
+            maxLights = cap,
+            outSelected = selectedLights,
+            scratchScores = selectedScores
+        )
+        if (selectedCount == 0 || !ensureLayerSize(w, h)) {
+            lastRenderedLightCount = 0
+            return 0
+        }
 
         val canvas = layerCanvas ?: return 0
         val image = layerImage ?: return 0
@@ -191,8 +223,12 @@ class HalfResLightLayerRenderer(
         val scaleY = allocatedH.toFloat() / h
         val isHd = quality.lightingMode == LightingDetailMode.HD_MULTI_LAYER
 
-        val outerSprite = LightGlowSpriteAtlas.getOuterHaloBitmap()
-        val innerSprite = LightGlowSpriteAtlas.getInnerBloomBitmap()
+        // HD uses the richer inner-bloom sprite in a single clean SCREEN pass (no redundant ADD double-draw)
+        val sprite = if (isHd) {
+            LightGlowSpriteAtlas.getInnerBloomBitmap()
+        } else {
+            LightGlowSpriteAtlas.getOuterHaloBitmap()
+        }
 
         // Clear offscreen light layer to transparent black
         canvas.drawColor(android.graphics.Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
@@ -200,57 +236,29 @@ class HalfResLightLayerRenderer(
         val timeSec = nowMs * 0.001
         var drawnCount = 0
 
-        for (i in 0 until lights.size) {
-            val light = lights[i]
-            val r = light.radiusPx
-            if (light.screenX + r < 0f || light.screenX - r > w ||
-                light.screenY + r < 0f || light.screenY - r > h
-            ) continue
-
+        for (i in 0 until selectedCount) {
+            val light = selectedLights[i]
             val waveA = sin(timeSec * (if (light.isArcane) 3.8 else 7.2) + light.flickerSeed).toFloat()
             val waveB = cos(timeSec * (if (light.isArcane) 2.1 else 11.3) + light.flickerSeed * 1.7).toFloat()
             val flicker = (0.91f + 0.06f * waveA + 0.03f * waveB).coerceIn(0.80f, 1.04f)
-            val effIntensity = (light.intensity * lightMultiplier).coerceIn(0.08f, 1.5f)
-            val scaledR = (r * flicker).coerceAtLeast(16f)
+            val effIntensity = (light.intensity * lightMultiplier).coerceIn(0.08f, 1.45f)
+            val scaledR = (light.radiusPx * flicker).coerceAtLeast(16f)
 
             val lx = light.screenX * scaleX
             val ly = light.screenY * scaleY
-
-            if (isHd) {
-                // HD Layer 1: Wide atmospheric soft halo (screen-blended onto offscreen buffer)
-                val wideRx = scaledR * 1.32f * scaleX
-                val wideRy = scaledR * 1.32f * scaleY
-                val outerAlpha = ((0.36f * effIntensity * flicker).coerceIn(0f, 0.72f) * 255f).roundToInt()
-                if (outerAlpha > 2) {
-                    screenPaint.colorFilter = getCachedTintFilter(light.outerColor)
-                    screenPaint.alpha = outerAlpha
-                    dstRect.set(lx - wideRx, ly - wideRy, lx + wideRx, ly + wideRy)
-                    canvas.drawBitmap(outerSprite, null, dstRect, screenPaint)
-                }
-
-                // HD Layer 2: Crisp incandescent/arcane inner bloom (additively accumulated)
-                val innerRx = scaledR * 0.80f * scaleX
-                val innerRy = scaledR * 0.80f * scaleY
-                val innerAlpha = ((0.48f * effIntensity * flicker).coerceIn(0f, 0.78f) * 255f).roundToInt()
-                if (innerAlpha > 2) {
-                    additivePaint.colorFilter = getCachedTintFilter(light.coreColor)
-                    additivePaint.alpha = innerAlpha
-                    dstRect.set(lx - innerRx, ly - innerRy, lx + innerRx, ly + innerRy)
-                    canvas.drawBitmap(innerSprite, null, dstRect, additivePaint)
-                }
-            } else {
-                // High / Custom Time tier: Single balanced soft radial light sprite
-                val rx = scaledR * 1.05f * scaleX
-                val ry = scaledR * 1.05f * scaleY
-                val highAlpha = ((0.42f * effIntensity * flicker).coerceIn(0f, 0.68f) * 255f).roundToInt()
-                if (highAlpha > 2) {
-                    screenPaint.colorFilter = getCachedTintFilter(light.coreColor)
-                    screenPaint.alpha = highAlpha
-                    dstRect.set(lx - rx, ly - ry, lx + rx, ly + ry)
-                    canvas.drawBitmap(outerSprite, null, dstRect, screenPaint)
-                }
+            val radiusScale = if (isHd) 1.22f else 1.05f
+            val rx = scaledR * radiusScale * scaleX
+            val ry = scaledR * radiusScale * scaleY
+            val alphaFactor = if (isHd) 0.54f else 0.42f
+            val maxAlpha = if (isHd) 0.78f else 0.68f
+            val drawAlpha = ((alphaFactor * effIntensity * flicker).coerceIn(0f, maxAlpha) * 255f).roundToInt()
+            if (drawAlpha > 2) {
+                screenPaint.colorFilter = getCachedTintFilter(light.coreColor)
+                screenPaint.alpha = drawAlpha
+                dstRect.set(lx - rx, ly - ry, lx + rx, ly + ry)
+                canvas.drawBitmap(sprite, null, dstRect, screenPaint)
+                drawnCount++
             }
-            drawnCount++
         }
 
         if (drawnCount > 0) {
@@ -266,6 +274,7 @@ class HalfResLightLayerRenderer(
                 filterQuality = FilterQuality.Low
             )
         }
+        lastRenderedLightCount = drawnCount
         return drawnCount
     }
 
@@ -284,8 +293,8 @@ class HalfResLightLayerRenderer(
     companion object {
         const val HALF_RES_SCALE = 0.5f
         private const val MIN_BUFFER_DIM = 64
-        private const val MAX_BUFFER_WIDTH = 1280
-        private const val MAX_BUFFER_HEIGHT = 720
+        private const val MAX_BUFFER_WIDTH = 1024
+        private const val MAX_BUFFER_HEIGHT = 600
         private const val MAX_TINT_CACHE = 64
     }
 }

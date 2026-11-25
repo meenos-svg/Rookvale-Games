@@ -238,7 +238,7 @@ object VolumetricShading {
         val e2 = Offset(end.x - lx * rEnd, end.y - ly * rEnd)
         val e1 = Offset(end.x + lx * rEnd, end.y + ly * rEnd)
 
-        path.reset()
+        path.rewind()
         path.moveTo(s1.x, s1.y)
         path.lineTo(e1.x, e1.y)
         path.quadraticTo(
@@ -314,7 +314,7 @@ object VolumetricShading {
         useRim: Boolean,
         path: Path
     ) = with(scope) {
-        path.reset()
+        path.rewind()
         path.moveTo(topCenter.x - topHalfW, topCenter.y)
         path.quadraticTo(topCenter.x, topCenter.y - domeHeight, topCenter.x + topHalfW, topCenter.y)
         path.lineTo(bottomCenter.x + botHalfW, bottomCenter.y)

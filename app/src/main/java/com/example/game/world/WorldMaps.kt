@@ -55,6 +55,23 @@ data class LandmarkLabel(
     val label: String
 )
 
+data class UndergroundCampZone(
+    val floorId: Int,
+    val name: String,
+    val minX: Int,
+    val minY: Int,
+    val maxX: Int,
+    val maxY: Int,
+    val healerX: Int,
+    val healerY: Int,
+    val healerName: String,
+    val merchantX: Int,
+    val merchantY: Int,
+    val merchantName: String
+) {
+    fun contains(x: Int, y: Int): Boolean = x in minX..maxX && y in minY..maxY
+}
+
 data class WorldFloor(
     val floorId: Int,
     val name: String,
@@ -99,78 +116,157 @@ object WorldMaps {
     fun harborPortAtNpc(x: Int, y: Int): HarborPort? =
         harborPorts.firstOrNull { abs(it.dockX - x) <= 3 && abs(it.dockY - y) <= 3 }
 
-    val npcs: List<NpcSpot> = listOf(
-        // Rookvale Capital City NPCs
-        NpcSpot(0, ROOKVALE_ORIGIN_X + 162, ROOKVALE_ORIGIN_Y + 204, "Alaric", NpcRole.SHOP_ALCHEMIST),
-        NpcSpot(0, ROOKVALE_ORIGIN_X + 193, ROOKVALE_ORIGIN_Y + 179, "Brother Alden", NpcRole.TEMPLE_PRIEST),
-        NpcSpot(0, ORACLE_X, ORACLE_Y, "The Oracle", NpcRole.ORACLE),
-        NpcSpot(0, REAPER_X, REAPER_Y, "Mortis, Keeper of Reapers", NpcRole.REAPER_KEEPER),
-
-        // 6 Coastal Harbor Ferry Captains across the World Map
-        *WorldBiomeBlueprint.harborPorts.map { port ->
-            NpcSpot(0, port.dockX, port.dockY, port.captainName, NpcRole.HARBOR_CAPTAIN)
-        }.toTypedArray(),
-
-        // Secondary Settlement Healers & Merchants
-        NpcSpot(0, 549, 591, "Brother Corwin", NpcRole.TEMPLE_PRIEST),
-        NpcSpot(0, 380, 787, "Merchant Zara", NpcRole.SHOP_ALCHEMIST),
-        NpcSpot(0, 964, 992, "Elder Lyra", NpcRole.TEMPLE_PRIEST)
+    val undergroundCamps: List<UndergroundCampZone> = listOf(
+        UndergroundCampZone(
+            floorId = -1,
+            name = "SEWERS VANGUARD CAMP (PZ)",
+            minX = 25, minY = 9, maxX = 31, maxY = 12,
+            healerX = 26, healerY = 10, healerName = "Sister Mara",
+            merchantX = 30, merchantY = 10, merchantName = "Quartermaster Bram"
+        ),
+        UndergroundCampZone(
+            floorId = -2,
+            name = "DEEP CAVERNS FORWARD CAMP (PZ)",
+            minX = 20, minY = 35, maxX = 28, maxY = 40,
+            healerX = 21, healerY = 38, healerName = "Brother Tavin",
+            merchantX = 27, merchantY = 38, merchantName = "Alchemist Veyra"
+        ),
+        UndergroundCampZone(
+            floorId = -3,
+            name = "ABYSSAL CRYPT FORWARD CAMP (PZ)",
+            minX = 20, minY = 6, maxX = 28, maxY = 11,
+            healerX = 21, healerY = 8, healerName = "Chaplain Oren",
+            merchantX = 27, merchantY = 8, merchantName = "Supplier Kora"
+        ),
+        UndergroundCampZone(
+            floorId = -4,
+            name = "WYRM SANCTUM VANGUARD CAMP (PZ)",
+            minX = 19, minY = 35, maxX = 29, maxY = 41,
+            healerX = 21, healerY = 39, healerName = "Priestess Selene",
+            merchantX = 27, merchantY = 39, merchantName = "Quartermaster Dax"
+        ),
+        UndergroundCampZone(
+            floorId = -5,
+            name = "GRIMMAW QUARRY FORWARD CAMP (PZ)",
+            minX = 20, minY = 37, maxX = 28, maxY = 42,
+            healerX = 21, healerY = 40, healerName = "Brother Halden",
+            merchantX = 27, merchantY = 40, merchantName = "Alchemist Talia"
+        ),
+        UndergroundCampZone(
+            floorId = -6,
+            name = "GOREK LABYRINTH VANGUARD CAMP (PZ)",
+            minX = 20, minY = 38, maxX = 28, maxY = 42,
+            healerX = 21, healerY = 40, healerName = "High Cleric Vesper",
+            merchantX = 27, merchantY = 40, merchantName = "Quartermaster Ryn"
+        )
     )
 
-    val landmarks: List<LandmarkLabel> = listOf(
-        // Rookvale Valley & Capital City (shifted by +1200, +400)
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 192, "TEMPLE & SANCTUARY PLAZA"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 175, ROOKVALE_ORIGIN_Y + 162, "TEMPLE OF REAPERS"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 197, "TOWN SQUARE FOUNTAIN"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 164, ROOKVALE_ORIGIN_Y + 185, "TOWN DEPOT HALL"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 163, ROOKVALE_ORIGIN_Y + 205, "ALARIC'S MARKET QUARTER"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 225, ROOKVALE_ORIGIN_Y + 182, "RUNECRAFTING ACADEMY"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 224, ROOKVALE_ORIGIN_Y + 204, "CRAFT & FLETCHING WARD"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 245, ROOKVALE_ORIGIN_Y + 204, "LOGGING ORCHARD"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 183, ROOKVALE_ORIGIN_Y + 231, "WEST HARBOR FISHING PIER"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 211, ROOKVALE_ORIGIN_Y + 231, "ROOKVALE ROYAL HARBOR FERRY"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 242, ROOKVALE_ORIGIN_Y + 180, "CITY SEWERS (FLOOR -1)"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 152, ROOKVALE_ORIGIN_Y + 173, "CELLAR ROPE HOLE (FLOOR -1)"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 134, "NORTH STARTER MEADOWS"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, "NW COPPER QUARRY (FLOOR -1)"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 85, "MOUNTAIN CAVERN (FLOOR -1)"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 67, "DEEP ABYSSAL CAVERN (FLOOR -2)"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 207, "DARK FOREST SINKHOLE (FLOOR -1)"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 88, ROOKVALE_ORIGIN_Y + 320, "GRIMMAW CRAGS CAMP (LVL 16+)"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, "THE GRIMMAW QUARRY (FLOOR -5)"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 320, "GOREK BADLANDS CAMP (LVL 20+)"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 317, "THE GOREK LABYRINTH (FLOOR -6)"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 8, "FROSTCREST NORTH HIGHWAY"),
-        LandmarkLabel(0, ROOKVALE_ORIGIN_X + 8, ROOKVALE_ORIGIN_Y + 192, "SPIREWOOD WEST HIGHWAY"),
+    fun undergroundCampForFloor(floorId: Int): UndergroundCampZone? =
+        undergroundCamps.firstOrNull { it.floorId == floorId }
 
-        // Multi-Region Overland Cities, Harbors, Bridges & Dungeons
-        LandmarkLabel(0, 545, 595, "MIREWATCH FORTRESS"),
-        LandmarkLabel(0, 618, 560, "MIREWATCH BAY HARBOR"),
-        LandmarkLabel(0, 882, 250, "DUSKPORT COASTAL QUAY"),
-        LandmarkLabel(0, 375, 790, "SUNSPIRE OASIS CITY"),
-        LandmarkLabel(0, 490, 865, "SUNSPIRE OASIS DOCK"),
-        LandmarkLabel(0, 960, 995, "SUNLEAF JUNGLE VILLAGE"),
-        LandmarkLabel(0, 959, 934, "SUNLEAF JUNGLE PIER"),
-        LandmarkLabel(0, 1458, 952, "EMBER WATCH OUTPOST"),
-        LandmarkLabel(0, 1427, 952, "EMBER ISLES LANDING"),
-        LandmarkLabel(0, 760, 790, "MAELSTROM SEA-DRAGON SHRINE"),
-        LandmarkLabel(0, 650, 211, "FROSTBAY SEA-BRIDGE"),
-        LandmarkLabel(0, 770, 591, "CENTRAL ALDER CAUSEWAY"),
-        LandmarkLabel(0, 318, 252, "ASHEN CALDERA SHAFT (FLOOR -2)"),
-        LandmarkLabel(0, 295, 515, "WRITHING SINKHOLE (FLOOR -1)"),
-        LandmarkLabel(0, 1020, 175, "BLIGHTWOOD BARROW (FLOOR -1)"),
-        LandmarkLabel(0, 1320, 260, "FROSTCREST GRIMMAW RIDGE (FLOOR -5)"),
-        LandmarkLabel(0, 242, 1020, "BADLANDS GOREK GATE (FLOOR -6)"),
-        LandmarkLabel(0, 720, 1020, "JUNGLE RUIN VAULT (FLOOR -2)"),
-        LandmarkLabel(0, 1510, 975, "EMBER SANCTUM DESCENT (FLOOR -2)"),
+    val npcs: List<NpcSpot> by lazy {
+        buildList {
+            // Rookvale Capital City NPCs
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 162, ROOKVALE_ORIGIN_Y + 204, "Alaric", NpcRole.SHOP_ALCHEMIST))
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 193, ROOKVALE_ORIGIN_Y + 179, "Brother Alden", NpcRole.TEMPLE_PRIEST))
+            add(NpcSpot(0, ORACLE_X, ORACLE_Y, "The Oracle", NpcRole.ORACLE))
+            add(NpcSpot(0, REAPER_X, REAPER_Y, "Mortis, Keeper of Reapers", NpcRole.REAPER_KEEPER))
 
-        // Dungeon Floor Landmarks
-        LandmarkLabel(-1, 24, 34, "BROODMOTHER'S WEBBED DEN"),
-        LandmarkLabel(-2, 24, 12, "MOLTEN PIT SANCTUM"),
-        LandmarkLabel(-3, 24, 18, "DEEP FORGE OUTPOST"),
-        LandmarkLabel(-5, 24, 12, "KRAGOR'S QUARRY PIT"),
-        LandmarkLabel(-6, 24, 11, "VAELGOR'S LABYRINTH SANCTUM")
-    )
+            // 6 Strictly Coastline-Validated Ocean Harbor Ferry Captains
+            WorldBiomeBlueprint.harborPorts.forEach { port ->
+                add(NpcSpot(0, port.dockX, port.dockY, port.captainName, NpcRole.HARBOR_CAPTAIN))
+            }
+
+            // Biome-Ideology Overland Empires, Towns & Forward Camps (Healers + Supply Alchemists)
+            add(NpcSpot(0, 1044, 590, "Sister Elen", NpcRole.TEMPLE_PRIEST))        // Spirewood Crossing Camp
+            add(NpcSpot(0, 1040, 594, "Peddler Fen", NpcRole.SHOP_ALCHEMIST))       // Spirewood Crossing Camp
+            add(NpcSpot(0, 549, 591, "Brother Corwin", NpcRole.TEMPLE_PRIEST))      // Mirewatch Stilt Citadel
+            add(NpcSpot(0, 541, 599, "Apothecary Maren", NpcRole.SHOP_ALCHEMIST))   // Mirewatch Stilt Citadel
+            add(NpcSpot(0, 360, 558, "Bog Priestess Nira", NpcRole.TEMPLE_PRIEST))  // Boghollow Stilt Camp
+            add(NpcSpot(0, 356, 562, "Supplier Galt", NpcRole.SHOP_ALCHEMIST))      // Boghollow Stilt Camp
+            add(NpcSpot(0, 380, 787, "Merchant Zara", NpcRole.SHOP_ALCHEMIST))      // Sunspire Oasis Empire
+            add(NpcSpot(0, 371, 793, "Sun Cleric Hakim", NpcRole.TEMPLE_PRIEST))    // Sunspire Oasis Empire
+            add(NpcSpot(0, 317, 910, "Nomad Healer Safi", NpcRole.TEMPLE_PRIEST))   // Scorchwind Nomad Camp
+            add(NpcSpot(0, 313, 914, "Caravaner Idris", NpcRole.SHOP_ALCHEMIST))    // Scorchwind Nomad Camp
+            add(NpcSpot(0, 1400, 200, "Frost Cleric Bjorn", NpcRole.TEMPLE_PRIEST)) // Frostpeak Granite Citadel
+            add(NpcSpot(0, 1392, 208, "Runesmith Astrid", NpcRole.SHOP_ALCHEMIST))  // Frostpeak Granite Citadel
+            add(NpcSpot(0, 1270, 256, "Healer Freya", NpcRole.TEMPLE_PRIEST))       // Boreal Watch Camp
+            add(NpcSpot(0, 1266, 260, "Quartermaster Tor", NpcRole.SHOP_ALCHEMIST)) // Boreal Watch Camp
+            add(NpcSpot(0, 390, 257, "Ash Cleric Malakor", NpcRole.TEMPLE_PRIEST))  // Ashen Bastion Empire
+            add(NpcSpot(0, 382, 263, "War Alchemist Nyx", NpcRole.SHOP_ALCHEMIST))  // Ashen Bastion Empire
+            add(NpcSpot(0, 908, 247, "Shade Priest Vane", NpcRole.TEMPLE_PRIEST))   // Duskport Shadow Keep
+            add(NpcSpot(0, 900, 253, "Merchant Kestrel", NpcRole.SHOP_ALCHEMIST))   // Duskport Shadow Keep
+            add(NpcSpot(0, 964, 992, "Elder Lyra", NpcRole.TEMPLE_PRIEST))          // Sunleaf Stilt Village
+            add(NpcSpot(0, 956, 998, "Herbalist Soren", NpcRole.SHOP_ALCHEMIST))    // Sunleaf Stilt Village
+            add(NpcSpot(0, 1466, 949, "Ember Cleric Ignar", NpcRole.TEMPLE_PRIEST)) // Ember Watch Citadel
+            add(NpcSpot(0, 1458, 955, "Supplier Cassian", NpcRole.SHOP_ALCHEMIST))  // Ember Watch Citadel
+
+            // Subterranean Forward Camp Healers & Supply Alchemists across Floors -1..-6
+            undergroundCamps.forEach { camp ->
+                add(NpcSpot(camp.floorId, camp.healerX, camp.healerY, camp.healerName, NpcRole.TEMPLE_PRIEST))
+                add(NpcSpot(camp.floorId, camp.merchantX, camp.merchantY, camp.merchantName, NpcRole.SHOP_ALCHEMIST))
+            }
+        }
+    }
+
+    val landmarks: List<LandmarkLabel> by lazy {
+        buildList {
+            // Rookvale Valley & Capital City (shifted by +1200, +400)
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 192, "TEMPLE & SANCTUARY PLAZA"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 175, ROOKVALE_ORIGIN_Y + 162, "TEMPLE OF REAPERS"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 197, "TOWN SQUARE FOUNTAIN"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 164, ROOKVALE_ORIGIN_Y + 185, "TOWN DEPOT HALL"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 163, ROOKVALE_ORIGIN_Y + 205, "ALARIC'S MARKET QUARTER"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 225, ROOKVALE_ORIGIN_Y + 182, "RUNECRAFTING ACADEMY"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 224, ROOKVALE_ORIGIN_Y + 204, "CRAFT & FLETCHING WARD"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 245, ROOKVALE_ORIGIN_Y + 204, "LOGGING ORCHARD"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 183, ROOKVALE_ORIGIN_Y + 231, "WEST RIVER FISHING PIER"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 242, ROOKVALE_ORIGIN_Y + 180, "CITY SEWERS (FLOOR -1)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 152, ROOKVALE_ORIGIN_Y + 173, "CELLAR ROPE HOLE (FLOOR -1)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 134, "NORTH STARTER MEADOWS"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, "NW COPPER QUARRY (FLOOR -1)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 85, "MOUNTAIN CAVERN (FLOOR -1)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 67, "DEEP ABYSSAL CAVERN (FLOOR -2)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 207, "DARK FOREST SINKHOLE (FLOOR -1)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 88, ROOKVALE_ORIGIN_Y + 320, "GRIMMAW CRAGS CAMP (LVL 16-20)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, "THE GRIMMAW QUARRY (FLOOR -5)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 320, "GOREK BADLANDS CAMP (LVL 18-20)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 317, "THE GOREK LABYRINTH (FLOOR -6)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 8, "FROSTPEAK NORTH HIGHWAY"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 8, ROOKVALE_ORIGIN_Y + 192, "SPIREWOOD WEST HIGHWAY"))
+
+            // Biome-Ideology Empires, Towns & Forward Camps
+            WorldBiomeBlueprint.secondarySettlements.forEach { s ->
+                add(LandmarkLabel(0, s.centerX, s.centerY, "${s.name.uppercase()} (${s.levelRangeLabel.uppercase()})"))
+            }
+            // Validated Ocean Harbor Ports
+            WorldBiomeBlueprint.harborPorts.forEach { port ->
+                add(LandmarkLabel(0, port.dockX, port.dockY, port.name.uppercase()))
+            }
+
+            // Sea-Bridges, Shrines & Outer Dungeon Entrances
+            add(LandmarkLabel(0, 760, 790, "MAELSTROM SEA-DRAGON SHRINE"))
+            add(LandmarkLabel(0, 650, 211, "FROSTBAY SEA-BRIDGE"))
+            add(LandmarkLabel(0, 770, 591, "CENTRAL ALDER CAUSEWAY"))
+            add(LandmarkLabel(0, 318, 252, "ASHEN CALDERA SHAFT (FLOOR -2)"))
+            add(LandmarkLabel(0, 295, 515, "WRITHING SINKHOLE (FLOOR -1)"))
+            add(LandmarkLabel(0, 1020, 175, "BLIGHTWOOD BARROW (FLOOR -1)"))
+            add(LandmarkLabel(0, 1320, 260, "FROSTPEAK GRIMMAW RIDGE (FLOOR -5)"))
+            add(LandmarkLabel(0, 242, 1020, "BADLANDS GOREK GATE (FLOOR -6)"))
+            add(LandmarkLabel(0, 720, 1020, "JUNGLE RUIN VAULT (FLOOR -2)"))
+            add(LandmarkLabel(0, 1510, 975, "EMBER SANCTUM DESCENT (FLOOR -2)"))
+
+            // Dungeon Floor Landmarks & Subterranean Safe Forward Camps
+            undergroundCamps.forEach { camp ->
+                add(LandmarkLabel(camp.floorId, (camp.minX + camp.maxX) / 2, (camp.minY + camp.maxY) / 2, camp.name))
+            }
+            add(LandmarkLabel(-1, 24, 34, "BROODMOTHER'S WEBBED DEN"))
+            add(LandmarkLabel(-2, 24, 12, "MOLTEN PIT SANCTUM"))
+            add(LandmarkLabel(-3, 24, 18, "DEEP FORGE OUTPOST"))
+            add(LandmarkLabel(-5, 24, 12, "KRAGOR'S QUARRY PIT"))
+            add(LandmarkLabel(-6, 24, 11, "VAELGOR'S LABYRINTH SANCTUM"))
+        }
+    }
 
     val portals: List<FloorPortal> = listOf(
         // Rookvale City Sewers Stairs <-> Floor -1
@@ -454,16 +550,18 @@ object WorldMaps {
 
     fun initialMonsters(): List<MonsterEntity> {
         return monsterSpawns.mapIndexed { idx, spawn ->
-            MonsterEntity(
+            val resolvedLevel = if (spawn.floor == 0) {
+                BiomeProgressionRules.resolveOverlandSpawnLevel(spawn.x, spawn.y, spawn.type)
+            } else {
+                BiomeProgressionRules.resolveDungeonSpawnLevel(spawn.floor, spawn.x, spawn.y, spawn.type)
+            }
+            BiomeProgressionRules.createScaledMonster(
                 id = idx + 1,
                 type = spawn.type,
                 floor = spawn.floor,
                 x = spawn.x,
                 y = spawn.y,
-                spawnX = spawn.x,
-                spawnY = spawn.y,
-                hp = spawn.type.maxHp,
-                maxHp = spawn.type.maxHp,
+                targetLevel = resolvedLevel,
                 animOffset = (idx * 0.37f) % 1f
             )
         }
@@ -1134,6 +1232,25 @@ object WorldMaps {
             grid.set(cx, cy, TileType.CRATE_BARREL)
         }
 
+        // --- DISTRICT 6: ROOKVALE EASTERN OCEAN BAY (true open sea for Rookvale Royal Harbor) ---
+        for (ly in 0 until s) {
+            for (lx in 354 until s) {
+                val seaTile = WorldBiomeBlueprint.rawRookvaleEasternSeaTile(
+                    ROOKVALE_ORIGIN_X + lx,
+                    ROOKVALE_ORIGIN_Y + ly
+                )
+                if (seaTile != null) {
+                    grid.set(lx, ly, seaTile)
+                } else if (lx >= 358 && ly in 14..386 && ly !in 189..195) {
+                    // Golden coastal beach apron along Rookvale's Eastern Ocean shoreline
+                    val prev = grid.get(lx, ly)
+                    if (prev == TileType.GRASS || prev == TileType.DARK_GRASS || prev == TileType.FLOWER_GRASS) {
+                        grid.set(lx, ly, TileType.SAND)
+                    }
+                }
+            }
+        }
+
         // Guarantee every Rookvale-local Floor 0 monster spawn & portal landing is walkable ground
         for (spawn in monsterSpawns) {
             if (spawn.floor == 0 && WorldBiomeBlueprint.isInRookvaleHeartland(spawn.x, spawn.y)) {
@@ -1188,11 +1305,12 @@ object WorldMaps {
                         for (lx in 0 until WORLD_CHUNK_SIZE) {
                             val gx = minX + lx
                             if (gx >= WORLD_OVERLAND_WIDTH) continue
-                            val tile = if (WorldBiomeBlueprint.isInRookvaleHeartland(gx, gy)) {
-                                heartland.get(gx - ROOKVALE_ORIGIN_X, gy - ROOKVALE_ORIGIN_Y)
-                            } else {
-                                WorldBiomeBlueprint.tileAtGlobal(gx, gy)
-                            }
+                            val tile = WorldBiomeBlueprint.validatedPortTileAt(gx, gy)
+                                ?: if (WorldBiomeBlueprint.isInRookvaleHeartland(gx, gy)) {
+                                    heartland.get(gx - ROOKVALE_ORIGIN_X, gy - ROOKVALE_ORIGIN_Y)
+                                } else {
+                                    WorldBiomeBlueprint.tileAtGlobal(gx, gy)
+                                }
                             chunk.setLocal(lx, ly, tile)
                         }
                     }
@@ -1280,7 +1398,7 @@ object WorldMaps {
                     WorldBiomeBlueprint.isSecondarySafeZone(x, y)
             },
             dangerLevel = "Varies",
-            recommendedLevel = "Lvl 1-26+",
+            recommendedLevel = "Lvl 1-75+",
             dangerSeverity = 0
         )
     }
@@ -1360,6 +1478,15 @@ object WorldMaps {
             17 to 34, 31 to 34, 24 to 41
         ).forEach { (tx, ty) -> g[ty][tx] = TileType.TORCH_WALL }
 
+        // Subterranean Safe Forward Camp (PZ) around Sewer Gatehouse entry (x=25..31, y=9..12)
+        val camp = undergroundCampForFloor(-1)!!
+        g[9][25] = TileType.WAR_BANNER
+        g[9][31] = TileType.WAR_BANNER
+        g[11][25] = TileType.CAMPFIRE_BRAZIER
+        g[11][31] = TileType.CAMPFIRE_BRAZIER
+        g[10][26] = TileType.COBBLESTONE
+        g[10][30] = TileType.COBBLESTONE
+
         // Portals (exact coordinates preserved & guaranteed walkable)
         g[10][28] = TileType.STAIRS_UP
         g[10][38] = TileType.STAIRS_UP
@@ -1371,12 +1498,13 @@ object WorldMaps {
         return WorldFloor(
             floorId = -1,
             name = "Mossy Sewers & Caves",
-            subtitle = "Dungeon Floor -1",
+            subtitle = "Dungeon Floor -1 • Forward Camp PZ",
             width = s,
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),
+            isProtectionZone = { x, y -> camp.contains(x, y) },
             dangerLevel = "Moderate",
-            recommendedLevel = "Lvl 3-8",
+            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(-1),
             dangerSeverity = 1
         )
     }
@@ -1453,6 +1581,17 @@ object WorldMaps {
             22 to 17, 26 to 17, 14 to 12, 34 to 12, 24 to 6
         ).forEach { (tx, ty) -> g[ty][tx] = TileType.TORCH_WALL }
 
+        // Subterranean Safe Forward Camp (PZ) in Southern Vestibule (x=20..28, y=35..40)
+        val camp = undergroundCampForFloor(-2)!!
+        g[35][20] = TileType.OBSIDIAN_WALL
+        g[35][28] = TileType.OBSIDIAN_WALL
+        g[36][21] = TileType.CAMPFIRE_BRAZIER
+        g[36][27] = TileType.CAMPFIRE_BRAZIER
+        g[39][22] = TileType.WAR_BANNER
+        g[39][26] = TileType.WAR_BANNER
+        g[38][21] = TileType.COBBLESTONE
+        g[38][27] = TileType.COBBLESTONE
+
         // Portals (exact coordinates preserved & guaranteed walkable)
         g[38][24] = TileType.ROPE_SPOT_UP
         g[24][10] = TileType.STAIRS_UP // Direct return stairway up to NE Crag Hills on Floor 0!
@@ -1462,12 +1601,13 @@ object WorldMaps {
         return WorldFloor(
             floorId = -2,
             name = "Deep Caverns",
-            subtitle = "Dungeon Floor -2",
+            subtitle = "Dungeon Floor -2 • Forward Camp PZ",
             width = s,
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),
+            isProtectionZone = { x, y -> camp.contains(x, y) },
             dangerLevel = "High",
-            recommendedLevel = "Lvl 6-12",
+            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(-2),
             dangerSeverity = 2
         )
     }
@@ -1496,6 +1636,17 @@ object WorldMaps {
         listOf(10 to 10, 39 to 10, 10 to 28, 39 to 30).forEach { (x, y) -> g[y][x] = TileType.ORE_VESPERITE }
         listOf(9 to 35, 38 to 35, 16 to 40, 32 to 40).forEach { (x, y) -> g[y][x] = TileType.ORE_CINDERITE }
 
+        // Subterranean Safe Forward Camp (PZ) at Northern Entry Vestibule (x=20..28, y=6..11)
+        val camp = undergroundCampForFloor(-3)!!
+        g[6][20] = TileType.OBSIDIAN_WALL
+        g[6][28] = TileType.OBSIDIAN_WALL
+        g[10][20] = TileType.CAMPFIRE_BRAZIER
+        g[10][28] = TileType.CAMPFIRE_BRAZIER
+        g[7][22] = TileType.WAR_BANNER
+        g[7][26] = TileType.WAR_BANNER
+        g[8][21] = TileType.COBBLESTONE
+        g[8][27] = TileType.COBBLESTONE
+
         // Portals
         g[8][24] = TileType.STAIRS_UP
         g[24][40] = TileType.ROPE_SPOT_UP
@@ -1505,12 +1656,13 @@ object WorldMaps {
         return WorldFloor(
             floorId = -3,
             name = "Abyssal Crypt",
-            subtitle = "Dungeon Floor -3 • Deep Outpost",
+            subtitle = "Dungeon Floor -3 • Forward Camp PZ",
             width = s,
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),
+            isProtectionZone = { x, y -> camp.contains(x, y) },
             dangerLevel = "Extreme",
-            recommendedLevel = "Lvl 10-18",
+            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(-3),
             dangerSeverity = 3
         )
     }
@@ -1538,6 +1690,17 @@ object WorldMaps {
         // Rich Cinderite Veins guarded by Wyrms & the Ancient Dragon
         listOf(13 to 10, 35 to 10, 12 to 22, 36 to 22, 24 to 9).forEach { (x, y) -> g[y][x] = TileType.ORE_CINDERITE }
 
+        // Subterranean Safe Vanguard Camp (PZ) at Southern Entry Bastion (x=19..29, y=35..41)
+        val camp = undergroundCampForFloor(-4)!!
+        g[35][19] = TileType.OBSIDIAN_WALL
+        g[35][29] = TileType.OBSIDIAN_WALL
+        g[36][20] = TileType.CAMPFIRE_BRAZIER
+        g[36][28] = TileType.CAMPFIRE_BRAZIER
+        g[40][20] = TileType.WAR_BANNER
+        g[40][28] = TileType.WAR_BANNER
+        g[39][21] = TileType.COBBLESTONE
+        g[39][27] = TileType.COBBLESTONE
+
         // Portals
         g[40][24] = TileType.STAIRS_UP
         g[34][10] = TileType.ROPE_SPOT_UP
@@ -1545,12 +1708,13 @@ object WorldMaps {
         return WorldFloor(
             floorId = -4,
             name = "Obsidian Wyrm Sanctum",
-            subtitle = "Dungeon Floor -4 • Classic Endgame Lair",
+            subtitle = "Dungeon Floor -4 • Vanguard Camp PZ",
             width = s,
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),
+            isProtectionZone = { x, y -> camp.contains(x, y) },
             dangerLevel = "Deadly",
-            recommendedLevel = "Lvl 16-20",
+            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(-4),
             dangerSeverity = 4
         )
     }
@@ -1618,18 +1782,28 @@ object WorldMaps {
             22 to 17, 26 to 17, 13 to 12, 35 to 12, 24 to 6
         ).forEach { (tx, ty) -> g[ty][tx] = TileType.TORCH_WALL }
 
+        // Subterranean Safe Forward Camp (PZ) on Southern Quarry Terrace (x=20..28, y=37..42)
+        val camp = undergroundCampForFloor(-5)!!
+        g[37][20] = TileType.CAMPFIRE_BRAZIER
+        g[37][28] = TileType.CAMPFIRE_BRAZIER
+        g[41][20] = TileType.WAR_BANNER
+        g[41][28] = TileType.WAR_BANNER
+        g[40][21] = TileType.COBBLESTONE
+        g[40][27] = TileType.COBBLESTONE
+
         // Return Stairway Up to Floor 0 Grimmaw Crags Camp
         g[41][24] = TileType.STAIRS_UP
 
         return WorldFloor(
             floorId = -5,
             name = "The Grimmaw Quarry",
-            subtitle = "Endgame Dungeon • Floor -5 (Vesperite Veins)",
+            subtitle = "Endgame Dungeon • Floor -5 • Forward Camp PZ",
             width = s,
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),
+            isProtectionZone = { x, y -> camp.contains(x, y) },
             dangerLevel = "Extreme",
-            recommendedLevel = "Lvl 16-24",
+            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(-5),
             dangerSeverity = 4
         )
     }
@@ -1704,18 +1878,28 @@ object WorldMaps {
             22 to 17, 26 to 17, 15 to 11, 33 to 11, 24 to 6
         ).forEach { (tx, ty) -> g[ty][tx] = TileType.TORCH_WALL }
 
+        // Subterranean Safe Vanguard Camp (PZ) in Southern Gatehouse (x=20..28, y=37..42)
+        val camp = undergroundCampForFloor(-6)!!
+        g[38][21] = TileType.CAMPFIRE_BRAZIER
+        g[38][27] = TileType.CAMPFIRE_BRAZIER
+        g[41][21] = TileType.WAR_BANNER
+        g[41][27] = TileType.WAR_BANNER
+        g[40][21] = TileType.COBBLESTONE
+        g[40][27] = TileType.COBBLESTONE
+
         // Return Stairway Up to Floor 0 Gorek Badlands War-Camp
         g[41][24] = TileType.STAIRS_UP
 
         return WorldFloor(
             floorId = -6,
             name = "The Gorek Labyrinth",
-            subtitle = "Pinnacle Maze • Floor -6 (Cinderite Veins)",
+            subtitle = "Pinnacle Maze • Floor -6 • Vanguard Camp PZ",
             width = s,
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),
+            isProtectionZone = { x, y -> camp.contains(x, y) },
             dangerLevel = "Pinnacle",
-            recommendedLevel = "Lvl 20-30+",
+            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(-6),
             dangerSeverity = 4
         )
     }

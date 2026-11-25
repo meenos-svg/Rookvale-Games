@@ -1,7 +1,5 @@
 package com.example.ui.screens
 
-import android.graphics.RuntimeShader
-import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -27,7 +25,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -54,22 +51,19 @@ import com.example.ui.theme.TorchAmber
 import com.example.ui.theme.TorchGold
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * Zero-GC procedural weather renderer & Android 13+ AGSL atmospheric weather shader pass.
+ * Zero-GC procedural weather renderer & cached atmospheric gradient pass.
  *
- * Scales smoothly across all four [GraphicsQuality] tiers:
- * - LOW: Ultra-light ambient tint only (0 particles, 0 shader)
+ * Scales smoothly across all four [GraphicsQuality] tiers without full-screen RuntimeShader stalls:
+ * - LOW: Ultra-light ambient tint only (0 particles)
  * - MEDIUM: Lightweight single-layer particles + subtle atmospheric veil
- * - HIGH: Multi-depth parallax particles, ground rain ripples, ember glows & multi-stop atmospheric fog gradients
- * - HD: Full cinematic parallax particles + Android 13+ AGSL [RuntimeShader] atmospheric weather pass
- *       (with seamless layered gradient fallback on API 24-32)
+ * - HIGH: Multi-depth parallax particles, ground rain ripples, ember glows & cached multi-stop gradients
+ * - HD: Enriched parallax particles, ground ripples, ember glows & cached atmospheric gradients
  */
 class WeatherOverlayRenderer {
-    private var agslShader: RuntimeShader? = null
-    private var agslAttempted: Boolean = false
-
     // Smooth region-crossing / admin-override interpolation state
     private var displayedWeather: WeatherType = WeatherType.CLEAR
     private var fadingWeather: WeatherType = WeatherType.CLEAR
@@ -77,18 +71,65 @@ class WeatherOverlayRenderer {
     private var lastFrameMs: Long = 0L
     private val leafPath = Path()
 
-    val isRuntimeShaderSupported: Boolean
-        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+    // Viewport-keyed atmospheric gradient Brush cache (zero per-frame gradient allocations)
+    private var cachedGradW: Int = -1
+    private var cachedGradH: Int = -1
+    private var cachedGradWeather: WeatherType = WeatherType.CLEAR
+    private var cachedGradBrush: Brush? = null
+    private var gradCacheRebuilds: Int = 0
 
-    private fun getOrInitShader(): RuntimeShader? {
-        if (!isRuntimeShaderSupported) return null
-        if (!agslAttempted) {
-            agslAttempted = true
-            agslShader = runCatching {
-                RuntimeShader(HD_WEATHER_AGSL)
-            }.getOrNull()
+    val isRuntimeShaderActive: Boolean
+        get() = false
+
+    val gradientCacheRebuildCount: Int
+        get() = gradCacheRebuilds
+
+    fun getOrCreateAtmosphericBrush(w: Float, h: Float, weather: WeatherType): Brush? {
+        if (weather == WeatherType.CLEAR || w <= 0f || h <= 0f) return null
+        val wi = w.roundToInt()
+        val hi = h.roundToInt()
+        val existing = cachedGradBrush
+        if (existing != null && cachedGradW == wi && cachedGradH == hi && cachedGradWeather == weather) {
+            return existing
         }
-        return agslShader
+        val created: Brush = when (weather) {
+            WeatherType.LIGHT_RAIN -> Brush.verticalGradient(
+                0.0f to Color(0xFF1F334D).copy(alpha = 0.22f),
+                0.55f to Color(0xFF284160).copy(alpha = 0.11f),
+                1.0f to Color(0xFF132236).copy(alpha = 0.18f)
+            )
+            WeatherType.FALLING_LEAVES -> Brush.radialGradient(
+                0.0f to Color(0xFFF2B359).copy(alpha = 0.09f),
+                0.72f to Color.Transparent,
+                1.0f to Color(0xFF5A3718).copy(alpha = 0.12f),
+                center = Offset(w * 0.28f, h * 0.20f),
+                radius = maxOf(w, h) * 0.88f
+            )
+            WeatherType.SNOW -> Brush.radialGradient(
+                0.0f to Color(0xFFDCEEFF).copy(alpha = 0.06f),
+                0.62f to Color(0xFFB7D6F5).copy(alpha = 0.10f),
+                1.0f to Color(0xFF8CB4E0).copy(alpha = 0.22f),
+                center = Offset(w * 0.5f, h * 0.5f),
+                radius = maxOf(w, h) * 0.72f
+            )
+            WeatherType.VOLCANIC_ASH -> Brush.verticalGradient(
+                0.0f to Color(0xFF2B2220).copy(alpha = 0.20f),
+                0.60f to Color(0xFF3E2920).copy(alpha = 0.12f),
+                1.0f to Color(0xFF8C3618).copy(alpha = 0.20f)
+            )
+            WeatherType.SWAMP_MIST -> Brush.verticalGradient(
+                0.0f to Color(0xFF1F332B).copy(alpha = 0.14f),
+                0.55f to Color(0xFF47695B).copy(alpha = 0.18f),
+                1.0f to Color(0xFF729E88).copy(alpha = 0.26f)
+            )
+            WeatherType.CLEAR -> return null
+        }
+        cachedGradW = wi
+        cachedGradH = hi
+        cachedGradWeather = weather
+        cachedGradBrush = created
+        gradCacheRebuilds++
+        return created
     }
 
     fun drawWeatherPass(
@@ -204,102 +245,21 @@ class WeatherOverlayRenderer {
         val w = scope.size.width
         val h = scope.size.height
 
-        // HD Tier on Android 13+: AGSL RuntimeShader procedural weather atmosphere
-        if (profile.enableAgslShader) {
-            val shader = getOrInitShader()
-            if (shader != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                runCatching {
-                    shader.setFloatUniform("uResolution", w, h)
-                    shader.setFloatUniform("uTime", timeSec)
-                    shader.setFloatUniform("uWeatherMode", weather.shaderModeId)
-                    shader.setFloatUniform("uIntensity", intensity)
-                    shader.setFloatUniform("uWind", weather.windX, weather.windY)
-                    shader.setFloatUniform("uDaylight", daylightFactor)
-                    scope.drawRect(
-                        brush = ShaderBrush(shader),
-                        topLeft = Offset.Zero,
-                        size = scope.size
-                    )
-                    return
-                }
-            }
-        }
-
-        // HIGH Tier (and HD API 24-32 fallback): Layered multi-stop atmospheric weather gradients
+        // HIGH & HD Tiers: Viewport-cached multi-stop atmospheric weather gradient (zero RuntimeShader / zero per-frame Brush alloc)
         if (profile.enableAtmosphericGradient) {
-            val drift = sin(timeSec * 0.42f) * w * 0.08f
-            when (weather) {
-                WeatherType.LIGHT_RAIN -> {
-                    scope.drawRect(
-                        brush = Brush.verticalGradient(
-                            0.0f to Color(0xFF1F334D).copy(alpha = 0.22f * intensity),
-                            0.55f to Color(0xFF284160).copy(alpha = 0.11f * intensity),
-                            1.0f to Color(0xFF132236).copy(alpha = 0.18f * intensity)
-                        ),
-                        topLeft = Offset.Zero,
-                        size = scope.size
-                    )
+            val cachedBrush = getOrCreateAtmosphericBrush(w, h, weather)
+            if (cachedBrush != null) {
+                val modAlpha = when (weather) {
+                    WeatherType.FALLING_LEAVES -> (intensity * (0.65f + 0.35f * daylightFactor)).coerceIn(0f, 1f)
+                    WeatherType.SWAMP_MIST -> (intensity * (0.86f + 0.14f * sin(timeSec * 0.55f))).coerceIn(0f, 1f)
+                    else -> intensity.coerceIn(0f, 1f)
                 }
-                WeatherType.FALLING_LEAVES -> {
-                    scope.drawRect(
-                        brush = Brush.radialGradient(
-                            0.0f to Color(0xFFF2B359).copy(alpha = 0.09f * intensity * daylightFactor),
-                            0.72f to Color.Transparent,
-                            1.0f to Color(0xFF5A3718).copy(alpha = 0.12f * intensity),
-                            center = Offset(w * 0.25f + drift, h * 0.18f),
-                            radius = maxOf(w, h) * 0.88f
-                        ),
-                        topLeft = Offset.Zero,
-                        size = scope.size
-                    )
-                }
-                WeatherType.SNOW -> {
-                    scope.drawRect(
-                        brush = Brush.radialGradient(
-                            0.0f to Color(0xFFDCEEFF).copy(alpha = 0.06f * intensity),
-                            0.62f to Color(0xFFB7D6F5).copy(alpha = 0.10f * intensity),
-                            1.0f to Color(0xFF8CB4E0).copy(alpha = 0.22f * intensity),
-                            center = Offset(w * 0.5f, h * 0.5f),
-                            radius = maxOf(w, h) * 0.72f
-                        ),
-                        topLeft = Offset.Zero,
-                        size = scope.size
-                    )
-                }
-                WeatherType.VOLCANIC_ASH -> {
-                    scope.drawRect(
-                        brush = Brush.verticalGradient(
-                            0.0f to Color(0xFF2B2220).copy(alpha = 0.20f * intensity),
-                            0.60f to Color(0xFF3E2920).copy(alpha = 0.12f * intensity),
-                            1.0f to Color(0xFF8C3618).copy(alpha = 0.20f * intensity)
-                        ),
-                        topLeft = Offset.Zero,
-                        size = scope.size
-                    )
-                }
-                WeatherType.SWAMP_MIST -> {
-                    val pulse = 0.85f + 0.15f * sin(timeSec * 0.55f)
-                    scope.drawRect(
-                        brush = Brush.verticalGradient(
-                            0.0f to Color(0xFF1F332B).copy(alpha = 0.14f * intensity),
-                            0.55f to Color(0xFF47695B).copy(alpha = 0.18f * intensity * pulse),
-                            1.0f to Color(0xFF729E88).copy(alpha = 0.26f * intensity * pulse)
-                        ),
-                        topLeft = Offset.Zero,
-                        size = scope.size
-                    )
-                    scope.drawCircle(
-                        brush = Brush.radialGradient(
-                            0.0f to Color(0xFF89B89E).copy(alpha = 0.16f * intensity * pulse),
-                            1.0f to Color.Transparent,
-                            center = Offset(w * 0.5f + drift * 1.6f, h * 0.72f),
-                            radius = maxOf(w, h) * 0.55f
-                        ),
-                        radius = maxOf(w, h) * 0.55f,
-                        center = Offset(w * 0.5f + drift * 1.6f, h * 0.72f)
-                    )
-                }
-                WeatherType.CLEAR -> Unit
+                scope.drawRect(
+                    brush = cachedBrush,
+                    topLeft = Offset.Zero,
+                    size = scope.size,
+                    alpha = modAlpha
+                )
             }
             return
         }
@@ -410,7 +370,7 @@ class WeatherOverlayRenderer {
                         else -> Color(0xFF5FA649) // Canopy Emerald
                     }.copy(alpha = ((0.55f + 0.35f * depth) * alpha * (0.65f + 0.35f * daylightFactor)).coerceIn(0f, 0.92f))
 
-                    leafPath.reset()
+                    leafPath.rewind()
                     leafPath.moveTo(px + rx * cosA, py + rx * sinA)
                     leafPath.lineTo(px - ry * sinA, py + ry * cosA)
                     leafPath.lineTo(px - rx * cosA, py - rx * sinA)
@@ -431,10 +391,10 @@ class WeatherOverlayRenderer {
                     val py = wrapMod(h2 * h + timeSec * weather.windY * speed - camShiftY * depth * 0.65f, h)
                     val radius = (1.6f + 2.4f * depth) * scale
                     val flakeAlpha = ((0.35f + 0.52f * depth) * alpha).coerceIn(0f, 0.92f)
-                    if (profile.enableAgslShader && depth > 0.70f) {
+                    if (profile.enableAtmosphericGradient && depth > 0.74f) {
                         scope.drawCircle(
-                            color = Color(0xFFD8EEFF).copy(alpha = flakeAlpha * 0.32f),
-                            radius = radius * 2.1f,
+                            color = Color(0xFFD8EEFF).copy(alpha = flakeAlpha * 0.28f),
+                            radius = radius * 2.0f,
                             center = Offset(px, py)
                         )
                     }
@@ -500,16 +460,17 @@ class WeatherOverlayRenderer {
                         val py = h * (0.28f + 0.68f * h2) + sin(timeSec * 0.45f + i) * 18f
                         val fogRadius = (72f + 68f * depth) * scale
                         val puffColor = if (i % 6 == 0) Color(0xFF7D6B99) else Color(0xFF7FA892)
-                        val puffAlpha = ((0.09f + 0.07f * depth) * alpha).coerceIn(0f, 0.20f)
+                        val puffAlpha = ((0.06f + 0.05f * depth) * alpha).coerceIn(0f, 0.14f)
+                        val center = Offset(px, py)
                         scope.drawCircle(
-                            brush = Brush.radialGradient(
-                                0.0f to puffColor.copy(alpha = puffAlpha),
-                                1.0f to Color.Transparent,
-                                center = Offset(px, py),
-                                radius = fogRadius
-                            ),
+                            color = puffColor.copy(alpha = puffAlpha * 0.55f),
                             radius = fogRadius,
-                            center = Offset(px, py)
+                            center = center
+                        )
+                        scope.drawCircle(
+                            color = puffColor.copy(alpha = puffAlpha),
+                            radius = fogRadius * 0.58f,
+                            center = center
                         )
                     } else {
                         val speed = 16f + 14f * depth
@@ -552,91 +513,6 @@ class WeatherOverlayRenderer {
 
     companion object {
         private const val REGION_CROSSFADE_SEC: Float = 2.5f
-
-        /**
-         * Android 13+ (API 33+) AGSL procedural weather atmosphere shader.
-         * Modes: 1 = Light Rain, 2 = Falling Leaves, 3 = Snow, 4 = Volcanic Ash, 5 = Swamp Mist.
-         */
-        internal const val HD_WEATHER_AGSL = """
-            uniform float2 uResolution;
-            uniform float uTime;
-            uniform float uWeatherMode;
-            uniform float uIntensity;
-            uniform float2 uWind;
-            uniform float uDaylight;
-
-            float hash21(float2 p) {
-                p = fract(p * float2(123.34, 456.21));
-                p += dot(p, p + 45.32);
-                return fract(p.x * p.y);
-            }
-
-            float vnoise(float2 p) {
-                float2 i = floor(p);
-                float2 f = fract(p);
-                f = f * f * (3.0 - 2.0 * f);
-                float a = hash21(i);
-                float b = hash21(i + float2(1.0, 0.0));
-                float c = hash21(i + float2(0.0, 1.0));
-                float d = hash21(i + float2(1.0, 1.0));
-                return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-            }
-
-            float fbm(float2 p) {
-                float v = 0.0;
-                float a = 0.5;
-                for (int k = 0; k < 3; k++) {
-                    v += a * vnoise(p);
-                    p = p * 2.03 + float2(7.1, 13.7);
-                    a *= 0.5;
-                }
-                return v;
-            }
-
-            half4 main(float2 fragCoord) {
-                float2 uv = fragCoord / max(uResolution, float2(1.0, 1.0));
-                float2 centered = (uv - 0.5) * float2(1.15, 1.0);
-                float edge = smoothstep(0.32, 0.96, length(centered));
-
-                float3 col = float3(0.0);
-                float alpha = 0.0;
-
-                if (uWeatherMode > 0.5 && uWeatherMode < 1.5) {
-                    // LIGHT RAIN: cool overcast sheen + angled drifting mist bands
-                    float2 rainUv = float2(uv.x * 5.0 + uv.y * 1.4 - uTime * 0.22, uv.y * 3.0 - uTime * 0.45);
-                    float sheen = fbm(rainUv);
-                    col = mix(float3(0.11, 0.20, 0.32), float3(0.45, 0.62, 0.82), sheen * 0.45);
-                    alpha = (0.11 + 0.10 * sheen + 0.08 * edge) * uIntensity;
-                } else if (uWeatherMode >= 1.5 && uWeatherMode < 2.5) {
-                    // FALLING LEAVES: warm dappled canopy sunlight & golden breeze glow
-                    float dapple = fbm(uv * 3.2 - float2(uTime * 0.14, uTime * 0.08));
-                    col = mix(float3(0.55, 0.34, 0.12), float3(0.96, 0.72, 0.34), dapple);
-                    alpha = (0.04 + 0.08 * dapple * uDaylight + 0.05 * edge) * uIntensity;
-                } else if (uWeatherMode >= 2.5 && uWeatherMode < 3.5) {
-                    // SNOW: drifting alpine snow-haze + frosty crisp edge bloom
-                    float drift = fbm(uv * 3.6 + float2(uTime * 0.18, -uTime * 0.12));
-                    col = mix(float3(0.62, 0.78, 0.94), float3(0.88, 0.95, 1.0), edge * 0.65 + drift * 0.35);
-                    alpha = (0.06 + 0.16 * edge + 0.08 * drift) * uIntensity;
-                } else if (uWeatherMode >= 3.5 && uWeatherMode < 4.5) {
-                    // VOLCANIC ASH: smoky dark haze + rising ember glow near lower horizon
-                    float smoke = fbm(uv * 3.4 + float2(uTime * 0.12, uTime * 0.16));
-                    float emberBand = smoothstep(0.45, 1.0, uv.y) * (0.65 + 0.35 * sin(uv.x * 8.0 + uTime * 2.2));
-                    col = mix(float3(0.18, 0.13, 0.12), float3(0.76, 0.28, 0.10), emberBand * 0.75);
-                    alpha = (0.12 + 0.10 * smoke + 0.12 * emberBand) * uIntensity;
-                } else if (uWeatherMode >= 4.5) {
-                    // SWAMP MIST: undulating low-lying jade-violet bog fog waves
-                    float fogA = fbm(float2(uv.x * 2.8 - uTime * 0.10, uv.y * 2.4 + uTime * 0.03));
-                    float fogB = fbm(float2(uv.x * 4.5 + uTime * 0.07, uv.y * 3.2 - uTime * 0.04));
-                    float lowBand = smoothstep(0.15, 0.95, uv.y);
-                    float fog = mix(fogA, fogB, 0.45) * (0.45 + 0.55 * lowBand);
-                    col = mix(float3(0.24, 0.42, 0.36), float3(0.52, 0.68, 0.60), fogB);
-                    alpha = (0.08 + 0.24 * fog) * uIntensity;
-                }
-
-                alpha = clamp(alpha, 0.0, 0.36);
-                return half4(col * alpha, alpha);
-            }
-        """
     }
 }
 

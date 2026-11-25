@@ -172,9 +172,10 @@ class DynamicBiomeWeatherTest {
         assertFalse(high.enableAgslShader)
 
         assertTrue(hd.particleCount > high.particleCount)
+        assertEquals(104, hd.particleCount)
         assertTrue(hd.enableGroundRipples)
         assertTrue(hd.enableAtmosphericGradient)
-        assertTrue(hd.enableAgslShader)
+        assertFalse(hd.enableAgslShader)
     }
 
     @Test

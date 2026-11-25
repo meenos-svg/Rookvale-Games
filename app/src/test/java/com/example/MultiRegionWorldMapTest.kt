@@ -122,15 +122,23 @@ class MultiRegionWorldMapTest {
         val ores = WorldMaps.initialOreNodes().values
         val overworldOres = ores.filter { it.floor == 0 }
         val dungeonOres = ores.filter { it.floor < 0 }
+        val heartlandOres = overworldOres.filter { ore ->
+            com.example.game.world.BiomeProgressionRules.biomeForGlobalTile(ore.x, ore.y) ==
+                com.example.game.world.OverlandBiomeTier.ROOKVALE_HEARTLAND
+        }
 
-        assertTrue("Overworld must spawn Copper, Tin, and Bog Iron ores", overworldOres.size >= 35)
+        assertTrue("Overworld must spawn rich biome-tiered ore veins", overworldOres.size >= 35)
         assertTrue(
-            "Overworld must contain ONLY Copper/Tin/Bog Iron",
-            overworldOres.all { it.kind in setOf(OreVeinKind.COPPER, OreVeinKind.TIN, OreVeinKind.BOG_IRON) }
+            "Rookvale Heartland (Lvl 1-20) must contain ONLY Copper/Tin/Bog Iron",
+            heartlandOres.isNotEmpty() && heartlandOres.all {
+                it.kind in setOf(OreVeinKind.COPPER, OreVeinKind.TIN, OreVeinKind.BOG_IRON)
+            }
         )
         assertTrue("Overworld must include Copper", overworldOres.any { it.kind == OreVeinKind.COPPER })
         assertTrue("Overworld must include Tin", overworldOres.any { it.kind == OreVeinKind.TIN })
         assertTrue("Overworld must include Bog Iron", overworldOres.any { it.kind == OreVeinKind.BOG_IRON })
+        assertTrue("High-tier Badlands/Frostpeak biomes must hold Vesperite veins", overworldOres.any { it.kind == OreVeinKind.VESPERITE })
+        assertTrue("Ashen Caldera & Blighted Wastes must hold Cinderite veins", overworldOres.any { it.kind == OreVeinKind.CINDERITE })
 
         assertTrue("Dungeons must hold Vesperite veins", dungeonOres.any { it.kind == OreVeinKind.VESPERITE })
         assertTrue("Dungeons must hold Cinderite veins", dungeonOres.any { it.kind == OreVeinKind.CINDERITE })

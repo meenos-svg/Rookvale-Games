@@ -147,21 +147,27 @@ fun GameScreen(
         adminControlExpanded = false
     }
 
+    val latestState by androidx.compose.runtime.rememberUpdatedState(state)
+    val latestMultiplayerState by androidx.compose.runtime.rememberUpdatedState(multiplayerState)
+    val latestDisplaySettings by androidx.compose.runtime.rememberUpdatedState(displaySettings)
+    val latestRotateDragMode by androidx.compose.runtime.rememberUpdatedState(rotateDragMode)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(ObsidianVoid)
     ) {
         // 1. FULLSCREEN 360-DEGREE ROTATABLE 2.5D ISOMETRIC WORLD VIEWPORT
+        // All per-frame state reads are deferred strictly to layout/drawWithCache phases!
         GameCanvasView(
-            state = state,
-            remotePlayers = multiplayerState.remotePlayers,
-            graphicsQuality = displaySettings.graphicsQuality,
-            displaySettings = displaySettings,
-            measureFps = displaySettings.showFpsCounter,
+            stateProvider = { latestState },
+            remotePlayersProvider = { latestMultiplayerState.remotePlayers },
+            graphicsQualityProvider = { latestDisplaySettings.graphicsQuality },
+            displaySettingsProvider = { latestDisplaySettings },
+            measureFpsProvider = { latestDisplaySettings.showFpsCounter },
             onFpsUpdated = { liveFpsState.intValue = it },
             cameraYawProvider = { cameraYawState.floatValue },
-            rotateDragMode = rotateDragMode,
+            rotateDragModeProvider = { latestRotateDragMode },
             onCameraYawDelta = { delta ->
                 cameraYawState.floatValue = IsometricCamera.normalizeYawDeg(cameraYawState.floatValue + delta)
             },

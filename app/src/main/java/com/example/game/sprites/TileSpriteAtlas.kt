@@ -114,6 +114,11 @@ object TileSpriteAtlas {
         TileType.VOLCANIC_ASH -> drawObsidianFloor()
         TileType.BLIGHT_SOIL -> drawObsidianFloor()
         TileType.DEEP_WATER -> drawWater(frame)
+        TileType.SANDSTONE_WALL -> drawObliqueWall(0xFFD6B57C.toInt(), 0xFFB08A53.toInt(), 0xFF6B502B.toInt(), 0xFF826237.toInt())
+        TileType.GRANITE_WALL -> drawObliqueWall(0xFF8F99A3.toInt(), 0xFF5D6670.toInt(), 0xFF343A42.toInt(), 0xFF424952.toInt())
+        TileType.OBSIDIAN_WALL -> drawObliqueWall(0xFF3E354A.toInt(), 0xFF261F30.toInt(), 0xFF14101A.toInt(), 0xFF1D1726.toInt())
+        TileType.WAR_BANNER -> drawObliqueWall(0xFF9E2525.toInt(), 0xFF701919.toInt(), 0xFF381010.toInt(), 0xFFD9A738.toInt())
+        TileType.CAMPFIRE_BRAZIER -> drawSmeltingFurnace(frame)
     }
 
     private fun drawGrass(): ImageBitmap {

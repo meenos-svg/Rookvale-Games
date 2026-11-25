@@ -25,6 +25,12 @@ data class HarborPort(
     val dangerSeverity: Int
 )
 
+enum class SettlementTier {
+    EMPIRE,
+    TOWN,
+    FORWARD_CAMP
+}
+
 data class SettlementZone(
     val id: String,
     val name: String,
@@ -35,7 +41,10 @@ data class SettlementZone(
     val minY: Int,
     val maxX: Int,
     val maxY: Int,
-    val isSafeZone: Boolean = true
+    val isSafeZone: Boolean = true,
+    val ideology: BiomeIdeology = BiomeIdeology.HEARTLAND,
+    val tier: SettlementTier = SettlementTier.TOWN,
+    val levelRangeLabel: String = "Lvl 1-20"
 ) {
     fun contains(x: Int, y: Int): Boolean = x in minX..maxX && y in minY..maxY
 }
@@ -52,11 +61,15 @@ data class WorldMapPin(
     val x: Int,
     val y: Int,
     val category: WorldPinCategory,
-    val subtitle: String = ""
+    val subtitle: String = "",
+    val levelRange: String = "",
+    val minZoomToShow: Float = 1.0f
 )
 
 enum class WorldPinCategory {
+    EMPIRE,
     CITY,
+    CAMP,
     FERRY,
     DUNGEON
 }
@@ -65,194 +78,343 @@ enum class WorldPinCategory {
  * Deterministic 1600x1200 (4x3 grid of 400x400 regions) overland geographic blueprint
  * modeled proportionally on Rookvale's painted parchment world map.
  *
- * Generates 32x32 chunks on demand with O(1) per-tile evaluation while reserving the
- * East-Central Heartland sector (x=1200..1599, y=400..799) for Rookvale City & Valley.
+ * Enforces:
+ * - Five locked overland biome tiers (Levels 1-75+) with biome-ideology empires, towns, and camps
+ * - Biome-tiered ore veins (Copper/Tin/Bog Iron in Heartland & Marsh; Vesperite in Badlands/Frostpeak;
+ *   Cinderite in Ashen Caldera & Blighted Wastes)
+ * - Strict ocean coastline validation via [CoastalPortValidator] so ports NEVER spawn inland
  */
 object WorldBiomeBlueprint {
 
-    val harborPorts: List<HarborPort> = listOf(
-        HarborPort(
+    private val harborCandidates: List<HarborPortCandidate> = listOf(
+        HarborPortCandidate(
             id = "rookvale_harbor",
             name = "Rookvale Royal Harbor",
             regionId = "rookvale_valley",
             captainName = "Captain Vance",
-            dockX = 1411,
-            dockY = 631,
-            arrivalX = 1412,
-            arrivalY = 630,
-            description = "East-Central Heartland capital pier & trade hub",
-            recommendedLevel = "Lvl 1-8",
-            dangerSeverity = 0
+            candidateX = 1560,
+            candidateY = 592,
+            roadTargetX = 1510,
+            roadTargetY = 592,
+            description = "Eastern Ocean capital pier & royal trade hub",
+            recommendedLevel = OverlandBiomeTier.ROOKVALE_HEARTLAND.levelRangeLabel,
+            dangerSeverity = OverlandBiomeTier.ROOKVALE_HEARTLAND.dangerSeverity,
+            preferredRegionBounds = 1525..1588,
+            preferredRegionYBounds = 470..710
         ),
-        HarborPort(
+        HarborPortCandidate(
             id = "mirewatch_bay",
             name = "Mirewatch Bay Port",
             regionId = "alder_sea_plains",
             captainName = "Captain Helena",
-            dockX = 618,
-            dockY = 560,
-            arrivalX = 615,
-            arrivalY = 560,
-            description = "Western peninsula anchorage beside Mirewatch Fortress",
-            recommendedLevel = "Lvl 6-12",
-            dangerSeverity = 1
+            candidateX = 638,
+            candidateY = 560,
+            roadTargetX = 545,
+            roadTargetY = 595,
+            description = "Western marsh peninsula anchorage beside Mirewatch Citadel",
+            recommendedLevel = OverlandBiomeTier.WHISPERING_MARSH.levelRangeLabel,
+            dangerSeverity = OverlandBiomeTier.WHISPERING_MARSH.dangerSeverity,
+            preferredRegionBounds = 580..720,
+            preferredRegionYBounds = 490..660
         ),
-        HarborPort(
+        HarborPortCandidate(
             id = "duskport_quay",
             name = "Duskport Coastal Quay",
             regionId = "blightwood_reach",
             captainName = "Captain Thorne",
-            dockX = 866,
-            dockY = 250,
-            arrivalX = 870,
-            arrivalY = 250,
-            description = "Northern strait gateway to Blightwood & Frostcrest",
-            recommendedLevel = "Lvl 8-14",
-            dangerSeverity = 2
+            candidateX = 855,
+            candidateY = 250,
+            roadTargetX = 904,
+            roadTargetY = 250,
+            description = "Northern Frostbay Strait gateway to Blighted Wastes",
+            recommendedLevel = OverlandBiomeTier.ASHEN_CALDERA.levelRangeLabel,
+            dangerSeverity = OverlandBiomeTier.ASHEN_CALDERA.dangerSeverity,
+            preferredRegionBounds = 810..910,
+            preferredRegionYBounds = 170..330
         ),
-        HarborPort(
+        HarborPortCandidate(
             id = "sunspire_dock",
             name = "Sunspire Oasis Dock",
-            regionId = "maelstrom_jungle_west",
+            regionId = "sunspire_desert",
             captainName = "Captain Tariq",
-            dockX = 490,
-            dockY = 865,
-            arrivalX = 486,
-            arrivalY = 865,
-            description = "Sun-drenched desert harbor near Sunspire Oasis City",
-            recommendedLevel = "Lvl 12-22",
-            dangerSeverity = 3
+            candidateX = 486,
+            candidateY = 855,
+            roadTargetX = 375,
+            roadTargetY = 790,
+            description = "Sun-drenched badlands ocean harbor serving Sunspire Empire",
+            recommendedLevel = OverlandBiomeTier.SUNSCORCH_BADLANDS.levelRangeLabel,
+            dangerSeverity = OverlandBiomeTier.SUNSCORCH_BADLANDS.dangerSeverity,
+            preferredRegionBounds = 390..540,
+            preferredRegionYBounds = 790..920
         ),
-        HarborPort(
+        HarborPortCandidate(
             id = "sunleaf_pier",
             name = "Sunleaf Jungle Pier",
             regionId = "emerald_jungle_east",
             captainName = "Captain Orin",
-            dockX = 959,
-            dockY = 934,
-            arrivalX = 960,
-            arrivalY = 937,
-            description = "Emerald canopy timber pier serving Sunleaf Village",
-            recommendedLevel = "Lvl 10-16",
-            dangerSeverity = 2
+            candidateX = 960,
+            candidateY = 914,
+            roadTargetX = 960,
+            roadTargetY = 995,
+            description = "Raised canopy timber pier jutting into the Central Sea",
+            recommendedLevel = OverlandBiomeTier.WHISPERING_MARSH.levelRangeLabel,
+            dangerSeverity = OverlandBiomeTier.WHISPERING_MARSH.dangerSeverity,
+            preferredRegionBounds = 890..1040,
+            preferredRegionYBounds = 870..965
         ),
-        HarborPort(
+        HarborPortCandidate(
             id = "ember_landing",
             name = "Ember Isles Landing",
             regionId = "ember_isles",
             captainName = "Captain Kael",
-            dockX = 1427,
-            dockY = 952,
-            arrivalX = 1430,
-            arrivalY = 952,
+            candidateX = 1406,
+            candidateY = 952,
+            roadTargetX = 1462,
+            roadTargetY = 952,
             description = "Volcanic eastern archipelago harbor & lighthouse cove",
-            recommendedLevel = "Lvl 18-26",
-            dangerSeverity = 4
+            recommendedLevel = OverlandBiomeTier.ASHEN_CALDERA.levelRangeLabel,
+            dangerSeverity = OverlandBiomeTier.ASHEN_CALDERA.dangerSeverity,
+            preferredRegionBounds = 1365..1448,
+            preferredRegionYBounds = 900..1020
         )
     )
 
+    /**
+     * Strictly validated ocean-coastline Harbor Ports snapped via [CoastalPortValidator].
+     * Every port is guaranteed to sit 1-2 tiles from an open Sea/Ocean body (>= 25 connected tiles).
+     */
+    val validatedCoastalPorts: List<ValidatedCoastalPort> by lazy {
+        harborCandidates.map { candidate ->
+            CoastalPortValidator.validateAndSnapPort(candidate) { tx, ty ->
+                rawOverlandTerrainAt(tx, ty)
+            }
+        }
+    }
+
+    val harborPorts: List<HarborPort> by lazy {
+        validatedCoastalPorts.map { it.port }
+    }
+
+    private val validatedPierLookup: Set<Long> by lazy {
+        HashSet<Long>(512).apply {
+            validatedCoastalPorts.forEach { addAll(it.pierTiles) }
+        }
+    }
+
+    private val validatedBoatLookup: Set<Long> by lazy {
+        HashSet<Long>(32).apply {
+            validatedCoastalPorts.forEach { addAll(it.boatTiles) }
+        }
+    }
+
+    /**
+     * Biome-ideology Empires, Towns, and Forward Camps across all 5 overland biome tiers.
+     * Each settlement uses distinct cutaway walls, walkways, plazas, and light fixtures.
+     */
     val secondarySettlements: List<SettlementZone> = listOf(
+        // Heartland & Green Meadows (Lvl 1-20) — Half-timbered frontier camp
+        SettlementZone(
+            id = "spirewood_crossing",
+            name = "Spirewood Crossing Camp",
+            regionId = "spirewood_west",
+            centerX = 1042,
+            centerY = 592,
+            minX = 1031,
+            minY = 581,
+            maxX = 1053,
+            maxY = 603,
+            ideology = BiomeIdeology.HEARTLAND,
+            tier = SettlementTier.FORWARD_CAMP,
+            levelRangeLabel = OverlandBiomeTier.ROOKVALE_HEARTLAND.levelRangeLabel
+        ),
+        // Whispering Marsh & Mirelands (Lvl 20-32) — Raised plank walkways, stilt huts & campfires
         SettlementZone(
             id = "mirewatch_fortress",
-            name = "Mirewatch Fortress",
+            name = "Mirewatch Stilt Citadel",
             regionId = "alder_sea_plains",
             centerX = 545,
             centerY = 595,
             minX = 528,
             minY = 578,
             maxX = 562,
-            maxY = 612
+            maxY = 612,
+            ideology = BiomeIdeology.MARSHLAND,
+            tier = SettlementTier.EMPIRE,
+            levelRangeLabel = OverlandBiomeTier.WHISPERING_MARSH.levelRangeLabel
         ),
         SettlementZone(
-            id = "duskport_town",
-            name = "Duskport Quay",
-            regionId = "blightwood_reach",
-            centerX = 882,
-            centerY = 250,
-            minX = 866,
-            minY = 236,
-            maxX = 898,
-            maxY = 264
-        ),
-        SettlementZone(
-            id = "sunspire_oasis",
-            name = "Sunspire Oasis City",
-            regionId = "sunspire_desert",
-            centerX = 375,
-            centerY = 790,
-            minX = 358,
-            minY = 774,
-            maxX = 392,
-            maxY = 806
+            id = "boghollow_camp",
+            name = "Boghollow Stilt Camp",
+            regionId = "writhing_marshes",
+            centerX = 358,
+            centerY = 560,
+            minX = 348,
+            minY = 550,
+            maxX = 368,
+            maxY = 570,
+            ideology = BiomeIdeology.MARSHLAND,
+            tier = SettlementTier.FORWARD_CAMP,
+            levelRangeLabel = OverlandBiomeTier.WHISPERING_MARSH.levelRangeLabel
         ),
         SettlementZone(
             id = "sunleaf_village",
-            name = "Sunleaf Village",
+            name = "Sunleaf Stilt Village",
             regionId = "emerald_jungle_east",
             centerX = 960,
             centerY = 995,
             minX = 944,
             minY = 980,
             maxX = 976,
-            maxY = 1010
+            maxY = 1010,
+            ideology = BiomeIdeology.MARSHLAND,
+            tier = SettlementTier.TOWN,
+            levelRangeLabel = OverlandBiomeTier.WHISPERING_MARSH.levelRangeLabel
+        ),
+        // Sunscorch Badlands & Arid Dunes (Lvl 30-45) — Sandstone walls, shaded bazaar stalls & oasis wells
+        SettlementZone(
+            id = "sunspire_oasis",
+            name = "Sunspire Oasis Empire",
+            regionId = "sunspire_desert",
+            centerX = 375,
+            centerY = 790,
+            minX = 358,
+            minY = 774,
+            maxX = 392,
+            maxY = 806,
+            ideology = BiomeIdeology.BADLANDS,
+            tier = SettlementTier.EMPIRE,
+            levelRangeLabel = OverlandBiomeTier.SUNSCORCH_BADLANDS.levelRangeLabel
+        ),
+        SettlementZone(
+            id = "scorchwind_camp",
+            name = "Scorchwind Nomad Camp",
+            regionId = "sunspire_desert",
+            centerX = 315,
+            centerY = 912,
+            minX = 305,
+            minY = 902,
+            maxX = 325,
+            maxY = 922,
+            ideology = BiomeIdeology.BADLANDS,
+            tier = SettlementTier.FORWARD_CAMP,
+            levelRangeLabel = OverlandBiomeTier.SUNSCORCH_BADLANDS.levelRangeLabel
+        ),
+        // Frostpeak Highlands & Boreal Woods (Lvl 42-58) — Heavy mortared granite citadels & roaring hearth-forges
+        SettlementZone(
+            id = "frostpeak_citadel",
+            name = "Frostpeak Granite Citadel",
+            regionId = "frostcrest_highlands",
+            centerX = 1396,
+            centerY = 204,
+            minX = 1378,
+            minY = 188,
+            maxX = 1414,
+            maxY = 220,
+            ideology = BiomeIdeology.FROSTPEAK,
+            tier = SettlementTier.EMPIRE,
+            levelRangeLabel = OverlandBiomeTier.FROSTPEAK_HIGHLANDS.levelRangeLabel
+        ),
+        SettlementZone(
+            id = "boreal_watch_camp",
+            name = "Boreal Watch Camp",
+            regionId = "frostcrest_highlands",
+            centerX = 1268,
+            centerY = 258,
+            minX = 1258,
+            minY = 248,
+            maxX = 1278,
+            maxY = 268,
+            ideology = BiomeIdeology.FROSTPEAK,
+            tier = SettlementTier.FORWARD_CAMP,
+            levelRangeLabel = OverlandBiomeTier.FROSTPEAK_HIGHLANDS.levelRangeLabel
+        ),
+        // Ashen Caldera & Blighted Wastes (Lvl 55-75+) — Obsidian/iron-reinforced fortresses, war banners & braziers
+        SettlementZone(
+            id = "ashen_bastion",
+            name = "Ashen Bastion Empire",
+            regionId = "caldera_peaks",
+            centerX = 386,
+            centerY = 260,
+            minX = 370,
+            minY = 246,
+            maxX = 402,
+            maxY = 274,
+            ideology = BiomeIdeology.ASHEN_BLIGHT,
+            tier = SettlementTier.EMPIRE,
+            levelRangeLabel = OverlandBiomeTier.ASHEN_CALDERA.levelRangeLabel
+        ),
+        SettlementZone(
+            id = "duskport_town",
+            name = "Duskport Shadow Keep",
+            regionId = "blightwood_reach",
+            centerX = 904,
+            centerY = 250,
+            minX = 888,
+            minY = 236,
+            maxX = 920,
+            maxY = 264,
+            ideology = BiomeIdeology.ASHEN_BLIGHT,
+            tier = SettlementTier.TOWN,
+            levelRangeLabel = OverlandBiomeTier.ASHEN_CALDERA.levelRangeLabel
         ),
         SettlementZone(
             id = "ember_outpost",
-            name = "Ember Watch Outpost",
+            name = "Ember Watch Citadel",
             regionId = "ember_isles",
-            centerX = 1458,
+            centerX = 1462,
             centerY = 952,
-            minX = 1444,
-            minY = 940,
-            maxX = 1472,
-            maxY = 964
+            minX = 1448,
+            minY = 938,
+            maxX = 1476,
+            maxY = 966,
+            ideology = BiomeIdeology.ASHEN_BLIGHT,
+            tier = SettlementTier.EMPIRE,
+            levelRangeLabel = OverlandBiomeTier.ASHEN_CALDERA.levelRangeLabel
         )
     )
 
     /**
-     * Deterministic outer-overworld mining nodes across the 11 non-Rookvale regions.
-     * Strictly low-to-mid tier (Copper, Tin, Bog Iron) — Vesperite & Cinderite remain dungeon-exclusive!
+     * Deterministic biome-tiered outer-overworld mining veins:
+     * - Heartland & Marsh (Lvl 1-32): Copper, Tin & Bog Iron
+     * - Sunscorch Badlands & Frostpeak Highlands (Lvl 30-58): Vesperite & Bog Iron
+     * - Ashen Caldera & Blighted Wastes (Lvl 55-75+): Cinderite & Vesperite
      */
     val outerOverworldOres: List<OverworldOrePlacement> = listOf(
-        // Ashen Caldera Peaks (NW)
-        OverworldOrePlacement(278, 224, OreVeinKind.COPPER),
-        OverworldOrePlacement(286, 232, OreVeinKind.TIN),
-        OverworldOrePlacement(355, 240, OreVeinKind.BOG_IRON),
-        OverworldOrePlacement(364, 248, OreVeinKind.BOG_IRON),
-        // Writhing Marshes (W)
+        // Spirewood Meadows (Heartland Lvl 1-20 — Copper/Tin/Bog Iron only)
+        OverworldOrePlacement(1025, 538, OreVeinKind.COPPER),
+        OverworldOrePlacement(1042, 548, OreVeinKind.TIN),
+        OverworldOrePlacement(1118, 635, OreVeinKind.BOG_IRON),
+        // Whispering Marsh & Mirelands (Lvl 20-32 — Bog Iron, Tin & Copper)
         OverworldOrePlacement(255, 495, OreVeinKind.BOG_IRON),
         OverworldOrePlacement(268, 522, OreVeinKind.BOG_IRON),
         OverworldOrePlacement(332, 540, OreVeinKind.BOG_IRON),
         OverworldOrePlacement(220, 560, OreVeinKind.TIN),
-        // Mirewatch Peninsula
         OverworldOrePlacement(498, 558, OreVeinKind.COPPER),
         OverworldOrePlacement(510, 548, OreVeinKind.TIN),
-        // Blightwood & Duskport
-        OverworldOrePlacement(940, 215, OreVeinKind.BOG_IRON),
-        OverworldOrePlacement(965, 232, OreVeinKind.TIN),
-        OverworldOrePlacement(1062, 220, OreVeinKind.BOG_IRON),
-        // Frostcrest Highlands (NE)
-        OverworldOrePlacement(1278, 238, OreVeinKind.COPPER),
-        OverworldOrePlacement(1292, 248, OreVeinKind.TIN),
-        OverworldOrePlacement(1352, 228, OreVeinKind.BOG_IRON),
-        OverworldOrePlacement(1442, 236, OreVeinKind.BOG_IRON),
-        OverworldOrePlacement(1460, 248, OreVeinKind.TIN),
-        // Spirewood West
-        OverworldOrePlacement(1025, 538, OreVeinKind.COPPER),
-        OverworldOrePlacement(1042, 548, OreVeinKind.TIN),
-        OverworldOrePlacement(1118, 635, OreVeinKind.BOG_IRON),
-        // Sunspire Desert & Badlands (SW)
-        OverworldOrePlacement(315, 765, OreVeinKind.COPPER),
-        OverworldOrePlacement(424, 822, OreVeinKind.TIN),
-        OverworldOrePlacement(284, 1005, OreVeinKind.BOG_IRON),
-        OverworldOrePlacement(215, 1034, OreVeinKind.BOG_IRON),
-        // Emerald Jungle (South)
         OverworldOrePlacement(680, 995, OreVeinKind.COPPER),
         OverworldOrePlacement(748, 1012, OreVeinKind.TIN),
         OverworldOrePlacement(1018, 1022, OreVeinKind.BOG_IRON),
-        // Ember Isles (SE)
-        OverworldOrePlacement(1485, 932, OreVeinKind.BOG_IRON),
-        OverworldOrePlacement(1518, 948, OreVeinKind.BOG_IRON)
+        // Sunscorch Badlands & Arid Dunes (Lvl 30-45 — Vesperite veins + Bog Iron)
+        OverworldOrePlacement(315, 765, OreVeinKind.BOG_IRON),
+        OverworldOrePlacement(424, 822, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(284, 1005, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(215, 1034, OreVeinKind.VESPERITE),
+        // Frostpeak Highlands & Boreal Woods (Lvl 42-58 — High-tier Vesperite veins)
+        OverworldOrePlacement(1278, 238, OreVeinKind.BOG_IRON),
+        OverworldOrePlacement(1292, 248, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(1352, 228, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(1442, 236, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(1460, 248, OreVeinKind.VESPERITE),
+        // Ashen Caldera & Blighted Wastes (Lvl 55-75+ — Cinderite & Vesperite veins)
+        OverworldOrePlacement(278, 224, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(286, 232, OreVeinKind.CINDERITE),
+        OverworldOrePlacement(355, 240, OreVeinKind.CINDERITE),
+        OverworldOrePlacement(364, 248, OreVeinKind.CINDERITE),
+        OverworldOrePlacement(940, 215, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(965, 232, OreVeinKind.CINDERITE),
+        OverworldOrePlacement(1062, 220, OreVeinKind.CINDERITE),
+        OverworldOrePlacement(1485, 932, OreVeinKind.CINDERITE),
+        OverworldOrePlacement(1518, 948, OreVeinKind.CINDERITE)
     )
 
     private val outerOreLookup: Map<Long, TileType> = outerOverworldOres.associate { ore ->
@@ -267,39 +429,83 @@ object WorldBiomeBlueprint {
     }
 
     /**
-     * World Map pins calibrated to the 1600x1200 parchment artwork.
+     * World Map pins calibrated to the 1600x1200 parchment map.
+     * Empires, Cities, Ocean Ports, and Major Dungeons show at overview zoom (`1.0x`);
+     * Forward Camps (`CAMP`) and exact settlement level badges auto-reveal when zoomed in (`>= 1.6x`).
      */
-    val worldMapPins: List<WorldMapPin> = listOf(
-        // Major Cities & Settlements
-        WorldMapPin("city_rookvale", "Rookvale City", 1396, 592, WorldPinCategory.CITY, "Capital Sanctuary • Lvl 1-8"),
-        WorldMapPin("city_mirewatch", "Mirewatch Fortress", 545, 595, WorldPinCategory.CITY, "Peninsula Keep • Lvl 6-12"),
-        WorldMapPin("city_duskport", "Duskport Quay", 882, 250, WorldPinCategory.CITY, "Northern Harbor • Lvl 8-14"),
-        WorldMapPin("city_sunspire", "Sunspire Oasis", 375, 790, WorldPinCategory.CITY, "Desert Oasis • Lvl 12-22"),
-        WorldMapPin("city_sunleaf", "Sunleaf Village", 960, 995, WorldPinCategory.CITY, "Emerald Jungle • Lvl 10-16"),
-        WorldMapPin("city_ember", "Ember Watch", 1458, 952, WorldPinCategory.CITY, "Volcanic Isles • Lvl 18-26"),
+    val worldMapPins: List<WorldMapPin> by lazy {
+        buildList {
+            // Capital Heartland Empire
+            add(
+                WorldMapPin(
+                    id = "empire_rookvale",
+                    label = "Rookvale City",
+                    x = 1396,
+                    y = 592,
+                    category = WorldPinCategory.EMPIRE,
+                    subtitle = "Heartland Capital • Half-Timbered Sanctuary",
+                    levelRange = OverlandBiomeTier.ROOKVALE_HEARTLAND.levelRangeLabel,
+                    minZoomToShow = 1.0f
+                )
+            )
+            // All Biome-Ideology Empires, Towns & Forward Camps
+            for (s in secondarySettlements) {
+                val category = when (s.tier) {
+                    SettlementTier.EMPIRE -> WorldPinCategory.EMPIRE
+                    SettlementTier.TOWN -> WorldPinCategory.CITY
+                    SettlementTier.FORWARD_CAMP -> WorldPinCategory.CAMP
+                }
+                val minZoom = if (s.tier == SettlementTier.FORWARD_CAMP) 1.6f else 1.0f
+                val styleTag = when (s.ideology) {
+                    BiomeIdeology.HEARTLAND -> "Heartland Camp"
+                    BiomeIdeology.MARSHLAND -> "Marsh Stilt Stronghold"
+                    BiomeIdeology.BADLANDS -> "Sandstone Oasis"
+                    BiomeIdeology.FROSTPEAK -> "Granite Citadel"
+                    BiomeIdeology.ASHEN_BLIGHT -> "Obsidian Fortress"
+                }
+                add(
+                    WorldMapPin(
+                        id = "settlement_${s.id}",
+                        label = s.name,
+                        x = s.centerX,
+                        y = s.centerY,
+                        category = category,
+                        subtitle = "$styleTag • ${s.levelRangeLabel}",
+                        levelRange = s.levelRangeLabel,
+                        minZoomToShow = minZoom
+                    )
+                )
+            }
+            // All 6 Strictly Coastline-Validated Ocean Ferry Ports
+            for (port in harborPorts) {
+                add(
+                    WorldMapPin(
+                        id = "ferry_${port.id}",
+                        label = port.name,
+                        x = port.dockX,
+                        y = port.dockY,
+                        category = WorldPinCategory.FERRY,
+                        subtitle = "${port.captainName} • Ocean Harbor",
+                        levelRange = port.recommendedLevel,
+                        minZoomToShow = 1.0f
+                    )
+                )
+            }
+            // Major Dungeon Entrances (with scaled dungeon level recommendations)
+            add(WorldMapPin("dng_sewers", "Rookvale Sewers (-1)", 1442, 579, WorldPinCategory.DUNGEON, "Floor -1 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-1)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-1), 1.6f))
+            add(WorldMapPin("dng_grimmaw_valley", "Grimmaw Quarry (-5)", 1284, 716, WorldPinCategory.DUNGEON, "Floor -5 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-5)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-5), 1.0f))
+            add(WorldMapPin("dng_gorek_valley", "Gorek Labyrinth (-6)", 1516, 716, WorldPinCategory.DUNGEON, "Floor -6 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-6)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-6), 1.0f))
+            add(WorldMapPin("dng_caldera", "Ashen Caldera Shaft (-2)", 318, 252, WorldPinCategory.DUNGEON, "Floor -2 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-2)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-2), 1.0f))
+            add(WorldMapPin("dng_marsh", "Writhing Sinkhole (-1)", 295, 515, WorldPinCategory.DUNGEON, "Floor -1 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-1)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-1), 1.0f))
+            add(WorldMapPin("dng_blightwood", "Blightwood Barrow (-1)", 1020, 175, WorldPinCategory.DUNGEON, "Floor -1 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-1)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-1), 1.0f))
+            add(WorldMapPin("dng_frostcrest", "Frostpeak Quarry (-5)", 1320, 260, WorldPinCategory.DUNGEON, "Floor -5 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-5)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-5), 1.0f))
+            add(WorldMapPin("dng_badlands", "Badlands Labyrinth (-6)", 242, 1020, WorldPinCategory.DUNGEON, "Floor -6 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-6)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-6), 1.0f))
+            add(WorldMapPin("dng_jungle", "Jungle Ruin Vault (-2)", 720, 1020, WorldPinCategory.DUNGEON, "Floor -2 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-2)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-2), 1.0f))
+            add(WorldMapPin("dng_ember", "Ember Sanctum (-2)", 1510, 975, WorldPinCategory.DUNGEON, "Floor -2 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-2)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-2), 1.0f))
+        }
+    }
 
-        // Coastal Ferry Ports
-        WorldMapPin("ferry_rookvale", "Rookvale Harbor", 1411, 631, WorldPinCategory.FERRY, "Captain Vance"),
-        WorldMapPin("ferry_mirewatch", "Mirewatch Port", 618, 560, WorldPinCategory.FERRY, "Captain Helena"),
-        WorldMapPin("ferry_duskport", "Duskport Pier", 866, 250, WorldPinCategory.FERRY, "Captain Thorne"),
-        WorldMapPin("ferry_sunspire", "Sunspire Dock", 490, 865, WorldPinCategory.FERRY, "Captain Tariq"),
-        WorldMapPin("ferry_sunleaf", "Sunleaf Pier", 959, 934, WorldPinCategory.FERRY, "Captain Orin"),
-        WorldMapPin("ferry_ember", "Ember Landing", 1427, 952, WorldPinCategory.FERRY, "Captain Kael"),
-
-        // Major Dungeon Entrances
-        WorldMapPin("dng_sewers", "Rookvale Sewers (-1)", 1442, 579, WorldPinCategory.DUNGEON, "Floor -1 • Lvl 3-6"),
-        WorldMapPin("dng_grimmaw_valley", "Grimmaw Quarry (-5)", 1284, 716, WorldPinCategory.DUNGEON, "Floor -5 • Vesperite"),
-        WorldMapPin("dng_gorek_valley", "Gorek Labyrinth (-6)", 1516, 716, WorldPinCategory.DUNGEON, "Floor -6 • Cinderite"),
-        WorldMapPin("dng_caldera", "Ashen Caldera Shaft (-2)", 318, 252, WorldPinCategory.DUNGEON, "Floor -2 • Molten Chasm"),
-        WorldMapPin("dng_marsh", "Writhing Sinkhole (-1)", 295, 515, WorldPinCategory.DUNGEON, "Floor -1 • Bog Crypt"),
-        WorldMapPin("dng_blightwood", "Blightwood Barrow (-1)", 1020, 175, WorldPinCategory.DUNGEON, "Floor -1 • Dark Barrow"),
-        WorldMapPin("dng_frostcrest", "Frostcrest Quarry (-5)", 1320, 260, WorldPinCategory.DUNGEON, "Floor -5 • Grimmaw Peak"),
-        WorldMapPin("dng_badlands", "Badlands Labyrinth (-6)", 242, 1020, WorldPinCategory.DUNGEON, "Floor -6 • Gorek Gate"),
-        WorldMapPin("dng_jungle", "Jungle Ruin Vault (-2)", 720, 1020, WorldPinCategory.DUNGEON, "Floor -2 • Deep Caverns"),
-        WorldMapPin("dng_ember", "Ember Sanctum (-2)", 1510, 975, WorldPinCategory.DUNGEON, "Floor -2 • Volcanic Pit")
-    )
-
-    // --- Road Network Segments connecting every city, bridge, harbor, and dungeon entrance ---
+    // --- Road Network Segments connecting every empire, town, forward camp, harbor, and dungeon entrance ---
     private data class RoadSeg(
         val x0: Int,
         val y0: Int,
@@ -309,38 +515,53 @@ object WorldBiomeBlueprint {
         val tile: TileType
     )
 
-    private val roadSegments: List<RoadSeg> = listOf(
+    private val baseRoadSegments: List<RoadSeg> = listOf(
         // East-Central Heartland Connections (into Rookvale City borders at 1200,592 / 1396,400 / 1396,799)
         RoadSeg(942, 592, 1205, 592, 2, TileType.COBBLESTONE), // Spirewood Royal Highway -> Rookvale West
-        RoadSeg(1396, 150, 1396, 405, 2, TileType.COBBLESTONE), // Frostcrest North Highway -> Rookvale North
-        RoadSeg(1396, 260, 1320, 260, 2, TileType.DIRT_FLOOR), // Frostcrest Grimmaw Ridge spur
+        RoadSeg(1396, 150, 1396, 405, 2, TileType.COBBLESTONE), // Frostpeak Citadel Highway -> Rookvale North
+        RoadSeg(1396, 260, 1268, 258, 2, TileType.DIRT_FLOOR), // Frostpeak Grimmaw & Boreal Watch Camp spur
         RoadSeg(1396, 795, 1396, 952, 2, TileType.DIRT_FLOOR), // South Rookvale -> Ember Causeway
-        RoadSeg(1396, 952, 1465, 952, 2, TileType.COBBLESTONE), // Ember Causeway -> Ember Watch
+        RoadSeg(1396, 952, 1465, 952, 2, TileType.COBBLESTONE), // Ember Causeway -> Ember Watch Citadel
         RoadSeg(1465, 952, 1510, 975, 1, TileType.DIRT_FLOOR), // Ember Watch -> Ember Sanctum
 
-        // Eastern Continent North-South Spine (Duskport <-> Blightwood <-> Spirewood <-> Sunleaf)
-        RoadSeg(882, 250, 1020, 250, 2, TileType.COBBLESTONE),
+        // Eastern Continent North-South Spine (Duskport <-> Blightwood <-> Spirewood Camp <-> Sunleaf)
+        RoadSeg(868, 250, 1020, 250, 2, TileType.COBBLESTONE),
         RoadSeg(1020, 175, 1020, 250, 2, TileType.DIRT_FLOOR), // Blightwood Barrow spur
-        RoadSeg(1020, 250, 1042, 592, 2, TileType.COBBLESTONE), // Blightwood -> Spirewood Crossroads
+        RoadSeg(1020, 250, 1042, 592, 2, TileType.COBBLESTONE), // Blightwood -> Spirewood Crossing Camp
         RoadSeg(1042, 592, 1042, 760, 2, TileType.COBBLESTONE), // Spirewood -> South Bridgehead
-        RoadSeg(1042, 985, 960, 995, 2, TileType.COBBLESTONE), // Bridgehead -> Sunleaf Village
-        RoadSeg(960, 995, 960, 936, 2, TileType.WOOD_PIER), // Sunleaf Village -> Sunleaf Jungle Pier
+        RoadSeg(1042, 985, 960, 995, 2, TileType.COBBLESTONE), // Bridgehead -> Sunleaf Stilt Village
         RoadSeg(960, 995, 720, 1020, 2, TileType.DIRT_FLOOR), // Sunleaf -> West Jungle Ruins
         RoadSeg(720, 1020, 645, 980, 2, TileType.DIRT_FLOOR), // West Jungle -> SW Bridge
         RoadSeg(760, 945, 760, 795, 1, TileType.STONE_BRIDGE), // Jungle -> Maelstrom Shrine Causeway
 
-        // Western Continent Spine (Ashen Caldera <-> Writhing Marshes <-> Mirewatch <-> Sunspire <-> Badlands)
-        RoadSeg(318, 252, 445, 212, 2, TileType.DIRT_FLOOR), // Ashen Caldera -> Frostbay Bridge West
+        // Western Continent Spine (Ashen Bastion <-> Writhing Marshes <-> Boghollow Camp <-> Mirewatch <-> Sunspire <-> Scorchwind <-> Badlands)
+        RoadSeg(318, 252, 386, 260, 2, TileType.COBBLESTONE), // Ashen Caldera Shaft -> Ashen Bastion Empire
+        RoadSeg(386, 260, 445, 212, 2, TileType.COBBLESTONE), // Ashen Bastion -> Frostbay Bridge West
         RoadSeg(318, 252, 295, 515, 2, TileType.DIRT_FLOOR), // Caldera -> Writhing Marshes Sinkhole
-        RoadSeg(295, 515, 375, 592, 2, TileType.DIRT_FLOOR), // Writhing Marshes -> Mirewatch West Road
+        RoadSeg(295, 515, 358, 560, 2, TileType.DIRT_FLOOR), // Sinkhole -> Boghollow Stilt Camp
+        RoadSeg(358, 560, 375, 592, 2, TileType.DIRT_FLOOR), // Boghollow Camp -> Mirewatch West Road
         RoadSeg(375, 592, 545, 592, 2, TileType.COBBLESTONE), // Mirewatch Main Road
         RoadSeg(545, 592, 600, 592, 2, TileType.COBBLESTONE), // Mirewatch -> Central Alder Causeway
-        RoadSeg(545, 592, 616, 560, 2, TileType.COBBLESTONE), // Mirewatch -> Mirewatch Bay Port
-        RoadSeg(375, 592, 375, 790, 2, TileType.DIRT_FLOOR), // Western Road -> Sunspire Oasis City
-        RoadSeg(375, 790, 486, 865, 2, TileType.DIRT_FLOOR), // Sunspire Oasis -> Sunspire Dock
+        RoadSeg(375, 592, 375, 790, 2, TileType.DIRT_FLOOR), // Western Road -> Sunspire Oasis Empire
         RoadSeg(375, 790, 455, 980, 2, TileType.DIRT_FLOOR), // Sunspire Oasis -> SW Jungle Bridge
-        RoadSeg(375, 790, 242, 1020, 2, TileType.DIRT_FLOOR) // Sunspire Oasis -> Badlands Gorek Gate
+        RoadSeg(375, 790, 315, 912, 2, TileType.DIRT_FLOOR), // Sunspire Oasis -> Scorchwind Nomad Camp
+        RoadSeg(315, 912, 242, 1020, 2, TileType.DIRT_FLOOR) // Scorchwind Nomad Camp -> Badlands Gorek Gate
     )
+
+    private val allRoadSegments: List<RoadSeg> by lazy {
+        baseRoadSegments + validatedCoastalPorts.mapNotNull { vp ->
+            // Link every validated ocean port's land anchor cleanly to its nearest inland highway/city
+            if (vp.port.id == "rookvale_harbor") null
+            else RoadSeg(
+                x0 = vp.landAnchorX,
+                y0 = vp.landAnchorY,
+                x1 = vp.roadTargetX,
+                y1 = vp.roadTargetY,
+                halfWidth = 2,
+                tile = TileType.COBBLESTONE
+            )
+        }
+    }
 
     // --- 5 Inter-Continental Walkable Stone Sea-Bridges ---
     private data class BridgeRect(val x1: Int, val y1: Int, val x2: Int, val y2: Int)
@@ -358,7 +579,7 @@ object WorldBiomeBlueprint {
         packCoord(318, 252) to TileType.STAIRS_DOWN,   // Ashen Caldera Shaft -> Floor -2
         packCoord(295, 515) to TileType.ROPE_HOLE_DOWN,// Writhing Sinkhole -> Floor -1
         packCoord(1020, 175) to TileType.STAIRS_DOWN,  // Blightwood Barrow -> Floor -1
-        packCoord(1320, 260) to TileType.STAIRS_DOWN,  // Frostcrest Grimmaw Ridge -> Floor -5
+        packCoord(1320, 260) to TileType.STAIRS_DOWN,  // Frostpeak Grimmaw Ridge -> Floor -5
         packCoord(242, 1020) to TileType.STAIRS_DOWN,  // Badlands Gorek Gate -> Floor -6
         packCoord(720, 1020) to TileType.STAIRS_DOWN,  // Jungle Ruin Vault -> Floor -2
         packCoord(1510, 975) to TileType.STAIRS_DOWN   // Ember Sanctum -> Floor -2
@@ -370,22 +591,28 @@ object WorldBiomeBlueprint {
     private val waypointNodes: List<WaypointNode> = listOf(
         WaypointNode("rookvale_center", 1396, 592),
         WaypointNode("rookvale_west_gate", 1200, 592),
+        WaypointNode("rookvale_east_harbor", 1558, 592),
         WaypointNode("rookvale_north_gate", 1396, 400),
         WaypointNode("rookvale_south_gate", 1396, 799),
+        WaypointNode("frostcrest_citadel", 1396, 204),
         WaypointNode("frostcrest_hub", 1396, 260),
         WaypointNode("frostcrest_grimmaw", 1320, 260),
+        WaypointNode("boreal_watch_camp", 1268, 258),
         WaypointNode("spirewood_cross", 1042, 592),
         WaypointNode("alder_bridge_east", 942, 592),
         WaypointNode("alder_bridge_west", 595, 592),
         WaypointNode("mirewatch", 545, 592),
         WaypointNode("mirewatch_west", 375, 592),
+        WaypointNode("boghollow_camp", 358, 560),
         WaypointNode("writhing_marsh", 295, 515),
         WaypointNode("ashen_caldera", 318, 252),
+        WaypointNode("ashen_bastion", 386, 260),
         WaypointNode("frostbay_west", 442, 212),
         WaypointNode("frostbay_east", 866, 212),
-        WaypointNode("duskport", 882, 250),
+        WaypointNode("duskport", 904, 250),
         WaypointNode("blightwood_jct", 1020, 250),
         WaypointNode("sunspire_oasis", 375, 790),
+        WaypointNode("scorchwind_camp", 315, 912),
         WaypointNode("sunspire_badlands", 242, 1020),
         WaypointNode("sw_bridge_west", 452, 980),
         WaypointNode("sw_bridge_east", 650, 980),
@@ -394,7 +621,7 @@ object WorldBiomeBlueprint {
         WaypointNode("sunleaf_bridge_south", 1042, 988),
         WaypointNode("sunleaf_bridge_north", 1042, 756),
         WaypointNode("ember_causeway_west", 1396, 952),
-        WaypointNode("ember_watch", 1458, 952)
+        WaypointNode("ember_watch", 1462, 952)
     )
 
     private val waypointEdges: Map<String, List<String>> = buildMap {
@@ -403,24 +630,30 @@ object WorldBiomeBlueprint {
             put(b, (get(b) ?: emptyList()) + a)
         }
         link("rookvale_center", "rookvale_west_gate")
+        link("rookvale_center", "rookvale_east_harbor")
         link("rookvale_center", "rookvale_north_gate")
         link("rookvale_center", "rookvale_south_gate")
         link("rookvale_north_gate", "frostcrest_hub")
+        link("frostcrest_hub", "frostcrest_citadel")
         link("frostcrest_hub", "frostcrest_grimmaw")
+        link("frostcrest_grimmaw", "boreal_watch_camp")
         link("rookvale_west_gate", "spirewood_cross")
         link("spirewood_cross", "alder_bridge_east")
         link("alder_bridge_east", "alder_bridge_west")
         link("alder_bridge_west", "mirewatch")
         link("mirewatch", "mirewatch_west")
-        link("mirewatch_west", "writhing_marsh")
+        link("mirewatch_west", "boghollow_camp")
+        link("boghollow_camp", "writhing_marsh")
         link("writhing_marsh", "ashen_caldera")
-        link("ashen_caldera", "frostbay_west")
+        link("ashen_caldera", "ashen_bastion")
+        link("ashen_bastion", "frostbay_west")
         link("frostbay_west", "frostbay_east")
         link("frostbay_east", "duskport")
         link("duskport", "blightwood_jct")
         link("blightwood_jct", "spirewood_cross")
         link("mirewatch_west", "sunspire_oasis")
-        link("sunspire_oasis", "sunspire_badlands")
+        link("sunspire_oasis", "scorchwind_camp")
+        link("scorchwind_camp", "sunspire_badlands")
         link("sunspire_oasis", "sw_bridge_west")
         link("sw_bridge_west", "sw_bridge_east")
         link("sw_bridge_east", "west_jungle")
@@ -480,7 +713,6 @@ object WorldBiomeBlueprint {
         }
         if (chain.isEmpty()) return listOf(goalX to goalY)
 
-        // Subdivide any long straight bridge/highway legs (> 110 tiles) so each local A* hop stays fast
         val subdivided = mutableListOf<Pair<Int, Int>>()
         var prevPt = startX to startY
         for (pt in chain) {
@@ -519,6 +751,52 @@ object WorldBiomeBlueprint {
     fun isSecondarySafeZone(x: Int, y: Int): Boolean =
         secondarySettlements.any { it.isSafeZone && it.contains(x, y) }
 
+    /**
+     * Organic Eastern Ocean Bay carved along Rookvale Valley's eastern flank (`lx >= ~360..366`),
+     * connecting seamlessly to the eastern sea so Rookvale Royal Harbor anchors directly on true ocean water.
+     */
+    fun rawRookvaleEasternSeaTile(gx: Int, gy: Int): TileType? {
+        if (!isInRookvaleHeartland(gx, gy)) return null
+        val lx = gx - 1200
+        val ly = gy - 400
+        if (ly in 190..194) return null // Keep Rookvale East Border Highway causeway unbroken
+        if (lx >= 394) return TileType.DEEP_WATER
+        if (ly !in 14..386) return null
+        val shoreX = 364 + (sin(ly * 0.032) * 3.5 + cos(ly * 0.017) * 2.0).toInt()
+        if (lx < shoreX) return null
+        return if (lx >= shoreX + 8) TileType.DEEP_WATER else TileType.WATER
+    }
+
+    /**
+     * Pure continent land-vs-ocean elevation oracle used by [CoastalPortValidator] so harbor snapping
+     * evaluates strictly against true open Sea/Ocean geometry (never rivers, ponds, or settlements).
+     */
+    fun rawOverlandTerrainAt(x: Int, y: Int): TileType {
+        if (x < 6 || x >= WORLD_OVERLAND_WIDTH - 6 || y < 6 || y >= WORLD_OVERLAND_HEIGHT - 6) {
+            return TileType.DEEP_WATER
+        }
+        if (isInRookvaleHeartland(x, y)) {
+            rawRookvaleEasternSeaTile(x, y)?.let { return it }
+            return TileType.GRASS
+        }
+        val landVal = landmassField(x, y)
+        if (landVal < 0.0f) {
+            return if (landVal > -0.14f) TileType.WATER else TileType.DEEP_WATER
+        }
+        return TileType.GRASS
+    }
+
+    /**
+     * O(1) lookup for strictly validated ocean-coastline wooden piers and moored boats.
+     * Checked for both outer continent chunks and Rookvale's Eastern Ocean Harbor.
+     */
+    fun validatedPortTileAt(x: Int, y: Int): TileType? {
+        val key = packCoord(x, y)
+        if (key in validatedPierLookup) return TileType.WOOD_PIER
+        if (key in validatedBoatLookup) return TileType.MOORED_BOAT
+        return null
+    }
+
     fun generateOuterChunk(chunkX: Int, chunkY: Int): TileChunk {
         val chunk = TileChunk(chunkX, chunkY, WORLD_CHUNK_SIZE, TileType.DEEP_WATER)
         val baseX = chunkX * WORLD_CHUNK_SIZE
@@ -537,7 +815,6 @@ object WorldBiomeBlueprint {
 
     /**
      * Deterministic tile resolver for all 11 outer 400x400 regions around Rookvale Valley.
-     * Matches the continents, seas, biomes, harbors, bridges, and settlements of 4308.jpg.
      */
     fun tileAtGlobal(x: Int, y: Int): TileType {
         // Outer ocean frame
@@ -548,13 +825,13 @@ object WorldBiomeBlueprint {
         // 1. Explicit dungeon portals outside Rookvale Valley
         outerPortals[packCoord(x, y)]?.let { return it }
 
-        // 2. Explicit outer-overworld ore veins (Copper, Tin, Bog Iron only)
+        // 2. Biome-tiered outer-overworld ore veins
         outerOreLookup[packCoord(x, y)]?.let { return it }
 
-        // 3. Harbor Piers & Moored Boats for outer coastal ports
+        // 3. Strictly coastline-validated Ocean Harbor Piers, Boats & Maelstrom Shrine
         resolveOuterHarborTile(x, y)?.let { return it }
 
-        // 4. Secondary Settlement Plazas, Walls & Mini-Depots
+        // 4. Biome-Ideology Empires, Towns & Forward Camps
         resolveSettlementTile(x, y)?.let { return it }
 
         // 5. Walkable Stone Sea-Bridges (highest priority over water!)
@@ -564,10 +841,10 @@ object WorldBiomeBlueprint {
             }
         }
 
-        // 6. Inter-regional Highways & Trails
+        // 6. Inter-regional Highways, Camp Roads & Auto-Linked Harbor Spurs
         resolveRoadTile(x, y)?.let { return it }
 
-        // 7. Landmass & Biome Elevation Field matching 4308.jpg
+        // 7. Landmass & Biome Elevation Field
         val landVal = landmassField(x, y)
         if (landVal < 0.0f) {
             return if (landVal > -0.14f) TileType.WATER else TileType.DEEP_WATER
@@ -577,25 +854,7 @@ object WorldBiomeBlueprint {
     }
 
     private fun resolveOuterHarborTile(x: Int, y: Int): TileType? {
-        // Mirewatch Bay Port (east pier jutting into Central Sea)
-        if (x in 612..624 && y in 558..562) return TileType.WOOD_PIER
-        if ((x == 625 && y == 559) || (x == 625 && y == 561)) return TileType.MOORED_BOAT
-
-        // Duskport Coastal Quay (west pier jutting into Frostbay Straits)
-        if (x in 858..870 && y in 248..252) return TileType.WOOD_PIER
-        if ((x == 857 && y == 249) || (x == 857 && y == 251)) return TileType.MOORED_BOAT
-
-        // Sunspire Oasis Dock (SE desert bay pier)
-        if (x in 484..496 && y in 863..867) return TileType.WOOD_PIER
-        if ((x == 497 && y == 864) || (x == 497 && y == 866)) return TileType.MOORED_BOAT
-
-        // Sunleaf Jungle Pier (north pier into Central Sea)
-        if (x in 957..963 && y in 928..942) return TileType.WOOD_PIER
-        if ((x == 956 && y == 930) || (x == 964 && y == 930)) return TileType.MOORED_BOAT
-
-        // Ember Isles Landing (west cove pier — boats moored along north flank so causeway stays clear)
-        if (x in 1422..1434 && y in 950..954) return TileType.WOOD_PIER
-        if ((x == 1425 && y == 949) || (x == 1428 && y == 949)) return TileType.MOORED_BOAT
+        validatedPortTileAt(x, y)?.let { return it }
 
         // Maelstrom Sea-Dragon Shrine Isle plaza
         if (x in 752..768 && y in 784..796) {
@@ -606,39 +865,119 @@ object WorldBiomeBlueprint {
         return null
     }
 
+    /**
+     * Generates open-top cutaway walls, plazas, walkways, workshops, and lighting fixtures
+     * tailored to each settlement's [BiomeIdeology] and [SettlementTier].
+     */
     private fun resolveSettlementTile(x: Int, y: Int): TileType? {
         for (s in secondarySettlements) {
             if (!s.contains(x, y)) continue
             val onBorderX = x == s.minX || x == s.maxX
             val onBorderY = y == s.minY || y == s.maxY
-            val nearCenterX = abs(x - s.centerX) <= 3
-            val nearCenterY = abs(y - s.centerY) <= 3
+            val gateHalf = if (s.tier == SettlementTier.FORWARD_CAMP) 2 else 3
+            val nearCenterX = abs(x - s.centerX) <= gateHalf
+            val nearCenterY = abs(y - s.centerY) <= gateHalf
+            val dx = x - s.centerX
+            val dy = y - s.centerY
 
-            // Leave wide open gates on all 4 cardinal sides
+            // 1. Cutaway Perimeter Walls & Fortifications with wide cardinal gates
             if ((onBorderX && !nearCenterY) || (onBorderY && !nearCenterX)) {
-                return if (s.id == "sunleaf_village") TileType.WOOD_FENCE else TileType.CITY_WALL
+                return when (s.ideology) {
+                    BiomeIdeology.HEARTLAND -> {
+                        if ((x + y) % 5 == 0) TileType.TIMBER_WINDOW_WALL else TileType.TIMBER_WALL
+                    }
+                    BiomeIdeology.MARSHLAND -> {
+                        if (s.tier == SettlementTier.EMPIRE && (x + y) % 4 == 0) TileType.TIMBER_WALL else TileType.WOOD_FENCE
+                    }
+                    BiomeIdeology.BADLANDS -> TileType.SANDSTONE_WALL
+                    BiomeIdeology.FROSTPEAK -> {
+                        if (s.tier == SettlementTier.FORWARD_CAMP) TileType.WOOD_FENCE else TileType.GRANITE_WALL
+                    }
+                    BiomeIdeology.ASHEN_BLIGHT -> TileType.OBSIDIAN_WALL
+                }
             }
-            // Corner lanterns inside settlement plaza
-            if ((x == s.minX + 3 || x == s.maxX - 3) && (y == s.minY + 3 || y == s.maxY - 3)) {
-                return TileType.LANTERN_POST
-            }
-            // Central Fountain & Mini-Depot chest
-            if (x == s.centerX && y == s.centerY) return TileType.FOUNTAIN
-            if (x == s.centerX - 5 && y == s.centerY - 4) return TileType.MINI_DEPOT
-            if (x == s.centerX + 5 && y == s.centerY - 4) return TileType.SMELTING_FURNACE
-            if (x == s.centerX + 6 && y == s.centerY - 4) return TileType.BLACKSMITH_ANVIL
 
-            return when (s.id) {
-                "sunleaf_village" -> TileType.WOOD_PLANK_FLOOR
-                "sunspire_oasis" -> if (abs(x - s.centerX) <= 6 && abs(y - s.centerY) <= 6) TileType.TEMPLE_FLOOR else TileType.COBBLESTONE
-                else -> TileType.COBBLESTONE
+            // Iron-bar entrance gates for Ashen/Blight fortresses on north/south portals
+            if (s.ideology == BiomeIdeology.ASHEN_BLIGHT && onBorderY && abs(dx) == gateHalf) {
+                return TileType.IRON_BAR_GATE
+            }
+
+            // 2. Corner Light Fixtures & Ideology Standards
+            val nearCornerX = x == s.minX + 3 || x == s.maxX - 3
+            val nearCornerY = y == s.minY + 3 || y == s.maxY - 3
+            if (nearCornerX && nearCornerY) {
+                return when (s.ideology) {
+                    BiomeIdeology.HEARTLAND, BiomeIdeology.BADLANDS -> TileType.LANTERN_POST
+                    BiomeIdeology.MARSHLAND, BiomeIdeology.FROSTPEAK, BiomeIdeology.ASHEN_BLIGHT -> TileType.CAMPFIRE_BRAZIER
+                }
+            }
+
+            // 3. Ideology-Specific Landmarks, Stalls, Stilt Huts, Forges & Banners
+            when (s.ideology) {
+                BiomeIdeology.HEARTLAND -> {
+                    if (dx == 0 && dy == 0) return TileType.FOUNTAIN
+                    if (dx == -4 && dy == -3) return TileType.MINI_DEPOT
+                    if ((dx == -5 || dx == 5) && dy == 3) return TileType.MARKET_AWNING
+                    if (dx == 4 && dy == -3) return TileType.BLACKSMITH_ANVIL
+                    return if (abs(dx) <= 4 && abs(dy) <= 4) TileType.TEMPLE_FLOOR else TileType.COBBLESTONE
+                }
+                BiomeIdeology.MARSHLAND -> {
+                    // Central roaring campfire, raised plank walkways & stilt hut alcoves
+                    if (dx == 0 && dy == 0) return TileType.CAMPFIRE_BRAZIER
+                    if (dx == -4 && dy == -3) return TileType.MINI_DEPOT
+                    if (s.tier != SettlementTier.FORWARD_CAMP) {
+                        if ((dx == -8 || dx == 8) && dy in -4..4 && dy != 0) return TileType.TIMBER_WALL
+                        if (dx == 5 && dy == -4) return TileType.SMELTING_FURNACE
+                        if (dx == 6 && dy == -4) return TileType.BLACKSMITH_ANVIL
+                    }
+                    if ((dx == -3 || dx == 3) && dy == 4) return TileType.CRATE_BARREL
+                    return TileType.WOOD_PLANK_FLOOR
+                }
+                BiomeIdeology.BADLANDS -> {
+                    // Oasis well, shaded desert bazaar awnings & sandstone trade plaza
+                    if (dx == 0 && dy == 0) return TileType.FOUNTAIN
+                    if (dx == -5 && dy == -4) return TileType.MINI_DEPOT
+                    if ((dx == -6 || dx == 6) && (dy == -2 || dy == 2)) return TileType.MARKET_AWNING
+                    if (s.tier == SettlementTier.EMPIRE) {
+                        if (dx == 5 && dy == -4) return TileType.SMELTING_FURNACE
+                        if (dx == 6 && dy == -4) return TileType.BLACKSMITH_ANVIL
+                        if ((dx == -9 || dx == 9) && dy == 0) return TileType.SANDSTONE_WALL
+                    }
+                    return when {
+                        abs(dx) <= 5 && abs(dy) <= 5 -> TileType.TEMPLE_FLOOR
+                        abs(dx) <= 10 && abs(dy) <= 10 -> TileType.COBBLESTONE
+                        else -> TileType.SAND
+                    }
+                }
+                BiomeIdeology.FROSTPEAK -> {
+                    // Heavy granite hearth-forges, timber palisades & roaring braziers
+                    if (dx == 0 && dy == 0) return TileType.CAMPFIRE_BRAZIER
+                    if (dx == -5 && dy == -4) return TileType.MINI_DEPOT
+                    if (dx == 4 && dy == -4) return TileType.SMELTING_FURNACE
+                    if (dx == 5 && dy == -4) return TileType.BLACKSMITH_ANVIL
+                    if (dx == -4 && dy == 4) return TileType.WEAPON_RACK
+                    if (s.tier == SettlementTier.EMPIRE && (dx == -8 || dx == 8) && (dy == -6 || dy == 6)) {
+                        return TileType.GRANITE_WALL
+                    }
+                    return if (abs(dx) <= 5 && abs(dy) <= 5) TileType.COBBLESTONE else TileType.DIRT_FLOOR
+                }
+                BiomeIdeology.ASHEN_BLIGHT -> {
+                    // Obsidian/iron fortress, crimson war banners, glowing braziers & armory
+                    if (dx == 0 && dy == 0) return TileType.CAMPFIRE_BRAZIER
+                    if ((dx == -4 || dx == 4) && dy == 0) return TileType.WAR_BANNER
+                    if (dx == -5 && dy == -4) return TileType.MINI_DEPOT
+                    if (dx == 5 && dy == -4) return TileType.SMELTING_FURNACE
+                    if (dx == 6 && dy == -4) return TileType.BLACKSMITH_ANVIL
+                    if (dx == 4 && dy == 4) return TileType.WEAPON_RACK
+                    return if (abs(dx) <= 6 && abs(dy) <= 6) TileType.OBSIDIAN_FLOOR else TileType.COBBLESTONE
+                }
             }
         }
         return null
     }
 
     private fun resolveRoadTile(x: Int, y: Int): TileType? {
-        for (seg in roadSegments) {
+        for (seg in allRoadSegments) {
             val minX = minOf(seg.x0, seg.x1) - seg.halfWidth
             val maxX = maxOf(seg.x0, seg.x1) + seg.halfWidth
             val minY = minOf(seg.y0, seg.y1) - seg.halfWidth
@@ -660,13 +999,12 @@ object WorldBiomeBlueprint {
     }
 
     /**
-     * Smooth organic continent distance field matching 4308.jpg:
+     * Smooth organic continent distance field:
      * Positive = land, Negative = sea (`-0.14..0` coastal shallows, `< -0.14` deep ocean).
      */
     private fun landmassField(x: Int, y: Int): Float {
         val fx = x.toFloat()
         val fy = y.toFloat()
-        // Organic coastal shoreline wobble
         val coastNoise = (sin(fx * 0.023f + fy * 0.017f) * 0.09f +
             cos(fx * 0.041f - fy * 0.031f) * 0.06f)
 
@@ -692,7 +1030,7 @@ object WorldBiomeBlueprint {
 
         // --- EASTERN CONTINENT ---
         addBlob(1010f, 195f, 175f, 165f)   // Blightwood & Duskport Coast
-        addBlob(1365f, 200f, 235f, 185f)   // Frostcrest Highlands & Alpine Peaks
+        addBlob(1365f, 200f, 235f, 185f)   // Frostpeak Highlands & Alpine Peaks
         addBlob(1065f, 545f, 205f, 235f)   // Spirewood Western Reach
         addBlob(1395f, 595f, 235f, 240f)   // Rookvale Heartland & Eastern Coast
 
@@ -710,12 +1048,10 @@ object WorldBiomeBlueprint {
         val h = deterministicHash(x, y, 31) and 255
         val detail = deterministicHash(x, y, 73) and 255
 
-        // Natural 7x7 glade clearings around outer-continent monster camps so trees/rocks never spawn on monsters
         val nearMonsterClearing = outerMonsterClearings.any { (sx, sy) ->
             abs(x - sx) <= 3 && abs(y - sy) <= 3
         }
 
-        // Keep immediate dungeon entrance, settlement apron & monster clearings walkable
         val nearPortal = nearMonsterClearing || outerPortals.keys.any { key ->
             val px = (key and 0xFFFFFFFFL).toInt()
             val py = (key ushr 32).toInt()
@@ -768,7 +1104,7 @@ object WorldBiomeBlueprint {
             return if (detail < 210) TileType.BLIGHT_SOIL else TileType.DARK_GRASS
         }
 
-        // 7. Frostcrest Snowy Highlands (x >= 1145, y < 395)
+        // 7. Frostpeak Snowy Highlands (x >= 1145, y < 395)
         if (x >= 1145 && y < 395) {
             val snowLine = 265 + (sin(x * 0.025) * 28.0).toInt()
             if (y < snowLine) {
@@ -799,7 +1135,7 @@ object WorldBiomeBlueprint {
         }
 
         // 10. Temperate Coastal Plains & Spirewood / Mirewatch Heartland
-        if (landVal < 0.06f) return TileType.SAND // Sandy coastal beaches
+        if (landVal < 0.06f) return TileType.SAND
         if (!nearPortal && h < 34 && landVal > 0.16f) return TileType.TREE
         return when {
             detail < 32 -> TileType.FLOWER_GRASS

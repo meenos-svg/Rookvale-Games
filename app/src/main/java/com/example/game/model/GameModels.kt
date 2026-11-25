@@ -621,7 +621,12 @@ enum class TileType(val walkable: Boolean, val blocksSight: Boolean = false) {
     JUNGLE_FLOOR(true),
     VOLCANIC_ASH(true),
     BLIGHT_SOIL(true),
-    DEEP_WATER(false);
+    DEEP_WATER(false),
+    SANDSTONE_WALL(false, true),
+    GRANITE_WALL(false, true),
+    OBSIDIAN_WALL(false, true),
+    WAR_BANNER(false),
+    CAMPFIRE_BRAZIER(false);
 
     fun oreVeinKind(): OreVeinKind? = when (this) {
         ORE_COPPER -> OreVeinKind.COPPER
@@ -879,6 +884,13 @@ data class MonsterEntity(
     val spawnY: Int,
     val hp: Int,
     val maxHp: Int,
+    val level: Int = type.threatLevel,
+    val scaledArmor: Int = type.armor,
+    val scaledMinDmg: Int = type.minDmg,
+    val scaledMaxDmg: Int = type.maxDmg,
+    val scaledXpReward: Int = type.xpReward,
+    val scaledGoldMin: Int = type.goldMin,
+    val scaledGoldMax: Int = type.goldMax,
     val facing: Direction = Direction.SOUTH,
     val moveCooldown: Int = 0,
     val animOffset: Float = 0f,
@@ -897,7 +909,14 @@ data class MonsterEntity(
     val burnDamagePerTick: Int = 0,
     val shatterTicks: Int = 0,
     val slowTicks: Int = 0
-)
+) {
+    fun threatBandFor(playerLevel: Int): ThreatBand = when {
+        type.isBoss || level >= playerLevel + 5 -> ThreatBand.DEADLY
+        level >= playerLevel + 2 -> ThreatBand.CHALLENGING
+        level <= playerLevel - 3 -> ThreatBand.EASY
+        else -> ThreatBand.EVEN
+    }
+}
 
 data class PendingRespawn(
     val type: MonsterType,
@@ -906,7 +925,8 @@ data class PendingRespawn(
     val spawnY: Int,
     val ticksRemaining: Int,
     val originalMonsterId: Int = 0,
-    val respawnAtMs: Long = 0L
+    val respawnAtMs: Long = 0L,
+    val level: Int = type.threatLevel
 )
 
 @JsonClass(generateAdapter = true)
@@ -1119,7 +1139,9 @@ enum class GraphicsQuality(
     val drawCastShadows: Boolean,
     val drawTwilightAtmosphere: Boolean,
     val drawPointLightPools: Boolean,
-    val useHdPostProcessShader: Boolean
+    val useHdPostProcessShader: Boolean,
+    val renderScaleFactor: Float = 1.0f,
+    val maxDynamicPointLights: Int = 0
 ) {
     LOW(
         displayName = "Low",
@@ -1146,7 +1168,9 @@ enum class GraphicsQuality(
         drawCastShadows = false,
         drawTwilightAtmosphere = false,
         drawPointLightPools = false,
-        useHdPostProcessShader = false
+        useHdPostProcessShader = false,
+        renderScaleFactor = 1.0f,
+        maxDynamicPointLights = 0
     ),
     MEDIUM(
         displayName = "Medium",
@@ -1173,13 +1197,15 @@ enum class GraphicsQuality(
         drawCastShadows = false,
         drawTwilightAtmosphere = false,
         drawPointLightPools = false,
-        useHdPostProcessShader = false
+        useHdPostProcessShader = false,
+        renderScaleFactor = 1.0f,
+        maxDynamicPointLights = 6
     ),
     HIGH(
         displayName = "High",
         shortBadge = "HIGH",
         summaryNote = "Pixel-mosaic tiles, twilight glow & shadows",
-        capabilityTags = listOf("Pixel-mosaic tiles", "Directional shadows", "Twilight lights"),
+        capabilityTags = listOf("Pixel-mosaic tiles", "Directional shadows", "10 dynamic lights"),
         drawGroundClutter = true,
         drawWildflowers = true,
         drawShorelineDetails = true,
@@ -1191,7 +1217,7 @@ enum class GraphicsQuality(
         drawHdVignette = false,
         particleLevel = ParticleDetailLevel.FULL,
         treeDetailLayers = 3,
-        cullMargin = 4,
+        cullMargin = 3,
         spriteScaleMultiplier = 1.0f,
         strokeScale = 1.0f,
         useProceduralTileTextures = true,
@@ -1200,13 +1226,15 @@ enum class GraphicsQuality(
         drawCastShadows = true,
         drawTwilightAtmosphere = true,
         drawPointLightPools = true,
-        useHdPostProcessShader = false
+        useHdPostProcessShader = false,
+        renderScaleFactor = 1.0f,
+        maxDynamicPointLights = 10
     ),
     HD(
         displayName = "HD",
         shortBadge = "HD",
-        summaryNote = "Maximum fidelity, bloom & twilight shader",
-        capabilityTags = listOf("HD mosaic & water", "Multi-layer bloom", "Twilight shader"),
+        summaryNote = "Crisp 0.8x scaled world, cached bloom & native HUD",
+        capabilityTags = listOf("0.8x world / 1x HUD", "Closest-14 lights", "Cached HD polish"),
         drawGroundClutter = true,
         drawWildflowers = true,
         drawShorelineDetails = true,
@@ -1218,7 +1246,7 @@ enum class GraphicsQuality(
         drawHdVignette = true,
         particleLevel = ParticleDetailLevel.HD_ENHANCED,
         treeDetailLayers = 3,
-        cullMargin = 4,
+        cullMargin = 3,
         spriteScaleMultiplier = 1.06f,
         strokeScale = 1.15f,
         useProceduralTileTextures = true,
@@ -1227,11 +1255,23 @@ enum class GraphicsQuality(
         drawCastShadows = true,
         drawTwilightAtmosphere = true,
         drawPointLightPools = true,
-        useHdPostProcessShader = true
+        useHdPostProcessShader = false,
+        renderScaleFactor = 0.8f,
+        maxDynamicPointLights = 14
     );
+
+    fun effectiveRenderScale(overrideScale: Float? = null): Float =
+        clampRenderScale(overrideScale ?: renderScaleFactor)
 
     companion object {
         val DEFAULT: GraphicsQuality = MEDIUM
+        const val HD_RENDER_SCALE: Float = 0.8f
+        const val MIN_RENDER_SCALE: Float = 0.5f
+        const val MAX_RENDER_SCALE: Float = 1.0f
+        const val MAX_HD_DYNAMIC_POINT_LIGHTS: Int = 14
+
+        fun clampRenderScale(scale: Float): Float =
+            scale.coerceIn(MIN_RENDER_SCALE, MAX_RENDER_SCALE)
 
         fun fromStorageName(raw: String?): GraphicsQuality {
             if (raw.isNullOrBlank()) return DEFAULT

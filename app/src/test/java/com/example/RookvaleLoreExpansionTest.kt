@@ -16,6 +16,7 @@ import com.example.game.model.RecipeCatalog
 import com.example.game.model.TileType
 import com.example.game.model.Vocation
 import com.example.game.multiplayer.MultiplayerSanitizer
+import com.example.game.world.WorldBiomeBlueprint
 import com.example.game.world.WorldMaps
 import com.example.ui.screens.MaterialPalettes
 import com.example.ui.screens.PaperDollAppearance
@@ -59,12 +60,17 @@ class RookvaleLoreExpansionTest {
     fun fiveOriginalOreTiersSpawnAcrossOutskirtsAndDeepDungeonsAndSmeltCleanly() {
         assertEquals(5, OreVeinKind.entries.size)
         val state = GameEngine.createNewWorld("Roland")
+        val heartlandKinds = state.oreNodes
+            .filterKeys { (f, x, y) -> f == 0 && WorldBiomeBlueprint.isInRookvaleHeartland(x, y) }
+            .values.map { it.kind }.toSet()
         val overworldKinds = state.oreNodes.filterKeys { it.first == 0 }.values.map { it.kind }.toSet()
-        assertTrue("Overworld outskirts must have Copper", OreVeinKind.COPPER in overworldKinds)
-        assertTrue("Overworld outskirts must have Tin", OreVeinKind.TIN in overworldKinds)
-        assertTrue("Overworld outskirts must have Bog Iron", OreVeinKind.BOG_IRON in overworldKinds)
-        assertFalse("Vesperite must be dungeon-only", OreVeinKind.VESPERITE in overworldKinds)
-        assertFalse("Cinderite must be deep-dungeon-only", OreVeinKind.CINDERITE in overworldKinds)
+        assertTrue("Rookvale Heartland outskirts must have Copper", OreVeinKind.COPPER in heartlandKinds)
+        assertTrue("Rookvale Heartland outskirts must have Tin", OreVeinKind.TIN in heartlandKinds)
+        assertTrue("Rookvale Heartland outskirts must have Bog Iron", OreVeinKind.BOG_IRON in heartlandKinds)
+        assertFalse("Vesperite must not spawn in starter Rookvale Heartland", OreVeinKind.VESPERITE in heartlandKinds)
+        assertFalse("Cinderite must not spawn in starter Rookvale Heartland", OreVeinKind.CINDERITE in heartlandKinds)
+        assertTrue("High-tier outer overland biomes (Badlands/Frostpeak) must hold Vesperite", OreVeinKind.VESPERITE in overworldKinds)
+        assertTrue("Endgame overland Ashen/Blight wastes must hold Cinderite", OreVeinKind.CINDERITE in overworldKinds)
 
         // All overworld ore veins must sit away from Rookvale central city square
         val overworldNodes = state.oreNodes.filterKeys { it.first == 0 }.keys

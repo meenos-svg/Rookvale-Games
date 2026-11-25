@@ -249,6 +249,11 @@ internal fun minimapTileColor(tile: TileType): Color = when (tile) {
     TileType.TIMBER_WALL, TileType.TIMBER_WINDOW_WALL -> Color(0xFFCBBCA4)
     TileType.TEMPLE_WALL -> Color(0xFFE0D6C3)
     TileType.GATE_PILLAR -> Color(0xFFAAA091)
+    TileType.SANDSTONE_WALL -> Color(0xFFD9B271)
+    TileType.GRANITE_WALL -> Color(0xFF8B949E)
+    TileType.OBSIDIAN_WALL -> Color(0xFF423452)
+    TileType.WAR_BANNER -> Color(0xFFC82838)
+    TileType.CAMPFIRE_BRAZIER -> Color(0xFFFF9638)
     else -> Color(0xFF242120)
 }
 
@@ -1200,7 +1205,7 @@ private fun BattleMonsterRow(
         hpFrac > 0.25f -> Color(0xFFE6B44C)
         else -> HealthCrimson
     }
-    val band = monster.type.threatBandFor(playerLevel)
+    val band = monster.threatBandFor(playerLevel)
     val nameColor = when (band) {
         ThreatBand.EASY -> Color(0xFF6EF087)
         ThreatBand.EVEN -> ParchmentLight
@@ -1244,7 +1249,7 @@ private fun BattleMonsterRow(
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = "L${monster.type.threatLevel}",
+                        text = "L${monster.level}",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
                         color = ParchmentMuted
                     )

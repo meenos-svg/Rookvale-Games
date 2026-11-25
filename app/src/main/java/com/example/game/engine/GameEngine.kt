@@ -10,6 +10,7 @@ import com.example.game.multiplayer.RemoteMonsterHitEvent
 import com.example.game.multiplayer.RemotePlayerActionFxEvent
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.multiplayer.SyncedMonsterSnapshot
+import com.example.game.world.BiomeProgressionRules
 import com.example.game.world.NpcRole
 import com.example.game.world.WorldBiomeBlueprint
 import com.example.game.world.WorldFloor
@@ -1143,7 +1144,7 @@ object GameEngine {
         val skillPenaltyMult = if (reqType != null && s.skills.levelFor(reqType) < weapon.requiredSkillLevel) 0.65 else 1.0
         val offVocationMult = s.weaponOffVocationMultiplier(weapon)
         val accessoryAtk = s.equipment.totalAccessoryAttackBonus()
-        val effectiveTargetArmor = if (target.shatterTicks > 0) (target.type.armor * 0.55).roundToInt() else target.type.armor
+        val effectiveTargetArmor = if (target.shatterTicks > 0) (target.scaledArmor * 0.55).roundToInt() else target.scaledArmor
 
         return when (weapon?.category) {
             ItemCategory.WEAPON_WAND -> {
@@ -1282,7 +1283,8 @@ object GameEngine {
                 spawnY = m.spawnY,
                 ticksRemaining = respawnTicks,
                 originalMonsterId = m.id,
-                respawnAtMs = respawnAtMs
+                respawnAtMs = respawnAtMs,
+                level = m.level
             )
         } else {
             s.pendingRespawns
@@ -1306,9 +1308,9 @@ object GameEngine {
             questFlags = bossFlags,
             outboundSystemAlerts = s.outboundSystemAlerts + bossAlert
         )
-        s = grantExperience(s, m.type.xpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
+        s = grantExperience(s, m.scaledXpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
         val expiryHint = if (m.type.isBoss) "3m" else "90s"
-        return s.addLogInternal("Slain ${m.type.displayName}! (+${m.type.xpReward} XP) Tap corpse to loot ($expiryHint).")
+        return s.addLogInternal("Slain ${m.type.displayName} [Lvl ${m.level}]! (+${m.scaledXpReward} XP) Tap corpse to loot ($expiryHint).")
     }
 
     /**
@@ -1354,7 +1356,8 @@ object GameEngine {
                 spawnY = m.spawnY,
                 ticksRemaining = respawnTicks,
                 originalMonsterId = m.id,
-                respawnAtMs = respawnAtMs
+                respawnAtMs = respawnAtMs,
+                level = m.level
             )
         } else {
             s.pendingRespawns
@@ -1371,8 +1374,8 @@ object GameEngine {
         if (localContributed) {
             val personalCorpse = generateMonsterCorpse(m, nowMs)
             s = s.copy(corpses = (s.corpses + personalCorpse).takeLast(38))
-            s = grantExperience(s, m.type.xpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
-            s = s.addLogInternal("Co-op kill: ${m.type.displayName}! (+${m.type.xpReward} XP) Personal loot dropped.")
+            s = grantExperience(s, m.scaledXpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
+            s = s.addLogInternal("Co-op kill: ${m.type.displayName}! (+${m.scaledXpReward} XP) Personal loot dropped.")
         } else {
             s = s.addLogInternal("${event.attackerName} slew ${m.type.displayName}.")
         }
@@ -1402,8 +1405,8 @@ object GameEngine {
             if (id !in syncedIds && localPlayerId.isNotBlank() && localPlayerId in oldM.contributors) {
                 val personalCorpse = generateMonsterCorpse(oldM, nowMs)
                 s = s.copy(corpses = (s.corpses + personalCorpse).takeLast(38))
-                s = grantExperience(s, oldM.type.xpReward.toLong(), oldM.x.toFloat(), oldM.y.toFloat(), nowMs)
-                s = s.addLogInternal("Co-op kill: ${oldM.type.displayName}! (+${oldM.type.xpReward} XP) Personal loot dropped.")
+                s = grantExperience(s, oldM.scaledXpReward.toLong(), oldM.x.toFloat(), oldM.y.toFloat(), nowMs)
+                s = s.addLogInternal("Co-op kill: ${oldM.type.displayName}! (+${oldM.scaledXpReward} XP) Personal loot dropped.")
             }
         }
 
@@ -1412,6 +1415,14 @@ object GameEngine {
             val existing = existingOnFloor[snap.id]
             val type = existing?.type ?: MonsterType.fromWireName(snap.typeName) ?: return@mapNotNull null
             val moved = existing != null && (existing.x != snap.x || existing.y != snap.y)
+            val resolvedLevel = existing?.level ?: if (floor == 0) {
+                BiomeProgressionRules.resolveOverlandSpawnLevel(snap.spawnX, snap.spawnY, type)
+            } else {
+                BiomeProgressionRules.resolveDungeonSpawnLevel(floor, snap.spawnX, snap.spawnY, type)
+            }
+            val scaledTemplate = if (existing == null) {
+                BiomeProgressionRules.createScaledMonster(snap.id, type, floor, snap.x, snap.y, resolvedLevel)
+            } else null
             MonsterEntity(
                 id = snap.id,
                 type = type,
@@ -1422,6 +1433,13 @@ object GameEngine {
                 spawnY = existing?.spawnY ?: snap.spawnY,
                 hp = snap.hp.coerceIn(1, snap.maxHp),
                 maxHp = snap.maxHp,
+                level = resolvedLevel,
+                scaledArmor = existing?.scaledArmor ?: scaledTemplate!!.scaledArmor,
+                scaledMinDmg = existing?.scaledMinDmg ?: scaledTemplate!!.scaledMinDmg,
+                scaledMaxDmg = existing?.scaledMaxDmg ?: scaledTemplate!!.scaledMaxDmg,
+                scaledXpReward = existing?.scaledXpReward ?: scaledTemplate!!.scaledXpReward,
+                scaledGoldMin = existing?.scaledGoldMin ?: scaledTemplate!!.scaledGoldMin,
+                scaledGoldMax = existing?.scaledGoldMax ?: scaledTemplate!!.scaledGoldMax,
                 facing = existing?.facing ?: Direction.SOUTH,
                 moveCooldown = existing?.moveCooldown ?: 0,
                 animOffset = existing?.animOffset ?: ((snap.id * 0.37f) % 1f),
@@ -1501,7 +1519,7 @@ object GameEngine {
                 } else {
                     val caster = s.monsters.firstOrNull { it.id == event.monsterId }
                     val rawDmg = if (caster != null) {
-                        Random.nextInt(caster.type.minDmg, caster.type.maxDmg + 12)
+                        Random.nextInt(caster.scaledMinDmg, caster.scaledMaxDmg + 12)
                     } else {
                         Random.nextInt(38, 66)
                     }
@@ -1607,6 +1625,11 @@ object GameEngine {
      */
     fun generateMonsterCorpse(m: MonsterEntity, nowMs: Long = 0L): CorpseEntity {
         val rolled = MonsterLootTable.rollLoot(m.type)
+        val scaledGold = if (m.scaledGoldMax > m.type.goldMax) {
+            Random.nextInt(m.scaledGoldMin, m.scaledGoldMax + 1)
+        } else {
+            rolled.gold
+        }
         val lifetimeMs = if (m.type.isBoss) BOSS_CORPSE_LIFETIME_MS else REGULAR_CORPSE_LIFETIME_MS
         val expiresAt = if (nowMs > 0L) nowMs + lifetimeMs else 0L
         return CorpseEntity(
@@ -1617,7 +1640,7 @@ object GameEngine {
             label = "Slain ${m.type.displayName}",
             isPlayerCorpse = false,
             monsterTypeName = m.type.name,
-            gold = rolled.gold,
+            gold = scaledGold,
             items = rolled.items,
             createdAtMs = nowMs,
             expiresAtMs = expiresAt
@@ -1801,7 +1824,7 @@ object GameEngine {
         val rawDmg = ((runeDef.attack + state.level * 1.15) * magicMult * Random.nextDouble(0.88, 1.16))
             .roundToInt().coerceAtLeast(10)
         // Tier 2 HMM pierces extra armor via shock; Tier 4 SD hits hardest
-        val effectiveArmor = if (runeId == "hmm_rune") (target.type.armor * 0.7).roundToInt() else target.type.armor
+        val effectiveArmor = if (runeId == "hmm_rune") (target.scaledArmor * 0.7).roundToInt() else target.scaledArmor
         val primaryDmg = mitigateMonsterDamage(rawDmg, effectiveArmor, isMagic = true)
 
         var next = state.copy(
@@ -1848,7 +1871,7 @@ object GameEngine {
             }
             for (splashTarget in splashTargets) {
                 val splashRaw = (rawDmg * splashFactor).roundToInt().coerceAtLeast(8)
-                val splashDmg = mitigateMonsterDamage(splashRaw, splashTarget.type.armor, isMagic = true)
+                val splashDmg = mitigateMonsterDamage(splashRaw, splashTarget.scaledArmor, isMagic = true)
                 next = next.addProjectileInternal(
                     state.floor,
                     originX.toFloat(),
@@ -2094,7 +2117,7 @@ object GameEngine {
                             s = s.copy(hp = s.effectiveMaxHp(), poisonTicks = 0, fireTicks = 0)
                                 .addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "IMMUNE", FloatingTextKind.BLOCK, nowMs)
                         } else {
-                            val rawWave = Random.nextInt(curM.type.minDmg, curM.type.maxDmg + 12)
+                            val rawWave = Random.nextInt(curM.scaledMinDmg, curM.scaledMaxDmg + 12)
                             val waveDmg = (rawWave - (s.equipment.totalArmor() * 0.5).roundToInt()).coerceAtLeast(14)
                             s = when {
                                 isVenomBoss -> s.copy(
@@ -2176,20 +2199,16 @@ object GameEngine {
                     } else null
                     if (summonType != null && tile != null) {
                         val sid = nextMonsterId++
-                        spawnedSummons += MonsterEntity(
+                        spawnedSummons += BiomeProgressionRules.createScaledMonster(
                             id = sid,
                             type = summonType,
                             floor = s.floor,
                             x = tile.first,
                             y = tile.second,
-                            spawnX = tile.first,
-                            spawnY = tile.second,
-                            hp = summonType.maxHp,
-                            maxHp = summonType.maxHp,
-                            targetPlayerId = targetId,
+                            targetLevel = (curM.level - 3).coerceAtLeast(1),
                             isSummon = true,
                             summonerId = curM.id
-                        )
+                        ).copy(targetPlayerId = targetId)
                         curM = curM.copy(summonCooldownTicks = 8)
                         updatedMonsters[i] = curM
                         s = s.addFloatingInternal(s.floor, curM.x.toFloat(), curM.y.toFloat(), "SUMMON!", FloatingTextKind.FIRE, nowMs)
@@ -2245,7 +2264,7 @@ object GameEngine {
                         s = s.addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "DODGE!", FloatingTextKind.BLOCK, nowMs)
                             .queuePlayerFx("DODGE!", FloatingTextKind.BLOCK, PlayerActionState.IDLE)
                     } else {
-                        val rawDmg = Random.nextInt(curM.type.minDmg, curM.type.maxDmg + 1)
+                        val rawDmg = Random.nextInt(curM.scaledMinDmg, curM.scaledMaxDmg + 1)
                         val armorMit = s.equipment.totalArmor() * 0.65
                         val glancingShieldMit = if (!isRanged && s.hasActiveShield()) s.equipment.shieldDefense() * 0.22 else 0.0
                         val reduced = (rawDmg - (if (isRanged) armorMit * 0.6 else (armorMit + glancingShieldMit) * Random.nextDouble(0.75, 1.05))).roundToInt()
@@ -2611,7 +2630,14 @@ object GameEngine {
                     state.monsters.any { it.floor == r.floor && it.x == r.spawnX && it.y == r.spawnY }
                 if (!occupied) {
                     val respawnId = if (r.originalMonsterId > 0) r.originalMonsterId else nextMonsterId++
-                    spawned += MonsterEntity(respawnId, r.type, r.floor, r.spawnX, r.spawnY, r.spawnX, r.spawnY, r.type.maxHp, r.type.maxHp)
+                    spawned += BiomeProgressionRules.createScaledMonster(
+                        id = respawnId,
+                        type = r.type,
+                        floor = r.floor,
+                        x = r.spawnX,
+                        y = r.spawnY,
+                        targetLevel = r.level
+                    )
                     if (r.type.isBoss) {
                         bossSpawnAlerts += "[BOSS] ${r.type.displayName} has awakened on Floor ${r.floor}!"
                     }
@@ -2850,7 +2876,7 @@ object GameEngine {
             walkPath = path,
             activePanel = ActivePanel.NONE,
             inspectingCorpseId = null
-        ).addLogInternal("Targeting ${m.type.displayName} [Lvl ${m.type.threatLevel}].")
+        ).addLogInternal("Targeting ${m.type.displayName} [Lvl ${m.level}].")
     }
 
     /**

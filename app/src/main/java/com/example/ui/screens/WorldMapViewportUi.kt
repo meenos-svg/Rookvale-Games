@@ -127,9 +127,44 @@ object WorldMapViewportCamera {
     const val DEFAULT_OVERLAND_ZOOM = 3.5f
     const val DEFAULT_DUNGEON_ZOOM = 2.5f
     const val ZOOM_STEP = 0.75f
+    const val CAMP_AND_LEVELS_MIN_ZOOM = 1.6f
     const val DETAIL_FADE_START_ZOOM = 2.2f
     const val DETAIL_FADE_FULL_ZOOM = 3.0f
     const val VEINS_AND_LANDMARKS_MIN_ZOOM = 2.5f
+
+    /**
+     * Zoom-aware World Map pin filter:
+     * - Overview zoom (< 1.6x): shows major Empires, Cities, Coastal Ocean Ports, and Major Dungeons.
+     * - Zoomed in (>= 1.6x): auto-reveals Forward Camps and localized dungeon/camp pins.
+     */
+    fun filterVisiblePins(
+        pins: List<com.example.game.world.WorldMapPin>,
+        mapZoom: Float,
+        showCities: Boolean,
+        showFerries: Boolean,
+        showDungeons: Boolean
+    ): List<com.example.game.world.WorldMapPin> {
+        return pins.filter { pin ->
+            val categoryEnabled = when (pin.category) {
+                WorldPinCategory.EMPIRE, WorldPinCategory.CITY, WorldPinCategory.CAMP -> showCities
+                WorldPinCategory.FERRY -> showFerries
+                WorldPinCategory.DUNGEON -> showDungeons
+            }
+            categoryEnabled && mapZoom >= pin.minZoomToShow
+        }
+    }
+
+    /**
+     * Formats World Map pin labels so settlement/empire level ranges auto-reveal when zoomed in (>= 1.6x).
+     */
+    fun formatPinLabel(pin: com.example.game.world.WorldMapPin, mapZoom: Float): String {
+        val base = pin.label.take(18)
+        return if (mapZoom >= CAMP_AND_LEVELS_MIN_ZOOM && pin.levelRange.isNotBlank()) {
+            "$base (${pin.levelRange})"
+        } else {
+            base
+        }
+    }
 
     // At 1.0f -> 1x (full 1600x1200 world); at 3.5f -> 6x (~267x200 tiles, ~100-133 tile radius); at 6.0f -> 36x (~44x33 tiles)
     private const val OVERLAND_MAX_MAGNIFICATION = 36.0f
@@ -469,15 +504,15 @@ fun EnhancedRegionalWorldMapContent(
         }
     }
 
-    val visiblePins = remember(state.floor, showCities, showFerries, showDungeons) {
+    val visiblePins = remember(state.floor, camera.mapZoom, showCities, showFerries, showDungeons) {
         if (!isOverland) emptyList()
-        else WorldBiomeBlueprint.worldMapPins.filter { pin ->
-            when (pin.category) {
-                WorldPinCategory.CITY -> showCities
-                WorldPinCategory.FERRY -> showFerries
-                WorldPinCategory.DUNGEON -> showDungeons
-            }
-        }
+        else WorldMapViewportCamera.filterVisiblePins(
+            pins = WorldBiomeBlueprint.worldMapPins,
+            mapZoom = camera.mapZoom,
+            showCities = showCities,
+            showFerries = showFerries,
+            showDungeons = showDungeons
+        )
     }
 
     val parchmentBitmap: ImageBitmap? = if (isOverland) {
@@ -991,29 +1026,35 @@ fun EnhancedRegionalWorldMapContent(
                                 val pos = WorldMapViewportCamera.worldToScreen(pin.x + 0.5f, pin.y + 0.5f, camera, w, h)
                                 if (pos.x !in -16f..(w + 16f) || pos.y !in -16f..(h + 16f)) return@forEach
                                 val pinColor = when (pin.category) {
+                                    WorldPinCategory.EMPIRE -> Color(0xFFFFD65A)
                                     WorldPinCategory.CITY -> TorchGold
+                                    WorldPinCategory.CAMP -> Color(0xFFFF9843)
                                     WorldPinCategory.FERRY -> Color(0xFF47B8FF)
                                     WorldPinCategory.DUNGEON -> TargetRed
                                 }
                                 val baseRadius = when (pin.category) {
+                                    WorldPinCategory.EMPIRE -> 5.8f
                                     WorldPinCategory.CITY -> 5.0f
+                                    WorldPinCategory.CAMP -> 4.3f
                                     WorldPinCategory.FERRY -> 4.2f
                                     WorldPinCategory.DUNGEON -> 4.0f
                                 }
-                                val pinRadius = (baseRadius + zoomFactor * 2.2f).coerceIn(4.0f, 7.6f)
+                                val pinRadius = (baseRadius + zoomFactor * 2.2f).coerceIn(4.0f, 8.2f)
                                 drawCircle(Color.Black.copy(alpha = 0.86f), radius = pinRadius + 1.8f, center = pos)
                                 drawCircle(pinColor, radius = pinRadius, center = pos)
-                                if (pin.category == WorldPinCategory.CITY) {
-                                    drawCircle(Color.White.copy(alpha = 0.88f), radius = (pinRadius * 0.36f).coerceAtLeast(1.6f), center = pos)
+                                if (pin.category == WorldPinCategory.EMPIRE || pin.category == WorldPinCategory.CITY) {
+                                    drawCircle(Color.White.copy(alpha = 0.90f), radius = (pinRadius * 0.38f).coerceAtLeast(1.8f), center = pos)
                                 }
                                 val showPinLabel = when {
-                                    pin.category == WorldPinCategory.CITY && camera.mapZoom >= 1.6f -> true
-                                    camera.mapZoom >= 2.4f -> true
+                                    pin.category == WorldPinCategory.EMPIRE -> true
+                                    (pin.category == WorldPinCategory.CITY || pin.category == WorldPinCategory.CAMP) &&
+                                        camera.mapZoom >= WorldMapViewportCamera.CAMP_AND_LEVELS_MIN_ZOOM -> true
+                                    camera.mapZoom >= 2.2f -> true
                                     else -> false
                                 }
                                 if (showPinLabel) {
                                     tryDrawBadgeLabel(
-                                        text = pin.label.take(18),
+                                        text = WorldMapViewportCamera.formatPinLabel(pin, camera.mapZoom),
                                         anchorX = pos.x,
                                         anchorY = pos.y - pinRadius * 0.4f,
                                         textPaint = landmarkLabelPaint,
@@ -1258,7 +1299,9 @@ fun EnhancedRegionalWorldMapContent(
                         }
                         items(visiblePins, key = { it.id }) { pin ->
                             val badgeCol = when (pin.category) {
+                                WorldPinCategory.EMPIRE -> Color(0xFFFFD65A)
                                 WorldPinCategory.CITY -> TorchGold
+                                WorldPinCategory.CAMP -> Color(0xFFFF9843)
                                 WorldPinCategory.FERRY -> Color(0xFF47B8FF)
                                 WorldPinCategory.DUNGEON -> TargetRed
                             }

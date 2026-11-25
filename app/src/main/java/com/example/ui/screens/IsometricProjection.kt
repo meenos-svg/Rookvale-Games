@@ -268,7 +268,12 @@ object IsometricTileDrawer {
         TileType.WEAPON_RACK,
         TileType.MOORED_BOAT,
         TileType.WOOD_BED,
-        TileType.IRON_BAR_GATE -> true
+        TileType.IRON_BAR_GATE,
+        TileType.SANDSTONE_WALL,
+        TileType.GRANITE_WALL,
+        TileType.OBSIDIAN_WALL,
+        TileType.WAR_BANNER,
+        TileType.CAMPFIRE_BRAZIER -> true
         else -> false
     }
 
@@ -316,7 +321,10 @@ object IsometricTileDrawer {
         TileType.GATE_PILLAR,
         TileType.STONE_WALL,
         TileType.CITY_WALL,
-        TileType.TORCH_WALL -> true
+        TileType.TORCH_WALL,
+        TileType.SANDSTONE_WALL,
+        TileType.GRANITE_WALL,
+        TileType.OBSIDIAN_WALL -> true
         else -> false
     }
 
@@ -392,7 +400,7 @@ object IsometricTileDrawer {
         val hvX = cam.vx * (fracV * 0.5f)
         val hvY = cam.vy * (fracV * 0.5f)
 
-        path.reset()
+        path.rewind()
         path.moveTo(ox - huX - hvX, oy - huY - hvY)
         path.lineTo(ox + huX - hvX, oy + huY - hvY)
         path.lineTo(ox + huX + hvX, oy + huY + hvY)
@@ -456,7 +464,7 @@ object IsometricTileDrawer {
                 } else {
                     baseColor
                 }).copy(alpha = (baseColor.alpha * alpha).coerceIn(0f, 1f))
-                path.reset()
+                path.rewind()
                 path.moveTo(ax, ay)
                 path.lineTo(bx, by)
                 path.lineTo(bx, by - heightPx)
@@ -510,7 +518,7 @@ object IsometricTileDrawer {
         } else {
             topColor
         }).copy(alpha = (topColor.alpha * alpha).coerceIn(0f, 1f))
-        path.reset()
+        path.rewind()
         path.moveTo(b0x, b0y - heightPx)
         path.lineTo(b1x, b1y - heightPx)
         path.lineTo(b2x, b2y - heightPx)
@@ -565,6 +573,11 @@ object IsometricTileDrawer {
             TileType.FOUNTAIN, TileType.MARKET_AWNING, TileType.SMELTING_FURNACE, TileType.BLACKSMITH_ANVIL,
             TileType.FLETCHING_BENCH, TileType.LANTERN_POST, TileType.GATE_PILLAR -> TileType.COBBLESTONE
             TileType.TIMBER_WALL, TileType.TIMBER_WINDOW_WALL -> TileType.COBBLESTONE
+            TileType.SANDSTONE_WALL -> TileType.SAND
+            TileType.GRANITE_WALL -> TileType.COBBLESTONE
+            TileType.OBSIDIAN_WALL -> TileType.OBSIDIAN_FLOOR
+            TileType.WAR_BANNER -> if (floorMap.floorId == 0) TileType.COBBLESTONE else TileType.OBSIDIAN_FLOOR
+            TileType.CAMPFIRE_BRAZIER -> if (floorMap.floorId == 0) TileType.COBBLESTONE else TileType.CRYPT_FLOOR
             TileType.IRON_BAR_GATE -> TileType.CRYPT_FLOOR
             else -> tile
         }
@@ -1037,6 +1050,16 @@ object IsometricTileDrawer {
             TileType.STONE_WALL, TileType.CITY_WALL, TileType.TORCH_WALL -> {
                 val cut = computeWallCutaway(cam, tx, ty, playerFx, playerFy)
                 drawDetailedStoneWall(scope, path, cam, floorMap, tx, ty, cx, cy, hasTorch = tile == TileType.TORCH_WALL, nowMs = nowMs, quality = quality, cutaway = cut)
+            }
+            TileType.SANDSTONE_WALL, TileType.GRANITE_WALL, TileType.OBSIDIAN_WALL -> {
+                val cut = computeWallCutaway(cam, tx, ty, playerFx, playerFy)
+                drawBiomeIdeologyWall(scope, path, cam, floorMap, tx, ty, cx, cy, tile = tile, quality = quality, cutaway = cut)
+            }
+            TileType.WAR_BANNER -> {
+                drawWarBannerProp(scope, path, cam, cx, cy, tx, ty, nowMs, quality, isOverland)
+            }
+            TileType.CAMPFIRE_BRAZIER -> {
+                drawCampfireBrazierProp(scope, path, cam, cx, cy, tx, ty, nowMs, quality, isOverland)
             }
             TileType.CAVE_WALL, TileType.MOUNTAIN_ROCK -> {
                 val isCave = tile == TileType.CAVE_WALL
@@ -1906,23 +1929,23 @@ object IsometricTileDrawer {
         val trimCol = Color(building.roofTrimArgb).copy(alpha = alpha)
 
         // North roof slope (catches NW twilight rim light)
-        path.reset()
+        path.rewind()
         path.moveTo(nw.x, nw.y); path.lineTo(ne.x, ne.y); path.lineTo(ridgeE.x, ridgeE.y); path.lineTo(ridgeW.x, ridgeW.y); path.close()
         scope.drawPath(path, color = northCol)
         scope.drawPath(path, color = trimCol, style = Stroke(width = 1.6f * quality.strokeScale))
 
         // South roof slope (cooler dusk shadow side)
-        path.reset()
+        path.rewind()
         path.moveTo(sw.x, sw.y); path.lineTo(se.x, se.y); path.lineTo(ridgeE.x, ridgeE.y); path.lineTo(ridgeW.x, ridgeW.y); path.close()
         scope.drawPath(path, color = southCol)
         scope.drawPath(path, color = trimCol, style = Stroke(width = 1.6f * quality.strokeScale))
 
         // West & East gables
-        path.reset()
+        path.rewind()
         path.moveTo(nw.x, nw.y); path.lineTo(sw.x, sw.y); path.lineTo(ridgeW.x, ridgeW.y); path.close()
         scope.drawPath(path, color = westCol)
 
-        path.reset()
+        path.rewind()
         path.moveTo(ne.x, ne.y); path.lineTo(se.x, se.y); path.lineTo(ridgeE.x, ridgeE.y); path.close()
         scope.drawPath(path, color = eastCol)
 
@@ -2222,41 +2245,196 @@ object IsometricTileDrawer {
             }
             LightingDetailMode.DYNAMIC_FLICKER -> {
                 val flicker = 0.86f + 0.14f * sin(nowMs * 0.011 + tx * 1.7 + ty * 2.3).toFloat()
-                scope.drawCircle(
-                    brush = Brush.radialGradient(
-                        listOf(TorchGold.copy(alpha = 0.80f * flicker), TorchAmber.copy(alpha = 0.26f * flicker), Color.Transparent),
-                        center = Offset(x, y),
-                        radius = radius * flicker
-                    ),
-                    radius = radius * flicker,
-                    center = Offset(x, y)
-                )
-                scope.drawCircle(Color(0xFFFFF2B2), 2.8f, Offset(x, y))
+                val center = Offset(x, y)
+                scope.drawCircle(TorchAmber.copy(alpha = 0.22f * flicker), radius * 0.92f * flicker, center)
+                scope.drawCircle(TorchGold.copy(alpha = 0.48f * flicker), radius * 0.48f * flicker, center)
+                scope.drawCircle(Color(0xFFFFF2B2), 2.8f, center)
             }
             LightingDetailMode.HD_MULTI_LAYER -> {
+                // Zero-allocation crisp flame core & tight rim; broad atmospheric light pool is composited
+                // in a single pass by HalfResLightLayerRenderer using pre-baked glow sprites.
                 val flicker = 0.88f + 0.12f * sin(nowMs * 0.011 + tx * 1.7 + ty * 2.3).toFloat()
-                // Wide warm atmospheric light pool
-                scope.drawCircle(
-                    brush = Brush.radialGradient(
-                        listOf(TorchAmber.copy(alpha = 0.30f * flicker), Color.Transparent),
-                        center = Offset(x, y),
-                        radius = radius * 1.48f * flicker
-                    ),
-                    radius = radius * 1.48f * flicker,
-                    center = Offset(x, y)
-                )
-                // Bright inner flame bloom
-                scope.drawCircle(
-                    brush = Brush.radialGradient(
-                        listOf(Color(0xFFFFF4C2).copy(alpha = 0.88f * flicker), TorchGold.copy(alpha = 0.36f * flicker), Color.Transparent),
-                        center = Offset(x, y),
-                        radius = radius * 0.92f * flicker
-                    ),
-                    radius = radius * 0.92f * flicker,
-                    center = Offset(x, y)
-                )
-                scope.drawCircle(Color(0xFFFFFAE0), 3.1f, Offset(x, y))
+                val center = Offset(x, y)
+                scope.drawCircle(TorchAmber.copy(alpha = 0.24f * flicker), radius * 1.05f * flicker, center)
+                scope.drawCircle(TorchGold.copy(alpha = 0.50f * flicker), radius * 0.56f * flicker, center)
+                scope.drawCircle(Color(0xFFFFF4C2).copy(alpha = 0.82f * flicker), radius * 0.26f * flicker, center)
+                scope.drawCircle(Color(0xFFFFFAE0), 3.1f, center)
             }
         }
+    }
+
+    /**
+     * Connected open-top cutaway biome-ideology walls:
+     * - [TileType.SANDSTONE_WALL]: Warm golden-ochre sandstone ashlar courses & sunlit desert parapet
+     * - [TileType.GRANITE_WALL]: Heavy mortared highland blue-grey granite citadel masonry
+     * - [TileType.OBSIDIAN_WALL]: Volcanic iron-reinforced obsidian fortress blocks with ember trim
+     */
+    private fun drawBiomeIdeologyWall(
+        scope: DrawScope,
+        path: Path,
+        cam: IsometricCamera,
+        floorMap: WorldFloor,
+        tx: Int,
+        ty: Int,
+        cx: Float,
+        cy: Float,
+        tile: TileType,
+        quality: GraphicsQuality,
+        cutaway: WallCutaway
+    ) {
+        val h = cam.tileH
+        val cScale = cutaway.heightScale
+        val cAlpha = cutaway.alpha
+        val isOverland = floorMap.floorId == 0
+        val hasN = isBuildingWall(floorMap.tileAt(tx, ty - 1))
+        val hasS = isBuildingWall(floorMap.tileAt(tx, ty + 1))
+        val hasW = isBuildingWall(floorMap.tileAt(tx - 1, ty))
+        val hasE = isBuildingWall(floorMap.tileAt(tx + 1, ty))
+        val beamThickness = when (tile) {
+            TileType.GRANITE_WALL -> 0.44f
+            TileType.OBSIDIAN_WALL -> 0.42f
+            else -> 0.38f
+        }
+        val totalH = h * (if (tile == TileType.GRANITE_WALL) 2.50f else TALL_WALL_HEIGHT_MULT) * cScale
+        val plinthH = totalH * 0.16f
+        val wallH = totalH * 0.84f
+
+        val (plinthTop, plinthX, plinthY) = when (tile) {
+            TileType.SANDSTONE_WALL -> Triple(Color(0xFFC4A06A), Color(0xFF947446), Color(0xFFAD8A56))
+            TileType.GRANITE_WALL -> Triple(Color(0xFF6B737D), Color(0xFF454C54), Color(0xFF565E68))
+            else -> Triple(Color(0xFF2E2636), Color(0xFF1A1520), Color(0xFF231C2B))
+        }
+        val (wallTop, wallX, wallY) = when (tile) {
+            TileType.SANDSTONE_WALL -> Triple(Color(0xFFE5C486), Color(0xFFB89258), Color(0xFFD4AF72))
+            TileType.GRANITE_WALL -> Triple(Color(0xFF9AA3AD), Color(0xFF626A73), Color(0xFF7B848E))
+            else -> Triple(Color(0xFF463B54), Color(0xFF241D2E), Color(0xFF332940))
+        }
+
+        fun drawSeg(fracU: Float, fracV: Float, offU: Float, offV: Float) {
+            drawRotatedPrism(
+                scope, path, cam, cx, cy, fracU = fracU + 0.05f, fracV = fracV + 0.05f,
+                heightPx = plinthH, offsetU = offU, offsetV = offV,
+                topColor = plinthTop, faceXColor = plinthX, faceYColor = plinthY,
+                quality = quality, isOverland = isOverland, alpha = cAlpha
+            )
+            drawRotatedPrism(
+                scope, path, cam, cx, cy, fracU = fracU, fracV = fracV,
+                heightPx = wallH, baseZ = plinthH, offsetU = offU, offsetV = offV,
+                topColor = wallTop, faceXColor = wallX, faceYColor = wallY,
+                quality = quality, isOverland = isOverland, alpha = cAlpha, drawMortarCourses = true
+            )
+        }
+
+        drawRotatedPrism(
+            scope, path, cam, cx, cy, fracU = beamThickness + 0.06f, fracV = beamThickness + 0.06f,
+            heightPx = totalH + h * 0.06f * cScale,
+            topColor = wallTop, faceXColor = wallX, faceYColor = wallY,
+            quality = quality, isOverland = isOverland, alpha = cAlpha, drawMortarCourses = true
+        )
+        if (hasE) drawSeg(0.50f, beamThickness, 0.25f, 0f)
+        if (hasW) drawSeg(0.50f, beamThickness, -0.25f, 0f)
+        if (hasS) drawSeg(beamThickness, 0.50f, 0f, 0.25f)
+        if (hasN) drawSeg(beamThickness, 0.50f, 0f, -0.25f)
+
+        if (tile == TileType.OBSIDIAN_WALL && cScale > 0.6f && quality != GraphicsQuality.LOW) {
+            drawRotatedQuad(
+                scope, path, cam, cx, cy, fracU = beamThickness + 0.04f, fracV = beamThickness + 0.04f,
+                zPx = totalH + h * 0.07f * cScale,
+                fillColor = Color(0xFFFF6B2B).copy(alpha = 0.42f * cAlpha)
+            )
+        }
+    }
+
+    /**
+     * Fortified iron-shod standard pole with an animated crimson & gold imperial war banner.
+     */
+    private fun drawWarBannerProp(
+        scope: DrawScope,
+        path: Path,
+        cam: IsometricCamera,
+        cx: Float,
+        cy: Float,
+        tx: Int,
+        ty: Int,
+        nowMs: Long,
+        quality: GraphicsQuality,
+        isOverland: Boolean
+    ) {
+        val h = cam.tileH
+        val w = cam.tileW
+        drawRotatedPrism(
+            scope, path, cam, cx, cy, fracU = 0.42f, fracV = 0.42f, heightPx = h * 0.24f,
+            topColor = Color(0xFF6B6560), faceXColor = Color(0xFF3E3A37), faceYColor = Color(0xFF524D49),
+            quality = quality, isOverland = isOverland
+        )
+        val poleTopY = cy - h * 1.95f
+        val poleStroke = (w * 0.045f).coerceIn(2.0f, 4.2f)
+        scope.drawLine(Color(0xFF2A262B), Offset(cx, cy - h * 0.22f), Offset(cx, poleTopY), poleStroke + 1.2f)
+        scope.drawLine(Color(0xFF9EA5B0), Offset(cx, cy - h * 0.22f), Offset(cx, poleTopY), poleStroke * 0.65f)
+        scope.drawCircle(TorchGold, (w * 0.055f).coerceIn(2.6f, 5.2f), Offset(cx, poleTopY - 2f))
+
+        val flutter = sin((nowMs / 240.0) + (tx * 0.9 + ty * 1.3)).toFloat() * (w * 0.06f)
+        val flagW = w * 0.44f
+        val flagH = h * 0.88f
+        path.rewind()
+        path.moveTo(cx + 1.5f, poleTopY + h * 0.08f)
+        path.lineTo(cx + flagW, poleTopY + h * 0.16f + flutter)
+        path.lineTo(cx + flagW * 0.82f, poleTopY + flagH * 0.56f + flutter * 1.2f)
+        path.lineTo(cx + flagW, poleTopY + flagH + flutter * 0.85f)
+        path.lineTo(cx + 1.5f, poleTopY + flagH * 0.92f)
+        path.close()
+        scope.drawPath(path, Color(0xFFA81D2B))
+        scope.drawPath(path, TorchGold, style = Stroke(width = 1.6f))
+        scope.drawCircle(TorchGold, (w * 0.048f).coerceIn(2.0f, 4.0f), Offset(cx + flagW * 0.42f, poleTopY + flagH * 0.48f + flutter * 0.5f))
+    }
+
+    /**
+     * Forged iron campfire brazier with glowing embers and flickering flames for camps & strongholds.
+     */
+    private fun drawCampfireBrazierProp(
+        scope: DrawScope,
+        path: Path,
+        cam: IsometricCamera,
+        cx: Float,
+        cy: Float,
+        tx: Int,
+        ty: Int,
+        nowMs: Long,
+        quality: GraphicsQuality,
+        isOverland: Boolean
+    ) {
+        val h = cam.tileH
+        val w = cam.tileW
+        drawRotatedPrism(
+            scope, path, cam, cx, cy, fracU = 0.54f, fracV = 0.54f, heightPx = h * 0.36f,
+            topColor = Color(0xFF474348), faceXColor = Color(0xFF262328), faceYColor = Color(0xFF343036),
+            quality = quality, isOverland = isOverland
+        )
+        drawRotatedPrism(
+            scope, path, cam, cx, cy, fracU = 0.64f, fracV = 0.64f, heightPx = h * 0.24f, baseZ = h * 0.34f,
+            topColor = Color(0xFF3A241A), faceXColor = Color(0xFF2B282E), faceYColor = Color(0xFF3E3A42),
+            quality = quality, isOverland = isOverland
+        )
+        val flameBaseY = cy - h * 0.60f
+        scope.drawCircle(Color(0xFFD93814), (w * 0.16f).coerceIn(4.5f, 12f), Offset(cx, flameBaseY))
+
+        val flicker = sin((nowMs / 135.0) + (tx * 1.7 + ty * 2.1)).toFloat()
+        val flameH = h * (0.68f + flicker * 0.14f)
+        val sway = flicker * w * 0.045f
+        path.rewind()
+        path.moveTo(cx - w * 0.14f, flameBaseY)
+        path.lineTo(cx + sway, flameBaseY - flameH)
+        path.lineTo(cx + w * 0.14f, flameBaseY)
+        path.close()
+        scope.drawPath(path, Color(0xFFFF7A1A))
+
+        path.rewind()
+        path.moveTo(cx - w * 0.08f, flameBaseY)
+        path.lineTo(cx - sway * 0.6f, flameBaseY - flameH * 0.68f)
+        path.lineTo(cx + w * 0.08f, flameBaseY)
+        path.close()
+        scope.drawPath(path, Color(0xFFFFE066))
+
+        drawWarmFlickerGlow(scope, cx, flameBaseY - flameH * 0.35f, h * 1.15f, nowMs, tx, ty, quality)
     }
 }

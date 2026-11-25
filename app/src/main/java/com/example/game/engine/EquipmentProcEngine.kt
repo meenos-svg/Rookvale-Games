@@ -314,9 +314,9 @@ object EquipmentProcEngine {
             val variance = 0.88 + rng.nextDouble() * 0.24
             val rawDmg = (basePower * proc.damageMultiplier * powerBonusMult * variance).roundToInt().coerceAtLeast(6)
             val effectiveArmor = if (liveTarget.shatterTicks > 0 || proc.bonusEffect == ProcBonusEffect.ARMOR_SHATTER) {
-                (liveTarget.type.armor * 0.55).roundToInt()
+                (liveTarget.scaledArmor * 0.55).roundToInt()
             } else {
-                liveTarget.type.armor
+                liveTarget.scaledArmor
             }
             val finalDmg = GameEngine.mitigateMonsterDamage(rawDmg, effectiveArmor, isMagic = isMagic)
             totalDamage += finalDmg

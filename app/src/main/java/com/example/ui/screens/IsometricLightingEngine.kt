@@ -1,14 +1,11 @@
 package com.example.ui.screens
 
-import android.graphics.RuntimeShader
-import android.os.Build
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import com.example.game.model.DEFAULT_TIME_OF_DAY_HOURS
 import com.example.game.model.GraphicsQuality
@@ -21,6 +18,7 @@ import com.example.ui.theme.TorchAmber
 import com.example.ui.theme.TorchGold
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -36,8 +34,16 @@ data class ScenePointLight(
     val outerColor: Color,
     val intensity: Float,
     val flickerSeed: Float,
-    val isArcane: Boolean = false
-)
+    val isArcane: Boolean = false,
+    val priority: Int = PRIORITY_AMBIENT
+) {
+    companion object {
+        const val PRIORITY_AMBIENT: Int = 0
+        const val PRIORITY_TORCH_OR_RUNE: Int = 1
+        const val PRIORITY_HERO_OR_BOSS: Int = 2
+        const val PRIORITY_COMBAT_FX: Int = 3
+    }
+}
 
 /**
  * Smoothly interpolated local 24-hour atmospheric lighting grade for overland rendering.
@@ -71,6 +77,104 @@ object IsometricLightingEngine {
     // World-space shadow cast direction (opposite horizontal component of incoming light)
     val SHADOW_DIR_WORLD_X: Float = -LIGHT_DIR_X
     val SHADOW_DIR_WORLD_Y: Float = -LIGHT_DIR_Y
+
+    const val MAX_SIMULTANEOUS_POINT_LIGHTS: Int = GraphicsQuality.MAX_HD_DYNAMIC_POINT_LIGHTS
+
+    // Cached viewport atmosphere brushes (rebuilt only on viewport resize or time bucket change)
+    private var cachedHorizonW: Int = -1
+    private var cachedHorizonH: Int = -1
+    private var cachedHorizonTimeBucket: Int = Int.MIN_VALUE
+    private var cachedHorizonBrush: Brush? = null
+
+    private var cachedDungeonVigW: Int = -1
+    private var cachedDungeonVigH: Int = -1
+    private var cachedDungeonVigBrush: Brush? = null
+
+    // Reusable scratch buffer for fallback direct light selection
+    private val fallbackSelectedLights = ArrayList<ScenePointLight>(MAX_SIMULTANEOUS_POINT_LIGHTS)
+    private val fallbackSelectedScores = FloatArray(MAX_SIMULTANEOUS_POINT_LIGHTS)
+
+    /**
+     * Selects up to [maxLights] (hard-capped at [MAX_SIMULTANEOUS_POINT_LIGHTS] = 14) visible
+     * point lights around the camera viewport center, prioritizing active equipment procs,
+     * spells, boss telegraphs, player lantern, nearby torches/braziers, and lava/rune glows.
+     *
+     * Performs zero heap allocations when reusing [outSelected] and [scratchScores].
+     */
+    fun selectClosestPrioritizedLights(
+        lights: List<ScenePointLight>,
+        viewportW: Float,
+        viewportH: Float,
+        maxLights: Int = MAX_SIMULTANEOUS_POINT_LIGHTS,
+        outSelected: MutableList<ScenePointLight>,
+        scratchScores: FloatArray
+    ): Int {
+        outSelected.clear()
+        val cap = maxLights.coerceIn(0, minOf(MAX_SIMULTANEOUS_POINT_LIGHTS, scratchScores.size))
+        if (cap == 0 || lights.isEmpty() || viewportW <= 0f || viewportH <= 0f) return 0
+
+        val centerX = viewportW * 0.5f
+        val centerY = viewportH * 0.5f
+        val diagSq = (viewportW * viewportW + viewportH * viewportH).coerceAtLeast(1f)
+        var count = 0
+
+        for (i in 0 until lights.size) {
+            val light = lights[i]
+            val r = light.radiusPx
+            if (light.screenX + r < 0f || light.screenX - r > viewportW ||
+                light.screenY + r < 0f || light.screenY - r > viewportH
+            ) continue
+
+            val dx = light.screenX - centerX
+            val dy = light.screenY - centerY
+            val distSq = dx * dx + dy * dy
+            // Lower score wins: higher priority lights receive a strong effective proximity advantage
+            // while still breaking ties strictly by closest distance to the camera viewport center.
+            val priorityDiscount = when (light.priority) {
+                ScenePointLight.PRIORITY_COMBAT_FX -> 0.16f
+                ScenePointLight.PRIORITY_HERO_OR_BOSS -> 0.28f
+                ScenePointLight.PRIORITY_TORCH_OR_RUNE -> 0.55f
+                else -> 1.0f
+            }
+            val score = (distSq / diagSq) * priorityDiscount - light.priority * 0.18f
+
+            if (count < cap) {
+                var insertAt = count
+                while (insertAt > 0 && score < scratchScores[insertAt - 1]) {
+                    scratchScores[insertAt] = scratchScores[insertAt - 1]
+                    insertAt--
+                }
+                scratchScores[insertAt] = score
+                outSelected.add(insertAt, light)
+                count++
+            } else if (score < scratchScores[cap - 1]) {
+                var insertAt = cap - 1
+                while (insertAt > 0 && score < scratchScores[insertAt - 1]) {
+                    scratchScores[insertAt] = scratchScores[insertAt - 1]
+                    outSelected[insertAt] = outSelected[insertAt - 1]
+                    insertAt--
+                }
+                scratchScores[insertAt] = score
+                outSelected[insertAt] = light
+            }
+        }
+        return count
+    }
+
+    /**
+     * Convenience helper returning the selected closest prioritized lights for deterministic tests.
+     */
+    fun selectClosestPrioritizedLights(
+        lights: List<ScenePointLight>,
+        viewportW: Float,
+        viewportH: Float,
+        maxLights: Int = MAX_SIMULTANEOUS_POINT_LIGHTS
+    ): List<ScenePointLight> {
+        val cap = maxLights.coerceIn(0, MAX_SIMULTANEOUS_POINT_LIGHTS)
+        val out = ArrayList<ScenePointLight>(cap)
+        selectClosestPrioritizedLights(lights, viewportW, viewportH, cap, out, FloatArray(cap))
+        return out
+    }
 
     /**
      * Computes world-space directional lighting for any 3D face normal `(nx, ny, nz)`.
@@ -253,6 +357,9 @@ object IsometricLightingEngine {
         TileType.GATE_PILLAR,
         TileType.CAVE_WALL,
         TileType.MOUNTAIN_ROCK,
+        TileType.SANDSTONE_WALL,
+        TileType.GRANITE_WALL,
+        TileType.OBSIDIAN_WALL,
         TileType.SMELTING_FURNACE -> true
         else -> false
     }
@@ -282,7 +389,8 @@ object IsometricLightingEngine {
                     coreColor = Color(0xFFFFD97D),
                     outerColor = TorchAmber,
                     intensity = 0.92f,
-                    flickerSeed = seed
+                    flickerSeed = seed,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
                 )
             )
             TileType.TORCH_WALL -> outLights.add(
@@ -293,7 +401,8 @@ object IsometricLightingEngine {
                     coreColor = Color(0xFFFFD478),
                     outerColor = FireOrange,
                     intensity = 1.05f,
-                    flickerSeed = seed
+                    flickerSeed = seed,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
                 )
             )
             TileType.GATE_PILLAR -> outLights.add(
@@ -304,7 +413,8 @@ object IsometricLightingEngine {
                     coreColor = Color(0xFFFFD87A),
                     outerColor = TorchAmber,
                     intensity = 0.85f,
-                    flickerSeed = seed
+                    flickerSeed = seed,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
                 )
             )
             TileType.SMELTING_FURNACE -> outLights.add(
@@ -315,7 +425,20 @@ object IsometricLightingEngine {
                     coreColor = Color(0xFFFF9A40),
                     outerColor = Color(0xFFE64817),
                     intensity = 1.0f,
-                    flickerSeed = seed * 1.4f
+                    flickerSeed = seed * 1.4f,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
+                )
+            )
+            TileType.CAMPFIRE_BRAZIER -> outLights.add(
+                ScenePointLight(
+                    screenX = cx,
+                    screenY = cy - unitH * 0.55f,
+                    radiusPx = unitW * 3.10f,
+                    coreColor = Color(0xFFFFCF6E),
+                    outerColor = FireOrange,
+                    intensity = 1.12f,
+                    flickerSeed = seed * 1.6f,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
                 )
             )
             TileType.TIMBER_WINDOW_WALL -> outLights.add(
@@ -326,7 +449,8 @@ object IsometricLightingEngine {
                     coreColor = TorchGold,
                     outerColor = TorchAmber,
                     intensity = 0.56f,
-                    flickerSeed = seed
+                    flickerSeed = seed,
+                    priority = ScenePointLight.PRIORITY_AMBIENT
                 )
             )
             TileType.TEMPLE_ALTAR -> outLights.add(
@@ -337,7 +461,8 @@ object IsometricLightingEngine {
                     coreColor = Color(0xFFFFEAB0),
                     outerColor = TorchGold,
                     intensity = 0.86f,
-                    flickerSeed = seed
+                    flickerSeed = seed,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
                 )
             )
             TileType.RUNECRAFTING_TABLE -> outLights.add(
@@ -349,7 +474,8 @@ object IsometricLightingEngine {
                     outerColor = Color(0xFF8C5EFF),
                     intensity = 0.96f,
                     flickerSeed = seed,
-                    isArcane = true
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
                 )
             )
             TileType.CRYSTAL_PILLAR -> outLights.add(
@@ -361,7 +487,8 @@ object IsometricLightingEngine {
                     outerColor = Color(0xFF9C6BFF),
                     intensity = 0.80f,
                     flickerSeed = seed,
-                    isArcane = true
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
                 )
             )
             TileType.ORE_VESPERITE -> outLights.add(
@@ -373,7 +500,8 @@ object IsometricLightingEngine {
                     outerColor = Color(0xFF8E63FF),
                     intensity = 0.48f,
                     flickerSeed = seed,
-                    isArcane = true
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_AMBIENT
                 )
             )
             TileType.ORE_CINDERITE -> outLights.add(
@@ -384,7 +512,8 @@ object IsometricLightingEngine {
                     coreColor = Color(0xFFFFE48C),
                     outerColor = FireOrange,
                     intensity = 0.56f,
-                    flickerSeed = seed * 1.2f
+                    flickerSeed = seed * 1.2f,
+                    priority = ScenePointLight.PRIORITY_AMBIENT
                 )
             )
             TileType.FOUNTAIN -> outLights.add(
@@ -396,7 +525,8 @@ object IsometricLightingEngine {
                     outerColor = Color(0xFF2B88C9),
                     intensity = 0.72f,
                     flickerSeed = seed,
-                    isArcane = true
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_AMBIENT
                 )
             )
             TileType.LAVA -> {
@@ -409,7 +539,8 @@ object IsometricLightingEngine {
                             coreColor = FireOrange,
                             outerColor = Color(0xFFC72B0C),
                             intensity = 0.64f,
-                            flickerSeed = seed
+                            flickerSeed = seed,
+                            priority = ScenePointLight.PRIORITY_TORCH_OR_RUNE
                         )
                     )
                 }
@@ -437,7 +568,8 @@ object IsometricLightingEngine {
                     coreColor = Color(0xFFFFDC7A),
                     outerColor = FireOrange,
                     intensity = 0.95f,
-                    flickerSeed = px * 0.05f
+                    flickerSeed = px * 0.05f,
+                    priority = ScenePointLight.PRIORITY_COMBAT_FX
                 )
             )
             ProjectileKind.ENERGY_BOLT, ProjectileKind.ARCANE_DART -> outLights.add(
@@ -449,7 +581,8 @@ object IsometricLightingEngine {
                     outerColor = Color(0xFF3DA6FF),
                     intensity = 0.85f,
                     flickerSeed = px * 0.05f,
-                    isArcane = true
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_COMBAT_FX
                 )
             )
             ProjectileKind.HEAL_RUNE -> outLights.add(
@@ -461,7 +594,8 @@ object IsometricLightingEngine {
                     outerColor = Color(0xFF33D486),
                     intensity = 0.80f,
                     flickerSeed = px * 0.04f,
-                    isArcane = true
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_COMBAT_FX
                 )
             )
             ProjectileKind.DEATH_RUNE, ProjectileKind.NECRO_BOLT -> outLights.add(
@@ -473,7 +607,8 @@ object IsometricLightingEngine {
                     outerColor = Color(0xFF9E33FF),
                     intensity = 0.88f,
                     flickerSeed = px * 0.06f,
-                    isArcane = true
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_COMBAT_FX
                 )
             )
             ProjectileKind.VENOM_GLOB -> outLights.add(
@@ -485,7 +620,8 @@ object IsometricLightingEngine {
                     outerColor = Color(0xFF2ED95B),
                     intensity = 0.90f,
                     flickerSeed = px * 0.06f,
-                    isArcane = true
+                    isArcane = true,
+                    priority = ScenePointLight.PRIORITY_COMBAT_FX
                 )
             )
             else -> Unit
@@ -651,7 +787,11 @@ object IsometricLightingEngine {
         val isHd = quality.lightingMode == LightingDetailMode.HD_MULTI_LAYER
         val tod = computeTimeOfDayProfile(timeOfDayHours)
 
+        val wi = w.roundToInt()
+        val hi = h.roundToInt()
+
         // 1. Dynamic 24-hour atmospheric grade on overland; moody torchlit cavern veil underground
+        // Uses viewport-keyed cached Brushes so steady-state frames allocate zero gradient objects.
         if (quality.drawTwilightAtmosphere || drawDungeonMood || isCustomTime) {
             if (isOverland) {
                 val hdAlphaScale = if (isHd) 1.04f else 0.92f
@@ -663,8 +803,15 @@ object IsometricLightingEngine {
                     topLeft = Offset.Zero,
                     size = scope.size
                 )
-                scope.drawRect(
-                    brush = Brush.linearGradient(
+                val timeBucket = (tod.normalizedHours * 12f).roundToInt()
+                val horizonBrush = if (cachedHorizonBrush != null &&
+                    cachedHorizonW == wi &&
+                    cachedHorizonH == hi &&
+                    cachedHorizonTimeBucket == timeBucket
+                ) {
+                    cachedHorizonBrush!!
+                } else {
+                    Brush.linearGradient(
                         colors = listOf(
                             tod.horizonStartColor,
                             Color.Transparent,
@@ -672,7 +819,15 @@ object IsometricLightingEngine {
                         ),
                         start = Offset(0f, 0f),
                         end = Offset(w, h)
-                    ),
+                    ).also {
+                        cachedHorizonW = wi
+                        cachedHorizonH = hi
+                        cachedHorizonTimeBucket = timeBucket
+                        cachedHorizonBrush = it
+                    }
+                }
+                scope.drawRect(
+                    brush = horizonBrush,
                     topLeft = Offset.Zero,
                     size = scope.size
                 )
@@ -687,9 +842,14 @@ object IsometricLightingEngine {
                     topLeft = Offset.Zero,
                     size = scope.size
                 )
-                val vigR = maxOf(w, h) * 0.68f
-                scope.drawRect(
-                    brush = Brush.radialGradient(
+                val dungeonVigBrush = if (cachedDungeonVigBrush != null &&
+                    cachedDungeonVigW == wi &&
+                    cachedDungeonVigH == hi
+                ) {
+                    cachedDungeonVigBrush!!
+                } else {
+                    val vigR = maxOf(w, h) * 0.68f
+                    Brush.radialGradient(
                         colorStops = arrayOf(
                             0.0f to Color.Transparent,
                             0.48f to Color(0x1A050710),
@@ -697,46 +857,60 @@ object IsometricLightingEngine {
                         ),
                         center = Offset(w * 0.5f, h * 0.5f),
                         radius = vigR
-                    ),
+                    ).also {
+                        cachedDungeonVigW = wi
+                        cachedDungeonVigH = hi
+                        cachedDungeonVigBrush = it
+                    }
+                }
+                scope.drawRect(
+                    brush = dungeonVigBrush,
                     topLeft = Offset.Zero,
                     size = scope.size
                 )
             }
         }
 
-        // 2. Dynamic flickering warm amber & cool cyan/arcane radial point-light pools
+        // 2. Dynamic flickering warm amber & cool cyan/arcane radial point-light pools (capped to closest prioritized lights)
         val lightMultiplier = if (isOverland) tod.pointLightBoost else 1.0f
-        if ((quality.drawPointLightPools || drawDungeonMood || (isOverland && isCustomTime)) && lights.isNotEmpty() && lightMultiplier > 0.05f) {
-            // Fast path for both HD & High (and any tier with a provided HalfResLightLayerRenderer):
-            // Render all lights onto the 0.5x offscreen layer with pre-baked soft glow sprites and
-            // composite in ONE bilinear pass (4x lower GPU fill cost, zero per-frame Brush allocations).
-            val useHalfResLayer = lightLayerRenderer != null &&
-                (quality == GraphicsQuality.HD || quality == GraphicsQuality.HIGH || drawDungeonMood || isCustomTime)
-            if (useHalfResLayer && lightLayerRenderer != null) {
+        val lightBudget = quality.maxDynamicPointLights
+            .let { if (it <= 0 && (drawDungeonMood || isCustomTime)) 6 else it }
+            .coerceIn(0, MAX_SIMULTANEOUS_POINT_LIGHTS)
+        if ((quality.drawPointLightPools || drawDungeonMood || (isOverland && isCustomTime)) &&
+            lights.isNotEmpty() &&
+            lightMultiplier > 0.05f &&
+            lightBudget > 0
+        ) {
+            if (lightLayerRenderer != null) {
                 lightLayerRenderer.renderAndCompositeLights(
                     scope = scope,
                     lights = lights,
                     quality = quality,
                     nowMs = nowMs,
-                    lightMultiplier = lightMultiplier
+                    lightMultiplier = lightMultiplier,
+                    maxLightsOverride = lightBudget
                 )
                 return
             }
 
-            // Fallback path when no offscreen renderer is supplied
+            // Fallback path when no offscreen renderer is supplied (still capped to closest prioritized lights)
+            val selectedCount = selectClosestPrioritizedLights(
+                lights = lights,
+                viewportW = w,
+                viewportH = h,
+                maxLights = lightBudget,
+                outSelected = fallbackSelectedLights,
+                scratchScores = fallbackSelectedScores
+            )
             val timeSec = nowMs * 0.001
-            for (light in lights) {
-                val r = light.radiusPx
-                if (light.screenX + r < 0f || light.screenX - r > w ||
-                    light.screenY + r < 0f || light.screenY - r > h
-                ) continue
-
+            for (i in 0 until selectedCount) {
+                val light = fallbackSelectedLights[i]
                 val waveA = sin(timeSec * (if (light.isArcane) 3.8 else 7.2) + light.flickerSeed).toFloat()
                 val waveB = cos(timeSec * (if (light.isArcane) 2.1 else 11.3) + light.flickerSeed * 1.7).toFloat()
                 val flicker = (0.91f + 0.06f * waveA + 0.03f * waveB).coerceIn(0.80f, 1.04f)
                 val effIntensity = (light.intensity * lightMultiplier).coerceIn(0.08f, 1.5f)
                 val center = Offset(light.screenX, light.screenY)
-                val scaledR = (r * flicker).coerceAtLeast(16f)
+                val scaledR = (light.radiusPx * flicker).coerceAtLeast(16f)
 
                 scope.drawCircle(
                     brush = Brush.radialGradient(
@@ -758,26 +932,64 @@ object IsometricLightingEngine {
 }
 
 /**
- * HD post-processing pass featuring Android 13+ (API 33+) AGSL [RuntimeShader] atmospheric edge
- * depth contrast, twilight color-depth polish, and subtle animated micro-shimmer, with a seamless
- * Compose layered radial-gradient fallback on Android 7.0–12 (API 24–32).
+ * Lightweight cached HD vignette & depth-contrast post-processor.
+ * Avoids full-screen per-pixel AGSL RuntimeShader passes every frame so HD stays locked and smooth
+ * during 360-degree camera rotation and dense combat, while caching the radial vignette Brush across
+ * frames to eliminate per-frame heap allocations.
  */
 class HdPostProcessRenderer {
-    private var agslShader: RuntimeShader? = null
-    private var agslAttempted: Boolean = false
+    private var cachedWidth: Int = -1
+    private var cachedHeight: Int = -1
+    private var cachedIsOverland: Boolean = false
+    private var cachedVignetteBucket: Int = Int.MIN_VALUE
+    private var cachedVignetteBrush: Brush? = null
+    private var rebuildCount: Int = 0
 
-    val isRuntimeShaderSupported: Boolean
-        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+    val isRuntimeShaderActive: Boolean
+        get() = false
 
-    private fun getOrInitShader(): RuntimeShader? {
-        if (!isRuntimeShaderSupported) return null
-        if (!agslAttempted) {
-            agslAttempted = true
-            agslShader = runCatching {
-                RuntimeShader(HD_TWILIGHT_AGSL)
-            }.getOrNull()
+    val cacheRebuildCount: Int
+        get() = rebuildCount
+
+    fun getOrCreateCachedVignetteBrush(
+        w: Float,
+        h: Float,
+        isOverland: Boolean,
+        vignetteScale: Float
+    ): Brush {
+        val wi = w.roundToInt()
+        val hi = h.roundToInt()
+        val bucket = (vignetteScale * 20f).roundToInt()
+        val existing = cachedVignetteBrush
+        if (existing != null &&
+            cachedWidth == wi &&
+            cachedHeight == hi &&
+            cachedIsOverland == isOverland &&
+            cachedVignetteBucket == bucket
+        ) {
+            return existing
         }
-        return agslShader
+        val radius = maxOf(w, h) * 0.74f
+        val center = Offset(w * 0.5f, h * 0.5f)
+        val midAlpha = (0.15f * vignetteScale).coerceIn(0.03f, 0.26f)
+        val edgeAlpha = (0.33f * vignetteScale).coerceIn(0.08f, 0.45f)
+        val created = Brush.radialGradient(
+            colorStops = arrayOf(
+                0.0f to if (isOverland) Color(0xFF9CC4FF).copy(alpha = (0.045f * vignetteScale).coerceIn(0.01f, 0.07f)) else Color.Transparent,
+                0.54f to Color.Transparent,
+                0.82f to Color(0xFF080C1A).copy(alpha = midAlpha),
+                1.0f to Color(0xFF050712).copy(alpha = edgeAlpha)
+            ),
+            center = center,
+            radius = radius
+        )
+        cachedWidth = wi
+        cachedHeight = hi
+        cachedIsOverland = isOverland
+        cachedVignetteBucket = bucket
+        cachedVignetteBrush = created
+        rebuildCount++
+        return created
     }
 
     fun drawHdPostProcess(
@@ -793,71 +1005,14 @@ class HdPostProcessRenderer {
         if (w <= 0f || h <= 0f) return
 
         val tod = IsometricLightingEngine.computeTimeOfDayProfile(timeOfDayHours)
-        val vignetteScale = if (floorId == 0) tod.hdVignetteScale else 1.0f
+        val isOverland = floorId == 0
+        val vignetteScale = if (isOverland) tod.hdVignetteScale else 1.0f
+        val vignetteBrush = getOrCreateCachedVignetteBrush(w, h, isOverland, vignetteScale)
 
-        val shader = if (quality.useHdPostProcessShader) getOrInitShader() else null
-        if (shader != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            runCatching {
-                shader.setFloatUniform("uResolution", w, h)
-                shader.setFloatUniform("uTime", ((nowMs % 60_000L) / 1000f))
-                shader.setFloatUniform("uIsOverland", if (floorId == 0) 1f else 0f)
-                shader.setFloatUniform("uVignetteScale", vignetteScale)
-                scope.drawRect(
-                    brush = ShaderBrush(shader),
-                    topLeft = Offset.Zero,
-                    size = scope.size
-                )
-                return
-            }
-        }
-
-        // Clean API 24-32 (or fallback) layered radial depth contrast & vignette
-        val radius = maxOf(w, h) * 0.74f
-        val center = Offset(w * 0.5f, h * 0.5f)
-        val midAlpha = (0.16f * vignetteScale).coerceIn(0.03f, 0.28f)
-        val edgeAlpha = (0.35f * vignetteScale).coerceIn(0.08f, 0.48f)
         scope.drawRect(
-            brush = Brush.radialGradient(
-                colorStops = arrayOf(
-                    0.0f to if (floorId == 0) Color(0xFF9CC4FF).copy(alpha = (0.05f * vignetteScale).coerceIn(0.01f, 0.08f)) else Color.Transparent,
-                    0.52f to Color.Transparent,
-                    0.82f to Color(0xFF080C1A).copy(alpha = midAlpha),
-                    1.0f to Color(0xFF050712).copy(alpha = edgeAlpha)
-                ),
-                center = center,
-                radius = radius
-            ),
+            brush = vignetteBrush,
             topLeft = Offset.Zero,
             size = scope.size
         )
-    }
-
-    companion object {
-        // Android 13+ AGSL shader: time-of-day responsive edge depth vignette + subtle animated air shimmer
-        private const val HD_TWILIGHT_AGSL = """
-            uniform float2 uResolution;
-            uniform float uTime;
-            uniform float uIsOverland;
-            uniform float uVignetteScale;
-
-            half4 main(float2 fragCoord) {
-                float2 uv = fragCoord / max(uResolution, float2(1.0, 1.0));
-                float2 centered = (uv - 0.5) * float2(1.18, 1.0);
-                float dist = length(centered);
-
-                // Smooth obsidian-indigo edge depth contrast scaled by time of day
-                float vignette = smoothstep(0.46, 0.96, dist);
-                float shimmer = 0.5 + 0.5 * sin(uv.x * 9.0 + uv.y * 6.0 + uTime * 1.15);
-
-                float3 edgeTint = mix(float3(0.03, 0.04, 0.09), float3(0.04, 0.06, 0.14), uIsOverland);
-                float alpha = vignette * (0.34 + 0.03 * shimmer) * uVignetteScale;
-
-                // Subtle rim lift near center on overland
-                float centerLift = (1.0 - smoothstep(0.0, 0.52, dist)) * uIsOverland * 0.045 * uVignetteScale;
-                float3 outColor = mix(edgeTint, float3(0.55, 0.72, 1.0), centerLift / max(alpha + centerLift, 0.001));
-                float outAlpha = clamp(alpha + centerLift, 0.0, 0.48);
-                return half4(outColor * outAlpha, outAlpha);
-            }
-        """
     }
 }
