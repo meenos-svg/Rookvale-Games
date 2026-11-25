@@ -38,6 +38,7 @@ import com.example.game.multiplayer.MultiplayerConfig
 import com.example.game.multiplayer.MultiplayerUiState
 import com.example.game.multiplayer.PlayerActionState
 import com.example.game.multiplayer.RealtimeMultiplayerManager
+import com.example.game.multiplayer.RemotePlayerInterpolator
 import com.example.game.sprites.EntitySpriteAtlas
 import com.example.game.sprites.TileSpriteAtlas
 import com.example.game.update.GitHubUpdateChecker
@@ -126,6 +127,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private var lastLocalMoveUptimeMs: Long = 0L
     @Volatile
     private var lastMoveBroadcastUptimeMs: Long = 0L
+    @Volatile
+    private var lastMoveSpeedTilesPerSec: Float = RemotePlayerInterpolator.WALK_SPEED_TILES_PER_SEC
     private var lastBackgroundSaveMs: Long = 0L
     private var lastKnownConnectionStatus: ConnectionStatus = ConnectionStatus.OFFLINE_SOLO
 
@@ -780,6 +783,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     persistCurrentState(silent = true)
                 } else if (movedTile || changedRegion) {
                     lastLocalMoveUptimeMs = now
+                    lastMoveSpeedTilesPerSec = RemotePlayerInterpolator.WALK_SPEED_TILES_PER_SEC
                     broadcastMovement(PlayerActionState.WALKING, now)
                     if (changedRegion) persistCurrentState(silent = true)
                 } else if (facingChanged) {
@@ -788,11 +792,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // High-frequency 120ms Supabase Realtime Broadcast movement streamer (ack = false, zero DB writes)
+        // High-frequency 100ms Supabase Realtime Broadcast movement streamer (ack = false, zero DB writes)
         movementBroadcastJob = viewModelScope.launch {
             var wasMoving = false
             while (true) {
-                delay(120L)
+                delay(100L)
                 if (_screen.value != AppScreen.PLAYING) {
                     wasMoving = false
                     continue
@@ -805,7 +809,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     (cur.autoFollowTarget && cur.targetMonsterId != null) ||
                     (nowUptime - lastLocalMoveUptimeMs) <= 260L
                 if (isMoving) {
-                    if (nowUptime - lastMoveBroadcastUptimeMs >= 100L) {
+                    if (nowUptime - lastMoveBroadcastUptimeMs >= 90L) {
                         broadcastMovement(PlayerActionState.WALKING, nowUptime)
                     }
                     wasMoving = true
@@ -958,7 +962,25 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     ): LocalPlayerPresencePayload {
         val nowMs = System.currentTimeMillis()
         val (tgtX, tgtY) = when {
-            walkPath.isNotEmpty() -> walkPath.first()
+            walkPath.isNotEmpty() -> {
+                // Look ahead up to 3 collinear tiles along the active walk path so dead-reckoning
+                // maintains a smooth forward heading across minor WebSocket jitter without cutting corners.
+                val first = walkPath.first()
+                val stepDx = (first.first - playerX).coerceIn(-1, 1)
+                val stepDy = (first.second - playerY).coerceIn(-1, 1)
+                var endPt = first
+                var lookIdx = 1
+                while (lookIdx < walkPath.size && lookIdx < 3) {
+                    val nxt = walkPath[lookIdx]
+                    if (nxt.first - endPt.first == stepDx && nxt.second - endPt.second == stepDy) {
+                        endPt = nxt
+                        lookIdx++
+                    } else {
+                        break
+                    }
+                }
+                endPt
+            }
             actionState == PlayerActionState.WALKING && (nowUptimeMs - lastLocalMoveUptimeMs) <= 260L -> {
                 val fl = WorldMaps.getFloor(floor)
                 val nx = (playerX + playerFacing.dx).coerceIn(0, fl.width - 1)
@@ -976,8 +998,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             hairColorIndex = hairColorIndex,
             x = playerX,
             y = playerY,
+            fromX = prevPlayerX,
+            fromY = prevPlayerY,
             targetX = tgtX,
             targetY = tgtY,
+            moveSpeed = lastMoveSpeedTilesPerSec,
             floor = floor,
             regionId = normalizeRegionId(regionId),
             hp = hp,
@@ -1089,6 +1114,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             if (moved || pathStarted) {
                 lastLocalMoveUptimeMs = now
+                lastMoveSpeedTilesPerSec = RemotePlayerInterpolator.WALK_SPEED_TILES_PER_SEC
                 broadcastMovement(PlayerActionState.WALKING, now)
             } else if (healed) {
                 broadcastCurrentState(PlayerActionState.HEALING)
@@ -1121,6 +1147,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             persistCurrentState(silent = true)
         } else if (moved) {
             lastLocalMoveUptimeMs = now
+            lastMoveSpeedTilesPerSec = RemotePlayerInterpolator.MANUAL_STEP_SPEED_TILES_PER_SEC
             broadcastMovement(PlayerActionState.WALKING, now)
         } else if (facingChanged) {
             broadcastMovement(PlayerActionState.IDLE, now)
@@ -1243,6 +1270,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (startedPath) {
             lastLocalMoveUptimeMs = now
+            lastMoveSpeedTilesPerSec = RemotePlayerInterpolator.WALK_SPEED_TILES_PER_SEC
             broadcastMovement(PlayerActionState.WALKING, now)
         }
     }

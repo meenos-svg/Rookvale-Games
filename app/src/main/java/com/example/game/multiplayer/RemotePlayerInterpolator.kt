@@ -23,15 +23,18 @@ data class RemotePlayerRenderState(
     val isGliding: Boolean,
     val velocityX: Float,
     val velocityY: Float,
-    val hardSnappedThisFrame: Boolean = false
+    val hardSnappedThisFrame: Boolean = false,
+    val tileOriginMs: Long = lastPacketMs
 )
 
 /**
  * Client-side path prediction & 60 FPS smooth interpolation engine for remote players:
  * - Advances predicted goal coordinates along `(networkX, networkY) -> (targetX, targetY)`
- *   at normal walking speed between 120ms Realtime Broadcast packets.
+ *   at the peer's broadcasted movement speed between ~100ms Realtime Broadcast packets.
+ * - Keeps a monotonic `tileOriginMs` anchor per tile so duplicate-tile keepalive packets
+ *   never reset prediction progress or yank remote heroes backwards (zero rubber-banding).
  * - Smoothly interpolates (`lerp`) `renderX/Y` every frame so remote heroes glide continuously
- *   across tiles with uninterrupted walk animations and zero rubber-banding.
+ *   across tiles with uninterrupted walk animations and smooth directional facing.
  * - Only hard-snaps `renderX/Y` when the floor changes or distance to `networkX/Y` exceeds 4 tiles
  *   (e.g., rope hole transition or respawn).
  */
@@ -41,14 +44,17 @@ class RemotePlayerInterpolator {
         /** Hard-snap only when distance between renderX/Y and networkX/Y exceeds 4 tiles. */
         const val HARD_SNAP_DISTANCE_TILES: Float = 4.0f
 
-        /** Normal Rookvale walking speed (~1 tile per 210ms = 4.76 tiles/sec). */
+        /** Normal Rookvale auto-walking speed (~1 tile per 210ms = 4.76 tiles/sec). */
         const val WALK_SPEED_TILES_PER_SEC: Float = 1000f / 210f
 
-        /** Maximum dead-reckoning prediction lead beyond last received networkX/Y. */
-        const val MAX_PREDICT_LEAD_TILES: Float = 1.15f
+        /** Manual directional step speed (~1 tile per 155ms = 6.45 tiles/sec). */
+        const val MANUAL_STEP_SPEED_TILES_PER_SEC: Float = 1000f / 155f
 
-        /** Stop dead-reckoning if no fresh packet arrives within 280ms so peers never overshoot walls. */
-        const val MAX_PREDICT_WINDOW_SEC: Float = 0.28f
+        /** Maximum dead-reckoning prediction lead beyond last received networkX/Y. */
+        const val MAX_PREDICT_LEAD_TILES: Float = 1.85f
+
+        /** Stop dead-reckoning if no fresh packet arrives within 420ms so peers never overshoot walls. */
+        const val MAX_PREDICT_WINDOW_SEC: Float = 0.42f
 
         /** Frame-rate independent exponential smoothing factor (at 60 FPS -> ~0.20 per frame). */
         const val SMOOTH_LERP_RATE: Float = 13.5f
@@ -87,6 +93,7 @@ class RemotePlayerInterpolator {
         val netY = rp.y.toFloat()
         val tgtX = rp.targetX.toFloat()
         val tgtY = rp.targetY.toFloat()
+        val walkSpeed = rp.moveSpeed.coerceIn(2.5f, 8.5f)
         val packetMs = if (rp.networkReceivedMs > 0L) rp.networkReceivedMs else nowUptimeMs
 
         val prev = states[rp.playerId]
@@ -105,14 +112,16 @@ class RemotePlayerInterpolator {
                 isGliding = false,
                 velocityX = 0f,
                 velocityY = 0f,
-                hardSnappedThisFrame = true
+                hardSnappedThisFrame = true,
+                tileOriginMs = packetMs
             )
             states[rp.playerId] = initial
             return initial
         }
 
-        val networkChanged = prev.networkX != netX || prev.networkY != netY ||
-            prev.targetX != tgtX || prev.targetY != tgtY
+        val tileChanged = prev.networkX != netX || prev.networkY != netY
+        val targetChanged = prev.targetX != tgtX || prev.targetY != tgtY
+        val networkChanged = tileChanged || targetChanged
         val effectivePacketMs = when {
             rp.networkReceivedMs > prev.lastPacketMs -> rp.networkReceivedMs
             networkChanged -> nowUptimeMs
@@ -135,25 +144,37 @@ class RemotePlayerInterpolator {
                 isGliding = false,
                 velocityX = 0f,
                 velocityY = 0f,
-                hardSnappedThisFrame = true
+                hardSnappedThisFrame = true,
+                tileOriginMs = effectivePacketMs
             )
             states[rp.playerId] = snapped
             return snapped
         }
 
-        // 1. Path Prediction: advance gently along (networkX, networkY) -> (targetX, targetY)
-        // at normal walking speed between packets, bounded by MAX_PREDICT_LEAD_TILES & MAX_PREDICT_WINDOW_SEC.
         val tDx = tgtX - netX
         val tDy = tgtY - netY
         val tLen = hypot(tDx, tDy)
+        val prevHadTarget = hypot(prev.targetX - prev.networkX, prev.targetY - prev.networkY) > 0.05f
+
+        // Anchor dead-reckoning time to when the peer arrived on (netX, netY) (or started walking from rest).
+        // Duplicate-tile keepalive packets (~100ms) keep tileOriginMs intact so prediction never yanks backwards!
+        val effectiveTileOriginMs = when {
+            tileChanged -> effectivePacketMs
+            !prevHadTarget && tLen > 0.05f -> effectivePacketMs
+            else -> prev.tileOriginMs
+        }
+
+        // 1. Dead-Reckoning Path Prediction: advance smoothly along (networkX, networkY) -> (targetX, targetY)
+        // at the peer's actual movement speed between WebSocket packets.
         val elapsedSincePacketSec = ((nowUptimeMs - effectivePacketMs).coerceAtLeast(0L)) / 1000f
+        val elapsedSinceTileSec = ((nowUptimeMs - effectiveTileOriginMs).coerceAtLeast(0L)) / 1000f
         val hasActiveTarget = tLen > 0.05f &&
             (rp.actionState == PlayerActionState.WALKING || elapsedSincePacketSec <= MAX_PREDICT_WINDOW_SEC)
 
         val goalX: Float
         val goalY: Float
         if (hasActiveTarget && elapsedSincePacketSec <= MAX_PREDICT_WINDOW_SEC) {
-            val leadDist = min(min(tLen, MAX_PREDICT_LEAD_TILES), WALK_SPEED_TILES_PER_SEC * elapsedSincePacketSec)
+            val leadDist = min(min(tLen, MAX_PREDICT_LEAD_TILES), walkSpeed * elapsedSinceTileSec)
             goalX = netX + (tDx / tLen) * leadDist
             goalY = netY + (tDy / tLen) * leadDist
         } else {
@@ -174,9 +195,9 @@ class RemotePlayerInterpolator {
         } else {
             val lerpAlpha = (1f - exp(-SMOOTH_LERP_RATE * dtSec)).coerceIn(0.06f, 1f)
             val expStep = distToGoal * lerpAlpha
-            val minWalkStep = min(distToGoal, WALK_SPEED_TILES_PER_SEC * 0.80f * dtSec)
-            val maxSpeedMult = if (distToNet > 1.5f) 1.50f else 1.20f
-            val maxWalkStep = WALK_SPEED_TILES_PER_SEC * maxSpeedMult * dtSec
+            val minWalkStep = min(distToGoal, walkSpeed * 0.85f * dtSec)
+            val maxSpeedMult = if (distToNet > 1.5f) 1.55f else 1.25f
+            val maxWalkStep = walkSpeed * maxSpeedMult * dtSec
             val step = expStep.coerceAtLeast(minWalkStep).coerceAtMost(maxWalkStep).coerceAtMost(distToGoal)
             nextRenderX = prev.renderX + (dx / distToGoal) * step
             nextRenderY = prev.renderY + (dy / distToGoal) * step
@@ -186,19 +207,20 @@ class RemotePlayerInterpolator {
         val movedDy = nextRenderY - prev.renderY
         val movedDist = hypot(movedDx, movedDy)
         val remainingToGoal = hypot(goalX - nextRenderX, goalY - nextRenderY)
-        val gliding = movedDist > 0.003f || remainingToGoal > 0.025f
+        val gliding = movedDist > 0.002f || remainingToGoal > 0.01f
 
         // 3. Continuous Walk Animation: keep stride phase cycling cleanly while gliding,
         // avoiding zero-crossing blips that would briefly snap legs to idle mid-step.
         val nextWalkPhase = if (gliding) {
-            val rawPhase = (prev.walkPhase + dtSec * WALK_CYCLES_PER_SEC) % 1.0f
+            val speedRatio = (walkSpeed / WALK_SPEED_TILES_PER_SEC).coerceIn(0.85f, 1.45f)
+            val rawPhase = (prev.walkPhase + dtSec * WALK_CYCLES_PER_SEC * speedRatio) % 1.0f
             if (rawPhase < 0.02f) 0.02f else rawPhase
         } else {
             0f
         }
 
-        val velX = if (movedDist > 0.003f) movedDx / dtSec else if (hasActiveTarget) tDx else 0f
-        val velY = if (movedDist > 0.003f) movedDy / dtSec else if (hasActiveTarget) tDy else 0f
+        val velX = if (movedDist > 0.002f) movedDx / dtSec else if (hasActiveTarget) tDx else 0f
+        val velY = if (movedDist > 0.002f) movedDy / dtSec else if (hasActiveTarget) tDy else 0f
 
         val updated = RemotePlayerRenderState(
             playerId = rp.playerId,
@@ -214,7 +236,8 @@ class RemotePlayerInterpolator {
             isGliding = gliding,
             velocityX = velX,
             velocityY = velY,
-            hardSnappedThisFrame = false
+            hardSnappedThisFrame = false,
+            tileOriginMs = effectiveTileOriginMs
         )
         states[rp.playerId] = updated
         return updated

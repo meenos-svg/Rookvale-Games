@@ -69,6 +69,7 @@ data class RemotePlayerState(
     val bootsId: String? = null,
     val targetX: Int = x,
     val targetY: Int = y,
+    val moveSpeed: Float = RemotePlayerInterpolator.WALK_SPEED_TILES_PER_SEC,
     val networkReceivedMs: Long = lastMoveMs,
     val isAdmin: Boolean = false,
     val isSpectator: Boolean = false
@@ -98,8 +99,11 @@ data class LocalPlayerPresencePayload(
     val armorId: String? = null,
     val helmetId: String? = null,
     val bootsId: String? = null,
+    val fromX: Int = x,
+    val fromY: Int = y,
     val targetX: Int = x,
     val targetY: Int = y,
+    val moveSpeed: Float = RemotePlayerInterpolator.WALK_SPEED_TILES_PER_SEC,
     val isAdmin: Boolean = false,
     val isSpectator: Boolean = false
 )

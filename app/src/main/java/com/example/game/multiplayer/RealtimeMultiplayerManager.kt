@@ -1624,9 +1624,13 @@ class RealtimeMultiplayerManager(
         val rawX = meta["x"].asIntOrNull() ?: existing?.x ?: return null
         val rawY = meta["y"].asIntOrNull() ?: existing?.y ?: return null
         val (cx, cy) = MultiplayerSanitizer.clampCoord(floor, rawX, rawY)
-        val rawTargetX = meta["targetX"].asIntOrNull() ?: cx
-        val rawTargetY = meta["targetY"].asIntOrNull() ?: cy
+        val rawTargetX = meta["targetX"].asIntOrNull() ?: meta["toX"].asIntOrNull() ?: cx
+        val rawTargetY = meta["targetY"].asIntOrNull() ?: meta["toY"].asIntOrNull() ?: cy
         val (tx, ty) = MultiplayerSanitizer.clampCoord(floor, rawTargetX, rawTargetY)
+        val rawFromX = meta["fromX"].asIntOrNull()
+        val rawFromY = meta["fromY"].asIntOrNull()
+        val parsedMoveSpeed = (meta["speed"].asFloatOrNull() ?: existing?.moveSpeed ?: RemotePlayerInterpolator.WALK_SPEED_TILES_PER_SEC)
+            .coerceIn(2.5f, 8.5f)
         val moved = existing != null && (existing.x != cx || existing.y != cy)
         val hasTargetLead = tx != cx || ty != cy
         val maxHp = (meta["maxHp"].asIntOrNull() ?: existing?.maxHp ?: 150).coerceIn(1, 50_000)
@@ -1677,10 +1681,19 @@ class RealtimeMultiplayerManager(
             hairColorIndex = MultiplayerSanitizer.clampHairIndex(rawHair),
             x = cx,
             y = cy,
-            prevX = if (moved) existing.x else cx,
-            prevY = if (moved) existing.y else cy,
+            prevX = when {
+                moved -> existing.x
+                rawFromX != null -> MultiplayerSanitizer.clampCoord(floor, rawFromX, rawFromY ?: cy).first
+                else -> cx
+            },
+            prevY = when {
+                moved -> existing.y
+                rawFromY != null -> MultiplayerSanitizer.clampCoord(floor, rawFromX ?: cx, rawFromY).second
+                else -> cy
+            },
             targetX = tx,
             targetY = ty,
+            moveSpeed = parsedMoveSpeed,
             lastMoveMs = if (moved || hasTargetLead) animNow else (existing?.lastMoveMs ?: animNow),
             networkReceivedMs = animNow,
             floor = floor,
@@ -1725,8 +1738,14 @@ class RealtimeMultiplayerManager(
         "name" to MultiplayerSanitizer.sanitizeName(p.name),
         "x" to p.x,
         "y" to p.y,
+        "fromX" to p.fromX,
+        "fromY" to p.fromY,
         "targetX" to p.targetX,
         "targetY" to p.targetY,
+        "toX" to p.targetX,
+        "toY" to p.targetY,
+        "speed" to p.moveSpeed,
+        "ts" to (if (p.lastSeenMs > 0L) p.lastSeenMs else nowProvider()),
         "floor" to p.floor,
         "regionId" to normalizeRegionId(p.regionId),
         "facing" to p.direction.name,
@@ -1756,8 +1775,11 @@ class RealtimeMultiplayerManager(
         ),
         "x" to p.x,
         "y" to p.y,
+        "fromX" to p.fromX,
+        "fromY" to p.fromY,
         "targetX" to p.targetX,
         "targetY" to p.targetY,
+        "speed" to p.moveSpeed,
         "floor" to p.floor,
         "regionId" to normalizeRegionId(p.regionId),
         "facing" to p.direction.name,
@@ -1788,6 +1810,12 @@ class RealtimeMultiplayerManager(
     private fun Any?.asLongOrNull(): Long? = when (this) {
         is Number -> this.toLong()
         is String -> this.toLongOrNull()
+        else -> null
+    }
+
+    private fun Any?.asFloatOrNull(): Float? = when (this) {
+        is Number -> this.toFloat()
+        is String -> this.toFloatOrNull()
         else -> null
     }
 }

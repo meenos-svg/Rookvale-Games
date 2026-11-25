@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.os.SystemClock
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -48,11 +49,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -83,6 +86,7 @@ import com.example.game.model.OreVeinKind
 import com.example.game.model.isRegionCompatible
 import com.example.game.model.normalizeRegionId
 import com.example.game.multiplayer.ConnectionStatus
+import com.example.game.multiplayer.RemotePlayerInterpolator
 import com.example.game.multiplayer.RemotePlayerState
 import com.example.game.world.WorldBiomeBlueprint
 import com.example.game.world.WorldFloor
@@ -99,13 +103,17 @@ import com.example.ui.theme.TargetRed
 import com.example.ui.theme.TorchAmber
 import com.example.ui.theme.TorchGold
 import java.util.Locale
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.ceil
+import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * Immutable camera state for the Regional/World Map modal in world-tile coordinates.
@@ -601,6 +609,21 @@ fun EnhancedRegionalWorldMapContent(
         label = "beacon_pulse"
     )
 
+    // 60 FPS client-side remote player interpolation & dead-reckoning on the World Map
+    val mapRemoteInterpolator = remember { RemotePlayerInterpolator() }
+    val mapActiveRemoteIds = remember { HashSet<String>(16) }
+    val mapLerpClockMs = remember { longArrayOf(SystemClock.uptimeMillis()) }
+    var mapAnimTickMs by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
+    LaunchedEffect(floorRemotePlayers.isNotEmpty()) {
+        if (floorRemotePlayers.isEmpty()) return@LaunchedEffect
+        mapLerpClockMs[0] = SystemClock.uptimeMillis()
+        while (true) {
+            withFrameNanos {
+                mapAnimTickMs = SystemClock.uptimeMillis()
+            }
+        }
+    }
+
     val allyLabelPaint = remember {
         Paint().apply {
             isAntiAlias = true
@@ -874,13 +897,19 @@ fun EnhancedRegionalWorldMapContent(
                                             val h = size.height.coerceAtLeast(1).toFloat()
                                             val cam = latestCamera
 
-                                            // 1. Snap to online player marker if tapped nearby on screen
+                                            // 1. Snap to online player marker (using smoothed interpolated coordinates) if tapped nearby
                                             val tappedAlly = if (latestShowAllies || !cam.isOverland) {
                                                 latestRemotePlayers.minByOrNull { rp ->
-                                                    val pos = WorldMapViewportCamera.worldToScreen(rp.x + 0.5f, rp.y + 0.5f, cam, w, h)
+                                                    val smooth = mapRemoteInterpolator.stateFor(rp.playerId)
+                                                    val rx = (smooth?.renderX ?: rp.x.toFloat()) + 0.5f
+                                                    val ry = (smooth?.renderY ?: rp.y.toFloat()) + 0.5f
+                                                    val pos = WorldMapViewportCamera.worldToScreen(rx, ry, cam, w, h)
                                                     hypot(downPos.x - pos.x, downPos.y - pos.y)
                                                 }?.takeIf { rp ->
-                                                    val pos = WorldMapViewportCamera.worldToScreen(rp.x + 0.5f, rp.y + 0.5f, cam, w, h)
+                                                    val smooth = mapRemoteInterpolator.stateFor(rp.playerId)
+                                                    val rx = (smooth?.renderX ?: rp.x.toFloat()) + 0.5f
+                                                    val ry = (smooth?.renderY ?: rp.y.toFloat()) + 0.5f
+                                                    val pos = WorldMapViewportCamera.worldToScreen(rx, ry, cam, w, h)
                                                     hypot(downPos.x - pos.x, downPos.y - pos.y) <= 24f
                                                 }
                                             } else null
@@ -1214,13 +1243,56 @@ fun EnhancedRegionalWorldMapContent(
                                 }
                             }
 
-                            // LAYER 9: Online Heroes (with glowing green Online dot & Golden Crown for Admin!)
+                            // LAYER 9: Online Heroes (60 FPS Smooth Lerp + Dead-Reckoning + Directional Heading + Online Dot)
                             if (showAllies || !isOverland) {
+                                val nowMapMs = mapAnimTickMs
+                                val mapDtSec = ((nowMapMs - mapLerpClockMs[0]).coerceIn(1L, 120L)) / 1000f
+                                mapLerpClockMs[0] = nowMapMs
+                                mapActiveRemoteIds.clear()
+
                                 val allyR = (3.4f + zoomFactor * 2.0f).coerceIn(3.4f, 6.0f)
                                 allyLabelPaint.textSize = (15f + zoomFactor * 3.5f).coerceIn(15f, 18.5f)
                                 floorRemotePlayers.forEach { rp ->
-                                    val pos = WorldMapViewportCamera.worldToScreen(rp.x + 0.5f, rp.y + 0.5f, camera, w, h)
+                                    mapActiveRemoteIds.add(rp.playerId)
+                                    val rState = mapRemoteInterpolator.updatePlayer(rp, nowMapMs, mapDtSec)
+                                    val strideBob = if (rState.isGliding) {
+                                        abs(sin(rState.walkPhase * PI.toFloat() * 2f)) * 1.6f
+                                    } else {
+                                        0f
+                                    }
+                                    val rawPos = WorldMapViewportCamera.worldToScreen(
+                                        rState.renderX + 0.5f,
+                                        rState.renderY + 0.5f,
+                                        camera,
+                                        w,
+                                        h
+                                    )
+                                    val pos = Offset(rawPos.x, rawPos.y - strideBob)
                                     if (pos.x !in -16f..(w + 16f) || pos.y !in -16f..(h + 16f)) return@forEach
+
+                                    // Directional heading indicator oriented along movement vector atan2(dy, dx)
+                                    if (rState.isGliding && hypot(rState.velocityX, rState.velocityY) > 0.08f) {
+                                        val angle = atan2(rState.velocityY, rState.velocityX)
+                                        val tipDist = allyR + 6.5f
+                                        val sideDist = allyR + 2.2f
+                                        val tip = Offset(pos.x + cos(angle) * tipDist, pos.y + sin(angle) * tipDist)
+                                        val leftWing = Offset(
+                                            pos.x + cos(angle + 2.35f) * sideDist,
+                                            pos.y + sin(angle + 2.35f) * sideDist
+                                        )
+                                        val rightWing = Offset(
+                                            pos.x + cos(angle - 2.35f) * sideDist,
+                                            pos.y + sin(angle - 2.35f) * sideDist
+                                        )
+                                        val headingPath = Path().apply {
+                                            moveTo(tip.x, tip.y)
+                                            lineTo(leftWing.x, leftWing.y)
+                                            lineTo(rightWing.x, rightWing.y)
+                                            close()
+                                        }
+                                        drawPath(headingPath, ExpEmerald.copy(alpha = 0.92f))
+                                    }
+
                                     drawCircle(ExpEmerald.copy(alpha = 0.30f), radius = allyR * 1.9f * beaconPulse, center = pos)
                                     drawCircle(Color.Black, radius = allyR + 2.4f, center = pos)
                                     drawCircle(TorchGold, radius = allyR + 1.1f, center = pos)
@@ -1239,6 +1311,7 @@ fun EnhancedRegionalWorldMapContent(
                                         boxH = 20f
                                     )
                                 }
+                                mapRemoteInterpolator.pruneInactive(mapActiveRemoteIds)
                             }
 
                             // LAYER 10: Pulsing Local Player Beacon
