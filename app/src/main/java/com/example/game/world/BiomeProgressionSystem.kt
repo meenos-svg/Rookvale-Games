@@ -112,8 +112,8 @@ object BiomeProgressionRules {
      * and outer-continent biome dungeons scale strictly from their host biome.
      */
     fun surfaceBiomeForDungeonFloor(floorId: Int): OverlandBiomeTier = when (floorId) {
-        -1 -> OverlandBiomeTier.ROOKVALE_HEARTLAND
-        -2 -> OverlandBiomeTier.WHISPERING_MARSH
+        -1 -> OverlandBiomeTier.ROOKVALE_HEARTLAND // Rookvale Upper Catacombs (Lvl 7-12)
+        -2 -> OverlandBiomeTier.ROOKVALE_HEARTLAND // Rookvale Deep Caverns (Lvl 13-18, strictly inside Lv 1-20)
         -3 -> OverlandBiomeTier.SUNSCORCH_BADLANDS
         -4 -> OverlandBiomeTier.FROSTPEAK_HIGHLANDS
         -5 -> OverlandBiomeTier.SUNSCORCH_BADLANDS // Grimmaw Quarry anchored to Sunscorch/Frostpeak frontier

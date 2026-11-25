@@ -11,6 +11,8 @@ permissions:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -121,12 +123,16 @@ jobs:
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: latest-build
+          tag_name: latest
           name: Rookvale Latest Android Build
           body: |
             Automated Android APK build (`v1.0.${{ github.run_number }}`, `versionCode ${{ github.run_number }}`, `${{ steps.signing.outputs.build_variant }}` signed) from latest `main` push.
             Tap **Rookvale-latest.apk** below to download and install as an in-place update on Android.
           files: Rookvale-latest.apk
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          draft: false
           prerelease: false
+          make_latest: "true"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

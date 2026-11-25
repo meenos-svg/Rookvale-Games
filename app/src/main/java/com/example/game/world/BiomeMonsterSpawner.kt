@@ -53,16 +53,30 @@ enum class BiomeType(
         )
     ),
     HEARTLAND_FRONTIER(
-        displayName = "Heartland Frontier & Outer Ruins",
+        displayName = "Heartland Frontier & Outer Woods",
         overlandTier = OverlandBiomeTier.ROOKVALE_HEARTLAND,
         minLevel = 12,
         maxLevel = 20,
         monsterPool = listOf(
-            WeightedMonsterEntry(MonsterType.ORC_WARRIOR, 28),
-            WeightedMonsterEntry(MonsterType.SKELETON, 24),
-            WeightedMonsterEntry(MonsterType.SWAMP_TROLL, 20),
-            WeightedMonsterEntry(MonsterType.POISON_SPIDER, 16),
-            WeightedMonsterEntry(MonsterType.GHOUL, 12)
+            WeightedMonsterEntry(MonsterType.OUTLAW_BANDIT, 22),
+            WeightedMonsterEntry(MonsterType.ORC_WARRIOR, 22),
+            WeightedMonsterEntry(MonsterType.OUTLAW_ROGUE, 16),
+            WeightedMonsterEntry(MonsterType.SKELETON, 16),
+            WeightedMonsterEntry(MonsterType.SWAMP_TROLL, 14),
+            WeightedMonsterEntry(MonsterType.POISON_SPIDER, 10)
+        )
+    ),
+    HEARTLAND_OUTLAW_CAMP(
+        displayName = "Rookvale Outlaw Camps",
+        overlandTier = OverlandBiomeTier.ROOKVALE_HEARTLAND,
+        minLevel = 12,
+        maxLevel = 20,
+        monsterPool = listOf(
+            WeightedMonsterEntry(MonsterType.OUTLAW_BANDIT, 38),
+            WeightedMonsterEntry(MonsterType.OUTLAW_ROGUE, 34),
+            WeightedMonsterEntry(MonsterType.GOBLIN_SCOUT, 12),
+            WeightedMonsterEntry(MonsterType.ORC_WARRIOR, 10),
+            WeightedMonsterEntry(MonsterType.CRAG_WOLF, 6)
         )
     ),
     WHISPERING_MARSH(
@@ -166,6 +180,13 @@ object BiomeMonsterSpawner {
     private const val HEARTLAND_WILDS_RADIUS = 142.0
     private const val HEARTLAND_MAX_RADIUS = 235.0
 
+    // Open rustic Lv 12-20 Rookvale Outlaw Camp centers (global Floor 0 coordinates)
+    const val SW_OUTLAW_CAMP_X = WorldMaps.ROOKVALE_ORIGIN_X + 88   // 1288 (Briar Outlaw Camp, Lv 12-16)
+    const val SW_OUTLAW_CAMP_Y = WorldMaps.ROOKVALE_ORIGIN_Y + 320  // 720
+    const val SE_OUTLAW_CAMP_X = WorldMaps.ROOKVALE_ORIGIN_X + 312  // 1512 (Watchwood Outlaw Camp, Lv 15-20)
+    const val SE_OUTLAW_CAMP_Y = WorldMaps.ROOKVALE_ORIGIN_Y + 320  // 720
+    const val OUTLAW_CAMP_RADIUS = 38.0
+
     // City outer perimeter buffer (global coords) so wild monsters never crowd city fences
     private const val ROOKVALE_CITY_BUFFER_MIN_X = WorldMaps.ROOKVALE_ORIGIN_X + 140
     private const val ROOKVALE_CITY_BUFFER_MAX_X = WorldMaps.ROOKVALE_ORIGIN_X + 262
@@ -204,11 +225,15 @@ object BiomeMonsterSpawner {
         val regionId = normalizeRegionId(WorldRegionMeta.forGlobalTile(x, y).regionId)
         return when (regionId) {
             "rookvale_valley" -> {
-                val dist = distanceFromRookvaleCenter(x, y)
-                when {
-                    dist <= HEARTLAND_MEADOW_RADIUS -> BiomeType.HEARTLAND_MEADOWS
-                    dist <= HEARTLAND_WILDS_RADIUS -> BiomeType.HEARTLAND_WILDS
-                    else -> BiomeType.HEARTLAND_FRONTIER
+                if (isInOutlawCampZone(x, y)) {
+                    BiomeType.HEARTLAND_OUTLAW_CAMP
+                } else {
+                    val dist = distanceFromRookvaleCenter(x, y)
+                    when {
+                        dist <= HEARTLAND_MEADOW_RADIUS -> BiomeType.HEARTLAND_MEADOWS
+                        dist <= HEARTLAND_WILDS_RADIUS -> BiomeType.HEARTLAND_WILDS
+                        else -> BiomeType.HEARTLAND_FRONTIER
+                    }
                 }
             }
             "spirewood_west" -> BiomeType.HEARTLAND_FRONTIER
@@ -222,12 +247,20 @@ object BiomeMonsterSpawner {
         }
     }
 
+    fun isInOutlawCampZone(x: Int, y: Int): Boolean {
+        val dSw = hypot((x - SW_OUTLAW_CAMP_X).toDouble(), (y - SW_OUTLAW_CAMP_Y).toDouble())
+        if (dSw <= OUTLAW_CAMP_RADIUS) return true
+        val dSe = hypot((x - SE_OUTLAW_CAMP_X).toDouble(), (y - SE_OUTLAW_CAMP_Y).toDouble())
+        return dSe <= OUTLAW_CAMP_RADIUS
+    }
+
     /**
      * Maps each underground dungeon floor (`-1..-10`) to its natural ecological [BiomeType].
+     * Both Floor -1 (Lv 7-12) and Floor -2 (Lv 13-18) belong to Rookvale Heartland's Lv 1-20 tier.
      */
     fun biomeForDungeonFloor(floorId: Int): BiomeType = when (floorId) {
         -1 -> BiomeType.HEARTLAND_WILDS
-        -2 -> BiomeType.WHISPERING_MARSH
+        -2 -> BiomeType.HEARTLAND_FRONTIER
         -3 -> BiomeType.BLIGHTWOOD_REACH
         -4 -> BiomeType.ASHEN_CALDERA
         -5 -> BiomeType.FROSTPEAK_HIGHLANDS
@@ -281,8 +314,17 @@ object BiomeMonsterSpawner {
                         .coerceIn(0.0, 1.0)
                     (5.0 + t * 7.0).roundToInt() + jitter
                 }
+                BiomeType.HEARTLAND_OUTLAW_CAMP -> {
+                    // SW Briar Outlaw Camp grades Lv 12-16; SE Watchwood Outlaw Camp grades Lv 15-20
+                    val isSeCamp = hypot((x - SE_OUTLAW_CAMP_X).toDouble(), (y - SE_OUTLAW_CAMP_Y).toDouble()) <
+                        hypot((x - SW_OUTLAW_CAMP_X).toDouble(), (y - SW_OUTLAW_CAMP_Y).toDouble())
+                    val bandMin = if (isSeCamp) 15 else 12
+                    val bandMax = if (isSeCamp) 20 else 16
+                    val roll = positiveHash(x, y, 521 + seedOffset) % (bandMax - bandMin + 1)
+                    (bandMin + roll).coerceIn(bandMin, bandMax)
+                }
                 else -> {
-                    // Outer Heartland borders, southern ruins & Spirewood Reach: Lv 12-20
+                    // Outer Heartland borders & Spirewood Reach: Lv 12-20
                     val t = ((dist - HEARTLAND_WILDS_RADIUS) / (HEARTLAND_MAX_RADIUS - HEARTLAND_WILDS_RADIUS))
                         .coerceIn(0.0, 1.0)
                     (12.0 + t * 8.0).roundToInt() + jitter
@@ -411,6 +453,23 @@ object BiomeMonsterSpawner {
                         tryPlaceBiomeSpawn(px, py, 307)
                     }
                 }
+            }
+        }
+
+        // 1B. Open Rustic Rookvale Outlaw Camps (Briar SW & Watchwood SE — biome-driven Lv 12-20 packs)
+        val campCenters = listOf(SW_OUTLAW_CAMP_X to SW_OUTLAW_CAMP_Y, SE_OUTLAW_CAMP_X to SE_OUTLAW_CAMP_Y)
+        val campRingOffsets = listOf(
+            -12 to -10, 0 to -12, 12 to -10,
+            -14 to 2, 14 to 2,
+            -10 to 12, 2 to 13, 12 to 11,
+            -22 to 0, 22 to -4
+        )
+        for ((campIdx, center) in campCenters.withIndex()) {
+            val (ccx, ccy) = center
+            for ((slotIdx, off) in campRingOffsets.withIndex()) {
+                val tx = ccx + off.first
+                val ty = ccy + off.second
+                tryPlaceBiomeSpawn(tx, ty, 809 + campIdx * 97 + slotIdx * 31)
             }
         }
 

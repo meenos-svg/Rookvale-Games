@@ -848,6 +848,10 @@ enum class MonsterType(
         xpReward = 115, minDmg = 11, maxDmg = 23, goldMin = 20, goldMax = 48, moveIntervalTicks = 1,
         inflictsPoison = true
     ),
+    OUTLAW_BANDIT(
+        displayName = "Outlaw Bandit", tier = 2, threatLevel = 7, maxHp = 132, armor = 5,
+        xpReward = 128, minDmg = 12, maxDmg = 24, goldMin = 26, goldMax = 58, moveIntervalTicks = 1
+    ),
     BROODMOTHER_ARACHNE(
         displayName = "Broodmother Arachne", tier = 2, threatLevel = 8, maxHp = 460, armor = 9,
         xpReward = 480, minDmg = 18, maxDmg = 34, goldMin = 110, goldMax = 220, moveIntervalTicks = 2,
@@ -856,10 +860,15 @@ enum class MonsterType(
         specialKind = BossSpecialKind.VENOM_NOVA, bossTitle = "Matriarch of the Mossy Sewers"
     ),
 
-    // --- TIER 3: Floor -2 Deep Caverns (Levels 6-10) ---
+    // --- TIER 3: Heartland Outlaw Frontier & Floor -2 Deep Caverns (Levels 13-20) ---
     ORC_WARRIOR(
         displayName = "Orc Warrior", tier = 3, threatLevel = 8, maxHp = 245, armor = 11,
         xpReward = 225, minDmg = 20, maxDmg = 36, goldMin = 40, goldMax = 90, moveIntervalTicks = 1
+    ),
+    OUTLAW_ROGUE(
+        displayName = "Outlaw Rogue", tier = 3, threatLevel = 9, maxHp = 228, armor = 8,
+        xpReward = 240, minDmg = 19, maxDmg = 36, goldMin = 48, goldMax = 104, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 3, rangedProjectile = ProjectileKind.ARROW
     ),
     GHOUL(
         displayName = "Ghoul", tier = 3, threatLevel = 9, maxHp = 270, armor = 8,

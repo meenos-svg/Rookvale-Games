@@ -32,13 +32,13 @@ data class ParsedReleaseInfo(
 )
 
 /**
- * Lightweight, silent-on-offline GitHub Release update checker for Rookvale's rolling `latest-build` tag.
+ * Lightweight, silent-on-offline GitHub Release update checker for Rookvale's rolling `latest` tag.
  * Compares the remote release/asset timestamp against max(BuildConfig.BUILD_TIME_UTC, lastDismissedReleaseMs)
  * with a 2-minute CI clock skew grace window so newly installed APKs never falsely prompt for themselves.
  */
 object GitHubUpdateChecker {
     const val LATEST_RELEASE_API_URL =
-        "https://api.github.com/repos/meenos-svg/Rookvale-Games/releases/tags/latest-build"
+        "https://api.github.com/repos/meenos-svg/Rookvale-Games/releases/tags/latest"
     const val RELEASES_PAGE_URL =
         "https://github.com/meenos-svg/Rookvale-Games/releases"
     private const val ALLOWED_URL_PREFIX =

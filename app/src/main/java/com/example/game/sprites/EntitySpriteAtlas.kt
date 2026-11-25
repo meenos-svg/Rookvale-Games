@@ -402,6 +402,32 @@ object EntitySpriteAtlas {
                 rect(buf, S, 22, 11 + bob, 4, 4, 0xFF9BA3AD.toInt())
                 rect(buf, S, 5, 13 + bob, 4, 5, 0xFF543318.toInt())
             }
+            MonsterType.OUTLAW_BANDIT -> {
+                drawShadow(buf, 7, 25, 18, 5)
+                val cloak = 0xFF7D2E28.toInt()
+                val leather = 0xFF5E412A.toInt()
+                rect(buf, S, 10, 20 + bob, 4, 7, 0xFF33261E.toInt()); rect(buf, S, 18, 20 + bob, 4, 7, 0xFF33261E.toInt())
+                rect(buf, S, 8, 11 + bob, 16, 10, leather)
+                rect(buf, S, 9, 10 + bob, 14, 3, cloak) // crimson scarf
+                rect(buf, S, 11, 4 + bob, 10, 7, 0xFFD9B08C.toInt())
+                rect(buf, S, 10, 3 + bob, 12, 3, cloak) // bandit hood
+                rect(buf, S, 11, 8 + bob, 10, 2, cloak) // face mask
+                px(buf, S, 13, 6 + bob, 0xFF1A1412.toInt()); px(buf, S, 18, 6 + bob, 0xFF1A1412.toInt())
+                rect(buf, S, 24, 6 + bob, 3, 14, 0xFFD4DCE6.toInt()) // notched cutlass
+                rect(buf, S, 5, 13 + bob, 4, 7, 0xFF7A5533.toInt()) // buckler
+            }
+            MonsterType.OUTLAW_ROGUE -> {
+                drawShadow(buf, 7, 25, 18, 5)
+                val cowl = 0xFF2B3832.toInt()
+                val vest = 0xFF38473F.toInt()
+                rect(buf, S, 10, 20 + bob, 4, 7, 0xFF1F2624.toInt()); rect(buf, S, 18, 20 + bob, 4, 7, 0xFF1F2624.toInt())
+                rect(buf, S, 9, 11 + bob, 14, 10, vest)
+                rect(buf, S, 10, 3 + bob, 12, 8, cowl) // dark hooded cowl
+                rect(buf, S, 12, 6 + bob, 8, 3, 0xFF171A19.toInt())
+                px(buf, S, 13, 7 + bob, 0xFF9EFFB2.toInt()); px(buf, S, 18, 7 + bob, 0xFF9EFFB2.toInt())
+                rect(buf, S, 24, 6 + bob, 3, 15, 0xFF9C7242.toInt()) // recurve shortbow
+                rect(buf, S, 5, 11 + bob, 3, 9, 0xFFC5D0DC.toInt()) // offhand dirk
+            }
             MonsterType.POISON_SPIDER -> {
                 drawShadow(buf, 6, 23, 20, 5)
                 val legShift = if (frame == 0) 0 else 2

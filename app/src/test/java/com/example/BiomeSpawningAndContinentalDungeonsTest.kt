@@ -297,4 +297,108 @@ class BiomeSpawningAndContinentalDungeonsTest {
         val decoded = CloudSavePayloadCodec.decode(encoded, "slot_delver", "Delver")
         assertEquals("Decoded floor must preserve Floor -10", -10, decoded.floor)
     }
+
+    @Test
+    fun rookvaleOuterBorderRebuiltAsRusticOutlawCampsAndDungeonsTunedToLevel1To20() {
+        val floor0 = WorldMaps.getFloor(0)
+
+        // 1. Cleared SW (1266..1312, 704..736) & SE (1488..1534, 704..736) sites must have ZERO rectangular stone boxes
+        val swBox = Triple(1266..1312, 704..736, "SW Briar Outlaw Camp")
+        val seBox = Triple(1488..1534, 704..736, "SE Watchwood Outlaw Camp")
+        for ((xs, ys, label) in listOf(swBox, seBox)) {
+            var campfires = 0
+            var tents = 0
+            var grassOrDirt = 0
+            for (y in ys) {
+                for (x in xs) {
+                    val t = floor0.tileAt(x, y)
+                    assertFalse("$label at ($x,$y) must NOT contain rectangular STONE_WALL", t == TileType.STONE_WALL)
+                    assertFalse("$label at ($x,$y) must NOT contain IRON_BAR_GATE fortress wall", t == TileType.IRON_BAR_GATE)
+                    assertFalse("$label at ($x,$y) must NOT contain COBBLESTONE slab", t == TileType.COBBLESTONE)
+                    assertFalse("$label at ($x,$y) must NOT contain CRYPT_FLOOR slab", t == TileType.CRYPT_FLOOR)
+                    assertFalse("$label at ($x,$y) must NOT contain LAVA", t == TileType.LAVA)
+                    if (t == TileType.CAMPFIRE_BRAZIER) campfires++
+                    if (t == TileType.MARKET_AWNING) tents++
+                    if (t == TileType.GRASS || t == TileType.DARK_GRASS || t == TileType.FLOWER_GRASS || t == TileType.DIRT_FLOOR) {
+                        grassOrDirt++
+                    }
+                }
+            }
+            assertTrue("$label must have rustic campfires (got $campfires)", campfires >= 2)
+            assertTrue("$label must have rustic canvas tents (got $tents)", tents >= 4)
+            assertTrue("$label must blend continuous Heartland grass & dirt terrain", grassOrDirt >= 900)
+        }
+
+        // 2. Zero Grimmaw/Gorek landmarks or World Map pins anywhere inside Rookvale Heartland (1200..1599, 400..799)
+        val heartlandPins = WorldBiomeBlueprint.worldMapPins.filter { WorldBiomeBlueprint.isInRookvaleHeartland(it.x, it.y) }
+        assertTrue(
+            "Rookvale Heartland must have zero Grimmaw or Gorek World Map pins",
+            heartlandPins.none { it.label.contains("Grimmaw", ignoreCase = true) || it.label.contains("Gorek", ignoreCase = true) }
+        )
+        assertTrue(
+            "Briar Outlaw Camp pin must exist in SW Heartland",
+            heartlandPins.any { it.id == "camp_briar_outlaws" }
+        )
+        assertTrue(
+            "Watchwood Outlaw Camp pin must exist in SE Heartland",
+            heartlandPins.any { it.id == "camp_watchwood_outlaws" }
+        )
+        val heartlandLandmarks = WorldMaps.landmarks.filter {
+            it.floor == 0 && WorldBiomeBlueprint.isInRookvaleHeartland(it.x, it.y)
+        }
+        assertTrue(
+            "Rookvale Heartland must have zero Grimmaw or Gorek landmarks",
+            heartlandLandmarks.none { it.label.contains("GRIMMAW", ignoreCase = true) || it.label.contains("GOREK", ignoreCase = true) }
+        )
+        // Grimmaw Quarry (-5) and Gorek Labyrinth (-6) must still live in their distant outer biomes
+        val grimmawPin = WorldBiomeBlueprint.worldMapPins.firstOrNull { it.id == "dng_frostcrest" }
+        val gorekPin = WorldBiomeBlueprint.worldMapPins.firstOrNull { it.id == "dng_badlands" }
+        assertNotNull("Relocated Grimmaw Quarry pin must exist in Frostpeak Highlands", grimmawPin)
+        assertNotNull("Relocated Gorek Labyrinth pin must exist in Sunscorch Badlands", gorekPin)
+        assertFalse(WorldBiomeBlueprint.isInRookvaleHeartland(grimmawPin!!.x, grimmawPin.y))
+        assertFalse(WorldBiomeBlueprint.isInRookvaleHeartland(gorekPin!!.x, gorekPin.y))
+
+        // 3. Dedicated Outlaw Bandit & Outlaw Rogue monsters populate the Rookvale Outlaw Camps strictly in Lv 12..20
+        val allMonsters = WorldMaps.initialMonsters()
+        val campMonsters = allMonsters.filter {
+            it.floor == 0 && BiomeMonsterSpawner.isInOutlawCampZone(it.x, it.y)
+        }
+        assertTrue("Outlaw Camps must spawn active outlaw packs", campMonsters.size >= 10)
+        assertTrue(
+            "Outlaw Camps must spawn dedicated OUTLAW_BANDIT enemies",
+            campMonsters.any { it.type == MonsterType.OUTLAW_BANDIT }
+        )
+        assertTrue(
+            "Outlaw Camps must spawn dedicated OUTLAW_ROGUE enemies",
+            campMonsters.any { it.type == MonsterType.OUTLAW_ROGUE }
+        )
+        campMonsters.forEach { m ->
+            assertTrue(
+                "Outlaw Camp ${m.type} at (${m.x},${m.y}) level ${m.level} must stay in Lv 12..20",
+                m.level in 12..20
+            )
+            assertTrue(
+                "Outlaw Camp ${m.type} must belong to HEARTLAND_OUTLAW_CAMP pool",
+                BiomeType.HEARTLAND_OUTLAW_CAMP.containsSpecies(m.type)
+            )
+        }
+
+        // 4. Both Rookvale-linked underground floors (Floor -1: Lv 6-12, Floor -2: Lv 13-20) strictly match Rookvale Lv 1..20!
+        val floor1Monsters = allMonsters.filter { it.floor == -1 }
+        val floor2Monsters = allMonsters.filter { it.floor == -2 }
+        assertTrue("Floor -1 must have monsters", floor1Monsters.isNotEmpty())
+        assertTrue("Floor -2 must have monsters", floor2Monsters.isNotEmpty())
+        floor1Monsters.forEach { m ->
+            assertTrue(
+                "Floor -1 ${m.type} level ${m.level} must lie strictly within Lv 6..12",
+                m.level in 6..12
+            )
+        }
+        floor2Monsters.forEach { m ->
+            assertTrue(
+                "Floor -2 ${m.type} level ${m.level} must lie strictly within Lv 13..20",
+                m.level in 13..20
+            )
+        }
+    }
 }

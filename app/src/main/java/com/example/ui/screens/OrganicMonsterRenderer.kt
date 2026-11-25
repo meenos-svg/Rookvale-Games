@@ -34,6 +34,8 @@ object OrganicMonsterRenderer {
         MonsterType.YOUNG_SNAKE -> 0.76f
         MonsterType.POISON_SPIDER -> 0.90f
         MonsterType.GOBLIN_SCOUT -> 0.88f
+        MonsterType.OUTLAW_BANDIT -> 1.04f
+        MonsterType.OUTLAW_ROGUE -> 1.02f
         MonsterType.CRAG_WOLF -> 1.08f
         MonsterType.ORC_WARRIOR -> 1.14f
         MonsterType.SWAMP_TROLL -> 1.18f
@@ -144,6 +146,14 @@ object OrganicMonsterRenderer {
             MonsterType.GOBLIN_SCOUT -> drawBipedMonster(
                 ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
                 species = BipedMonsterStyle.GOBLIN_SCOUT, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.OUTLAW_BANDIT -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.OUTLAW_BANDIT, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
+            MonsterType.OUTLAW_ROGUE -> drawBipedMonster(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                species = BipedMonsterStyle.OUTLAW_ROGUE, useSpec = useSpec, useRim = useRim, quality = quality, path = path
             )
             MonsterType.ORC_WARRIOR -> drawBipedMonster(
                 ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
@@ -1332,6 +1342,8 @@ object OrganicMonsterRenderer {
         SWAMP_TROLL,
         SKELETON,
         GOBLIN_SCOUT,
+        OUTLAW_BANDIT,
+        OUTLAW_ROGUE,
         ORC_WARRIOR,
         GHOUL,
         FIRE_DEVIL,
@@ -1399,6 +1411,8 @@ object OrganicMonsterRenderer {
             BipedMonsterStyle.SWAMP_TROLL -> Triple(Color(0xFF4F7A46), Color(0xFF7CB26B), Color(0xFF284524))
             BipedMonsterStyle.SKELETON -> Triple(Color(0xFFE6DEC8), Color(0xFFFFFBF0), Color(0xFF9C917A))
             BipedMonsterStyle.GOBLIN_SCOUT -> Triple(Color(0xFF5D8F3B), Color(0xFF8CC45E), Color(0xFF2F4F1C))
+            BipedMonsterStyle.OUTLAW_BANDIT -> Triple(Color(0xFFD4A47E), Color(0xFFF0C9A8), Color(0xFF8A6043))
+            BipedMonsterStyle.OUTLAW_ROGUE -> Triple(Color(0xFF2E3B35), Color(0xFF4F665B), Color(0xFF171F1C))
             BipedMonsterStyle.ORC_WARRIOR -> Triple(Color(0xFF51703B), Color(0xFF7CA15B), Color(0xFF283B1C))
             BipedMonsterStyle.GHOUL -> Triple(Color(0xFF7D857B), Color(0xFFAAB5A8), Color(0xFF444A45))
             BipedMonsterStyle.FIRE_DEVIL -> Triple(Color(0xFFC9331E), Color(0xFFFF6D3B), Color(0xFF6B120B))
@@ -1423,7 +1437,8 @@ object OrganicMonsterRenderer {
             BipedMonsterStyle.GRIMMAW_QUARRYMAN, BipedMonsterStyle.GRIMMAW_ROCK_HURLER,
             BipedMonsterStyle.GOREK_RAIDER -> 11.2f
             BipedMonsterStyle.SWAMP_TROLL, BipedMonsterStyle.ORC_WARRIOR -> 10.4f
-            BipedMonsterStyle.GOREK_HEX_CALLER -> 9.4f
+            BipedMonsterStyle.GOREK_HEX_CALLER, BipedMonsterStyle.OUTLAW_BANDIT -> 9.4f
+            BipedMonsterStyle.OUTLAW_ROGUE -> 8.2f
             BipedMonsterStyle.SKELETON, BipedMonsterStyle.GHOUL -> 7.0f
             BipedMonsterStyle.GOBLIN_SCOUT -> 7.4f
             else -> 8.6f
@@ -1441,7 +1456,9 @@ object OrganicMonsterRenderer {
         val hasCape = species == BipedMonsterStyle.NECROMANCER ||
             species == BipedMonsterStyle.GHOUL ||
             species == BipedMonsterStyle.GOREK_HEX_CALLER ||
-            species == BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN
+            species == BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN ||
+            species == BipedMonsterStyle.OUTLAW_BANDIT ||
+            species == BipedMonsterStyle.OUTLAW_ROGUE
 
         // 7 sortable layers: 0=BACK_EXTRAS(wings/tail/cape), 1=L_LEG, 2=R_LEG, 3=L_ARM_OFF, 4=R_ARM_WEAP, 5=TORSO, 6=HEAD
         val order = IntArray(7) { it }
@@ -1508,6 +1525,8 @@ object OrganicMonsterRenderer {
                             BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN -> Color(0xFF8C1D24)
                             BipedMonsterStyle.GOREK_HEX_CALLER -> Color(0xFF541C47)
                             BipedMonsterStyle.NECROMANCER -> Color(0xFF5E162B)
+                            BipedMonsterStyle.OUTLAW_BANDIT -> Color(0xFF7D2A24)
+                            BipedMonsterStyle.OUTLAW_ROGUE -> Color(0xFF24382F)
                             else -> Color(0xFF474F49)
                         }
                         val topL = facing.project(ox, oy, u, -7.2f, -3.5f, shoulderUp)
@@ -1594,6 +1613,8 @@ object OrganicMonsterRenderer {
                         val torsoMain = when (species) {
                             BipedMonsterStyle.ORC_WARRIOR -> Color(0xFF5D4029)
                             BipedMonsterStyle.GOBLIN_SCOUT -> Color(0xFF6B4C2E)
+                            BipedMonsterStyle.OUTLAW_BANDIT -> Color(0xFF63422B)
+                            BipedMonsterStyle.OUTLAW_ROGUE -> Color(0xFF304239)
                             BipedMonsterStyle.GOREK_RAIDER -> Color(0xFF332D38)
                             BipedMonsterStyle.GOREK_PHALANX -> Color(0xFF28242E)
                             BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN -> Color(0xFF241B24)
@@ -1602,6 +1623,8 @@ object OrganicMonsterRenderer {
                         val torsoHi = when (species) {
                             BipedMonsterStyle.ORC_WARRIOR -> Color(0xFF8C6342)
                             BipedMonsterStyle.GOBLIN_SCOUT -> Color(0xFF966E45)
+                            BipedMonsterStyle.OUTLAW_BANDIT -> Color(0xFF9E6B47)
+                            BipedMonsterStyle.OUTLAW_ROGUE -> Color(0xFF527060)
                             BipedMonsterStyle.GOREK_RAIDER -> Color(0xFF635A6E)
                             BipedMonsterStyle.GOREK_PHALANX -> Color(0xFF5E576B)
                             BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN -> Color(0xFFFFB240)
@@ -1716,6 +1739,20 @@ object OrganicMonsterRenderer {
                                 )
                                 drawLine(Color(0xFFD9A84E), trimTop, trimBot, strokeWidth = u * 0.7f)
                             }
+                            BipedMonsterStyle.OUTLAW_BANDIT -> {
+                                // Crimson outlaw bandolier & brass buckle across leather brigandine
+                                val strapStart = facing.project(ox, oy, u, -6.4f, 0f, shoulderUp)
+                                val strapEnd = facing.project(ox, oy, u, +5.8f, 0f, hipUp + 1.2f)
+                                drawLine(INK, strapStart, strapEnd, strokeWidth = u * 3.0f, cap = StrokeCap.Round)
+                                drawLine(Color(0xFF9E2B25), strapStart, strapEnd, strokeWidth = u * 1.6f, cap = StrokeCap.Round)
+                            }
+                            BipedMonsterStyle.OUTLAW_ROGUE -> {
+                                // Forest-green leather scout belt & quiver strap
+                                val strapStart = facing.project(ox, oy, u, +5.8f, 0f, shoulderUp)
+                                val strapEnd = facing.project(ox, oy, u, -5.4f, 0f, hipUp + 1.2f)
+                                drawLine(INK, strapStart, strapEnd, strokeWidth = u * 2.6f, cap = StrokeCap.Round)
+                                drawLine(Color(0xFFD4A24E), strapStart, strapEnd, strokeWidth = u * 1.1f, cap = StrokeCap.Round)
+                            }
                             else -> Unit
                         }
                     }
@@ -1734,7 +1771,8 @@ object OrganicMonsterRenderer {
                         outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
                     )
                     when (species) {
-                        BipedMonsterStyle.SKELETON, BipedMonsterStyle.GOBLIN_SCOUT, BipedMonsterStyle.ORC_WARRIOR -> {
+                        BipedMonsterStyle.SKELETON, BipedMonsterStyle.GOBLIN_SCOUT, BipedMonsterStyle.ORC_WARRIOR,
+                        BipedMonsterStyle.OUTLAW_BANDIT -> {
                             val shC = facing.project(ox, oy, u, -shoulderR - 2.6f, +5.8f, hipUp + 5.2f)
                             val isIron = species == BipedMonsterStyle.ORC_WARRIOR
                             val shieldRx = u * (if (isIron) 4.4f else 3.8f) * (0.55f + 0.45f * abs(facing.forwardDepth))
@@ -1900,12 +1938,24 @@ object OrganicMonsterRenderer {
                             drawCircle(Color(0xFFFF7A1F), u * 2.2f, bladeTop)
                             drawCircle(Color(0xFFFFF2A8), u * 1.0f, bladeTop)
                         }
-                        BipedMonsterStyle.SKELETON, BipedMonsterStyle.ORC_WARRIOR, BipedMonsterStyle.GOBLIN_SCOUT -> {
+                        BipedMonsterStyle.SKELETON, BipedMonsterStyle.ORC_WARRIOR, BipedMonsterStyle.GOBLIN_SCOUT,
+                        BipedMonsterStyle.OUTLAW_BANDIT -> {
                             VolumetricShading.drawVolumetricCylinder(
                                 this, hand, tip, u * 1.35f, u * 0.75f,
                                 main = Color(0xFF9EA8B8), highlight = Color(0xFFE8F0FC), shadow = Color(0xFF4F5866),
                                 outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
                             )
+                        }
+                        BipedMonsterStyle.OUTLAW_ROGUE -> {
+                            // Ashwood recurve outlaw shortbow + arrow nock
+                            val bowBot = facing.project(ox, oy, u, +shoulderR + 1.8f, swingF + 2.5f, swingUp - 6.0f)
+                            val bowTop = facing.project(ox, oy, u, +shoulderR + 2.4f, swingF + 4.5f, swingUp + 10.5f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, bowBot, bowTop, u * 1.1f, u * 0.9f,
+                                main = Color(0xFF8C5D32), highlight = Color(0xFFC4925E), shadow = Color(0xFF3E2612),
+                                outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
+                            )
+                            drawLine(Color(0xFFE6DEC8), bowBot, bowTop, strokeWidth = u * 0.55f)
                         }
                         BipedMonsterStyle.FIRE_DEVIL, BipedMonsterStyle.DEMON_LORD -> {
                             val bladeW = if (species == BipedMonsterStyle.DEMON_LORD) u * 2.5f else u * 1.4f
@@ -2047,6 +2097,33 @@ object OrganicMonsterRenderer {
                                 }
                                 val jaw = facing.project(ox, oy, u, 0f, +5.4f, headUp - 2.6f)
                                 drawLine(INK, Offset(jaw.x - u * 2.0f, jaw.y), Offset(jaw.x + u * 2.0f, jaw.y), strokeWidth = ow * 0.85f)
+                            }
+                            species == BipedMonsterStyle.OUTLAW_BANDIT -> {
+                                // Crimson outlaw bandana mask & brow hood
+                                val mask = facing.project(ox, oy, u, 0f, +5.2f, headUp - 1.8f)
+                                drawOval(
+                                    color = Color(0xFF8C2620),
+                                    topLeft = Offset(mask.x - u * 4.2f, mask.y - u * 2.1f),
+                                    size = Size(u * 8.4f, u * 4.2f)
+                                )
+                                for (side in -1..1 step 2) {
+                                    val ep = facing.project(ox, oy, u, side * 1.9f, +5.5f, headUp + 0.9f)
+                                    drawCircle(INK, u * 1.25f, ep)
+                                    drawCircle(Color(0xFFFFD873), u * 0.72f, ep)
+                                }
+                            }
+                            species == BipedMonsterStyle.OUTLAW_ROGUE -> {
+                                // Shadowed forest-cowl visor & sharp pale-emerald eyes
+                                val visor = facing.project(ox, oy, u, 0f, +4.8f, headUp + 0.2f)
+                                drawOval(
+                                    color = Color(0xFF141C18),
+                                    topLeft = Offset(visor.x - u * 3.8f, visor.y - u * 2.6f),
+                                    size = Size(u * 7.6f, u * 5.2f)
+                                )
+                                for (side in -1..1 step 2) {
+                                    val ep = facing.project(ox, oy, u, side * 1.7f, +5.6f, headUp + 0.6f)
+                                    drawCircle(Color(0xFF92FFB0), u * 0.95f, ep)
+                                }
                             }
                             else -> {
                                 val eyeColor = when (species) {

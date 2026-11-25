@@ -133,6 +133,17 @@ object MonsterLootTable {
             ),
             bonusWeightRolls = 1
         ),
+        MonsterType.OUTLAW_BANDIT to MonsterLootEntry(
+            minGp = 26, maxGp = 58,
+            weightedDrops = listOf(
+                WeightedLootDrop("rookvale_gladius", 1, 1, dropChance = 0.22f, weight = 24),
+                WeightedLootDrop("leather_boots", 1, 1, dropChance = 0.18f, weight = 18),
+                WeightedLootDrop("brass_armor", 1, 1, dropChance = 0.14f, weight = 14),
+                WeightedLootDrop("health_potion", 1, 1, dropChance = 0.34f, weight = 26),
+                WeightedLootDrop("bog_iron_ore", 1, 2, dropChance = 0.26f, weight = 18)
+            ),
+            bonusWeightRolls = 1
+        ),
         MonsterType.BROODMOTHER_ARACHNE to MonsterLootEntry(
             minGp = 110, maxGp = 220,
             guaranteedDrops = listOf(
@@ -155,7 +166,7 @@ object MonsterLootTable {
             bonusWeightRolls = 2
         ),
 
-        // --- TIER 3: Floor -2 Deep Caverns ---
+        // --- TIER 3: Heartland Outlaw Frontier & Floor -2 Deep Caverns ---
         MonsterType.ORC_WARRIOR to MonsterLootEntry(
             minGp = 40, maxGp = 90,
             weightedDrops = listOf(
@@ -164,6 +175,17 @@ object MonsterLootTable {
                 WeightedLootDrop("brass_armor", 1, 1, dropChance = 0.15f, weight = 16),
                 WeightedLootDrop("health_potion", 1, 1, dropChance = 0.30f, weight = 24),
                 WeightedLootDrop("bog_iron_ore", 1, 2, dropChance = 0.28f, weight = 20)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.OUTLAW_ROGUE to MonsterLootEntry(
+            minGp = 48, maxGp = 104,
+            weightedDrops = listOf(
+                WeightedLootDrop("ochre_shafts", 6, 12, dropChance = 0.58f, weight = 28),
+                WeightedLootDrop("ashwood_shortbow", 1, 1, dropChance = 0.20f, weight = 18),
+                WeightedLootDrop("duskmetal_falchion", 1, 1, dropChance = 0.16f, weight = 16),
+                WeightedLootDrop("healing_rune", 1, 2, dropChance = 0.26f, weight = 18),
+                WeightedLootDrop("health_potion", 1, 1, dropChance = 0.32f, weight = 20)
             ),
             bonusWeightRolls = 1
         ),

@@ -25,7 +25,7 @@ class UpdateCheckerTest {
         val json = """
             {
               "name": "Rookvale Build #42",
-              "html_url": "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest-build",
+              "html_url": "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest",
               "published_at": "2026-04-10T10:00:00Z",
               "updated_at": "2026-04-10T10:05:00Z",
               "assets": [
@@ -42,7 +42,7 @@ class UpdateCheckerTest {
         assertEquals("2026-04-10T10:12:30Z", parsed!!.latestTimestampIso)
         assertEquals("Rookvale Build #42", parsed.releaseName)
         assertEquals(
-            "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest-build",
+            "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest",
             parsed.downloadUrl
         )
     }
@@ -52,7 +52,7 @@ class UpdateCheckerTest {
         val json = """
             {
               "name": "Rookvale Latest",
-              "html_url": "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest-build",
+              "html_url": "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest",
               "published_at": "2026-04-10T10:01:30Z"
             }
         """.trimIndent()
@@ -73,7 +73,7 @@ class UpdateCheckerTest {
         val json = """
             {
               "name": "Rookvale Co-op Update",
-              "html_url": "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest-build",
+              "html_url": "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest",
               "published_at": "2026-04-10T12:30:00Z"
             }
         """.trimIndent()
@@ -96,7 +96,7 @@ class UpdateCheckerTest {
         val release1Json = """
             {
               "name": "Build 1",
-              "html_url": "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest-build",
+              "html_url": "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest",
               "published_at": "2026-04-10T12:30:00Z"
             }
         """.trimIndent()
@@ -111,7 +111,7 @@ class UpdateCheckerTest {
         val release2Json = """
             {
               "name": "Build 2",
-              "html_url": "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest-build",
+              "html_url": "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest",
               "published_at": "2026-04-11T08:00:00Z"
             }
         """.trimIndent()
@@ -128,9 +128,9 @@ class UpdateCheckerTest {
     @Test
     fun validateReleaseUrl_rejectsUntrustedSchemesAndForeignDomains() {
         assertEquals(
-            "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest-build",
+            "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest",
             GitHubUpdateChecker.validateReleaseUrl(
-                "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest-build"
+                "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest"
             )
         )
         assertEquals(

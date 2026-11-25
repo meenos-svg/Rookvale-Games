@@ -230,10 +230,10 @@ object WorldMaps {
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 85, "MOUNTAIN CAVERN (FLOOR -1)"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 67, "DEEP ABYSSAL CAVERN (FLOOR -2)"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 207, "DARK FOREST SINKHOLE (FLOOR -1)"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 88, ROOKVALE_ORIGIN_Y + 320, "OLD QUARRY RUINS CAMP (LVL 12-16)"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, "OLD QUARRY CATACOMBS (FLOOR -1)"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 320, "HEARTLAND WATCH RUINS (LVL 15-20)"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 317, "WATCH RUINS CAVERNS (FLOOR -2)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 88, ROOKVALE_ORIGIN_Y + 320, "BRIAR OUTLAW CAMP (LVL 12-16)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, "BRIAR CATACOMBS (FLOOR -1)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 320, "WATCHWOOD OUTLAW CAMP (LVL 15-20)"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 317, "WATCHWOOD CAVERNS (FLOOR -2)"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 8, "FROSTPEAK NORTH HIGHWAY"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 8, ROOKVALE_ORIGIN_Y + 192, "SPIREWOOD WEST HIGHWAY"))
 
@@ -275,7 +275,7 @@ object WorldMaps {
 
     val portals: List<FloorPortal> = listOf(
         // Outer Heartland Starter Ruins <-> Floor -1 (ZERO portals inside Rookvale City limits!)
-        // SW Old Quarry Frontier Ruins <-> Floor -1 Vanguard Gatehouse
+        // SW Briar Outlaw Camp Catacombs <-> Floor -1 Vanguard Gatehouse
         FloorPortal(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 316, -1, 28, 11, requiresRope = false),
         FloorPortal(-1, 28, 10, 0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, requiresRope = false),
         // Rookvale NW Quarry Rope-Hole <-> Floor -1 (both west rope-spots return to NW Quarry outside city)
@@ -289,11 +289,11 @@ object WorldMaps {
         FloorPortal(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 206, -1, 38, 29, requiresRope = false),
         FloorPortal(-1, 38, 28, 0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 207, requiresRope = true),
 
-        // Outer Heartland Deep Caverns <-> Floor -2
+        // Outer Heartland Deep Caverns <-> Floor -2 (Rookvale Lvl 13-18)
         // NE Crag Hills Deep Cavern <-> Floor -2
         FloorPortal(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 66, -2, 11, 24, requiresRope = false),
         FloorPortal(-2, 10, 24, 0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 67, requiresRope = false),
-        // SE Heartland Watch Ruins <-> Floor -2 Forward Camp
+        // SE Watchwood Outlaw Camp Caverns <-> Floor -2 Forward Camp
         FloorPortal(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 316, -2, 24, 37, requiresRope = false),
 
         // Outer-Continent Dedicated Biome Dungeons (Bidirectional!)
@@ -630,8 +630,8 @@ object WorldMaps {
                 if (x in 188..204 || y in 184..200) continue
                 if (x in 62..132 && y in 62..132) continue // NW Quarry
                 if (x in 230..332 && y in 48..116) continue // NE Crag Hills
-                if (x in 48..134 && y in 278..362) continue // SW Grimmaw Crags Camp
-                if (x in 266..352 && y in 278..362) continue // SE Gorek Badlands War-Camp
+                if ((x - 88) * (x - 88) + (y - 320) * (y - 320) <= 18 * 18) continue // SW Briar Outlaw Camp clearing
+                if ((x - 312) * (x - 312) + (y - 320) * (y - 320) <= 18 * 18) continue // SE Watchwood Outlaw Camp clearing
 
                 val h = deterministicHash(x, y, 19) and 255
                 val inEastForest = x >= 278 && y in 140..340
@@ -738,75 +738,92 @@ object WorldMaps {
             grid.set(vx, vy, TileType.ORE_BOG_IRON)
         }
 
-        // 7B. SW HEARTLAND FRONTIER: OLD QUARRY RUINS CAMP (x=54..126, y=288..352 — Level 12-16 Heartland Ruins)
-        grid.fillEllipse(88, 320, 34, 28, TileType.DIRT_FLOOR)
-        grid.fillRect(68, 306, 108, 334, TileType.COBBLESTONE)
-        // Natural crag cliff ridge wrapping the west & south borders
-        for (x in 56..118) {
-            grid.set(x, 348, TileType.MOUNTAIN_ROCK)
-            if (x < 96) grid.set(x, 347, TileType.MOUNTAIN_ROCK)
+        // 7B. SW ROOKVALE HEARTLAND: BRIAR OUTLAW CAMP (Open Rustic Lv 12-16 Camp — NO rectangular walls/slabs!)
+        // Organic irregular dirt clearing blended smoothly into Heartland grass & woodland
+        for (cy in 307..333) {
+            for (cx in 75..101) {
+                val dx = (cx - 88).toDouble()
+                val dy = (cy - 320).toDouble()
+                val angle = kotlin.math.atan2(dy, dx)
+                val organicRadius = 11.5 + sin(angle * 3.0) * 1.6 + cos(angle * 2.0 + 0.8) * 1.2
+                val dist = kotlin.math.hypot(dx, dy)
+                if (dist <= organicRadius) {
+                    val h = deterministicHash(cx, cy, 311) and 31
+                    val tile = when {
+                        dist <= 7.5 -> TileType.DIRT_FLOOR
+                        h < 18 -> TileType.DIRT_FLOOR
+                        h < 25 -> TileType.GRASS
+                        else -> TileType.FLOWER_GRASS
+                    }
+                    grid.set(cx, cy, tile)
+                }
+            }
         }
-        for (y in 294..348) {
-            grid.set(56, y, TileType.MOUNTAIN_ROCK)
-            if (y > 304) grid.set(57, y, TileType.MOUNTAIN_ROCK)
+        // Rustic outlaw camp props: blazing campfires, pitched canvas tents, supply barrels, weapon racks & lanterns
+        listOf(88 to 320, 82 to 325).forEach { (fx, fy) -> grid.set(fx, fy, TileType.CAMPFIRE_BRAZIER) }
+        listOf(81 to 313, 82 to 313, 94 to 314, 95 to 314, 93 to 326, 94 to 326).forEach { (tx, ty) ->
+            grid.set(tx, ty, TileType.MARKET_AWNING)
         }
-        // Weathered Heartland quarry ruin walls with wide East Archway (y=317..323)
-        for (x in 66..112) {
-            grid.set(x, 304, TileType.STONE_WALL)
-            grid.set(x, 336, TileType.STONE_WALL)
+        listOf(80 to 314, 96 to 315, 92 to 327, 85 to 327).forEach { (px, py) -> grid.set(px, py, TileType.CRATE_BARREL) }
+        listOf(91 to 316, 86 to 325).forEach { (px, py) -> grid.set(px, py, TileType.WEAPON_RACK) }
+        listOf(99 to 318, 99 to 322, 83 to 315, 85 to 315).forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
+        // Natural woodland shade trees framing the rustic camp edge organically
+        listOf(73 to 312, 74 to 327, 88 to 306, 102 to 311, 101 to 330, 85 to 334).forEach { (tx, ty) ->
+            grid.set(tx, ty, TileType.TREE)
         }
-        for (y in 304..336) {
-            grid.set(66, y, TileType.STONE_WALL)
-            if (y !in 317..323) grid.set(112, y, TileType.STONE_WALL)
-        }
-        for (y in 318..322) grid.set(112, y, TileType.IRON_BAR_GATE)
-        listOf(112 to 316, 112 to 324, 82 to 314, 86 to 314, 72 to 305, 104 to 305, 72 to 335, 104 to 335).forEach { (tx, ty) ->
-            grid.set(tx, ty, TileType.LANTERN_POST)
-        }
-        // Quarry ruins supply crates & weapon racks
-        listOf(70 to 308, 71 to 308, 106 to 332, 107 to 332).forEach { (px, py) -> grid.set(px, py, TileType.CRATE_BARREL) }
-        listOf(106 to 308, 70 to 332).forEach { (px, py) -> grid.set(px, py, TileType.WEAPON_RACK) }
-        // Outskirts Copper & Bog Iron veins outside Old Quarry Ruins
-        listOf(62 to 300, 64 to 342).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_COPPER) }
-        listOf(118 to 302, 118 to 338).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_BOG_IRON) }
-        // Frontier Road branching west off South Highway (195, 318) -> Old Quarry Ruins Gate (112, 320)
-        grid.drawRoadSegment(195, 318, 154, 318, 2, TileType.DIRT_FLOOR)
-        grid.drawRoadSegment(154, 318, 110, 320, 2, TileType.DIRT_FLOOR)
-        listOf(168 to 315, 168 to 321, 134 to 316, 134 to 322).forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
-        // Starter Ruins Catacombs Entrance (Floor -1) outside Rookvale City
+        // Low-tier Heartland Copper & Bog Iron outcrops tucked among surrounding meadows
+        listOf(71 to 319, 76 to 334).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_COPPER) }
+        listOf(105 to 310, 104 to 331).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_BOG_IRON) }
+        // Winding organic dirt trail curving west off South Frontier Road (195, 318) -> Briar Outlaw Camp (98, 320)
+        grid.drawRoadSegment(195, 318, 162, 314, 1, TileType.DIRT_FLOOR)
+        grid.drawRoadSegment(162, 314, 128, 324, 1, TileType.DIRT_FLOOR)
+        grid.drawRoadSegment(128, 324, 98, 320, 1, TileType.DIRT_FLOOR)
+        // Briar Catacombs Entrance (Floor -1 • Lvl 7-12) tucked on camp's north-west edge
         grid.set(84, 316, TileType.STAIRS_DOWN)
-        grid.set(84, 317, TileType.COBBLESTONE)
+        grid.set(84, 317, TileType.DIRT_FLOOR)
 
-        // 7C. SE HEARTLAND FRONTIER: HEARTLAND WATCH RUINS (x=274..346, y=288..352 — Level 15-20 Heartland Ruins)
-        grid.fillEllipse(312, 320, 34, 28, TileType.DARK_GRASS)
-        grid.fillEllipse(312, 320, 28, 22, TileType.DIRT_FLOOR)
-        grid.fillRect(292, 306, 332, 334, TileType.CRYPT_FLOOR)
-        // Mossy stone ruin walls & overgrown timber framing (no volcanic lava inside Heartland!)
-        for (x in 288..334) {
-            grid.set(x, 304, TileType.STONE_WALL)
-            grid.set(x, 336, TileType.STONE_WALL)
+        // 7C. SE ROOKVALE HEARTLAND: WATCHWOOD OUTLAW CAMP (Open Rustic Lv 15-20 Camp — NO rectangular walls/slabs!)
+        for (cy in 307..333) {
+            for (cx in 299..325) {
+                val dx = (cx - 312).toDouble()
+                val dy = (cy - 320).toDouble()
+                val angle = kotlin.math.atan2(dy, dx)
+                val organicRadius = 11.5 + sin(angle * 3.0 + 1.1) * 1.6 + cos(angle * 2.0) * 1.2
+                val dist = kotlin.math.hypot(dx, dy)
+                if (dist <= organicRadius) {
+                    val h = deterministicHash(cx, cy, 317) and 31
+                    val tile = when {
+                        dist <= 7.5 -> TileType.DIRT_FLOOR
+                        h < 18 -> TileType.DIRT_FLOOR
+                        h < 26 -> TileType.DARK_GRASS
+                        else -> TileType.GRASS
+                    }
+                    grid.set(cx, cy, tile)
+                }
+            }
         }
-        for (y in 304..336) {
-            grid.set(334, y, TileType.STONE_WALL)
-            if (y !in 317..323) grid.set(288, y, TileType.STONE_WALL)
+        // Rustic woodland outlaw camp props: campfires, pitched canvas tents, supply crates, weapon racks & lanterns
+        listOf(312 to 320, 307 to 324).forEach { (fx, fy) -> grid.set(fx, fy, TileType.CAMPFIRE_BRAZIER) }
+        listOf(305 to 313, 306 to 313, 319 to 314, 320 to 314, 316 to 326, 317 to 326).forEach { (tx, ty) ->
+            grid.set(tx, ty, TileType.MARKET_AWNING)
         }
-        for (y in 318..322) grid.set(288, y, TileType.IRON_BAR_GATE)
-        listOf(288 to 316, 288 to 324, 314 to 314, 318 to 314, 296 to 305, 328 to 305, 296 to 335, 328 to 335).forEach { (tx, ty) ->
-            grid.set(tx, ty, TileType.LANTERN_POST)
+        listOf(304 to 314, 321 to 315, 315 to 327, 309 to 327).forEach { (px, py) -> grid.set(px, py, TileType.CRATE_BARREL) }
+        listOf(309 to 316, 314 to 324).forEach { (px, py) -> grid.set(px, py, TileType.WEAPON_RACK) }
+        listOf(301 to 318, 301 to 322, 315 to 315, 317 to 315).forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
+        // Natural woodland trees framing Watchwood Outlaw Camp organically
+        listOf(298 to 312, 299 to 328, 312 to 306, 326 to 312, 325 to 329, 311 to 334).forEach { (tx, ty) ->
+            grid.set(tx, ty, TileType.TREE)
         }
-        // Watchtower ruin supplies & weapon racks
-        listOf(294 to 308, 328 to 308, 294 to 332).forEach { (px, py) -> grid.set(px, py, TileType.WEAPON_RACK) }
-        listOf(328 to 332, 329 to 332).forEach { (px, py) -> grid.set(px, py, TileType.CRATE_BARREL) }
-        // Outskirts Tin & Bog Iron veins outside Heartland Watch Ruins
-        listOf(282 to 302, 282 to 338).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_BOG_IRON) }
-        listOf(336 to 298, 336 to 342).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_TIN) }
-        // Frontier Road branching east off South Highway (197, 318) -> Heartland Watch Gate (288, 320)
-        grid.drawRoadSegment(197, 318, 244, 318, 2, TileType.DIRT_FLOOR)
-        grid.drawRoadSegment(244, 318, 290, 320, 2, TileType.DIRT_FLOOR)
-        listOf(228 to 315, 228 to 321, 266 to 316, 266 to 322).forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
-        // Heartland Watch Caverns Entrance (Floor -2)
+        // Low-tier Heartland Tin & Bog Iron outcrops tucked among surrounding Watchwood trees
+        listOf(295 to 319, 300 to 334).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_BOG_IRON) }
+        listOf(328 to 316, 323 to 333).forEach { (vx, vy) -> grid.set(vx, vy, TileType.ORE_TIN) }
+        // Winding organic dirt trail curving east off South Frontier Road (197, 318) -> Watchwood Outlaw Camp (302, 320)
+        grid.drawRoadSegment(197, 318, 232, 323, 1, TileType.DIRT_FLOOR)
+        grid.drawRoadSegment(232, 323, 268, 315, 1, TileType.DIRT_FLOOR)
+        grid.drawRoadSegment(268, 315, 302, 320, 1, TileType.DIRT_FLOOR)
+        // Watchwood Caverns Entrance (Floor -2 • Lvl 13-18) tucked on camp's north-east edge
         grid.set(316, 316, TileType.STAIRS_DOWN)
-        grid.set(316, 317, TileType.COBBLESTONE)
+        grid.set(316, 317, TileType.DIRT_FLOOR)
 
         // 8. Starter Meadows & Rustic Farms outside North & West Gates
         // North farmstead garden plot (fenced patch with open gate)
@@ -1540,7 +1557,7 @@ object WorldMaps {
         return WorldFloor(
             floorId = -2,
             name = "Deep Caverns",
-            subtitle = "Dungeon Floor -2 • Forward Camp PZ",
+            subtitle = "Rookvale Deep Caverns • Floor -2 • Forward Camp PZ",
             width = s,
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),
