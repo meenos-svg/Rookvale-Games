@@ -259,15 +259,21 @@ class BiomeSpawningAndContinentalDungeonsTest {
             assertTrue("Floor $floorId must host Healer NPC", floorNpcs.any { it.role == NpcRole.TEMPLE_PRIEST })
             assertTrue("Floor $floorId must host Supply Alchemist NPC", floorNpcs.any { it.role == NpcRole.SHOP_ALCHEMIST })
 
-            // Verify 100% BFS reachability from entry landing to exit stairs/rope, every monster, and boss
+            // Verify 100% BFS reachability from entry landing to exit stairs/rope, descent stairs, and every patrol
             val reachable = reachableTiles(floor, entryPortal!!.toX, entryPortal.toY)
             assertTrue("Floor $floorId must have substantial connected chambers (got ${reachable.size})", reachable.size >= 250)
             assertTrue("Floor $floorId return exit must be reachable", (exitPortal!!.fromX to exitPortal.fromY) in reachable)
 
+            val descentPortal = WorldMaps.portals.firstOrNull { it.fromFloor == floorId && it.toFloor in -28..-16 }
+            assertNotNull("Upper Floor $floorId must have STAIRS_DOWN to its paired Lower Boss Lair", descentPortal)
+            assertTrue(
+                "Floor $floorId descent stairs (${descentPortal!!.fromX},${descentPortal.fromY}) must be reachable",
+                (descentPortal.fromX to descentPortal.fromY) in reachable
+            )
+
             val floorMonsters = allMonsters.filter { it.floor == floorId }
-            assertTrue("Floor $floorId must have biome patrols + boss", floorMonsters.size >= 8)
-            val boss = floorMonsters.firstOrNull { it.type.isBoss }
-            assertNotNull("Floor $floorId must host a Boss chamber encounter", boss)
+            assertTrue("Floor $floorId must have dedicated upper dungeon patrols", floorMonsters.size >= 7)
+            assertTrue("Upper Floor $floorId must host ZERO bosses (boss dwells on lower floor)", floorMonsters.none { it.type.isBoss })
 
             val expectedBase = BiomeProgressionRules.dungeonBaseLevel(
                 BiomeProgressionRules.surfaceBiomeForDungeonFloor(floorId).minLevel,
@@ -276,7 +282,7 @@ class BiomeSpawningAndContinentalDungeonsTest {
             for (m in floorMonsters) {
                 assertTrue("Floor $floorId ${m.type} at (${m.x},${m.y}) must be reachable", (m.x to m.y) in reachable)
                 assertFalse("Floor $floorId ${m.type} must not spawn in safe camp PZ", floor.isProtectionZone(m.x, m.y))
-                val range = if (m.type.isBoss) (expectedBase + 5)..(expectedBase + 5) else expectedBase..(expectedBase + 4)
+                val range = expectedBase..(expectedBase + 4)
                 assertTrue("Floor $floorId ${m.type} level ${m.level} must lie in $range", m.level in range)
             }
 
@@ -285,9 +291,10 @@ class BiomeSpawningAndContinentalDungeonsTest {
             assertTrue("Floor $floorId must include biome mining nodes", floorOres.size >= 4)
         }
 
-        // Verify Supabase slim character save supports Floors -10 and -15 and NEVER serializes dungeon/monster entities
-        for (testFloor in listOf(-10, -11, -15)) {
-            val hero = GameEngine.createNewWorld("Delver").copy(floor = testFloor, playerX = 24, playerY = 40)
+        // Verify Supabase slim character save supports Upper & Lower Boss Floors (-10..-28) and NEVER serializes dungeon/monster entities
+        for (testFloor in listOf(-10, -11, -15, -16, -23, -28)) {
+            val (lx, ly) = WorldMaps.fallbackLandingForFloor(testFloor)
+            val hero = GameEngine.createNewWorld("Delver").copy(floor = testFloor, playerX = lx, playerY = ly)
             val save = GameEngine.toSaveData(hero)
             assertEquals(testFloor, save.floor)
             val encoded = CloudSavePayloadCodec.encode(save)
@@ -461,16 +468,23 @@ class BiomeSpawningAndContinentalDungeonsTest {
             descentsToF3.all { it.fromFloor == -2 }
         )
         for (standaloneRookvaleFloor in listOf(-1, -11, -12, -13, -14)) {
-            val crossDungeonPortals = WorldMaps.portals.filter {
+            val downwardPortals = WorldMaps.portals.filter {
                 it.fromFloor == standaloneRookvaleFloor && it.toFloor < 0
             }
-            assertTrue(
-                "Standalone Rookvale dungeon Floor $standaloneRookvaleFloor must have zero cross-dungeon links, found: $crossDungeonPortals",
-                crossDungeonPortals.isEmpty()
+            assertEquals(
+                "Standalone Rookvale dungeon Floor $standaloneRookvaleFloor must link ONLY to its own paired Lower Boss Floor, found: $downwardPortals",
+                1,
+                downwardPortals.size
+            )
+            val targetLair = downwardPortals.first().toFloor
+            assertEquals(
+                "Lower Boss Floor $targetLair must map back to parent Floor $standaloneRookvaleFloor",
+                standaloneRookvaleFloor,
+                BiomeProgressionRules.parentUpperFloorFor(targetLair)
             )
         }
 
-        // 5. All 5 newly separated procedural dungeons (-11..-15) generate genuinely unique tile floorplans
+        // 5. ALL 13 overland dungeons (-1, -2, -5..-15) generate 13 genuinely unique tile floorplans
         fun walkabilitySignature(floorId: Int): String {
             val fl = WorldMaps.getFloor(floorId)
             return buildString(fl.width * fl.height) {
@@ -481,11 +495,12 @@ class BiomeSpawningAndContinentalDungeonsTest {
                 }
             }
         }
-        val newFloorSignatures = listOf(-10, -11, -12, -13, -14, -15).map { walkabilitySignature(it) }
+        val allThirteenUpperFloors = listOf(-1, -2, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15)
+        val upperFloorSignatures = allThirteenUpperFloors.map { walkabilitySignature(it) }
         assertEquals(
-            "Every newly separated dungeon archetype (-11..-15) must have a unique walkable layout distinct from -10 and each other",
-            newFloorSignatures.size,
-            newFloorSignatures.toSet().size
+            "Every single one of the 13 continental dungeons must have its own unique walkable floorplan",
+            13,
+            upperFloorSignatures.toSet().size
         )
 
         // 6. Ember Sanctum (-15) is completely separated from Ashen Caldera Foundry (-10)
@@ -494,5 +509,130 @@ class BiomeSpawningAndContinentalDungeonsTest {
         assertEquals(-15, emberEntry.toFloor)
         assertEquals(-10, calderaEntry.toFloor)
         assertTrue("World Map must expose all 13 separate dungeon pins", WorldBiomeBlueprint.worldMapPins.count { it.category == WorldPinCategory.DUNGEON } == 13)
+    }
+
+    @Test
+    fun allThirteenDungeonsHaveDedicatedMonsterRostersAndPairedLowerBossFloorsWithUpOnlyExit() {
+        val allThirteenUpperFloors = listOf(-1, -2, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15)
+        val allThirteenLowerFloors = (-28..-16).toList()
+        val allMonsters = WorldMaps.initialMonsters()
+        val allOres = WorldMaps.initialOreNodes()
+
+        assertEquals(
+            "Must generate exactly 13 paired Lower Boss Lairs (-16..-28)",
+            13,
+            ContinentalDungeonGenerator.generatedLowerBossLairs.size
+        )
+
+        val uniqueBossTypes = mutableSetOf<MonsterType>()
+
+        for (upperFloorId in allThirteenUpperFloors) {
+            val upperFloor = WorldMaps.getFloor(upperFloorId)
+            val upperMonsters = allMonsters.filter { it.floor == upperFloorId }
+            val expectedPool = BiomeMonsterSpawner.dungeonPoolForFloor(upperFloorId).map { it.type }.toSet()
+
+            // 1. Upper dungeon has ZERO bosses and strictly uses its own dedicated dungeon monster roster
+            assertTrue("Upper Floor $upperFloorId must spawn regular patrols", upperMonsters.size >= 6)
+            assertTrue("Upper Floor $upperFloorId must have ZERO bosses", upperMonsters.none { it.type.isBoss })
+            for (m in upperMonsters) {
+                assertTrue(
+                    "Upper Floor $upperFloorId spawned ${m.type}, which is NOT in its dedicated dungeon pool $expectedPool",
+                    m.type in expectedPool
+                )
+            }
+
+            // 2. Upper dungeon has a reachable STAIRS_DOWN portal leading 1-to-1 to its Lower Boss Floor
+            val descentPortals = WorldMaps.portals.filter {
+                it.fromFloor == upperFloorId && it.toFloor in allThirteenLowerFloors
+            }
+            assertEquals(
+                "Upper Floor $upperFloorId must have exactly 1 descent portal to its paired Lower Boss Floor",
+                1,
+                descentPortals.size
+            )
+            val descent = descentPortals.first()
+            assertEquals(
+                "Descent tile on Upper Floor $upperFloorId (${descent.fromX},${descent.fromY}) must be STAIRS_DOWN",
+                TileType.STAIRS_DOWN,
+                upperFloor.tileAt(descent.fromX, descent.fromY)
+            )
+            val (upperStartX, upperStartY) = WorldMaps.fallbackLandingForFloor(upperFloorId)
+            val upperReachable = reachableTiles(upperFloor, upperStartX, upperStartY)
+            assertTrue(
+                "Descent stairs (${descent.fromX},${descent.fromY}) on Floor $upperFloorId must be BFS-reachable from entry",
+                (descent.fromX to descent.fromY) in upperReachable
+            )
+
+            // 3. Verify paired Lower Boss Floor (-16..-28)
+            val lowerFloorId = descent.toFloor
+            assertTrue("MultiplayerSanitizer must accept Lower Boss Floor $lowerFloorId", MultiplayerSanitizer.isValidFloor(lowerFloorId))
+            assertTrue("BiomeProgressionRules must recognize $lowerFloorId as a Lower Boss Floor", BiomeProgressionRules.isLowerBossFloor(lowerFloorId))
+            assertEquals(upperFloorId, BiomeProgressionRules.parentUpperFloorFor(lowerFloorId))
+
+            val lowerFloor = WorldMaps.getFloor(lowerFloorId)
+            val lowerPortals = WorldMaps.portals.filter { it.fromFloor == lowerFloorId }
+            assertEquals(
+                "Lower Boss Floor $lowerFloorId must have ONLY 1 exit portal (STAIRS_UP back to Upper Floor $upperFloorId)",
+                1,
+                lowerPortals.size
+            )
+            val stairsUp = lowerPortals.first()
+            assertEquals("Lower Boss Floor $lowerFloorId exit must return strictly to Upper Floor $upperFloorId", upperFloorId, stairsUp.toFloor)
+            assertFalse("Lower Boss Floor $lowerFloorId exit must be STAIRS_UP (no rope)", stairsUp.requiresRope)
+            assertEquals(
+                "Lower Boss Floor $lowerFloorId exit tile must be STAIRS_UP",
+                TileType.STAIRS_UP,
+                lowerFloor.tileAt(stairsUp.fromX, stairsUp.fromY)
+            )
+            assertTrue(
+                "Lower Boss Floor $lowerFloorId return tile on Upper Floor $upperFloorId must be walkable",
+                upperFloor.tileAt(stairsUp.toX, stairsUp.toY).walkable
+            )
+
+            // Zero Protection Zone camp & zero camp NPCs inside Lower Boss Lairs
+            assertEquals("Lower Boss Floor $lowerFloorId must have zero camp NPCs", 0, WorldMaps.npcs.count { it.floor == lowerFloorId })
+            assertFalse("Lower Boss Floor $lowerFloorId landing must NOT be a Protection Zone", lowerFloor.isProtectionZone(descent.toX, descent.toY))
+
+            // 100% BFS reachability from landing to STAIRS_UP, all escorts, and unique Boss
+            val lowerReachable = reachableTiles(lowerFloor, descent.toX, descent.toY)
+            assertTrue("Lower Boss Floor $lowerFloorId must have a playable boss chamber (got ${lowerReachable.size})", lowerReachable.size >= 150)
+            assertTrue("Lower Boss Floor $lowerFloorId STAIRS_UP must be reachable", (stairsUp.fromX to stairsUp.fromY) in lowerReachable)
+
+            val lowerMonsters = allMonsters.filter { it.floor == lowerFloorId }
+            val bosses = lowerMonsters.filter { it.type.isBoss }
+            val escorts = lowerMonsters.filter { !it.type.isBoss }
+            assertEquals("Lower Boss Floor $lowerFloorId must host exactly 1 unique Boss", 1, bosses.size)
+            assertEquals("Lower Boss Floor $lowerFloorId must host 4 elite escorts", 4, escorts.size)
+
+            val boss = bosses.first()
+            uniqueBossTypes += boss.type
+            assertTrue("Boss ${boss.type} on Floor $lowerFloorId must be BFS-reachable", (boss.x to boss.y) in lowerReachable)
+            for (escort in escorts) {
+                assertTrue("Escort ${escort.type} on Floor $lowerFloorId must be BFS-reachable", (escort.x to escort.y) in lowerReachable)
+                assertTrue(
+                    "Escort ${escort.type} on Floor $lowerFloorId must come from paired dungeon's own pool $expectedPool",
+                    escort.type in expectedPool
+                )
+            }
+
+            // Mining veins exist in Lower Boss Floor
+            assertTrue("Lower Boss Floor $lowerFloorId must include mining veins", allOres.keys.count { it.first == lowerFloorId } >= 4)
+
+            // All 6 Rookvale Heartland Lower Boss Floors (-16..-21) stay strictly within Lv 1..20!
+            if (lowerFloorId in -21..-16) {
+                for (m in lowerMonsters) {
+                    assertTrue(
+                        "Rookvale Lower Boss Floor $lowerFloorId ${m.type} level ${m.level} must stay strictly within Lv 1..20",
+                        m.level in 1..20
+                    )
+                }
+            }
+        }
+
+        assertEquals(
+            "All 13 Lower Boss Floors must host 13 completely distinct unique named Bosses",
+            13,
+            uniqueBossTypes.size
+        )
     }
 }

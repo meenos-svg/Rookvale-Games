@@ -115,7 +115,7 @@ fun AdminWarpSection(
     state: GameWorldState,
     onTeleport: (floor: Int, x: Int, y: Int, label: String?) -> Unit
 ) {
-    var selectedFloor by remember(state.floor) { mutableIntStateOf(state.floor.coerceIn(-15, 0)) }
+    var selectedFloor by remember(state.floor) { mutableIntStateOf(state.floor.coerceIn(-28, 0)) }
     var xInput by remember(state.playerX, state.floor) { mutableStateOf(state.playerX.toString()) }
     var yInput by remember(state.playerY, state.floor) { mutableStateOf(state.playerY.toString()) }
     var coordError by remember { mutableStateOf<String?>(null) }
@@ -220,14 +220,14 @@ fun AdminWarpSection(
                     )
                 }
 
-                // Floor Selector Chips (0 .. -15)
+                // Floor Selector Chips (0 .. -28)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    (0 downTo -15).forEach { fl ->
+                    (0 downTo -28).forEach { fl ->
                         val active = selectedFloor == fl
                         Surface(
                             color = if (active) TorchGold else ObsidianVoid,

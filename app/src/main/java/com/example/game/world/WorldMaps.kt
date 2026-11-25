@@ -262,13 +262,16 @@ object WorldMaps {
             undergroundCamps.forEach { camp ->
                 add(LandmarkLabel(camp.floorId, (camp.minX + camp.maxX) / 2, (camp.minY + camp.maxY) / 2, camp.name))
             }
-            add(LandmarkLabel(-1, 24, 34, "BROODMOTHER'S WEBBED DEN"))
-            add(LandmarkLabel(-2, 24, 12, "MOLTEN PIT SANCTUM"))
+            add(LandmarkLabel(-1, 24, 34, "DESCENT TO BRIAR BROOD SANCTUM"))
+            add(LandmarkLabel(-2, 24, 12, "DESCENT TO MOLTEN PIT THRONE"))
             add(LandmarkLabel(-3, 24, 18, "DEEP FORGE OUTPOST"))
-            add(LandmarkLabel(-5, 24, 12, "KRAGOR'S QUARRY PIT"))
-            add(LandmarkLabel(-6, 24, 11, "VAELGOR'S LABYRINTH SANCTUM"))
+            add(LandmarkLabel(-5, 24, 12, "DESCENT TO KRAGOR'S DEEP QUARRY PIT"))
+            add(LandmarkLabel(-6, 24, 11, "DESCENT TO VAELGOR'S INNER SANCTUM"))
             ContinentalDungeonGenerator.generatedDungeons.forEach { d ->
-                add(d.bossLandmark)
+                add(d.descentLandmark)
+            }
+            ContinentalDungeonGenerator.generatedLowerBossLairs.forEach { lair ->
+                add(lair.bossLandmark)
             }
         }
     }
@@ -329,33 +332,54 @@ object WorldMaps {
         FloorPortal(-4, 24, 40, -3, 24, 39, requiresRope = false),
         FloorPortal(-3, 10, 34, -4, 11, 34, requiresRope = false),
         FloorPortal(-4, 10, 34, -3, 11, 34, requiresRope = true)
-    )
+    ) + ContinentalDungeonGenerator.lowerBossLairSpecs.flatMap { lair ->
+        // Dedicated 1-to-1 Upper Dungeon Floor <-> Lower Boss Lair (-16..-28)
+        // Lower Boss Lairs have ONLY STAIRS_UP returning to their paired upper floor (no surface exit).
+        listOf(
+            FloorPortal(
+                fromFloor = lair.parentUpperFloorId,
+                fromX = lair.parentStairsDownX,
+                fromY = lair.parentStairsDownY,
+                toFloor = lair.floorId,
+                toX = ContinentalDungeonGenerator.LOWER_LANDING_X,
+                toY = ContinentalDungeonGenerator.LOWER_LANDING_Y,
+                requiresRope = false
+            ),
+            FloorPortal(
+                fromFloor = lair.floorId,
+                fromX = ContinentalDungeonGenerator.LOWER_STAIRS_UP_X,
+                fromY = ContinentalDungeonGenerator.LOWER_STAIRS_UP_Y,
+                toFloor = lair.parentUpperFloorId,
+                toX = lair.parentReturnX,
+                toY = lair.parentReturnY,
+                requiresRope = false
+            )
+        )
+    }
 
     private val dungeonFixedSpawns: List<MonsterSpawn> = listOf(
-        // --- Floor -1: Heartland Catacombs & Caves (Starter Ruins — Lvl 7-12 + Boss) ---
-        MonsterSpawn(-1, 26, 13, MonsterType.CAVE_RAT),
-        MonsterSpawn(-1, 13, 21, MonsterType.SWAMP_TROLL),
-        MonsterSpawn(-1, 37, 13, MonsterType.GOBLIN_SCOUT),
+        // --- Floor -1: Briar Catacombs (Dedicated Briar Roster — Boss dwells below in Floor -16) ---
+        MonsterSpawn(-1, 26, 13, MonsterType.BRIAR_CRYPT_CRAWLER),
+        MonsterSpawn(-1, 13, 21, MonsterType.CATACOMB_BONE_ARCHER),
+        MonsterSpawn(-1, 37, 13, MonsterType.BRIAR_CRYPT_CRAWLER),
         MonsterSpawn(-1, 13, 24, MonsterType.SKELETON),
         MonsterSpawn(-1, 37, 30, MonsterType.POISON_SPIDER),
-        MonsterSpawn(-1, 24, 27, MonsterType.SKELETON),
-        MonsterSpawn(-1, 24, 19, MonsterType.GOBLIN_SCOUT),
-        MonsterSpawn(-1, 21, 35, MonsterType.POISON_SPIDER),
-        MonsterSpawn(-1, 27, 35, MonsterType.POISON_SPIDER),
-        MonsterSpawn(-1, 24, 34, MonsterType.BROODMOTHER_ARACHNE),
+        MonsterSpawn(-1, 24, 27, MonsterType.CATACOMB_BONE_ARCHER),
+        MonsterSpawn(-1, 24, 19, MonsterType.BRIAR_CRYPT_CRAWLER),
+        MonsterSpawn(-1, 21, 35, MonsterType.BRIAR_CRYPT_CRAWLER),
+        MonsterSpawn(-1, 27, 35, MonsterType.CATACOMB_BONE_ARCHER),
 
-        // --- Floor -2: Deep Caverns & Molten Chasm ---
-        MonsterSpawn(-2, 12, 33, MonsterType.ORC_WARRIOR),
-        MonsterSpawn(-2, 35, 33, MonsterType.ORC_WARRIOR),
+        // --- Floor -2: Watchwood Caverns (Dedicated Watchwood Roster — Boss dwells below in Floor -21) ---
+        MonsterSpawn(-2, 12, 33, MonsterType.CINDER_IMP),
+        MonsterSpawn(-2, 35, 33, MonsterType.WATCHWOOD_DREAD_KNIGHT),
         MonsterSpawn(-2, 13, 25, MonsterType.FIRE_DEVIL),
         MonsterSpawn(-2, 37, 25, MonsterType.GHOUL),
-        MonsterSpawn(-2, 24, 25, MonsterType.GHOUL),
-        MonsterSpawn(-2, 20, 12, MonsterType.ORC_WARRIOR),
-        MonsterSpawn(-2, 28, 12, MonsterType.GHOUL),
+        MonsterSpawn(-2, 24, 25, MonsterType.WATCHWOOD_DREAD_KNIGHT),
+        MonsterSpawn(-2, 20, 12, MonsterType.CINDER_IMP),
+        MonsterSpawn(-2, 28, 12, MonsterType.WATCHWOOD_DREAD_KNIGHT),
         MonsterSpawn(-2, 24, 15, MonsterType.FIRE_DEVIL),
-        MonsterSpawn(-2, 24, 12, MonsterType.IGNIS_LORD_OF_THE_PIT),
 
-        // --- Floor -3: Abyssal Crypt & Boss ---
+        // --- Floor -3: Abyssal Crypt & Boss (Classic Deep Delve below Watchwood Caverns) ---
         MonsterSpawn(-3, 14, 14, MonsterType.DRAGON_HATCHLING),
         MonsterSpawn(-3, 34, 14, MonsterType.NECROMANCER),
         MonsterSpawn(-3, 12, 24, MonsterType.DRAGON_HATCHLING),
@@ -364,45 +388,47 @@ object WorldMaps {
         MonsterSpawn(-3, 32, 32, MonsterType.DRAGON_HATCHLING),
         MonsterSpawn(-3, 24, 34, MonsterType.DEMON_LORD),
 
-        // --- Floor -4: Obsidian Wyrm Sanctum ---
+        // --- Floor -4: Obsidian Wyrm Sanctum (Classic Deep Delve below Abyssal Crypt) ---
         MonsterSpawn(-4, 18, 32, MonsterType.DRAGON_HATCHLING),
         MonsterSpawn(-4, 32, 32, MonsterType.FIRE_DEVIL),
         MonsterSpawn(-4, 14, 24, MonsterType.NECROMANCER),
         MonsterSpawn(-4, 34, 24, MonsterType.DRAGON_HATCHLING),
         MonsterSpawn(-4, 24, 16, MonsterType.ELDER_DRAGON),
 
-        // --- Floor -5: The Grimmaw Quarry (TIER 5 Endgame Dungeon) ---
+        // --- Floor -5: The Grimmaw Quarry (Dedicated Grimmaw Roster — Kragor dwells below in Floor -22) ---
         MonsterSpawn(-5, 14, 34, MonsterType.GRIMMAW_QUARRYMAN),
         MonsterSpawn(-5, 34, 34, MonsterType.GRIMMAW_QUARRYMAN),
         MonsterSpawn(-5, 12, 25, MonsterType.GRIMMAW_ROCK_HURLER),
         MonsterSpawn(-5, 36, 25, MonsterType.GRIMMAW_ROCK_HURLER),
         MonsterSpawn(-5, 20, 26, MonsterType.GRIMMAW_CRUSHER),
         MonsterSpawn(-5, 28, 26, MonsterType.GRIMMAW_CRUSHER),
-        MonsterSpawn(-5, 24, 12, MonsterType.KRAGOR_THE_STONE_EYED),
 
-        // --- Floor -6: The Gorek Labyrinth (TIER 6 Pinnacle Maze Dungeon) ---
+        // --- Floor -6: The Gorek Labyrinth (Dedicated Gorek Roster — Vaelgor dwells below in Floor -23) ---
         MonsterSpawn(-6, 13, 34, MonsterType.GOREK_RAIDER),
         MonsterSpawn(-6, 35, 34, MonsterType.GOREK_RAIDER),
         MonsterSpawn(-6, 13, 24, MonsterType.GOREK_PHALANX),
         MonsterSpawn(-6, 35, 24, MonsterType.GOREK_PHALANX),
         MonsterSpawn(-6, 24, 25, MonsterType.GOREK_HEX_CALLER),
         MonsterSpawn(-6, 19, 14, MonsterType.GOREK_HEX_CALLER),
-        MonsterSpawn(-6, 29, 14, MonsterType.GOREK_PHALANX),
-        MonsterSpawn(-6, 24, 11, MonsterType.VAELGOR_LABYRINTH_WARDEN)
+        MonsterSpawn(-6, 29, 14, MonsterType.GOREK_PHALANX)
     )
 
     /**
      * Overland (Floor 0) monsters are generated dynamically from the underlying terrain
      * [BiomeType] pools via [BiomeMonsterSpawner] (no hand-placed town spots, zero PZ
-     * intrusion, zero chunk-cache churn). Underground floors -1..-10 append their dungeon
-     * patrols and boss encounters.
+     * intrusion, zero chunk-cache churn). Underground upper floors (-1..-15) append their
+     * dedicated regular patrols, and Lower Boss Lairs (-16..-28) append their unique bosses
+     * and elite escorts.
      */
     val monsterSpawns: List<MonsterSpawn> by lazy {
         val overlandSpawns = BiomeMonsterSpawner.generateOverlandBiomeSpawns(
             isProtectionZone = { x, y -> isOverlandProtectionZone(x, y) },
             tileOracle = { x, y -> fastHeartlandTileOrNull(x, y) ?: WorldBiomeBlueprint.tileAtGlobal(x, y) }
         )
-        overlandSpawns + dungeonFixedSpawns + ContinentalDungeonGenerator.generatedDungeons.flatMap { it.spawns }
+        overlandSpawns +
+            dungeonFixedSpawns +
+            ContinentalDungeonGenerator.generatedDungeons.flatMap { it.spawns } +
+            ContinentalDungeonGenerator.generatedLowerBossLairs.flatMap { it.spawns }
     }
 
     private fun isOverlandProtectionZone(x: Int, y: Int): Boolean {
@@ -425,6 +451,9 @@ object WorldMaps {
             ContinentalDungeonGenerator.generatedDungeons.forEach { d ->
                 put(d.spec.floorId, d.floor)
             }
+            ContinentalDungeonGenerator.generatedLowerBossLairs.forEach { lair ->
+                put(lair.spec.floorId, lair.floor)
+            }
         }
     }
 
@@ -446,6 +475,7 @@ object WorldMaps {
         -5 -> 24 to 40
         -6 -> 24 to 40
         in -15..-7 -> 24 to 40
+        in -28..-16 -> ContinentalDungeonGenerator.LOWER_LANDING_X to ContinentalDungeonGenerator.LOWER_LANDING_Y
         else -> TEMPLE_SPAWN_X to TEMPLE_SPAWN_Y
     }
 
@@ -1439,7 +1469,9 @@ object WorldMaps {
         g[10][30] = TileType.COBBLESTONE
 
         // Sole dedicated return stairway back up to SW Briar Outlaw Camp (1284, 717)
+        // plus lower boss lair descent stairs at the far end down to Floor -16 (Briar Brood Sanctum)
         g[10][28] = TileType.STAIRS_UP
+        g[34][24] = TileType.STAIRS_DOWN
 
         return WorldFloor(
             floorId = -1,
@@ -1540,9 +1572,11 @@ object WorldMaps {
         g[38][21] = TileType.COBBLESTONE
         g[38][27] = TileType.COBBLESTONE
 
-        // Portals: dedicated return stairway back up to SE Watchwood Outlaw Camp (1516, 717)
+        // Portals: dedicated return stairway back up to SE Watchwood Outlaw Camp (1516, 717),
+        // lower boss lair descent stairs at (24,12) -> Floor -21 (Molten Pit Throne),
         // plus exclusive Deep Delve portals down to Floor -3 (Abyssal Crypt) & Floor -4 (Wyrm Sanctum)
         g[38][24] = TileType.STAIRS_UP
+        g[12][24] = TileType.STAIRS_DOWN
         g[8][24] = TileType.STAIRS_DOWN
         g[24][40] = TileType.ROPE_HOLE_DOWN
 
@@ -1742,8 +1776,9 @@ object WorldMaps {
         g[40][27] = TileType.COBBLESTONE
         g[38][24] = TileType.BIOME_STALL_BADLANDS
 
-        // Return Stairway Up to Floor 0 Grimmaw Crags Camp
+        // Return Stairway Up to Floor 0 Grimmaw Crags Camp & Lower Boss Lair Descent to Floor -22
         g[41][24] = TileType.STAIRS_UP
+        g[12][24] = TileType.STAIRS_DOWN
 
         return WorldFloor(
             floorId = -5,
@@ -1839,8 +1874,9 @@ object WorldMaps {
         g[40][27] = TileType.COBBLESTONE
         g[38][24] = TileType.BIOME_STALL_ASHEN
 
-        // Return Stairway Up to Floor 0 Gorek Badlands War-Camp
+        // Return Stairway Up to Floor 0 Gorek Badlands War-Camp & Lower Boss Lair Descent to Floor -23
         g[41][24] = TileType.STAIRS_UP
+        g[11][24] = TileType.STAIRS_DOWN
 
         return WorldFloor(
             floorId = -6,

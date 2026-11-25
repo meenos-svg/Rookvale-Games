@@ -65,10 +65,19 @@ class DungeonBossLootAndDespawnTest {
                 (portal.fromX to portal.fromY) in f1Reachable
             )
         }
-        val f1Boss = WorldMaps.monsterSpawns.first { it.floor == -1 && it.type == MonsterType.BROODMOTHER_ARACHNE }
+        // Floor -1 upper floor has zero bosses and connects via STAIRS_DOWN (24,34) -> Floor -16 Briar Brood Sanctum
+        assertTrue("Upper Floor -1 must NOT host a boss directly", WorldMaps.monsterSpawns.none { it.floor == -1 && it.type.isBoss })
+        val f1Descent = WorldMaps.portals.first { it.fromFloor == -1 && it.toFloor == -16 }
         assertTrue(
-            "Broodmother Arachne chamber (${f1Boss.x},${f1Boss.y}) must be reachable",
-            (f1Boss.x to f1Boss.y) in f1Reachable
+            "Floor -1 descent stairs (${f1Descent.fromX},${f1Descent.fromY}) to Lower Boss Floor -16 must be reachable",
+            (f1Descent.fromX to f1Descent.fromY) in f1Reachable
+        )
+        val f16 = WorldMaps.getFloor(-16)
+        val f16Reachable = reachableTiles(f16, f1Descent.toX, f1Descent.toY)
+        val f16Boss = WorldMaps.monsterSpawns.first { it.floor == -16 && it.type == MonsterType.BROODMOTHER_ARACHNE }
+        assertTrue(
+            "Broodmother Arachne chamber (${f16Boss.x},${f16Boss.y}) on Lower Floor -16 must be reachable",
+            (f16Boss.x to f16Boss.y) in f16Reachable
         )
         // Verify dungeon architectural tiles exist on Floor -1
         val f1Tiles = (0 until f1.height).flatMap { y -> (0 until f1.width).map { x -> f1.tileAt(x, y) } }.toSet()
@@ -89,10 +98,19 @@ class DungeonBossLootAndDespawnTest {
                 (portal.fromX to portal.fromY) in f2Reachable
             )
         }
-        val f2Boss = WorldMaps.monsterSpawns.first { it.floor == -2 && it.type == MonsterType.IGNIS_LORD_OF_THE_PIT }
+        // Floor -2 upper floor has zero bosses and connects via STAIRS_DOWN (24,12) -> Floor -21 Molten Pit Throne
+        assertTrue("Upper Floor -2 must NOT host a boss directly", WorldMaps.monsterSpawns.none { it.floor == -2 && it.type.isBoss })
+        val f2Descent = WorldMaps.portals.first { it.fromFloor == -2 && it.toFloor == -21 }
         assertTrue(
-            "Ignis Lord of the Pit chamber (${f2Boss.x},${f2Boss.y}) must be reachable",
-            (f2Boss.x to f2Boss.y) in f2Reachable
+            "Floor -2 descent stairs (${f2Descent.fromX},${f2Descent.fromY}) to Lower Boss Floor -21 must be reachable",
+            (f2Descent.fromX to f2Descent.fromY) in f2Reachable
+        )
+        val f21 = WorldMaps.getFloor(-21)
+        val f21Reachable = reachableTiles(f21, f2Descent.toX, f2Descent.toY)
+        val f21Boss = WorldMaps.monsterSpawns.first { it.floor == -21 && it.type == MonsterType.IGNIS_LORD_OF_THE_PIT }
+        assertTrue(
+            "Ignis Lord of the Pit chamber (${f21Boss.x},${f21Boss.y}) on Lower Floor -21 must be reachable",
+            (f21Boss.x to f21Boss.y) in f21Reachable
         )
         val f2Tiles = (0 until f2.height).flatMap { y -> (0 until f2.width).map { x -> f2.tileAt(x, y) } }.toSet()
         assertTrue("Floor -2 must contain STONE_BRIDGE over lava", TileType.STONE_BRIDGE in f2Tiles)

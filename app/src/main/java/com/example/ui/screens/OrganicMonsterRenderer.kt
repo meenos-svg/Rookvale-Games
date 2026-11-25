@@ -54,6 +54,38 @@ object OrganicMonsterRenderer {
         MonsterType.GOREK_PHALANX -> 1.24f
         MonsterType.GOREK_HEX_CALLER -> 1.18f
         MonsterType.VAELGOR_LABYRINTH_WARDEN -> 1.36f
+        // New Dungeon-Specific Monsters & Lower-Floor Bosses
+        MonsterType.BRIAR_CRYPT_CRAWLER -> 0.94f
+        MonsterType.CATACOMB_BONE_ARCHER -> 1.00f
+        MonsterType.TUNNEL_KOBOLD_SAPPER -> 0.88f
+        MonsterType.QUARRY_MOLE_BRUTE -> 1.14f
+        MonsterType.CRAG_HARPY -> 1.06f
+        MonsterType.SHALE_GOLEM -> 1.22f
+        MonsterType.THORN_BRAMBLE_STALKER -> 1.10f
+        MonsterType.SPORELING_LOBBER -> 0.96f
+        MonsterType.VAULT_SENTINEL -> 1.14f
+        MonsterType.HOLLOW_CROSSBOWMAN -> 1.04f
+        MonsterType.CINDER_IMP -> 0.86f
+        MonsterType.WATCHWOOD_DREAD_KNIGHT -> 1.16f
+        MonsterType.MIRE_LURKER -> 1.12f
+        MonsterType.BOG_LEECH_WEAVER -> 1.04f
+        MonsterType.TEMPLE_SERPENT_GUARD -> 1.14f
+        MonsterType.SUN_PRIEST_ACOLYTE -> 1.06f
+        MonsterType.BARROW_WIGHT -> 1.14f
+        MonsterType.FROST_BANSHEE -> 1.08f
+        MonsterType.SLAG_AUTOMATON -> 1.24f
+        MonsterType.ASH_PYROMANCER -> 1.08f
+        MonsterType.EMBER_DRAKE -> 1.22f
+        MonsterType.OBSIDIAN_CULTIST -> 1.08f
+        MonsterType.FOREMAN_IRONJAW -> 1.26f
+        MonsterType.SKREE_RIDGE_MATRIARCH -> 1.26f
+        MonsterType.GNARLROOT_THE_BLIGHTED -> 1.30f
+        MonsterType.WARDEN_STONEHELM -> 1.30f
+        MonsterType.MIREMAW_THE_DROWNED -> 1.32f
+        MonsterType.XOLATL_THE_SUN_FANG -> 1.32f
+        MonsterType.LORD_MALGRATH_THE_UNDYING -> 1.34f
+        MonsterType.VULKARIS_THE_FORGE_TITAN -> 1.36f
+        MonsterType.IGNIVAR_ASH_WING_WYRM -> 1.36f
         else -> 1.0f
     }
 
@@ -207,6 +239,57 @@ object OrganicMonsterRenderer {
                 ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
                 species = BipedMonsterStyle.VAELGOR_LABYRINTH_WARDEN, useSpec = useSpec, useRim = useRim, quality = quality, path = path
             )
+            // --- NEW DUNGEON-SPECIFIC MONSTERS & LOWER-FLOOR BOSSES ---
+            MonsterType.BRIAR_CRYPT_CRAWLER -> drawPoisonSpider(
+                ox, oy, u, ow, facing, walkPhase, timeSec + seedRad, lunge, useSpec, useRim, path,
+                bodyMain = Color(0xFF283D24), bodyHi = Color(0xFF56824B), bodySh = Color(0xFF131F11),
+                venomGreen = Color(0xFFA6FF4D)
+            )
+            MonsterType.EMBER_DRAKE -> drawDragon3D(
+                ox, oy, u, ow, facing, stride, bobUp, timeSec + seedRad, lunge,
+                isElder = false, useSpec = useSpec, useRim = useRim, quality = quality, path = path,
+                scaleMainOverride = Color(0xFFA82C1C), scaleHiOverride = Color(0xFFFF7A3B),
+                scaleShOverride = Color(0xFF470D09), bellyOverride = Color(0xFFFFC95C),
+                wingMembraneOverride = Color(0xFF5C1510)
+            )
+            MonsterType.IGNIVAR_ASH_WING_WYRM -> drawDragon3D(
+                ox, oy, u, ow, facing, stride, bobUp, timeSec + seedRad, lunge,
+                isElder = true, useSpec = useSpec, useRim = useRim, quality = quality, path = path,
+                scaleMainOverride = Color(0xFF2F2229), scaleHiOverride = Color(0xFFFF7A26),
+                scaleShOverride = Color(0xFF140D12), bellyOverride = Color(0xFFFFB840),
+                wingMembraneOverride = Color(0xFF7D1F14), bossAuraColor = Color(0xFFFF6E1A)
+            )
+            MonsterType.CATACOMB_BONE_ARCHER,
+            MonsterType.TUNNEL_KOBOLD_SAPPER,
+            MonsterType.QUARRY_MOLE_BRUTE,
+            MonsterType.CRAG_HARPY,
+            MonsterType.SHALE_GOLEM,
+            MonsterType.THORN_BRAMBLE_STALKER,
+            MonsterType.SPORELING_LOBBER,
+            MonsterType.VAULT_SENTINEL,
+            MonsterType.HOLLOW_CROSSBOWMAN,
+            MonsterType.CINDER_IMP,
+            MonsterType.WATCHWOOD_DREAD_KNIGHT,
+            MonsterType.MIRE_LURKER,
+            MonsterType.BOG_LEECH_WEAVER,
+            MonsterType.TEMPLE_SERPENT_GUARD,
+            MonsterType.SUN_PRIEST_ACOLYTE,
+            MonsterType.BARROW_WIGHT,
+            MonsterType.FROST_BANSHEE,
+            MonsterType.SLAG_AUTOMATON,
+            MonsterType.ASH_PYROMANCER,
+            MonsterType.OBSIDIAN_CULTIST,
+            MonsterType.FOREMAN_IRONJAW,
+            MonsterType.SKREE_RIDGE_MATRIARCH,
+            MonsterType.GNARLROOT_THE_BLIGHTED,
+            MonsterType.WARDEN_STONEHELM,
+            MonsterType.MIREMAW_THE_DROWNED,
+            MonsterType.XOLATL_THE_SUN_FANG,
+            MonsterType.LORD_MALGRATH_THE_UNDYING,
+            MonsterType.VULKARIS_THE_FORGE_TITAN -> drawCustomDungeonBiped(
+                ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
+                type = type, useSpec = useSpec, useRim = useRim, quality = quality, path = path
+            )
         }
 
         // Directional 3D attack slash arc on High/HD quality
@@ -215,12 +298,23 @@ object OrganicMonsterRenderer {
             val slashColor = when (type) {
                 MonsterType.FIRE_DEVIL, MonsterType.IGNIS_LORD_OF_THE_PIT, MonsterType.DEMON_LORD,
                 MonsterType.ELDER_DRAGON, MonsterType.DRAGON_HATCHLING,
-                MonsterType.VAELGOR_LABYRINTH_WARDEN, MonsterType.GOREK_HEX_CALLER -> Color(0xFFFF7A26)
+                MonsterType.VAELGOR_LABYRINTH_WARDEN, MonsterType.GOREK_HEX_CALLER,
+                MonsterType.CINDER_IMP, MonsterType.SUN_PRIEST_ACOLYTE, MonsterType.XOLATL_THE_SUN_FANG,
+                MonsterType.SLAG_AUTOMATON, MonsterType.ASH_PYROMANCER, MonsterType.EMBER_DRAKE,
+                MonsterType.VULKARIS_THE_FORGE_TITAN, MonsterType.IGNIVAR_ASH_WING_WYRM -> Color(0xFFFF7A26)
                 MonsterType.POISON_SPIDER, MonsterType.BROODMOTHER_ARACHNE,
-                MonsterType.YOUNG_SNAKE, MonsterType.SWAMP_TROLL -> Color(0xFF7BFF33)
+                MonsterType.YOUNG_SNAKE, MonsterType.SWAMP_TROLL,
+                MonsterType.BRIAR_CRYPT_CRAWLER, MonsterType.THORN_BRAMBLE_STALKER,
+                MonsterType.SPORELING_LOBBER, MonsterType.GNARLROOT_THE_BLIGHTED,
+                MonsterType.MIRE_LURKER, MonsterType.BOG_LEECH_WEAVER,
+                MonsterType.MIREMAW_THE_DROWNED, MonsterType.TEMPLE_SERPENT_GUARD -> Color(0xFF7BFF33)
                 MonsterType.NECROMANCER, MonsterType.GHOUL,
-                MonsterType.KRAGOR_THE_STONE_EYED, MonsterType.GRIMMAW_CRUSHER -> Color(0xFFC07BFF)
-                MonsterType.GOREK_RAIDER, MonsterType.GOREK_PHALANX -> Color(0xFFFFC14D)
+                MonsterType.KRAGOR_THE_STONE_EYED, MonsterType.GRIMMAW_CRUSHER,
+                MonsterType.OBSIDIAN_CULTIST -> Color(0xFFC07BFF)
+                MonsterType.BARROW_WIGHT, MonsterType.FROST_BANSHEE,
+                MonsterType.LORD_MALGRATH_THE_UNDYING -> Color(0xFF7BE8FF)
+                MonsterType.GOREK_RAIDER, MonsterType.GOREK_PHALANX,
+                MonsterType.FOREMAN_IRONJAW, MonsterType.WARDEN_STONEHELM -> Color(0xFFFFC14D)
                 else -> Color(0xFFFFE7B0)
             }
             val arcCenter = facing.project(ox, oy, u, 0f, 10.5f, 18f)
@@ -605,12 +699,12 @@ object OrganicMonsterRenderer {
         lunge: Float,
         useSpec: Boolean,
         useRim: Boolean,
-        path: Path
+        path: Path,
+        bodyMain: Color = Color(0xFF282430),
+        bodyHi: Color = Color(0xFF564D66),
+        bodySh: Color = Color(0xFF131018),
+        venomGreen: Color = Color(0xFF7BFF33)
     ) {
-        val bodyMain = Color(0xFF282430)
-        val bodyHi = Color(0xFF564D66)
-        val bodySh = Color(0xFF131018)
-        val venomGreen = Color(0xFF7BFF33)
         val bodyUp = 10.5f + sin(t * 3.6f) * 0.7f + lunge * 2.6f
 
         // 10 sortable items: 0..7 = 8 articulated 3D legs (4 left, 4 right), 8 = ABDOMEN, 9 = CEPHALOTHORAX
@@ -1150,16 +1244,38 @@ object OrganicMonsterRenderer {
         useSpec: Boolean,
         useRim: Boolean,
         quality: GraphicsQuality,
-        path: Path
+        path: Path,
+        scaleMainOverride: Color? = null,
+        scaleHiOverride: Color? = null,
+        scaleShOverride: Color? = null,
+        bellyOverride: Color? = null,
+        wingMembraneOverride: Color? = null,
+        bossAuraColor: Color? = null
     ) {
-        val scaleMain = if (isElder) Color(0xFF9E1F1F) else Color(0xFF2E7D4A)
-        val scaleHi = if (isElder) Color(0xFFE34A32) else Color(0xFF5DC47A)
-        val scaleSh = if (isElder) Color(0xFF520C0E) else Color(0xFF154225)
-        val belly = if (isElder) Color(0xFFE8B44C) else Color(0xFFD9CC7A)
-        val wingMembrane = if (isElder) Color(0xFF5E1618) else Color(0xFF205434)
+        val scaleMain = scaleMainOverride ?: if (isElder) Color(0xFF9E1F1F) else Color(0xFF2E7D4A)
+        val scaleHi = scaleHiOverride ?: if (isElder) Color(0xFFE34A32) else Color(0xFF5DC47A)
+        val scaleSh = scaleShOverride ?: if (isElder) Color(0xFF520C0E) else Color(0xFF154225)
+        val belly = bellyOverride ?: if (isElder) Color(0xFFE8B44C) else Color(0xFFD9CC7A)
+        val wingMembrane = wingMembraneOverride ?: if (isElder) Color(0xFF5E1618) else Color(0xFF205434)
         val wingSpan = if (isElder) 25.5f else 19.0f
         val flap = sin(t * 5.0f) * 5.8f + lunge * 4.2f
         val bodyUp = 16.0f + bobUp + sin(t * 2.8f) * 0.8f
+        if (bossAuraColor != null) {
+            val pulse = 0.75f + 0.25f * sin(t * 4.2f)
+            drawOval(
+                brush = Brush.radialGradient(
+                    colorStops = arrayOf(
+                        0.0f to bossAuraColor.copy(alpha = 0.36f * pulse),
+                        0.62f to scaleSh.copy(alpha = 0.16f * pulse),
+                        1.0f to Color.Transparent
+                    ),
+                    center = Offset(ox, oy),
+                    radius = u * 25.0f
+                ),
+                topLeft = Offset(ox - u * 25.0f, oy - u * 13.0f),
+                size = Size(u * 50.0f, u * 26.0f)
+            )
+        }
 
         // 9 sortable 3D parts: 0=TAIL, 1=LEFT_WING, 2=RIGHT_WING, 3=BL, 4=BR, 5=FL, 6=FR, 7=BODY, 8=NECK_HEAD
         val order = IntArray(9) { it }
@@ -2153,6 +2269,451 @@ object OrganicMonsterRenderer {
                             main = Color(0xFF28201B), highlight = Color(0xFF4D3F35), shadow = INK,
                             outlineW = ow * 0.78f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
                         )
+                    }
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 6. VOLUMETRIC 3D DUNGEON-SPECIFIC MONSTERS & LOWER-FLOOR BOSSES
+    // -------------------------------------------------------------------------
+
+    private enum class CustomWeaponKind { BLADE, BOW, MAUL, STAFF, SPEAR, CLAWS, ORB }
+
+    private data class CustomDungeonVisual(
+        val skinMain: Color,
+        val skinHi: Color,
+        val skinSh: Color,
+        val armorMain: Color,
+        val armorHi: Color,
+        val eyeColor: Color,
+        val accentColor: Color,
+        val torsoWidth: Float,
+        val weapon: CustomWeaponKind,
+        val hasShield: Boolean = false,
+        val hasWings: Boolean = false,
+        val hasCape: Boolean = false,
+        val hasHorns: Boolean = false,
+        val hasCrown: Boolean = false,
+        val bossAuraColor: Color? = null
+    )
+
+    private fun visualSpecFor(type: MonsterType): CustomDungeonVisual = when (type) {
+        MonsterType.CATACOMB_BONE_ARCHER -> CustomDungeonVisual(
+            Color(0xFFE3DAC9), Color(0xFFFFFBF0), Color(0xFF8C8474),
+            Color(0xFF334730), Color(0xFF567551), Color(0xFF7BFF5C), Color(0xFFA2FF4A),
+            torsoWidth = 7.8f, weapon = CustomWeaponKind.BOW
+        )
+        MonsterType.TUNNEL_KOBOLD_SAPPER -> CustomDungeonVisual(
+            Color(0xFF9E5835), Color(0xFFD48357), Color(0xFF542B16),
+            Color(0xFF6B4E31), Color(0xFFC78B40), Color(0xFFFFD84D), Color(0xFFFF7A26),
+            torsoWidth = 8.2f, weapon = CustomWeaponKind.ORB, hasHorns = true
+        )
+        MonsterType.QUARRY_MOLE_BRUTE -> CustomDungeonVisual(
+            Color(0xFF5E4D42), Color(0xFF8F7768), Color(0xFF332923),
+            Color(0xFF473A32), Color(0xFF856F61), Color(0xFFFFC947), Color(0xFFD99A8C),
+            torsoWidth = 11.4f, weapon = CustomWeaponKind.CLAWS
+        )
+        MonsterType.CRAG_HARPY -> CustomDungeonVisual(
+            Color(0xFF6E7D8F), Color(0xFFAABACD), Color(0xFF3A4452),
+            Color(0xFF526273), Color(0xFF94A7BD), Color(0xFFFFD43B), Color(0xFFE6A84C),
+            torsoWidth = 8.6f, weapon = CustomWeaponKind.CLAWS, hasWings = true
+        )
+        MonsterType.SHALE_GOLEM -> CustomDungeonVisual(
+            Color(0xFF6A7078), Color(0xFFA2AAB5), Color(0xFF383C42),
+            Color(0xFF545A63), Color(0xFF939CA8), Color(0xFF66E8FF), Color(0xFF99EFFF),
+            torsoWidth = 12.0f, weapon = CustomWeaponKind.MAUL
+        )
+        MonsterType.THORN_BRAMBLE_STALKER -> CustomDungeonVisual(
+            Color(0xFF4A3828), Color(0xFF7A5D44), Color(0xFF261C14),
+            Color(0xFF2F5E2B), Color(0xFF64AD58), Color(0xFFB8FF4D), Color(0xFF7BFF33),
+            torsoWidth = 9.8f, weapon = CustomWeaponKind.CLAWS, hasHorns = true
+        )
+        MonsterType.SPORELING_LOBBER -> CustomDungeonVisual(
+            Color(0xFF5C406B), Color(0xFF9A6FB3), Color(0xFF2E1E38),
+            Color(0xFF3F6B36), Color(0xFF7ED957), Color(0xFFD9FF66), Color(0xFFC77DFF),
+            torsoWidth = 8.8f, weapon = CustomWeaponKind.ORB
+        )
+        MonsterType.VAULT_SENTINEL -> CustomDungeonVisual(
+            Color(0xFF596778), Color(0xFF96ABC4), Color(0xFF2E3640),
+            Color(0xFF485566), Color(0xFFA6BDD9), Color(0xFF8CE6FF), Color(0xFFD9A84E),
+            torsoWidth = 10.6f, weapon = CustomWeaponKind.SPEAR, hasShield = true
+        )
+        MonsterType.HOLLOW_CROSSBOWMAN -> CustomDungeonVisual(
+            Color(0xFFC9A180), Color(0xFFEBC5A4), Color(0xFF78583E),
+            Color(0xFF3D4A42), Color(0xFF6B8073), Color(0xFFFFD873), Color(0xFFD4A23C),
+            torsoWidth = 8.8f, weapon = CustomWeaponKind.BOW, hasCape = true
+        )
+        MonsterType.CINDER_IMP -> CustomDungeonVisual(
+            Color(0xFFD93B1E), Color(0xFFFF8347), Color(0xFF6E160A),
+            Color(0xFF471B16), Color(0xFFFF9A2B), Color(0xFFFFF08A), Color(0xFFFF6E1A),
+            torsoWidth = 7.8f, weapon = CustomWeaponKind.ORB, hasHorns = true, hasWings = true
+        )
+        MonsterType.WATCHWOOD_DREAD_KNIGHT -> CustomDungeonVisual(
+            Color(0xFF302838), Color(0xFF635373), Color(0xFF17121C),
+            Color(0xFF26202E), Color(0xFFFF6E3B), Color(0xFFFF5A36), Color(0xFFFF8C42),
+            torsoWidth = 10.8f, weapon = CustomWeaponKind.BLADE, hasShield = true, hasCape = true, hasHorns = true
+        )
+        MonsterType.MIRE_LURKER -> CustomDungeonVisual(
+            Color(0xFF2E6B59), Color(0xFF5CB89D), Color(0xFF16382E),
+            Color(0xFF245446), Color(0xFF66FFE0), Color(0xFFFFE57F), Color(0xFF7BFF70),
+            torsoWidth = 10.2f, weapon = CustomWeaponKind.CLAWS
+        )
+        MonsterType.BOG_LEECH_WEAVER -> CustomDungeonVisual(
+            Color(0xFF3B5C4E), Color(0xFF70A88F), Color(0xFF1C2E27),
+            Color(0xFF2C423B), Color(0xFF7BFF9E), Color(0xFFA6FF4D), Color(0xFF5EE89E),
+            torsoWidth = 8.8f, weapon = CustomWeaponKind.STAFF, hasCape = true
+        )
+        MonsterType.TEMPLE_SERPENT_GUARD -> CustomDungeonVisual(
+            Color(0xFF2A7D50), Color(0xFF5EC78A), Color(0xFF144028),
+            Color(0xFF7D5D22), Color(0xFFFFCC52), Color(0xFFFF5A1F), Color(0xFFFFD447),
+            torsoWidth = 10.4f, weapon = CustomWeaponKind.SPEAR, hasShield = true
+        )
+        MonsterType.SUN_PRIEST_ACOLYTE -> CustomDungeonVisual(
+            Color(0xFF8C6239), Color(0xFFC49464), Color(0xFF47301A),
+            Color(0xFF9E6B1E), Color(0xFFFFD452), Color(0xFFFFEE88), Color(0xFFFF7A1F),
+            torsoWidth = 8.8f, weapon = CustomWeaponKind.STAFF, hasCape = true, hasCrown = true
+        )
+        MonsterType.BARROW_WIGHT -> CustomDungeonVisual(
+            Color(0xFF8AA8BD), Color(0xFFD4EEFF), Color(0xFF3D5263),
+            Color(0xFF26364D), Color(0xFF7BE8FF), Color(0xFF99F3FF), Color(0xFF7BE8FF),
+            torsoWidth = 10.2f, weapon = CustomWeaponKind.BLADE, hasShield = true, hasCape = true
+        )
+        MonsterType.FROST_BANSHEE -> CustomDungeonVisual(
+            Color(0xFFC9EDFF), Color(0xFFFFFFFF), Color(0xFF5D8AA3),
+            Color(0xFF284766), Color(0xFF8CE8FF), Color(0xFFFFFFFF), Color(0xFF72E4FF),
+            torsoWidth = 8.4f, weapon = CustomWeaponKind.ORB, hasCape = true
+        )
+        MonsterType.SLAG_AUTOMATON -> CustomDungeonVisual(
+            Color(0xFF383033), Color(0xFF706066), Color(0xFF1A1517),
+            Color(0xFF2B2426), Color(0xFFFF7A26), Color(0xFFFFD84D), Color(0xFFFF6E1A),
+            torsoWidth = 12.2f, weapon = CustomWeaponKind.MAUL
+        )
+        MonsterType.ASH_PYROMANCER -> CustomDungeonVisual(
+            Color(0xFF423236), Color(0xFF7A5D63), Color(0xFF1F1618),
+            Color(0xFF6B1E1A), Color(0xFFFF8833), Color(0xFFFFEE88), Color(0xFFFF6E1A),
+            torsoWidth = 8.8f, weapon = CustomWeaponKind.STAFF, hasCape = true
+        )
+        MonsterType.OBSIDIAN_CULTIST -> CustomDungeonVisual(
+            Color(0xFF2E2238), Color(0xFF5E4773), Color(0xFF150E1A),
+            Color(0xFF24182E), Color(0xFFB87BFF), Color(0xFFFF7A26), Color(0xFFC77DFF),
+            torsoWidth = 8.8f, weapon = CustomWeaponKind.STAFF, hasCape = true, hasHorns = true
+        )
+        // --- 8 NAMED LOWER-FLOOR BOSSES (Ignivar uses drawDragon3D) ---
+        MonsterType.FOREMAN_IRONJAW -> CustomDungeonVisual(
+            Color(0xFF9E5A32), Color(0xFFD98A57), Color(0xFF4D2914),
+            Color(0xFF523C2C), Color(0xFFFFB240), Color(0xFFFFE57F), Color(0xFFFFAA33),
+            torsoWidth = 12.4f, weapon = CustomWeaponKind.MAUL, hasCrown = true,
+            bossAuraColor = Color(0xFFE69138)
+        )
+        MonsterType.SKREE_RIDGE_MATRIARCH -> CustomDungeonVisual(
+            Color(0xFF6B3E80), Color(0xFFB57AD1), Color(0xFF331B40),
+            Color(0xFF4C2B5E), Color(0xFFE6A84C), Color(0xFFFFE066), Color(0xFFFFB84D),
+            torsoWidth = 11.4f, weapon = CustomWeaponKind.CLAWS, hasWings = true, hasCrown = true,
+            bossAuraColor = Color(0xFFB57BFF)
+        )
+        MonsterType.GNARLROOT_THE_BLIGHTED -> CustomDungeonVisual(
+            Color(0xFF3D2B1F), Color(0xFF73533D), Color(0xFF1F150E),
+            Color(0xFF285426), Color(0xFF7BFF33), Color(0xFFD9FF66), Color(0xFF6CD936),
+            torsoWidth = 12.8f, weapon = CustomWeaponKind.MAUL, hasHorns = true, hasCrown = true,
+            bossAuraColor = Color(0xFF6CD936)
+        )
+        MonsterType.WARDEN_STONEHELM -> CustomDungeonVisual(
+            Color(0xFF4E5B6B), Color(0xFF92A8C2), Color(0xFF262D36),
+            Color(0xFF3A4654), Color(0xFF99CCFF), Color(0xFFA6F0FF), Color(0xFF8CCBFF),
+            torsoWidth = 12.6f, weapon = CustomWeaponKind.MAUL, hasShield = true, hasCrown = true,
+            bossAuraColor = Color(0xFF66C2FF)
+        )
+        MonsterType.MIREMAW_THE_DROWNED -> CustomDungeonVisual(
+            Color(0xFF1E524B), Color(0xFF4FB3A4), Color(0xFF0D2623),
+            Color(0xFF183D38), Color(0xFF66FFE0), Color(0xFFFFEE88), Color(0xFF5EE89E),
+            torsoWidth = 12.8f, weapon = CustomWeaponKind.SPEAR, hasHorns = true, hasCrown = true,
+            bossAuraColor = Color(0xFF4DE8B8)
+        )
+        MonsterType.XOLATL_THE_SUN_FANG -> CustomDungeonVisual(
+            Color(0xFF1F7850), Color(0xFF56C994), Color(0xFF0D3D27),
+            Color(0xFFB87F1E), Color(0xFFFFE066), Color(0xFFFF6E1A), Color(0xFFFFC947),
+            torsoWidth = 12.6f, weapon = CustomWeaponKind.SPEAR, hasCape = true, hasCrown = true,
+            bossAuraColor = Color(0xFFFFB833)
+        )
+        MonsterType.LORD_MALGRATH_THE_UNDYING -> CustomDungeonVisual(
+            Color(0xFF26334F), Color(0xFF6E8EC2), Color(0xFF111826),
+            Color(0xFF1B243B), Color(0xFF7BE8FF), Color(0xFFA6F5FF), Color(0xFF72E4FF),
+            torsoWidth = 12.8f, weapon = CustomWeaponKind.BLADE, hasCape = true, hasCrown = true, hasHorns = true,
+            bossAuraColor = Color(0xFF66D9FF)
+        )
+        else -> CustomDungeonVisual( // VULKARIS_THE_FORGE_TITAN
+            Color(0xFF2B2226), Color(0xFF6B535C), Color(0xFF140F12),
+            Color(0xFF241B1E), Color(0xFFFF7A1F), Color(0xFFFFEE88), Color(0xFFFF6E1A),
+            torsoWidth = 13.4f, weapon = CustomWeaponKind.MAUL, hasHorns = true, hasCrown = true,
+            bossAuraColor = Color(0xFFFF6E1A)
+        )
+    }
+
+    private fun DrawScope.drawCustomDungeonBiped(
+        ox: Float,
+        oy: Float,
+        u: Float,
+        ow: Float,
+        facing: ResolvedScreenFacing,
+        stride: Float,
+        bobUp: Float,
+        breath: Float,
+        lunge: Float,
+        t: Float,
+        type: MonsterType,
+        useSpec: Boolean,
+        useRim: Boolean,
+        quality: GraphicsQuality,
+        path: Path
+    ) {
+        val spec = visualSpecFor(type)
+        val pulse = 0.74f + 0.26f * sin(t * 4.2f)
+        if (spec.bossAuraColor != null) {
+            drawOval(
+                brush = Brush.radialGradient(
+                    colorStops = arrayOf(
+                        0.0f to spec.bossAuraColor.copy(alpha = 0.36f * pulse),
+                        0.60f to spec.armorMain.copy(alpha = 0.18f * pulse),
+                        1.0f to Color.Transparent
+                    ),
+                    center = Offset(ox, oy),
+                    radius = u * 23.5f
+                ),
+                topLeft = Offset(ox - u * 23.5f, oy - u * 12.0f),
+                size = Size(u * 47.0f, u * 24.0f)
+            )
+        }
+
+        val shoulderR = spec.torsoWidth * 0.98f
+        val hipUp = 13.5f + bobUp
+        val shoulderUp = 28.8f + bobUp + breath * 0.55f
+        val headUp = 36.6f + bobUp + breath * 0.6f
+
+        val order = IntArray(7) { it }
+        val depths = floatArrayOf(
+            if (facing.isBackFacing && spec.hasCape) 0.4f else facing.depthOf(0f, -6.5f) - 1.2f,
+            facing.depthOf(-3.6f, -stride * 4.0f) - 0.6f,
+            facing.depthOf(+3.6f, +stride * 4.0f) - 0.6f,
+            facing.depthOf(-shoulderR, 1.5f),
+            facing.depthOf(+shoulderR, 2.5f + lunge * 4.5f),
+            0.0f,
+            0.7f + facing.forwardDepth * 0.35f
+        )
+        sortIndices(order, depths)
+
+        for (i in 0 until 7) {
+            when (order[i]) {
+                0 -> {
+                    if (spec.hasWings) {
+                        val flap = sin(t * 4.5f) * 4.2f + lunge * 3.5f
+                        for (side in -1..1 step 2) {
+                            val sh = facing.project(ox, oy, u, side * 4.5f, -3.2f, shoulderUp)
+                            val tip = facing.project(ox, oy, u, side * 21.5f, -8.5f, shoulderUp + 11.5f + flap)
+                            val bot = facing.project(ox, oy, u, side * 13.5f, -6.8f, hipUp + 1.5f + flap * 0.4f)
+                            path.rewind()
+                            path.moveTo(sh.x, sh.y)
+                            path.lineTo(tip.x, tip.y)
+                            path.quadraticTo((tip.x + bot.x) * 0.5f, bot.y + u * 2.2f, bot.x, bot.y)
+                            path.close()
+                            drawPath(path, spec.skinSh)
+                            drawPath(path, INK, style = Stroke(ow * 0.85f, join = StrokeJoin.Round))
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, sh, tip, u * 1.6f, u * 0.7f,
+                                main = spec.skinMain, highlight = spec.accentColor, shadow = INK,
+                                outlineW = ow * 0.7f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                    }
+                    if (spec.hasCape) {
+                        val topL = facing.project(ox, oy, u, -7.0f, -3.4f, shoulderUp)
+                        val topR = facing.project(ox, oy, u, +7.0f, -3.4f, shoulderUp)
+                        val botR = facing.project(ox, oy, u, +8.8f, -5.6f, 4.2f + bobUp * 0.3f)
+                        val botL = facing.project(ox, oy, u, -8.8f, -5.6f, 4.2f + bobUp * 0.3f)
+                        path.rewind()
+                        path.moveTo(topL.x, topL.y)
+                        path.lineTo(topR.x, topR.y)
+                        path.lineTo(botR.x, botR.y)
+                        path.quadraticTo((botL.x + botR.x) * 0.5f, maxOf(botL.y, botR.y) + u * 2.0f, botL.x, botL.y)
+                        path.close()
+                        drawPath(path, spec.armorMain)
+                        drawPath(path, INK, style = Stroke(ow * 0.85f, join = StrokeJoin.Round))
+                    }
+                }
+                1, 2 -> {
+                    val isRight = order[i] == 2
+                    val side = if (isRight) 1f else -1f
+                    val step = if (isRight) stride else -stride
+                    val hip = facing.project(ox, oy, u, side * 3.8f, 0f, hipUp)
+                    val foot = facing.project(ox, oy, u, side * 4.2f, step * 4.4f, 1.4f + (step * 1.8f).coerceAtLeast(0f))
+                    VolumetricShading.drawFootContactDot(this, foot, u * 2.8f, u * 1.4f)
+                    val legR = if (spec.torsoWidth >= 11.5f) u * 3.3f else u * 2.7f
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, hip, foot, legR, legR * 0.84f,
+                        main = spec.skinMain, highlight = spec.skinHi, shadow = spec.skinSh,
+                        outlineW = ow * 0.88f, lightX = facing.lightScreenX, path = path
+                    )
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, foot.x, foot.y, legR * 1.15f, legR * 0.62f,
+                        main = spec.skinSh, highlight = spec.skinMain, shadow = INK,
+                        outlineW = ow * 0.78f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = false
+                    )
+                }
+                5 -> {
+                    val topC = facing.project(ox, oy, u, 0f, 0f, shoulderUp)
+                    val botC = facing.project(ox, oy, u, 0f, 0f, hipUp)
+                    val profileScale = 0.72f + 0.28f * abs(facing.forwardDepth)
+                    val topHW = u * spec.torsoWidth * profileScale
+                    val botHW = u * (spec.torsoWidth * 0.75f) * profileScale
+                    VolumetricShading.drawVolumetricTorso(
+                        scope = this, topCenter = topC, bottomCenter = botC,
+                        topHalfW = topHW, botHalfW = botHW, domeHeight = u * 3.5f,
+                        main = spec.armorMain, highlight = spec.armorHi,
+                        shadow = VolumetricShading.coolShadow(spec.armorMain, 0.45f),
+                        outlineW = ow, lightX = facing.lightScreenX, useRim = useRim, path = path
+                    )
+                    val chestSigil = facing.project(ox, oy, u, 0f, if (facing.isBackFacing) -3.0f else +3.6f, shoulderUp - 5.5f)
+                    drawCircle(spec.accentColor.copy(alpha = 0.85f), u * (if (type.isBoss) 3.4f else 2.2f), chestSigil)
+                    drawCircle(Color.White.copy(alpha = 0.7f), u * (if (type.isBoss) 1.3f else 0.8f), chestSigil)
+                }
+                3 -> {
+                    val sh = facing.project(ox, oy, u, -shoulderR, 0f, shoulderUp - 1.5f)
+                    val hand = facing.project(ox, oy, u, -shoulderR - 1.5f, +4.2f - stride * 2.2f, hipUp + 4.5f)
+                    val armR = if (spec.torsoWidth >= 11.5f) u * 3.0f else u * 2.35f
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, sh, hand, armR, armR * 0.84f,
+                        main = spec.skinMain, highlight = spec.skinHi, shadow = spec.skinSh,
+                        outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                    )
+                    if (spec.hasShield) {
+                        val shC = facing.project(ox, oy, u, -shoulderR - 2.8f, +6.0f, hipUp + 5.5f)
+                        val shieldRx = u * 4.6f * (0.55f + 0.45f * abs(facing.forwardDepth))
+                        VolumetricShading.drawVolumetricEllipsoid(
+                            this, shC.x, shC.y, shieldRx, u * 6.8f,
+                            main = spec.armorMain, highlight = spec.armorHi, shadow = INK,
+                            outlineW = ow * 0.95f, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                            useSpecular = useSpec
+                        )
+                        drawCircle(spec.accentColor, u * 1.45f, shC)
+                    } else if (spec.weapon == CustomWeaponKind.ORB && quality != GraphicsQuality.LOW) {
+                        val wisp = facing.project(ox, oy, u, -shoulderR - 3.2f + cos(t * 4.4f) * 1.8f, +5.0f, hipUp + 8.5f + sin(t * 4.4f) * 1.6f)
+                        drawCircle(spec.accentColor.copy(alpha = 0.55f), u * 3.5f, wisp)
+                        drawCircle(Color.White.copy(alpha = 0.9f), u * 1.5f, wisp)
+                    }
+                }
+                4 -> {
+                    val sh = facing.project(ox, oy, u, +shoulderR, 0f, shoulderUp - 1.5f)
+                    val swingF = 4.6f + stride * 2.2f + lunge * 6.5f
+                    val swingUp = hipUp + 5.0f + lunge * 4.5f
+                    val hand = facing.project(ox, oy, u, +shoulderR + 1.2f, swingF, swingUp)
+                    val armR = if (spec.torsoWidth >= 11.5f) u * 3.0f else u * 2.4f
+                    VolumetricShading.drawVolumetricCylinder(
+                        this, sh, hand, armR, armR * 0.85f,
+                        main = spec.skinMain, highlight = spec.skinHi, shadow = spec.skinSh,
+                        outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                    )
+                    val tip = facing.project(ox, oy, u, +shoulderR + 3.2f, swingF + 9.5f + lunge * 5.0f, swingUp + 12.5f - lunge * 6.0f)
+                    when (spec.weapon) {
+                        CustomWeaponKind.MAUL -> {
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, hand, tip, u * 1.5f, u * 1.4f,
+                                main = Color(0xFF473A32), highlight = spec.armorHi, shadow = INK,
+                                outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path
+                            )
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, tip.x, tip.y, u * (if (type.isBoss) 5.8f else 4.6f), u * (if (type.isBoss) 4.4f else 3.6f),
+                                main = spec.armorMain, highlight = spec.accentColor, shadow = INK,
+                                outlineW = ow * 0.95f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec
+                            )
+                        }
+                        CustomWeaponKind.BOW -> {
+                            val bowBot = facing.project(ox, oy, u, +shoulderR + 1.8f, swingF + 2.5f, swingUp - 6.0f)
+                            val bowTop = facing.project(ox, oy, u, +shoulderR + 2.4f, swingF + 4.5f, swingUp + 10.5f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, bowBot, bowTop, u * 1.15f, u * 0.95f,
+                                main = Color(0xFF8C5D32), highlight = spec.accentColor, shadow = Color(0xFF3E2612),
+                                outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
+                            )
+                            drawLine(Color(0xFFE6DEC8), bowBot, bowTop, strokeWidth = u * 0.55f)
+                        }
+                        CustomWeaponKind.STAFF -> {
+                            val staffBot = facing.project(ox, oy, u, +shoulderR + 1.0f, swingF - 1.5f, 2.0f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, staffBot, tip, u * 1.2f, u * 1.05f,
+                                main = Color(0xFF4A3529), highlight = spec.armorHi, shadow = INK,
+                                outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
+                            )
+                            drawCircle(spec.accentColor, u * 2.8f, tip)
+                            drawCircle(Color.White, u * 1.2f, tip)
+                        }
+                        CustomWeaponKind.SPEAR -> {
+                            val spearBot = facing.project(ox, oy, u, +shoulderR + 1.0f, swingF - 3.5f, 3.0f)
+                            val spearTop = facing.project(ox, oy, u, +shoulderR + 3.4f, swingF + 13.0f + lunge * 5.5f, swingUp + 15.0f - lunge * 6.0f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, spearBot, spearTop, u * 1.1f, u * 0.9f,
+                                main = Color(0xFF523C2B), highlight = spec.armorHi, shadow = INK,
+                                outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path
+                            )
+                            VolumetricShading.drawVolumetricEllipsoid(
+                                this, spearTop.x, spearTop.y, u * 2.2f, u * 3.6f,
+                                main = spec.armorHi, highlight = spec.accentColor, shadow = INK,
+                                outlineW = ow * 0.82f, lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec
+                            )
+                        }
+                        CustomWeaponKind.BLADE -> {
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, hand, tip, u * 1.8f, u * 0.9f,
+                                main = spec.armorHi, highlight = spec.accentColor, shadow = INK,
+                                outlineW = ow * 0.88f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                        CustomWeaponKind.ORB -> {
+                            drawCircle(spec.accentColor.copy(alpha = 0.88f), u * 3.2f, tip)
+                            drawCircle(Color.White, u * 1.4f, tip)
+                        }
+                        CustomWeaponKind.CLAWS -> {
+                            drawLine(spec.accentColor, hand, tip, strokeWidth = u * 1.6f, cap = StrokeCap.Round)
+                        }
+                    }
+                }
+                6 -> {
+                    val headPos = facing.project(ox, oy, u, 0f, +1.0f, headUp)
+                    val headR = if (type.isBoss) u * 6.2f else u * 5.4f
+                    if (spec.hasHorns) {
+                        for (side in -1..1 step 2) {
+                            val hb = facing.project(ox, oy, u, side * 3.8f, +0.5f, headUp + 3.4f)
+                            val ht = facing.project(ox, oy, u, side * 10.5f, +2.2f, headUp + 10.5f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, hb, ht, u * 2.1f, u * 0.6f,
+                                main = spec.skinSh, highlight = spec.accentColor, shadow = INK,
+                                outlineW = ow * 0.84f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                    }
+                    if (spec.hasCrown) {
+                        for (side in -1..1) {
+                            val cb = facing.project(ox, oy, u, side * 2.8f, +0.2f, headUp + 4.4f)
+                            val ct = facing.project(ox, oy, u, side * 4.0f, +0.8f, headUp + if (side == 0) 11.0f else 8.8f)
+                            VolumetricShading.drawVolumetricCylinder(
+                                this, cb, ct, u * 1.45f, u * 0.48f,
+                                main = spec.accentColor, highlight = Color.White, shadow = spec.armorMain,
+                                outlineW = ow * 0.76f, lightX = facing.lightScreenX, path = path
+                            )
+                        }
+                    }
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, headPos.x, headPos.y, headR, headR * 0.94f,
+                        main = spec.skinMain, highlight = spec.skinHi, shadow = spec.skinSh,
+                        outlineW = ow, lightX = facing.lightScreenX, lightY = facing.lightScreenY,
+                        useSpecular = useSpec, useRim = useRim
+                    )
+                    if (!facing.isBackFacing) {
+                        for (side in -1..1 step 2) {
+                            val ep = facing.project(ox, oy, u, side * 2.1f, +5.4f, headUp + 0.8f)
+                            drawCircle(INK, u * 1.55f, ep)
+                            drawCircle(spec.eyeColor, u * 1.12f, ep)
+                        }
                     }
                 }
             }

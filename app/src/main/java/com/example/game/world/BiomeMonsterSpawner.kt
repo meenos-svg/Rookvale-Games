@@ -193,7 +193,65 @@ object BiomeMonsterSpawner {
     private const val ROOKVALE_CITY_BUFFER_MIN_Y = WorldMaps.ROOKVALE_ORIGIN_Y + 142
     private const val ROOKVALE_CITY_BUFFER_MAX_Y = WorldMaps.ROOKVALE_ORIGIN_Y + 234
 
-    // Dedicated dungeon pools for Floor -5 (Grimmaw) and Floor -6 (Gorek)
+    // Dedicated per-dungeon monster ecologies so every one of the 13 dungeons (+ Deep Delves -3/-4)
+    // hosts its own distinct monsters across both its Upper Floor and Lower Boss Lair.
+    private val briarCatacombsPool = listOf(
+        WeightedMonsterEntry(MonsterType.BRIAR_CRYPT_CRAWLER, 36),
+        WeightedMonsterEntry(MonsterType.CATACOMB_BONE_ARCHER, 32),
+        WeightedMonsterEntry(MonsterType.POISON_SPIDER, 18),
+        WeightedMonsterEntry(MonsterType.SKELETON, 14)
+    )
+    private val quarryMinesPool = listOf(
+        WeightedMonsterEntry(MonsterType.TUNNEL_KOBOLD_SAPPER, 40),
+        WeightedMonsterEntry(MonsterType.QUARRY_MOLE_BRUTE, 38),
+        WeightedMonsterEntry(MonsterType.CAVE_RAT, 22)
+    )
+    private val northMountainCavernPool = listOf(
+        WeightedMonsterEntry(MonsterType.CRAG_HARPY, 40),
+        WeightedMonsterEntry(MonsterType.SHALE_GOLEM, 38),
+        WeightedMonsterEntry(MonsterType.CRAG_WOLF, 22)
+    )
+    private val darkForestSinkholePool = listOf(
+        WeightedMonsterEntry(MonsterType.THORN_BRAMBLE_STALKER, 40),
+        WeightedMonsterEntry(MonsterType.SPORELING_LOBBER, 38),
+        WeightedMonsterEntry(MonsterType.SWAMP_TROLL, 22)
+    )
+    private val cragDeepHollowPool = listOf(
+        WeightedMonsterEntry(MonsterType.VAULT_SENTINEL, 40),
+        WeightedMonsterEntry(MonsterType.HOLLOW_CROSSBOWMAN, 38),
+        WeightedMonsterEntry(MonsterType.OUTLAW_BANDIT, 22)
+    )
+    private val watchwoodCavernsPool = listOf(
+        WeightedMonsterEntry(MonsterType.CINDER_IMP, 34),
+        WeightedMonsterEntry(MonsterType.WATCHWOOD_DREAD_KNIGHT, 34),
+        WeightedMonsterEntry(MonsterType.GHOUL, 18),
+        WeightedMonsterEntry(MonsterType.FIRE_DEVIL, 14)
+    )
+    private val sunkenMireVaultsPool = listOf(
+        WeightedMonsterEntry(MonsterType.MIRE_LURKER, 42),
+        WeightedMonsterEntry(MonsterType.BOG_LEECH_WEAVER, 38),
+        WeightedMonsterEntry(MonsterType.SWAMP_TROLL, 20)
+    )
+    private val zigguratVaultPool = listOf(
+        WeightedMonsterEntry(MonsterType.TEMPLE_SERPENT_GUARD, 42),
+        WeightedMonsterEntry(MonsterType.SUN_PRIEST_ACOLYTE, 38),
+        WeightedMonsterEntry(MonsterType.POISON_SPIDER, 20)
+    )
+    private val blightwoodBarrowPool = listOf(
+        WeightedMonsterEntry(MonsterType.BARROW_WIGHT, 42),
+        WeightedMonsterEntry(MonsterType.FROST_BANSHEE, 38),
+        WeightedMonsterEntry(MonsterType.NECROMANCER, 20)
+    )
+    private val ashenFoundryPool = listOf(
+        WeightedMonsterEntry(MonsterType.SLAG_AUTOMATON, 42),
+        WeightedMonsterEntry(MonsterType.ASH_PYROMANCER, 38),
+        WeightedMonsterEntry(MonsterType.FIRE_DEVIL, 20)
+    )
+    private val emberSanctumPool = listOf(
+        WeightedMonsterEntry(MonsterType.EMBER_DRAKE, 42),
+        WeightedMonsterEntry(MonsterType.OBSIDIAN_CULTIST, 38),
+        WeightedMonsterEntry(MonsterType.DRAGON_HATCHLING, 20)
+    )
     private val grimmawDungeonPool = listOf(
         WeightedMonsterEntry(MonsterType.GRIMMAW_QUARRYMAN, 38),
         WeightedMonsterEntry(MonsterType.GRIMMAW_ROCK_HURLER, 32),
@@ -214,6 +272,29 @@ object BiomeMonsterSpawner {
         WeightedMonsterEntry(MonsterType.FIRE_DEVIL, 32),
         WeightedMonsterEntry(MonsterType.NECROMANCER, 22)
     )
+
+    /**
+     * Returns the dedicated regular-monster spawn pool for any underground dungeon floor (`-1..-28`).
+     */
+    fun dungeonPoolForFloor(floorId: Int): List<WeightedMonsterEntry> =
+        when (BiomeProgressionRules.parentUpperFloorFor(floorId)) {
+            -1 -> briarCatacombsPool
+            -2 -> watchwoodCavernsPool
+            -3 -> cryptDungeonPool
+            -4 -> wyrmDungeonPool
+            -5 -> grimmawDungeonPool
+            -6 -> gorekDungeonPool
+            -7 -> sunkenMireVaultsPool
+            -8 -> zigguratVaultPool
+            -9 -> blightwoodBarrowPool
+            -10 -> ashenFoundryPool
+            -11 -> quarryMinesPool
+            -12 -> northMountainCavernPool
+            -13 -> darkForestSinkholePool
+            -14 -> cragDeepHollowPool
+            -15 -> emberSanctumPool
+            else -> biomeForDungeonFloor(floorId).monsterPool
+        }
 
     /**
      * Resolves the ecological [BiomeType] at global Floor 0 coordinates `(x, y)`.
@@ -255,10 +336,11 @@ object BiomeMonsterSpawner {
     }
 
     /**
-     * Maps each underground dungeon floor (`-1..-15`) to its natural ecological [BiomeType].
-     * All six Rookvale dungeons (-1, -2, -11..-14) belong strictly to Rookvale Heartland's Lv 1-20 tier.
+     * Maps each underground dungeon floor (`-1..-28`) to its natural ecological [BiomeType].
+     * All six Rookvale dungeons (-1, -2, -11..-14 & their lower boss lairs -16..-21) belong
+     * strictly to Rookvale Heartland's Lv 1-20 tier.
      */
-    fun biomeForDungeonFloor(floorId: Int): BiomeType = when (floorId) {
+    fun biomeForDungeonFloor(floorId: Int): BiomeType = when (BiomeProgressionRules.parentUpperFloorFor(floorId)) {
         -1 -> BiomeType.HEARTLAND_WILDS
         -2 -> BiomeType.HEARTLAND_FRONTIER
         -3 -> BiomeType.BLIGHTWOOD_REACH
@@ -284,15 +366,10 @@ object BiomeMonsterSpawner {
         pickFromPool(biome.monsterPool, seed)
 
     /**
-     * Selects a weighted regular monster for a specific underground [floorId].
+     * Selects a weighted regular monster strictly from the dedicated dungeon roster for [floorId].
      */
-    fun pickWeightedDungeonMonster(floorId: Int, seed: Int): MonsterType = when (floorId) {
-        -3 -> pickFromPool(cryptDungeonPool, seed)
-        -4 -> pickFromPool(wyrmDungeonPool, seed)
-        -5 -> pickFromPool(grimmawDungeonPool, seed)
-        -6 -> pickFromPool(gorekDungeonPool, seed)
-        else -> pickWeightedMonster(biomeForDungeonFloor(floorId), seed)
-    }
+    fun pickWeightedDungeonMonster(floorId: Int, seed: Int): MonsterType =
+        pickFromPool(dungeonPoolForFloor(floorId), seed)
 
     /**
      * Resolves a strict biome-clamped monster level on Floor 0.

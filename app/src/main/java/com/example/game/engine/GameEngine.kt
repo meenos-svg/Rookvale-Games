@@ -326,7 +326,7 @@ object GameEngine {
             maxCapOz = state.maxCapOz,
             gold = state.gold,
             bankGold = state.bankGold.coerceAtLeast(0L),
-            floor = state.floor.coerceIn(-15, 0),
+            floor = state.floor.coerceIn(-28, 0),
             x = state.playerX,
             y = state.playerY,
             poisonTicks = 0,

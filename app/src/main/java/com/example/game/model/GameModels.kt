@@ -852,15 +852,75 @@ enum class MonsterType(
         displayName = "Outlaw Bandit", tier = 2, threatLevel = 7, maxHp = 132, armor = 5,
         xpReward = 128, minDmg = 12, maxDmg = 24, goldMin = 26, goldMax = 58, moveIntervalTicks = 1
     ),
+    BRIAR_CRYPT_CRAWLER(
+        displayName = "Briar Crypt Crawler", tier = 2, threatLevel = 6, maxHp = 116, armor = 4,
+        xpReward = 110, minDmg = 10, maxDmg = 21, goldMin = 18, goldMax = 46, moveIntervalTicks = 1,
+        inflictsPoison = true
+    ),
+    CATACOMB_BONE_ARCHER(
+        displayName = "Catacomb Bone Archer", tier = 2, threatLevel = 6, maxHp = 104, armor = 4,
+        xpReward = 108, minDmg = 10, maxDmg = 21, goldMin = 20, goldMax = 46, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 3, rangedProjectile = ProjectileKind.ARROW
+    ),
+    TUNNEL_KOBOLD_SAPPER(
+        displayName = "Tunnel Kobold Sapper", tier = 2, threatLevel = 5, maxHp = 96, armor = 3,
+        xpReward = 96, minDmg = 9, maxDmg = 19, goldMin = 18, goldMax = 40, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 3, rangedProjectile = ProjectileKind.THROWN_STONE
+    ),
+    QUARRY_MOLE_BRUTE(
+        displayName = "Quarry Mole Brute", tier = 2, threatLevel = 6, maxHp = 134, armor = 6,
+        xpReward = 118, minDmg = 11, maxDmg = 23, goldMin = 22, goldMax = 50, moveIntervalTicks = 2
+    ),
+    CRAG_HARPY(
+        displayName = "Crag Harpy", tier = 2, threatLevel = 6, maxHp = 108, armor = 4,
+        xpReward = 112, minDmg = 11, maxDmg = 22, goldMin = 20, goldMax = 48, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 3, rangedProjectile = ProjectileKind.THROWN_STONE
+    ),
+    SHALE_GOLEM(
+        displayName = "Shale Golem", tier = 2, threatLevel = 7, maxHp = 142, armor = 7,
+        xpReward = 132, minDmg = 12, maxDmg = 24, goldMin = 24, goldMax = 54, moveIntervalTicks = 2
+    ),
+    THORN_BRAMBLE_STALKER(
+        displayName = "Thorn Bramble Stalker", tier = 2, threatLevel = 7, maxHp = 128, armor = 5,
+        xpReward = 126, minDmg = 12, maxDmg = 24, goldMin = 22, goldMax = 52, moveIntervalTicks = 1,
+        inflictsPoison = true
+    ),
+    SPORELING_LOBBER(
+        displayName = "Sporeling Lobber", tier = 2, threatLevel = 7, maxHp = 112, armor = 4,
+        xpReward = 122, minDmg = 11, maxDmg = 23, goldMin = 22, goldMax = 50, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 3, rangedProjectile = ProjectileKind.VENOM_GLOB,
+        inflictsPoison = true
+    ),
     BROODMOTHER_ARACHNE(
         displayName = "Broodmother Arachne", tier = 2, threatLevel = 8, maxHp = 460, armor = 9,
         xpReward = 480, minDmg = 18, maxDmg = 34, goldMin = 110, goldMax = 220, moveIntervalTicks = 2,
         aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.VENOM_GLOB,
-        inflictsPoison = true, isBoss = true, summonTypeName = "POISON_SPIDER", maxSummons = 1,
-        specialKind = BossSpecialKind.VENOM_NOVA, bossTitle = "Matriarch of the Mossy Sewers"
+        inflictsPoison = true, isBoss = true, summonTypeName = "BRIAR_CRYPT_CRAWLER", maxSummons = 1,
+        specialKind = BossSpecialKind.VENOM_NOVA, bossTitle = "Matriarch of the Briar Brood Sanctum"
+    ),
+    FOREMAN_IRONJAW(
+        displayName = "Foreman Ironjaw", tier = 2, threatLevel = 7, maxHp = 420, armor = 10,
+        xpReward = 440, minDmg = 17, maxDmg = 31, goldMin = 100, goldMax = 200, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 3, rangedProjectile = ProjectileKind.THROWN_STONE,
+        isBoss = true, summonTypeName = "TUNNEL_KOBOLD_SAPPER", maxSummons = 1,
+        specialKind = BossSpecialKind.QUARRY_QUAKE, bossTitle = "Taskmaster of the Deep Copper Vein"
+    ),
+    SKREE_RIDGE_MATRIARCH(
+        displayName = "Skree, Ridge Matriarch", tier = 2, threatLevel = 8, maxHp = 450, armor = 9,
+        xpReward = 470, minDmg = 18, maxDmg = 33, goldMin = 110, goldMax = 215, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.THROWN_STONE,
+        isBoss = true, summonTypeName = "CRAG_HARPY", maxSummons = 1,
+        specialKind = BossSpecialKind.VENOM_NOVA, bossTitle = "Sovereign of the Crag Roost"
+    ),
+    GNARLROOT_THE_BLIGHTED(
+        displayName = "Gnarlroot the Blighted", tier = 2, threatLevel = 9, maxHp = 510, armor = 11,
+        xpReward = 540, minDmg = 20, maxDmg = 36, goldMin = 125, goldMax = 245, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.VENOM_GLOB,
+        inflictsPoison = true, isBoss = true, summonTypeName = "SPORELING_LOBBER", maxSummons = 1,
+        specialKind = BossSpecialKind.VENOM_NOVA, bossTitle = "Ancient Terror of the Heart-Root Abyss"
     ),
 
-    // --- TIER 3: Heartland Outlaw Frontier & Floor -2 Deep Caverns (Levels 13-20) ---
+    // --- TIER 3: Heartland Outlaw Frontier, Watchwood, Mire & Ziggurat Dungeons ---
     ORC_WARRIOR(
         displayName = "Orc Warrior", tier = 3, threatLevel = 8, maxHp = 245, armor = 11,
         xpReward = 225, minDmg = 20, maxDmg = 36, goldMin = 40, goldMax = 90, moveIntervalTicks = 1
@@ -881,15 +941,70 @@ enum class MonsterType(
         aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 3, rangedProjectile = ProjectileKind.FIREBALL,
         inflictsFire = true
     ),
+    VAULT_SENTINEL(
+        displayName = "Vault Sentinel", tier = 3, threatLevel = 10, maxHp = 268, armor = 12,
+        xpReward = 265, minDmg = 21, maxDmg = 38, goldMin = 50, goldMax = 110, moveIntervalTicks = 2
+    ),
+    HOLLOW_CROSSBOWMAN(
+        displayName = "Hollow Crossbowman", tier = 3, threatLevel = 10, maxHp = 222, armor = 8,
+        xpReward = 250, minDmg = 20, maxDmg = 37, goldMin = 48, goldMax = 106, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.ARROW
+    ),
+    CINDER_IMP(
+        displayName = "Cinder Imp", tier = 3, threatLevel = 10, maxHp = 218, armor = 7,
+        xpReward = 245, minDmg = 20, maxDmg = 38, goldMin = 48, goldMax = 108, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 3, rangedProjectile = ProjectileKind.FIREBALL,
+        inflictsFire = true
+    ),
+    WATCHWOOD_DREAD_KNIGHT(
+        displayName = "Watchwood Dread Knight", tier = 3, threatLevel = 11, maxHp = 282, armor = 12,
+        xpReward = 290, minDmg = 23, maxDmg = 42, goldMin = 56, goldMax = 122, moveIntervalTicks = 1
+    ),
+    MIRE_LURKER(
+        displayName = "Mire Lurker", tier = 3, threatLevel = 11, maxHp = 258, armor = 9,
+        xpReward = 270, minDmg = 22, maxDmg = 40, goldMin = 54, goldMax = 118, moveIntervalTicks = 1,
+        inflictsPoison = true
+    ),
+    BOG_LEECH_WEAVER(
+        displayName = "Bog Leech-Weaver", tier = 3, threatLevel = 11, maxHp = 232, armor = 8,
+        xpReward = 268, minDmg = 21, maxDmg = 39, goldMin = 52, goldMax = 116, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.VENOM_GLOB,
+        inflictsPoison = true
+    ),
+    TEMPLE_SERPENT_GUARD(
+        displayName = "Temple Serpent Guard", tier = 3, threatLevel = 12, maxHp = 275, armor = 11,
+        xpReward = 295, minDmg = 24, maxDmg = 43, goldMin = 60, goldMax = 130, moveIntervalTicks = 1,
+        inflictsPoison = true
+    ),
+    SUN_PRIEST_ACOLYTE(
+        displayName = "Sun-Priest Acolyte", tier = 3, threatLevel = 12, maxHp = 240, armor = 8,
+        xpReward = 285, minDmg = 23, maxDmg = 42, goldMin = 58, goldMax = 128, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
+        inflictsFire = true
+    ),
+    WARDEN_STONEHELM(
+        displayName = "Warden Stonehelm", tier = 3, threatLevel = 11, maxHp = 640, armor = 15,
+        xpReward = 720, minDmg = 26, maxDmg = 48, goldMin = 165, goldMax = 310, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 3, rangedProjectile = ProjectileKind.THROWN_STONE,
+        isBoss = true, summonTypeName = "VAULT_SENTINEL", maxSummons = 1,
+        specialKind = BossSpecialKind.QUARRY_QUAKE, bossTitle = "Keeper of the Sealed Granite Vault"
+    ),
     IGNIS_LORD_OF_THE_PIT(
         displayName = "Ignis, Lord of the Pit", tier = 3, threatLevel = 12, maxHp = 690, armor = 14,
         xpReward = 780, minDmg = 28, maxDmg = 52, goldMin = 180, goldMax = 340, moveIntervalTicks = 2,
         aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
-        inflictsFire = true, isBoss = true, summonTypeName = "FIRE_DEVIL", maxSummons = 1,
-        specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Warden of the Molten Chasm"
+        inflictsFire = true, isBoss = true, summonTypeName = "CINDER_IMP", maxSummons = 1,
+        specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Warden of the Molten Pit Throne"
+    ),
+    MIREMAW_THE_DROWNED(
+        displayName = "Miremaw the Drowned", tier = 3, threatLevel = 12, maxHp = 740, armor = 14,
+        xpReward = 840, minDmg = 29, maxDmg = 54, goldMin = 195, goldMax = 365, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.VENOM_GLOB,
+        inflictsPoison = true, isBoss = true, summonTypeName = "MIRE_LURKER", maxSummons = 1,
+        specialKind = BossSpecialKind.VENOM_NOVA, bossTitle = "Leviathan of the Sunken Sluice Depths"
     ),
 
-    // --- TIER 4: Floor -3 Abyssal Crypt & Floor -4 Wyrm Sanctum (Levels 10-20) ---
+    // --- TIER 4: Deep Delve Floors -3/-4, Ziggurat Boss & Blightwood Barrow Catacombs ---
     DRAGON_HATCHLING(
         displayName = "Dragon Hatchling", tier = 4, threatLevel = 13, maxHp = 440, armor = 14,
         xpReward = 450, minDmg = 32, maxDmg = 58, goldMin = 95, goldMax = 195, moveIntervalTicks = 2,
@@ -900,6 +1015,29 @@ enum class MonsterType(
         xpReward = 480, minDmg = 30, maxDmg = 56, goldMin = 105, goldMax = 210, moveIntervalTicks = 2,
         aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 3, rangedProjectile = ProjectileKind.NECRO_BOLT,
         summonTypeName = "SKELETON", maxSummons = 1
+    ),
+    BARROW_WIGHT(
+        displayName = "Barrow Wight", tier = 4, threatLevel = 14, maxHp = 430, armor = 15,
+        xpReward = 470, minDmg = 32, maxDmg = 58, goldMin = 100, goldMax = 205, moveIntervalTicks = 1
+    ),
+    FROST_BANSHEE(
+        displayName = "Frost Banshee", tier = 4, threatLevel = 15, maxHp = 395, armor = 12,
+        xpReward = 490, minDmg = 31, maxDmg = 57, goldMin = 108, goldMax = 215, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.NECRO_BOLT
+    ),
+    XOLATL_THE_SUN_FANG(
+        displayName = "Xolatl, the Sun-Fang", tier = 4, threatLevel = 14, maxHp = 880, armor = 16,
+        xpReward = 1120, minDmg = 38, maxDmg = 68, goldMin = 240, goldMax = 430, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
+        inflictsFire = true, isBoss = true, summonTypeName = "TEMPLE_SERPENT_GUARD", maxSummons = 2,
+        specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Solar Sovereign of the Ziggurat Altar"
+    ),
+    LORD_MALGRATH_THE_UNDYING(
+        displayName = "Lord Malgrath the Undying", tier = 4, threatLevel = 16, maxHp = 1040, armor = 18,
+        xpReward = 1380, minDmg = 44, maxDmg = 80, goldMin = 290, goldMax = 520, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.NECRO_BOLT,
+        isBoss = true, summonTypeName = "BARROW_WIGHT", maxSummons = 2,
+        specialKind = BossSpecialKind.LABYRINTH_PYRE, bossTitle = "Sovereign of the Blightwood Barrow"
     ),
     DEMON_LORD(
         displayName = "Demon Lord", tier = 4, threatLevel = 18, maxHp = 860, armor = 18,
@@ -916,7 +1054,7 @@ enum class MonsterType(
         specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Sovereign of the Wyrm Sanctum"
     ),
 
-    // --- TIER 5: SW Frontier Grimmaw Crags Camp & Floor -5 The Grimmaw Quarry (Harder than classic Rookvale Dungeons) ---
+    // --- TIER 5: Grimmaw Quarry, Ashen Caldera Foundry & Ember Sanctum ---
     GRIMMAW_QUARRYMAN(
         displayName = "Grimmaw Quarryman", tier = 5, threatLevel = 16, maxHp = 520, armor = 19,
         xpReward = 580, minDmg = 36, maxDmg = 64, goldMin = 120, goldMax = 240, moveIntervalTicks = 2
@@ -929,6 +1067,43 @@ enum class MonsterType(
     GRIMMAW_CRUSHER(
         displayName = "Grimmaw Crusher", tier = 5, threatLevel = 19, maxHp = 640, armor = 22,
         xpReward = 780, minDmg = 44, maxDmg = 78, goldMin = 165, goldMax = 320, moveIntervalTicks = 2
+    ),
+    SLAG_AUTOMATON(
+        displayName = "Slag Automaton", tier = 5, threatLevel = 18, maxHp = 610, armor = 22,
+        xpReward = 720, minDmg = 42, maxDmg = 74, goldMin = 155, goldMax = 305, moveIntervalTicks = 2,
+        inflictsFire = true
+    ),
+    ASH_PYROMANCER(
+        displayName = "Ash Pyromancer", tier = 5, threatLevel = 18, maxHp = 515, armor = 16,
+        xpReward = 690, minDmg = 40, maxDmg = 72, goldMin = 148, goldMax = 290, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
+        inflictsFire = true
+    ),
+    EMBER_DRAKE(
+        displayName = "Ember Drake", tier = 5, threatLevel = 19, maxHp = 565, armor = 18,
+        xpReward = 740, minDmg = 43, maxDmg = 76, goldMin = 160, goldMax = 315, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.FIRE_BREATH,
+        inflictsFire = true
+    ),
+    OBSIDIAN_CULTIST(
+        displayName = "Obsidian Cultist", tier = 5, threatLevel = 19, maxHp = 505, armor = 17,
+        xpReward = 710, minDmg = 41, maxDmg = 74, goldMin = 152, goldMax = 298, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.NECRO_BOLT,
+        inflictsFire = true
+    ),
+    VULKARIS_THE_FORGE_TITAN(
+        displayName = "Vulkaris the Forge Titan", tier = 5, threatLevel = 22, maxHp = 1360, armor = 23,
+        xpReward = 1980, minDmg = 52, maxDmg = 92, goldMin = 395, goldMax = 720, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
+        inflictsFire = true, isBoss = true, summonTypeName = "SLAG_AUTOMATON", maxSummons = 2,
+        specialKind = BossSpecialKind.QUARRY_QUAKE, bossTitle = "Molten Colossus of the Foundry Crucible"
+    ),
+    IGNIVAR_ASH_WING_WYRM(
+        displayName = "Ignivar, Ash-Wing Wyrm", tier = 5, threatLevel = 23, maxHp = 1400, armor = 23,
+        xpReward = 2050, minDmg = 54, maxDmg = 95, goldMin = 415, goldMax = 750, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIRE_BREATH,
+        inflictsFire = true, isBoss = true, summonTypeName = "EMBER_DRAKE", maxSummons = 2,
+        specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Sovereign of the Caldera Dragon Throne"
     ),
     KRAGOR_THE_STONE_EYED(
         displayName = "Kragor the Stone-Eyed", tier = 5, threatLevel = 23, maxHp = 1420, armor = 24,
@@ -958,7 +1133,7 @@ enum class MonsterType(
         xpReward = 2850, minDmg = 64, maxDmg = 112, goldMin = 560, goldMax = 980, moveIntervalTicks = 2,
         aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
         inflictsFire = true, isBoss = true, summonTypeName = "GOREK_RAIDER", maxSummons = 2,
-        specialKind = BossSpecialKind.LABYRINTH_PYRE, bossTitle = "Warden of the Gorek Labyrinth"
+        specialKind = BossSpecialKind.LABYRINTH_PYRE, bossTitle = "Warden of Vaelgor's Inner Sanctum"
     );
 
     fun threatBandFor(playerLevel: Int): ThreatBand = when {

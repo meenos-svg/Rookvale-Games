@@ -24,7 +24,7 @@ class MonsterProgressionTest {
 
     @Test
     fun allTwentyFiveMonstersScaleAcrossSixTiersAndSpawnOnWalkableNonPzTiles() {
-        assertEquals(27, MonsterType.entries.size)
+        assertEquals(58, MonsterType.entries.size)
         val tierAvgHp = (1..6).map { t ->
             MonsterType.entries.filter { it.tier == t && !it.isBoss }.map { it.maxHp }.average()
         }
@@ -43,14 +43,14 @@ class MonsterProgressionTest {
         assertTrue("Tier 5 Grimmaw armor must exceed classic Tier 4", tierAvgArmor[4] > tierAvgArmor[3])
         assertTrue("Tier 6 Gorek armor must exceed Tier 5 Grimmaw", tierAvgArmor[5] > tierAvgArmor[4])
 
-        // Every spawn coordinate across all 7 floors must be walkable and outside Protection Zone
+        // Every spawn coordinate across all floors must be walkable and outside Protection Zone
         val spawns = WorldMaps.initialMonsters()
-        assertTrue("Must spawn Broodmother Arachne on Floor -1", spawns.any { it.floor == -1 && it.type == MonsterType.BROODMOTHER_ARACHNE })
-        assertTrue("Must spawn Ignis Lord of the Pit on Floor -2", spawns.any { it.floor == -2 && it.type == MonsterType.IGNIS_LORD_OF_THE_PIT })
-        assertTrue("Must spawn Demon Lord on Floor -3", spawns.any { it.floor == -3 && it.type == MonsterType.DEMON_LORD })
-        assertTrue("Must spawn Elder Dragon on Floor -4", spawns.any { it.floor == -4 && it.type == MonsterType.ELDER_DRAGON })
-        assertTrue("Must spawn Kragor the Stone-Eyed on Floor -5", spawns.any { it.floor == -5 && it.type == MonsterType.KRAGOR_THE_STONE_EYED })
-        assertTrue("Must spawn Vaelgor the Labyrinth Warden on Floor -6", spawns.any { it.floor == -6 && it.type == MonsterType.VAELGOR_LABYRINTH_WARDEN })
+        assertTrue("Must spawn Broodmother Arachne in Briar Lower Boss Lair (-16)", spawns.any { it.floor == -16 && it.type == MonsterType.BROODMOTHER_ARACHNE })
+        assertTrue("Must spawn Ignis Lord of the Pit in Watchwood Lower Boss Lair (-21)", spawns.any { it.floor == -21 && it.type == MonsterType.IGNIS_LORD_OF_THE_PIT })
+        assertTrue("Must spawn Demon Lord on Deep Delve Floor -3", spawns.any { it.floor == -3 && it.type == MonsterType.DEMON_LORD })
+        assertTrue("Must spawn Elder Dragon on Deep Delve Floor -4", spawns.any { it.floor == -4 && it.type == MonsterType.ELDER_DRAGON })
+        assertTrue("Must spawn Kragor the Stone-Eyed in Grimmaw Lower Boss Lair (-22)", spawns.any { it.floor == -22 && it.type == MonsterType.KRAGOR_THE_STONE_EYED })
+        assertTrue("Must spawn Vaelgor the Labyrinth Warden in Gorek Lower Boss Lair (-23)", spawns.any { it.floor == -23 && it.type == MonsterType.VAELGOR_LABYRINTH_WARDEN })
         for (m in spawns) {
             val fl = WorldMaps.getFloor(m.floor)
             assertTrue(
