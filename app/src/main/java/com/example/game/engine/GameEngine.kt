@@ -1349,7 +1349,20 @@ object GameEngine {
         )
         s = grantExperience(s, m.scaledXpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
         val expiryHint = if (m.type.isBoss) "3m" else "90s"
-        return s.addLogInternal("Slain ${m.type.displayName} [Lvl ${m.level}]! (+${m.scaledXpReward} XP) Tap corpse to loot ($expiryHint).")
+        val potionQty = corpse.items.filter { it.itemId == "health_potion" }.sumOf { it.count }
+        val isGuaranteedPotion = MonsterLootTable.entryFor(m.type).guaranteedDrops.any { it.itemId == "health_potion" }
+        val rarePotionNote = if (potionQty > 0 && !isGuaranteedPotion) {
+            s = s.addFloatingInternal(m.floor, m.x.toFloat(), m.y.toFloat(), "RARE POTION!", FloatingTextKind.HEAL, nowMs)
+            " Rare drop: ${potionQty}x Health Potion!"
+        } else {
+            ""
+        }
+        val lootSummary = if (corpse.items.isEmpty() && corpse.gold > 0) {
+            "Dropped ${corpse.gold} gp ($expiryHint)."
+        } else {
+            "Tap corpse to loot ($expiryHint).$rarePotionNote"
+        }
+        return s.addLogInternal("Slain ${m.type.displayName} [Lvl ${m.level}]! (+${m.scaledXpReward} XP) $lootSummary")
     }
 
     /**
@@ -1988,6 +2001,13 @@ object GameEngine {
 
     fun selectFishingBait(state: GameWorldState, baitId: String, nowMs: Long = 0L): GameWorldState {
         val tier = FishingCatalog.tierForBait(baitId) ?: return state
+        val fishingLevel = state.skills.fishing.level
+        if (state.selectedBaitId == baitId) {
+            val barePct = (FishingCatalog.bareHookCatchChance(fishingLevel) * 100.0).toInt()
+            return state.copy(selectedBaitId = null)
+                .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "BARE HOOK", FloatingTextKind.INFO, nowMs)
+                .addLogInternal("Cleared Active Bait — now fishing with a bare hook ($barePct% small chance for Fresh Fish).")
+        }
         if (!state.hasItem(baitId)) {
             val name = ItemCatalog.get(baitId).name
             return state.addLogInternal("You don't have any $name in your backpack.")
@@ -1995,7 +2015,7 @@ object GameEngine {
         val baitDef = ItemCatalog.get(baitId)
         val fishDef = ItemCatalog.get(tier.fishId)
         val count = state.itemCount(baitId)
-        val fishingLevel = state.skills.fishing.level
+        val consumeRange = FishingCatalog.baitConsumeRangePercent(fishingLevel, tier)
         val next = state.copy(selectedBaitId = baitId)
         return if (!state.isAdmin && fishingLevel < tier.requiredFishingLevel) {
             next
@@ -2004,7 +2024,7 @@ object GameEngine {
         } else {
             next
                 .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "BAIT: ${baitDef.name}", FloatingTextKind.INFO, nowMs)
-                .addLogInternal("Baited hook with ${baitDef.name} (x$count) — targets ${fishDef.name} (+${fishDef.restoreAmount} HP).")
+                .addLogInternal("Baited hook with ${baitDef.name} (x$count) — targets ${fishDef.name} (+${fishDef.restoreAmount} HP, ${consumeRange.first}%–${consumeRange.last}% worm use on catch).")
         }
     }
 
@@ -2013,44 +2033,69 @@ object GameEngine {
         waterX: Int,
         waterY: Int,
         nowMs: Long,
-        catchRollOverride: Double? = null
+        catchRollOverride: Double? = null,
+        baitChancePercentOverride: Int? = null,
+        baitConsumeRollOverride: Double? = null
     ): GameWorldState {
         if (!state.hasItem("fishing_rod")) {
             return state.addLogInternal("You need a Fishing Rod in your backpack or Tool Bag to fish.")
         }
 
+        val currentFishingLevel = state.skills.fishing.level
         val activeBaitId = state.selectedBaitId
         val tier = FishingCatalog.tierForBait(activeBaitId)
-        if (tier == null || activeBaitId == null) {
-            val hint = if (state.carriedFishingBaitStacks().isNotEmpty()) {
-                "No Active Bait selected! Open your Backpack and tap a worm to set it as Active Bait."
+        val currentBaitCount = if (tier != null) state.itemCount(tier.baitId) else 0
+
+        // Bare-hook fallback: when no bait is selected or active worm stack is empty, allow casting with a small chance for Fresh Fish
+        if (tier == null || activeBaitId == null || currentBaitCount <= 0) {
+            var next = state.copy(
+                playerFacing = directionToward(state.playerX, state.playerY, waterX, waterY)
+            ).addProjectileInternal(
+                state.floor,
+                state.playerX.toFloat(),
+                state.playerY.toFloat(),
+                waterX.toFloat(),
+                waterY.toFloat(),
+                ProjectileKind.SPLASH,
+                nowMs,
+                340L
+            )
+            val bareFishDef = ItemCatalog.get(FishingCatalog.BARE_HOOK_FISH_ID)
+            val bareCatchChance = FishingCatalog.bareHookCatchChance(currentFishingLevel)
+            val barePct = (bareCatchChance * 100.0).toInt()
+            val roll = catchRollOverride ?: Random.nextDouble()
+
+            if (roll <= bareCatchChance) {
+                if (next.remainingCapOz() < bareFishDef.weightOz) {
+                    return next
+                        .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "CAP FULL", FloatingTextKind.INFO, nowMs)
+                        .addLogInternal("A ${bareFishDef.name} bit your bare hook, but you lack Cap (${bareFishDef.weightOz} oz needed)!")
+                }
+                next = advanceSkillPublic(next, SkillType.FISHING, FishingCatalog.BARE_HOOK_CATCH_XP, nowMs)
+                val updatedBackpack = addItemPublic(next.backpack, bareFishDef.id, 1)
+                next = next.copy(backpack = updatedBackpack)
+                    .addFloatingInternal(state.floor, waterX.toFloat(), waterY.toFloat(), "+1 ${bareFishDef.name}!", FloatingTextKind.HEAL, nowMs)
+                    .addLogInternal("Bare-hook catch! Landed a ${bareFishDef.name} without worms ($barePct% chance • Fishing ${next.skills.fishing.level})")
             } else {
-                "You have no fishing worms! Buy worms from Alaric's Shop or dig ore veins & chop trees to find them."
+                val baitHint = if (state.carriedFishingBaitStacks().isNotEmpty()) {
+                    "Pick a worm in your Backpack for higher odds & rare fish."
+                } else {
+                    "Buy worms at Alaric's Shop or dig ore veins & chop trees for higher odds!"
+                }
+                next = advanceSkillPublic(next, SkillType.FISHING, FishingCatalog.BARE_HOOK_MISS_XP, nowMs)
+                    .addFloatingInternal(state.floor, waterX.toFloat(), waterY.toFloat(), "Splash...", FloatingTextKind.INFO, nowMs)
+                    .addLogInternal("Cast a bare hook ($barePct% chance)... no bite yet. $baitHint")
             }
-            return state
-                .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "PICK BAIT", FloatingTextKind.INFO, nowMs)
-                .addLogInternal(hint)
+            return next
         }
 
         val baitDef = ItemCatalog.get(tier.baitId)
         val fishDef = ItemCatalog.get(tier.fishId)
-        val currentBaitCount = state.itemCount(tier.baitId)
-        if (currentBaitCount <= 0) {
-            val otherHint = if (state.carriedFishingBaitStacks().isNotEmpty()) {
-                "Pick another worm in your Backpack."
-            } else {
-                "Buy worms at Alaric's Shop or dig ore veins & chop trees to find more."
-            }
-            return state
-                .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "NO WORMS", FloatingTextKind.INFO, nowMs)
-                .addLogInternal("Out of ${baitDef.name}! $otherHint")
-        }
 
-        val currentFishingLevel = state.skills.fishing.level
         if (!state.isAdmin && currentFishingLevel < tier.requiredFishingLevel) {
             return state
                 .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "FISHING LV ${tier.requiredFishingLevel}", FloatingTextKind.INFO, nowMs)
-                .addLogInternal("Need Fishing Lv ${tier.requiredFishingLevel} to fish with ${baitDef.name} for ${fishDef.name} (you: Lv $currentFishingLevel). Select a lower worm in your Backpack.")
+                .addLogInternal("Need Fishing Lv ${tier.requiredFishingLevel} to fish with ${baitDef.name} for ${fishDef.name} (you: Lv $currentFishingLevel). Select a lower worm or Clear bait for bare hook.")
         }
 
         var next = state.copy(
@@ -2071,20 +2116,42 @@ object GameEngine {
         val roll = catchRollOverride ?: Random.nextDouble()
 
         if (roll <= catchChance) {
-            // Do not consume bait if carrying capacity cannot hold the fish
-            val netExtraWeight = (fishDef.weightOz - baitDef.weightOz).coerceAtLeast(0.0)
+            val consumeRange = FishingCatalog.baitConsumeRangePercent(currentFishingLevel, tier)
+            val rolledConsumePct = (
+                baitChancePercentOverride ?: Random.nextInt(consumeRange.first, consumeRange.last + 1)
+                ).coerceIn(consumeRange.first, consumeRange.last)
+            val consumeRoll = baitConsumeRollOverride ?: Random.nextDouble()
+            val consumedWorm = consumeRoll < (rolledConsumePct / 100.0)
+
+            // Validate exact carrying capacity based on whether the worm is consumed or saved
+            val netExtraWeight = if (consumedWorm) {
+                (fishDef.weightOz - baitDef.weightOz).coerceAtLeast(0.0)
+            } else {
+                fishDef.weightOz
+            }
             if (next.remainingCapOz() < netExtraWeight) {
                 return next
                     .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "CAP FULL", FloatingTextKind.INFO, nowMs)
                     .addLogInternal("A ${fishDef.name} bit, but you lack Cap (${fishDef.weightOz} oz needed)! No worm lost.")
             }
+
             next = advanceSkillPublic(next, SkillType.FISHING, tier.catchXpPoints, nowMs)
-            val afterBaitRemoved = removeItemPublic(next.backpack, tier.baitId, 1)
-            val updatedBackpack = addItemPublic(afterBaitRemoved, tier.fishId, 1)
+            val afterBaitStep = if (consumedWorm) removeItemPublic(next.backpack, tier.baitId, 1) else next.backpack
+            val updatedBackpack = addItemPublic(afterBaitStep, tier.fishId, 1)
             val remainingWorms = updatedBackpack.filter { it.itemId == tier.baitId }.sumOf { it.count }
             next = next.copy(backpack = updatedBackpack)
                 .addFloatingInternal(state.floor, waterX.toFloat(), waterY.toFloat(), "+1 ${fishDef.name}!", FloatingTextKind.HEAL, nowMs)
-                .addLogInternal("Caught a ${fishDef.name}! (-1 ${baitDef.name}, $remainingWorms left • Fishing ${next.skills.fishing.level})")
+            next = if (consumedWorm) {
+                next.addLogInternal(
+                    "Caught a ${fishDef.name}! (-1 ${baitDef.name} on $rolledConsumePct% roll, $remainingWorms left • Fishing ${next.skills.fishing.level})"
+                )
+            } else {
+                next
+                    .addFloatingInternal(state.floor, state.playerX.toFloat(), state.playerY.toFloat(), "BAIT SAVED!", FloatingTextKind.INFO, nowMs)
+                    .addLogInternal(
+                        "Caught a ${fishDef.name}! Worm saved ($rolledConsumePct% use roll • $remainingWorms ${baitDef.name} left • Fishing ${next.skills.fishing.level})"
+                    )
+            }
         } else {
             // Miss: ZERO worms consumed; still award modest Fishing skill practice XP
             next = advanceSkillPublic(next, SkillType.FISHING, tier.missXpPoints, nowMs)
@@ -4042,27 +4109,49 @@ object GameEngine {
 
     private fun formatGold(amount: Long): String = String.format(java.util.Locale.US, "%,d", amount)
 
-    fun buyShopItem(state: GameWorldState, itemId: String): GameWorldState {
+    fun maxShopBuyQuantity(state: GameWorldState, itemId: String, requestedQuantity: Int): Int {
+        val qty = requestedQuantity.coerceAtLeast(1)
+        val def = ItemCatalog.get(itemId)
+        if (def.buyPrice <= 0) return 0
+        val maxByGold = state.gold / def.buyPrice
+        if (maxByGold <= 0) return 0
+        val netWeightPerUnit = def.carriedWeightOz() - def.buyPrice * GOLD_COIN_WEIGHT_OZ
+        val maxByCap = if (netWeightPerUnit <= 1e-6) {
+            qty
+        } else {
+            ((state.remainingCapOz() + 1e-6) / netWeightPerUnit).toInt().coerceAtLeast(0)
+        }
+        return minOf(qty, maxByGold, maxByCap)
+    }
+
+    fun buyShopItem(state: GameWorldState, itemId: String, quantity: Int = 1): GameWorldState {
+        val req = quantity.coerceAtLeast(1)
         val def = ItemCatalog.get(itemId)
         if (def.buyPrice <= 0) return state
         if (state.gold < def.buyPrice) return state.addLogInternal("Not enough Gold (${def.buyPrice} gp required).")
-        val neededWeight = def.carriedWeightOz()
-        val netWeightDelta = neededWeight - def.buyPrice * 0.1
-        if (netWeightDelta > 0 && state.remainingCapOz() < netWeightDelta) {
-            return state.addLogInternal("Too heavy! Need ${String.format("%.1f", neededWeight)} oz Cap.")
+        val actualQty = maxShopBuyQuantity(state, itemId, req)
+        if (actualQty <= 0) {
+            return state.addLogInternal("Too heavy! Need ${String.format("%.1f", def.carriedWeightOz())} oz Cap.")
         }
+        val totalCost = def.buyPrice * actualQty
         val bagNote = if (def.isTool) " (packed in Tool Bag)" else ""
-        return addCarriedItem(state.copy(gold = state.gold - def.buyPrice), itemId, 1)
-            .addLogInternal("Bought ${def.name} for ${def.buyPrice} gp$bagNote.")
+        val qtyPrefix = if (actualQty > 1) "${actualQty}x " else ""
+        val clampNote = if (actualQty < req) " (max affordable/Cap)" else ""
+        return addCarriedItem(state.copy(gold = state.gold - totalCost), itemId, actualQty)
+            .addLogInternal("Bought $qtyPrefix${def.name} for $totalCost gp$bagNote$clampNote.")
     }
 
-    fun sellBackpackItem(state: GameWorldState, itemId: String): GameWorldState {
-        if (!state.hasItem(itemId)) return state
+    fun sellBackpackItem(state: GameWorldState, itemId: String, quantity: Int = 1): GameWorldState {
+        val owned = state.itemCount(itemId)
+        if (owned <= 0) return state
         val def = ItemCatalog.get(itemId)
         if (def.adminOnly || def.sellPrice <= 0) return state.addLogInternal("Alaric isn't interested in ${def.name}.")
-        return removeCarriedItem(state, itemId, 1)
-            .let { it.copy(gold = it.gold + def.sellPrice) }
-            .addLogInternal("Sold ${def.name} for ${def.sellPrice} gp.")
+        val actualQty = minOf(quantity.coerceAtLeast(1), owned)
+        val totalGain = def.sellPrice * actualQty
+        val qtyPrefix = if (actualQty > 1) "${actualQty}x " else ""
+        return removeCarriedItem(state, itemId, actualQty)
+            .let { it.copy(gold = it.gold + totalGain) }
+            .addLogInternal("Sold $qtyPrefix${def.name} for $totalGain gp.")
     }
 
     fun addCarriedItem(state: GameWorldState, itemId: String, amount: Int): GameWorldState {

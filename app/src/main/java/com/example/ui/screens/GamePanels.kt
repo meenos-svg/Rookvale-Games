@@ -122,8 +122,8 @@ fun SlideUpGamePanel(
     onDepositAllGold: () -> Unit = {},
     onWithdrawGold: (Long) -> Unit = {},
     onWithdrawAllGold: () -> Unit = {},
-    onBuyItem: (String) -> Unit,
-    onSellItem: (String) -> Unit,
+    onBuyItem: (String, Int) -> Unit,
+    onSellItem: (String, Int) -> Unit,
     onCraftRecipe: (String) -> Unit,
     onBindRune: (String) -> Unit = {},
     onWalkToTile: (Int, Int) -> Unit = { _, _ -> },
@@ -638,6 +638,8 @@ private fun BackpackPanelContent(
                 val activeTier = FishingCatalog.tierForBait(activeBait?.id)
                 val targetFish = activeTier?.let { ItemCatalog.get(it.fishId) }
                 val baitLevelMet = activeTier == null || state.isAdmin || state.skills.fishing.level >= activeTier.requiredFishingLevel
+                val bareHookPct = (FishingCatalog.bareHookCatchChance(state.skills.fishing.level) * 100.0).toInt()
+                val consumeRange = activeTier?.let { FishingCatalog.baitConsumeRangePercent(state.skills.fishing.level, it) }
                 val stripBorder = when {
                     activeBait == null || activeBaitCount <= 0 -> StoneBorderLight.copy(alpha = 0.7f)
                     !baitLevelMet -> HealthCrimson.copy(alpha = 0.75f)
@@ -670,8 +672,8 @@ private fun BackpackPanelContent(
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                             Text(
                                 text = when {
-                                    activeBait == null -> "Active Bait: None (Fishing Lv ${state.skills.fishing.level})"
-                                    activeBaitCount <= 0 -> "Active Bait: ${activeBait.name} (Empty — 0 left)"
+                                    activeBait == null -> "Active Bait: Bare Hook (Fishing Lv ${state.skills.fishing.level})"
+                                    activeBaitCount <= 0 -> "Active Bait: ${activeBait.name} Empty — Bare Hook"
                                     else -> "Active Bait: ${activeBait.name} x$activeBaitCount (Fishing Lv ${state.skills.fishing.level})"
                                 },
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
@@ -686,11 +688,11 @@ private fun BackpackPanelContent(
                             Text(
                                 text = when {
                                     activeBait == null || activeBaitCount <= 0 ->
-                                        "Tap 'Set Bait' on any worm below • Worms are only used when you catch a fish"
+                                        "Bare hook active ($bareHookPct% small chance for Fresh Fish) • Set a worm below for higher odds & rare fish"
                                     !baitLevelMet && activeTier != null ->
-                                        "Requires Fishing Lv ${activeTier.requiredFishingLevel} to catch ${targetFish?.name ?: "fish"} • Pick a lower worm"
-                                    targetFish != null ->
-                                        "Targets ${targetFish.name} (+${targetFish.restoreAmount} HP) • Used only on catch"
+                                        "Requires Fishing Lv ${activeTier.requiredFishingLevel} to catch ${targetFish?.name ?: "fish"} • Pick a lower worm or Clear"
+                                    targetFish != null && consumeRange != null ->
+                                        "Targets ${targetFish.name} (+${targetFish.restoreAmount} HP) • ${consumeRange.first}%–${consumeRange.last}% worm use on catch (0% on miss)"
                                     else -> "Ready to fish"
                                 },
                                 style = MaterialTheme.typography.labelSmall,
@@ -698,6 +700,24 @@ private fun BackpackPanelContent(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
+                        }
+                        if (activeBait != null) {
+                            OutlinedButton(
+                                onClick = { onUseItem(activeBait.id) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                border = BorderStroke(1.dp, StoneBorderLight),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier
+                                    .height(30.dp)
+                                    .testTag("backpack_clear_bait_btn")
+                            ) {
+                                Text(
+                                    text = "Clear",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = ParchmentLight,
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                 }
@@ -722,7 +742,7 @@ private fun BackpackPanelContent(
                         val actionLabel = when {
                             isAdminScroll -> "Unseal"
                             isCastableRune -> "Cast"
-                            isFishingBait -> if (isActiveBait) "Active" else "Set Bait"
+                            isFishingBait -> if (isActiveBait) "Unset" else "Set Bait"
                             isFood -> "Eat"
                             def.category == ItemCategory.AMMO -> "Load"
                             def.equipSlot != null -> "Equip"
@@ -1005,20 +1025,59 @@ private fun SkillBarRow(
 @Composable
 private fun ShopPanelContent(
     state: GameWorldState,
-    onBuy: (String) -> Unit,
-    onSell: (String) -> Unit,
+    onBuy: (String, Int) -> Unit,
+    onSell: (String, Int) -> Unit,
     onInspectItem: (InspectedItemRequest) -> Unit
 ) {
     var tab by remember { mutableIntStateOf(0) }
+    var selectedQty by remember { mutableIntStateOf(1) }
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             PanelTabChip("Buy Supplies", tab == 0, { tab = 0 }, Modifier.weight(1f))
             PanelTabChip("Sell Loot", tab == 1, { tab = 1 }, Modifier.weight(1f))
             Text("${state.gold} gp", style = MaterialTheme.typography.labelLarge, color = TorchGold)
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Qty:",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = ParchmentMuted
+            )
+            listOf(1, 5, 10).forEach { qty ->
+                val selected = selectedQty == qty
+                Surface(
+                    color = if (selected) TorchGold else StoneSurface,
+                    shape = RoundedCornerShape(6.dp),
+                    border = BorderStroke(1.dp, if (selected) TorchGold else StoneBorderLight.copy(alpha = 0.7f)),
+                    modifier = Modifier
+                        .clickable { selectedQty = qty }
+                        .testTag("shop_qty_$qty")
+                ) {
+                    Text(
+                        text = "x$qty",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = if (selected) ObsidianVoid else ParchmentLight,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = if (selectedQty > 1) "Clamps to max valid" else "Single item",
+                style = MaterialTheme.typography.labelSmall,
+                color = ParchmentMuted,
+                maxLines = 1
+            )
         }
         if (tab == 0) {
             LazyColumn(contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1035,18 +1094,23 @@ private fun ShopPanelContent(
                         val reqNote = if (def.equipSlot != null && def.requiredLevel > 1) " • Req Lv ${def.requiredLevel}" else ""
                         "${def.buyPrice} gp • $wt$reqNote • ${def.description}"
                     }
+                    val maxCanBuy = GameEngine.maxShopBuyQuantity(state, itemId, selectedQty)
+                    val displayQty = if (maxCanBuy > 0) maxCanBuy else selectedQty
+                    val totalPrice = def.buyPrice * displayQty
+                    val buyLabel = if (displayQty > 1) "Buy x$displayQty (${totalPrice}g)" else "Buy ${def.buyPrice}g"
+                    val inspectLabel = if (displayQty > 1) "Buy x$displayQty ($totalPrice gp)" else "Buy (${def.buyPrice} gp)"
                     ItemActionRow(
                         stack = ItemStack(itemId, 1),
                         subtitleOverride = shopSubtitle,
                         subtitleColor = if (isBait && !baitMeetsFish) HealthCrimson else ParchmentMuted,
-                        primaryLabel = "Buy ${def.buyPrice}g",
-                        onPrimary = { onBuy(itemId) },
+                        primaryLabel = buyLabel,
+                        onPrimary = { onBuy(itemId, selectedQty) },
                         onInspect = {
                             onInspectItem(
                                 InspectedItemRequest(
                                     itemId = itemId,
-                                    primaryActionLabel = "Buy (${def.buyPrice} gp)",
-                                    onPrimaryAction = { onBuy(itemId) }
+                                    primaryActionLabel = inspectLabel,
+                                    onPrimaryAction = { onBuy(itemId, selectedQty) }
                                 )
                             )
                         }
@@ -1069,17 +1133,22 @@ private fun ShopPanelContent(
                         val stack = entry.stack
                         val def = ItemCatalog.get(stack.itemId)
                         val bagTag = if (def.isTool) "Tool Bag • " else ""
+                        val ownedTotal = state.itemCount(stack.itemId)
+                        val sellQty = minOf(selectedQty, ownedTotal).coerceAtLeast(1)
+                        val totalGain = def.sellPrice * sellQty
+                        val sellLabel = if (sellQty > 1) "Sell x$sellQty (+${totalGain}g)" else "Sell +${def.sellPrice}g"
+                        val inspectLabel = if (sellQty > 1) "Sell x$sellQty (+$totalGain gp)" else "Sell (+${def.sellPrice} gp)"
                         ItemActionRow(
                             stack = stack,
                             subtitleOverride = "${bagTag}Sells for ${def.sellPrice} gp • ${formatOz(def.carriedWeightOz())} oz",
-                            primaryLabel = "Sell +${def.sellPrice}g",
-                            onPrimary = { onSell(stack.itemId) },
+                            primaryLabel = sellLabel,
+                            onPrimary = { onSell(stack.itemId, selectedQty) },
                             onInspect = {
                                 onInspectItem(
                                     InspectedItemRequest(
                                         itemId = stack.itemId,
-                                        primaryActionLabel = "Sell (+${def.sellPrice} gp)",
-                                        onPrimaryAction = { onSell(stack.itemId) }
+                                        primaryActionLabel = inspectLabel,
+                                        onPrimaryAction = { onSell(stack.itemId, selectedQty) }
                                     )
                                 )
                             }

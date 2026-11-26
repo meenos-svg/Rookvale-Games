@@ -347,4 +347,95 @@ class SharedLootAndTradeTest {
         assertEquals(2, worldB.itemCount("health_potion")) // 0 + 2
         assertEquals(1, worldB.itemCount("mana_potion")) // 4 - 3
     }
+
+    @Test
+    fun shopBatchBuyAndSellClampToGoldCapAndStock() {
+        // Health Potion: buyPrice = 45 gp, sellPrice = 18 gp, weight = 2.7 oz
+        // Cheese: buyPrice = 6 gp, sellPrice = 2 gp, weight = 4.0 oz (net weight per unit = 4.0 - 0.6 = 3.4 oz)
+        val base = GameEngine.createNewWorld("Merchant", Vocation.KNIGHT).copy(
+            gold = 600,
+            backpack = emptyList(),
+            maxCapOz = 400.0
+        )
+
+        // 1. Buy x5 Health Potions cleanly (5 * 45 = 225 gp)
+        val afterBuy5 = GameEngine.buyShopItem(base, "health_potion", quantity = 5)
+        assertEquals(5, afterBuy5.itemCount("health_potion"))
+        assertEquals(600 - 225, afterBuy5.gold)
+
+        // 2. Request x10 Health Potions with 150 gp -> clamps to 3 (3 * 45 = 135 gp)
+        val lowGold = afterBuy5.copy(gold = 150)
+        assertEquals(3, GameEngine.maxShopBuyQuantity(lowGold, "health_potion", 10))
+        val afterClampedGold = GameEngine.buyShopItem(lowGold, "health_potion", quantity = 10)
+        assertEquals(8, afterClampedGold.itemCount("health_potion"))
+        assertEquals(15, afterClampedGold.gold)
+
+        // 3. Request x10 Cheese when Cap only fits 2 units (net weight 3.4 oz/unit -> 8.0 oz free fits 2)
+        val tightCapBase = base.copy(gold = 200, backpack = emptyList())
+        val tightCap = tightCapBase.copy(maxCapOz = tightCapBase.usedCapOz() + 8.0)
+        assertEquals(2, GameEngine.maxShopBuyQuantity(tightCap, "cheese", 10))
+        val afterClampedCap = GameEngine.buyShopItem(tightCap, "cheese", quantity = 10)
+        assertEquals(2, afterClampedCap.itemCount("cheese"))
+        assertEquals(200 - 12, afterClampedCap.gold)
+
+        // 4. Sell x5 Health Potions from 8 owned -> leaves 3, adds 5 * 18 = 90 gp
+        val afterSell5 = GameEngine.sellBackpackItem(afterClampedGold, "health_potion", quantity = 5)
+        assertEquals(3, afterSell5.itemCount("health_potion"))
+        assertEquals(15 + 90, afterSell5.gold)
+
+        // 5. Sell x10 Health Potions with only 3 left -> clamps to 3, adds 3 * 18 = 54 gp
+        val afterSellClamped = GameEngine.sellBackpackItem(afterSell5, "health_potion", quantity = 10)
+        assertEquals(0, afterSellClamped.itemCount("health_potion"))
+        assertEquals(105 + 54, afterSellClamped.gold)
+    }
+
+    @Test
+    fun tradeBatchItemQuantitiesAndOneFiveTenAllGoldControls() {
+        val worldA = GameWorldState(
+            saveId = "p_a",
+            playerName = "Roland",
+            level = 15,
+            vocation = Vocation.KNIGHT,
+            gold = 23,
+            backpack = listOf(ItemStack("garden_worm", 12))
+        )
+        val peerB = RemotePlayerState(
+            playerId = "p_b",
+            name = "Lyra",
+            level = 14,
+            vocation = Vocation.PALADIN,
+            tunicColorIndex = 0,
+            hairColorIndex = 0,
+            x = 201,
+            y = 200,
+            floor = 0,
+            hp = 200,
+            maxHp = 200
+        )
+        val now = 200_000L
+        var sess = PlayerTradeCoordinator.startOutgoingInvite(worldA, null, peerB, now).session!!
+            .copy(status = TradeSessionStatus.NEGOTIATING)
+
+        // Gold quick increments: +1 -> 1, +5 -> 6, +10 -> 16, All -> 23
+        sess = PlayerTradeCoordinator.setLocalGold(worldA, sess, (sess.localOffer.gold + 1).coerceAtMost(worldA.gold)).session!!
+        assertEquals(1, sess.localOffer.gold)
+        sess = PlayerTradeCoordinator.setLocalGold(worldA, sess, (sess.localOffer.gold + 5).coerceAtMost(worldA.gold)).session!!
+        assertEquals(6, sess.localOffer.gold)
+        sess = PlayerTradeCoordinator.setLocalGold(worldA, sess, (sess.localOffer.gold + 10).coerceAtMost(worldA.gold)).session!!
+        assertEquals(16, sess.localOffer.gold)
+        sess = PlayerTradeCoordinator.setLocalGold(worldA, sess, worldA.gold).session!!
+        assertEquals(23, sess.localOffer.gold)
+
+        // Item batch add x5 -> 5, add x10 -> clamps at 12 owned
+        sess = PlayerTradeCoordinator.addLocalItem(worldA, sess, "garden_worm", 5).session!!
+        assertEquals(5, sess.localOffer.items.first { it.itemId == "garden_worm" }.count)
+        sess = PlayerTradeCoordinator.addLocalItem(worldA, sess, "garden_worm", 10).session!!
+        assertEquals(12, sess.localOffer.items.first { it.itemId == "garden_worm" }.count)
+
+        // Item batch remove x5 -> 7, remove x10 -> clamps to 0 (removed from list)
+        sess = PlayerTradeCoordinator.removeLocalItem(worldA, sess, "garden_worm", 5).session!!
+        assertEquals(7, sess.localOffer.items.first { it.itemId == "garden_worm" }.count)
+        sess = PlayerTradeCoordinator.removeLocalItem(worldA, sess, "garden_worm", 10).session!!
+        assertTrue(sess.localOffer.items.isEmpty())
+    }
 }

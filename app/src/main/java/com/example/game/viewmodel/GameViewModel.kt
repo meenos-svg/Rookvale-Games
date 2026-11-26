@@ -1880,13 +1880,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (changed) persistCurrentState(silent = true)
     }
 
-    fun buyItem(itemId: String) {
-        _world.update { GameEngine.buyShopItem(it, itemId) }
+    fun buyItem(itemId: String, quantity: Int = 1) {
+        _world.update { GameEngine.buyShopItem(it, itemId, quantity) }
         persistCurrentState(silent = true)
     }
 
-    fun sellItem(itemId: String) {
-        _world.update { GameEngine.sellBackpackItem(it, itemId) }
+    fun sellItem(itemId: String, quantity: Int = 1) {
+        _world.update { GameEngine.sellBackpackItem(it, itemId, quantity) }
         persistCurrentState(silent = true)
     }
 

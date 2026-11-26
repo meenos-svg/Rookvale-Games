@@ -42,7 +42,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -282,6 +285,7 @@ fun PlayerTradeLedgerModal(
 ) {
     BackHandler(onBack = onCancel)
 
+    var itemQty by remember { mutableIntStateOf(1) }
     val netDeltaOz = remember(session.localOffer, session.partnerOffer) {
         GameEngine.tradeNetWeightDeltaOz(
             outgoingGold = session.localOffer.gold,
@@ -402,7 +406,8 @@ fun PlayerTradeLedgerModal(
                     offer = session.localOffer,
                     accentColor = TorchGold,
                     isEditable = true,
-                    onRemoveItem = { itemId -> onRemoveItem(itemId, 1) },
+                    removeQty = itemQty,
+                    onRemoveItem = { itemId -> onRemoveItem(itemId, itemQty) },
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
@@ -412,6 +417,7 @@ fun PlayerTradeLedgerModal(
                     offer = session.partnerOffer,
                     accentColor = ManaSapphire,
                     isEditable = false,
+                    removeQty = 1,
                     onRemoveItem = null,
                     modifier = Modifier
                         .weight(1f)
@@ -445,16 +451,16 @@ fun PlayerTradeLedgerModal(
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = TorchGold
                     )
+                    TradeGoldChip("+1", enabled = state.gold > session.localOffer.gold, tag = "trade_gold_add_1") {
+                        onSetGold((session.localOffer.gold + 1).coerceAtMost(state.gold))
+                    }
+                    TradeGoldChip("+5", enabled = state.gold > session.localOffer.gold, tag = "trade_gold_add_5") {
+                        onSetGold((session.localOffer.gold + 5).coerceAtMost(state.gold))
+                    }
                     TradeGoldChip("+10", enabled = state.gold > session.localOffer.gold, tag = "trade_gold_add_10") {
                         onSetGold((session.localOffer.gold + 10).coerceAtMost(state.gold))
                     }
-                    TradeGoldChip("+100", enabled = state.gold > session.localOffer.gold, tag = "trade_gold_add_100") {
-                        onSetGold((session.localOffer.gold + 100).coerceAtMost(state.gold))
-                    }
-                    TradeGoldChip("+1K", enabled = state.gold > session.localOffer.gold, tag = "trade_gold_add_1000") {
-                        onSetGold((session.localOffer.gold + 1000).coerceAtMost(state.gold))
-                    }
-                    TradeGoldChip("Max", enabled = state.gold > session.localOffer.gold, tag = "trade_gold_max") {
+                    TradeGoldChip("All", enabled = state.gold > session.localOffer.gold, tag = "trade_gold_all") {
                         onSetGold(state.gold)
                     }
                     if (session.localOffer.gold > 0) {
@@ -462,6 +468,45 @@ fun PlayerTradeLedgerModal(
                             onSetGold(0)
                         }
                     }
+                }
+
+                // Item batch quantity toggle bar (x1, x5, x10)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Text(
+                        text = "Items:",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = ParchmentMuted
+                    )
+                    listOf(1, 5, 10).forEach { qty ->
+                        val selected = itemQty == qty
+                        Surface(
+                            color = if (selected) TorchGold else StoneSurface,
+                            shape = RoundedCornerShape(5.dp),
+                            border = BorderStroke(1.dp, if (selected) TorchGold else StoneBorderLight.copy(alpha = 0.65f)),
+                            modifier = Modifier
+                                .clickable { itemQty = qty }
+                                .testTag("trade_qty_$qty")
+                        ) {
+                            Text(
+                                text = "x$qty",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.ExtraBold),
+                                color = if (selected) ObsidianVoid else ParchmentLight,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = "Tap bag to add • offer to remove",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        color = ParchmentMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
                 if (tradeableStacks.isEmpty()) {
@@ -480,6 +525,7 @@ fun PlayerTradeLedgerModal(
                     ) {
                         items(tradeableStacks, key = { it.itemId }) { stack ->
                             val remaining = (stack.count - (offeredById[stack.itemId] ?: 0)).coerceAtLeast(0)
+                            val addAmt = minOf(itemQty, remaining).coerceAtLeast(1)
                             val def = ItemCatalog.get(stack.itemId)
                             val bmp = remember(stack.itemId) { EntitySpriteAtlas.itemIcon(stack.itemId) }
                             Surface(
@@ -487,7 +533,7 @@ fun PlayerTradeLedgerModal(
                                 shape = RoundedCornerShape(6.dp),
                                 border = BorderStroke(1.dp, StoneBorderLight.copy(alpha = 0.65f)),
                                 modifier = Modifier
-                                    .clickable { onAddItem(stack.itemId, 1) }
+                                    .clickable { onAddItem(stack.itemId, itemQty) }
                                     .testTag("trade_bag_item_${stack.itemId}")
                             ) {
                                 Row(
@@ -511,7 +557,7 @@ fun PlayerTradeLedgerModal(
                                             modifier = Modifier.widthIn(max = 96.dp)
                                         )
                                         Text(
-                                            text = "+1 (x$remaining)",
+                                            text = "+$addAmt (x$remaining)",
                                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                             color = TorchGold
                                         )
@@ -608,6 +654,7 @@ private fun TradeOfferPane(
     offer: TradeOfferSnapshot,
     accentColor: Color,
     isEditable: Boolean,
+    removeQty: Int = 1,
     onRemoveItem: ((String) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
@@ -741,8 +788,9 @@ private fun TradeOfferPane(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     if (isEditable) {
+                                        val remAmt = minOf(removeQty, stack.count).coerceAtLeast(1)
                                         Text(
-                                            text = "Tap to remove 1",
+                                            text = "Tap to remove $remAmt",
                                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
                                             color = ParchmentMuted
                                         )

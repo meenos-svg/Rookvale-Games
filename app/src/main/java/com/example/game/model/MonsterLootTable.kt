@@ -816,7 +816,31 @@ object MonsterLootTable {
         entries[type] ?: MonsterLootEntry(minGp = type.goldMin, maxGp = type.goldMax)
 
     /**
-     * Rolls guaranteed gold, guaranteed items, independent drop-chance triggers, and weighted bonus picks.
+     * Common gold-only loot chance for non-boss monsters (~48% of regular kills drop just gold
+     * instead of rolling the monster's valuable item table, so not every kill is guaranteed valuable).
+     */
+    const val COMMON_GOLD_ONLY_CHANCE: Float = 0.48f
+
+    /**
+     * Universal rare Health Potion drop chance for any monster species whose table
+     * does not already explicitly include `health_potion` in its guaranteed or weighted drops.
+     * Scales gently with monster strength (5% low-tier, 7% mid-tier, 9% high-tier, 14% boss).
+     */
+    fun rareHealthPotionChance(type: MonsterType): Float = when {
+        type.isBoss -> 0.14f
+        type.maxHp >= 300 -> 0.09f
+        type.maxHp >= 100 -> 0.07f
+        else -> 0.05f
+    }
+
+    fun hasExplicitHealthPotion(table: MonsterLootEntry): Boolean =
+        table.guaranteedDrops.any { it.itemId == "health_potion" } ||
+            table.weightedDrops.any { it.itemId == "health_potion" }
+
+    /**
+     * Rolls gold plus either a common gold-only outcome on regular monsters (~48% chance) or
+     * the species' guaranteed, independent weighted, and boss bonus drops, alongside the
+     * universal rare Health Potion roll for monsters without an explicit potion entry.
      * Merges duplicate stackable items into clean [ItemStack] entries.
      */
     fun rollLoot(type: MonsterType, rng: Random = Random.Default): RolledLoot {
@@ -826,45 +850,55 @@ object MonsterLootTable {
         val gold = if (lo == hi) lo else rng.nextInt(lo, hi + 1)
 
         val rolled = mutableListOf<ItemStack>()
-        rolled.addAll(table.guaranteedDrops)
+        val isCommonGoldOnly = !type.isBoss && rng.nextFloat() < COMMON_GOLD_ONLY_CHANCE
 
-        // Independent chance evaluation per weighted entry
-        val pickedIds = mutableSetOf<String>()
-        for (drop in table.weightedDrops) {
-            if (rng.nextFloat() <= drop.dropChance.coerceIn(0f, 1f)) {
-                val qty = rollQty(drop.minQty, drop.maxQty, rng)
-                if (qty > 0) {
-                    rolled.add(ItemStack(drop.itemId, qty))
-                    pickedIds.add(drop.itemId)
+        if (!isCommonGoldOnly) {
+            rolled.addAll(table.guaranteedDrops)
+
+            // Independent chance evaluation per weighted entry
+            val pickedIds = mutableSetOf<String>()
+            for (drop in table.weightedDrops) {
+                if (rng.nextFloat() <= drop.dropChance.coerceIn(0f, 1f)) {
+                    val qty = rollQty(drop.minQty, drop.maxQty, rng)
+                    if (qty > 0) {
+                        rolled.add(ItemStack(drop.itemId, qty))
+                        pickedIds.add(drop.itemId)
+                    }
+                }
+            }
+
+            // Weighted bonus roll(s) reserved for bosses so regular monsters are never forced to drop items
+            if (type.isBoss && table.weightedDrops.isNotEmpty() && table.bonusWeightRolls > 0) {
+                val totalWeight = table.weightedDrops.sumOf { it.weight.coerceAtLeast(1) }
+                repeat(table.bonusWeightRolls) {
+                    var cursor = rng.nextInt(totalWeight)
+                    var chosen = table.weightedDrops.first()
+                    for (drop in table.weightedDrops) {
+                        val w = drop.weight.coerceAtLeast(1)
+                        if (cursor < w) {
+                            chosen = drop
+                            break
+                        }
+                        cursor -= w
+                    }
+                    val isEquip = ItemCatalog.all[chosen.itemId]?.stackable == false
+                    if (!isEquip || chosen.itemId !in pickedIds) {
+                        val qty = rollQty(chosen.minQty, chosen.maxQty, rng)
+                        if (qty > 0) {
+                            rolled.add(ItemStack(chosen.itemId, qty))
+                            pickedIds.add(chosen.itemId)
+                        }
+                    }
                 }
             }
         }
 
-        // Weighted bonus roll(s) so bosses and stronger foes reliably drop creature-themed loot
-        if (table.weightedDrops.isNotEmpty() && table.bonusWeightRolls > 0) {
-            val totalWeight = table.weightedDrops.sumOf { it.weight.coerceAtLeast(1) }
-            val rollsNeeded = if (type.isBoss) table.bonusWeightRolls else {
-                if (rolled.isEmpty()) 1 else 0
-            }
-            repeat(rollsNeeded) {
-                var cursor = rng.nextInt(totalWeight)
-                var chosen = table.weightedDrops.first()
-                for (drop in table.weightedDrops) {
-                    val w = drop.weight.coerceAtLeast(1)
-                    if (cursor < w) {
-                        chosen = drop
-                        break
-                    }
-                    cursor -= w
-                }
-                val isEquip = ItemCatalog.all[chosen.itemId]?.stackable == false
-                if (!isEquip || chosen.itemId !in pickedIds) {
-                    val qty = rollQty(chosen.minQty, chosen.maxQty, rng)
-                    if (qty > 0) {
-                        rolled.add(ItemStack(chosen.itemId, qty))
-                        pickedIds.add(chosen.itemId)
-                    }
-                }
+        // Universal rare Health Potion drop for any monster species without an explicit potion entry
+        if (!hasExplicitHealthPotion(table)) {
+            val rareChance = rareHealthPotionChance(type)
+            if (rng.nextFloat() <= rareChance) {
+                val qty = if (type.isBoss || type.maxHp >= 300) rollQty(1, 2, rng) else 1
+                rolled.add(ItemStack("health_potion", qty))
             }
         }
 

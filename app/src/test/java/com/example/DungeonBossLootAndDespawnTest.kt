@@ -172,6 +172,77 @@ class DungeonBossLootAndDespawnTest {
     }
 
     @Test
+    fun allMonstersHaveRareHealthPotionDropChance() {
+        // Verify rare drop chances scale cleanly with monster strength
+        assertEquals(0.05f, MonsterLootTable.rareHealthPotionChance(MonsterType.CAVE_RAT), 0.0001f)
+        assertEquals(0.07f, MonsterLootTable.rareHealthPotionChance(MonsterType.GHOUL), 0.0001f)
+        assertEquals(0.09f, MonsterLootTable.rareHealthPotionChance(MonsterType.NECROMANCER), 0.0001f)
+        assertEquals(0.14f, MonsterLootTable.rareHealthPotionChance(MonsterType.ELDER_DRAGON), 0.0001f)
+
+        // Verify monsters without an explicit potion entry drop Health Potions rarely (not every kill, > 0 over 400 kills)
+        val sampleSpecies = listOf(
+            MonsterType.CAVE_RAT,
+            MonsterType.SKELETON,
+            MonsterType.GHOUL,
+            MonsterType.NECROMANCER,
+            MonsterType.ELDER_DRAGON
+        )
+        for (type in sampleSpecies) {
+            val rng = Random(1234 + type.ordinal)
+            var potionDrops = 0
+            val trials = 400
+            repeat(trials) {
+                val rolled = MonsterLootTable.rollLoot(type, rng)
+                if (rolled.items.any { it.itemId == "health_potion" }) {
+                    potionDrops++
+                }
+            }
+            assertTrue(
+                "${type.name} should occasionally drop a rare Health Potion (got $potionDrops/$trials)",
+                potionDrops in 3..(trials / 3)
+            )
+        }
+    }
+
+    @Test
+    fun regularMonstersFrequentlyDropCommonGoldOnlyLootWhileBossesDropItems() {
+        val regularSpecies = listOf(
+            MonsterType.WILD_RABBIT,
+            MonsterType.CAVE_RAT,
+            MonsterType.OUTLAW_BANDIT,
+            MonsterType.ORC_WARRIOR,
+            MonsterType.GHOUL,
+            MonsterType.DRAGON_HATCHLING
+        )
+        for (type in regularSpecies) {
+            val rng = Random(999 + type.ordinal)
+            var goldOnlyKills = 0
+            var itemKills = 0
+            val trials = 300
+            repeat(trials) {
+                val rolled = MonsterLootTable.rollLoot(type, rng)
+                assertTrue("${type.name} should still drop gold", rolled.gold > 0)
+                if (rolled.items.isEmpty()) goldOnlyKills++ else itemKills++
+            }
+            assertTrue(
+                "${type.name} should commonly drop gold-only loot so not every kill is valuable (got $goldOnlyKills/$trials)",
+                goldOnlyKills in (trials / 4)..((trials * 3) / 4)
+            )
+            assertTrue(
+                "${type.name} should still drop items on other kills (got $itemKills/$trials)",
+                itemKills in (trials / 4)..((trials * 3) / 4)
+            )
+        }
+
+        // Bosses still reliably drop items alongside gold
+        val bossRng = Random(55)
+        repeat(20) {
+            val bossLoot = MonsterLootTable.rollLoot(MonsterType.BROODMOTHER_ARACHNE, bossRng)
+            assertTrue("Bosses must continue dropping guaranteed/bonus items", bossLoot.items.isNotEmpty())
+        }
+    }
+
+    @Test
     fun broodmotherAndIgnisTelegraphDangerZonesBroadcastSlayAndRespawnOnFiveMinuteTimer() {
         // 1. Broodmother Arachne Venom Nova telegraph -> detonation inflicts POISON
         val arachne = MonsterEntity(

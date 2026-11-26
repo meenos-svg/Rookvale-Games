@@ -933,11 +933,39 @@ object FishingCatalog {
     private val byBaitId: Map<String, FishingTierSpec> = tiers.associateBy { it.baitId }
     private val byFishId: Map<String, FishingTierSpec> = tiers.associateBy { it.fishId }
 
+    const val BARE_HOOK_FISH_ID: String = "fresh_fish"
+    const val BARE_HOOK_BASE_CATCH_CHANCE: Double = 0.12
+    const val BARE_HOOK_MAX_CATCH_CHANCE: Double = 0.25
+    const val BARE_HOOK_CATCH_XP: Double = 5.5
+    const val BARE_HOOK_MISS_XP: Double = 1.5
+
     val allBaitIds: List<String> = tiers.map { it.baitId }
     val allFishIds: List<String> = tiers.map { it.fishId }
 
     fun tierForBait(baitId: String?): FishingTierSpec? = baitId?.let { byBaitId[it] }
     fun tierForFish(fishId: String?): FishingTierSpec? = fishId?.let { byFishId[it] }
+
+    /**
+     * Small catch chance when fishing with a bare hook (no worms).
+     * Starts at 12% at Fishing Lv 10 and scales +0.5% per Fishing level up to 25%.
+     */
+    fun bareHookCatchChance(fishingLevel: Int): Double {
+        val bonus = (fishingLevel - 10).coerceAtLeast(0) * 0.005
+        return (BARE_HOOK_BASE_CATCH_CHANCE + bonus)
+            .coerceIn(BARE_HOOK_BASE_CATCH_CHANCE, BARE_HOOK_MAX_CATCH_CHANCE)
+    }
+
+    /**
+     * Random worm-consumption percentage window on a successful baited catch.
+     * Base range is 25%..75% at the tier's required Fishing level; each level above
+     * reduces min by 0.5% (floor 10%) and max by 1.5% (floor 35%).
+     */
+    fun baitConsumeRangePercent(fishingLevel: Int, tier: FishingTierSpec): IntRange {
+        val advantage = (fishingLevel - tier.requiredFishingLevel).coerceAtLeast(0)
+        val minPct = (25.0 - advantage * 0.5).toInt().coerceAtLeast(10)
+        val maxPct = (75.0 - advantage * 1.5).toInt().coerceAtLeast(35)
+        return minPct..maxPct.coerceAtLeast(minPct)
+    }
 }
 
 object RecipeCatalog {
