@@ -136,10 +136,10 @@ class CorpseLootingAndPanelDismissTest {
 
     @Test
     fun tappingMapGroundOrMonsterAutoClosesAnyOpenWindowInOneTap() {
-        val base = GameEngine.createNewWorld(name = "Idemon").copy(
-            playerX = 26,
-            playerY = 44
-        )
+        // Start at the Rookvale temple spawn (old coordinates 26,44 are open ocean on the expanded map)
+        val base = GameEngine.createNewWorld(name = "Idemon")
+        val groundX = base.playerX + 2
+        val groundY = base.playerY
         val panelsToTest = listOf(
             ActivePanel.LOOT_CORPSE,
             ActivePanel.EQUIPMENT,
@@ -157,7 +157,7 @@ class CorpseLootingAndPanelDismissTest {
                 activePanel = panel,
                 inspectingCorpseId = if (panel == ActivePanel.LOOT_CORPSE) "fallen_1" else null
             )
-            val afterTap = GameEngine.handleTileTap(withPanel, tx = 28, ty = 44, nowMs = 5_000L)
+            val afterTap = GameEngine.handleTileTap(withPanel, tx = groundX, ty = groundY, nowMs = 5_000L)
             assertEquals("Panel $panel should auto-close on map ground tap", ActivePanel.NONE, afterTap.activePanel)
             assertNull(afterTap.inspectingCorpseId)
             assertTrue(
@@ -171,10 +171,10 @@ class CorpseLootingAndPanelDismissTest {
             id = 777,
             type = MonsterType.CAVE_RAT,
             floor = 0,
-            x = 28,
-            y = 44,
-            spawnX = 28,
-            spawnY = 44,
+            x = groundX,
+            y = groundY,
+            spawnX = groundX,
+            spawnY = groundY,
             hp = 20,
             maxHp = 20
         )

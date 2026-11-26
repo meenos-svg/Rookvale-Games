@@ -490,8 +490,11 @@ class ArticulatedEntityAndPaperDollTest {
     fun partitionedTownRoomsIncludeRichInteriorPropsAndPreserveSafeCoordinates() {
         val surface = WorldMaps.getFloor(0)
         val counts = mutableMapOf<TileType, Int>()
-        for (y in 170..215) {
-            for (x in 152..238) {
+        // Rookvale town block, measured relative to the temple spawn so it follows the town on the world map
+        val sx = WorldMaps.TEMPLE_SPAWN_X
+        val sy = WorldMaps.TEMPLE_SPAWN_Y
+        for (y in (sy - 22)..(sy + 23)) {
+            for (x in (sx - 44)..(sx + 42)) {
                 val t = surface.tileAt(x, y)
                 counts[t] = (counts[t] ?: 0) + 1
             }
@@ -506,7 +509,9 @@ class ArticulatedEntityAndPaperDollTest {
         // Critical coordinates remain walkable & unblocked
         assertTrue(surface.tileAt(WorldMaps.TEMPLE_SPAWN_X, WorldMaps.TEMPLE_SPAWN_Y).walkable)
         assertTrue(surface.tileAt(WorldMaps.ORACLE_X - 1, WorldMaps.ORACLE_Y).walkable)
-        assertTrue(surface.tileAt(162, 204).walkable) // Alaric
-        assertTrue(surface.tileAt(193, 179).walkable) // Brother Alden
+        val alaric = WorldMaps.npcs.first { it.floor == 0 && it.name == "Alaric" }
+        val alden = WorldMaps.npcs.first { it.floor == 0 && it.name == "Brother Alden" }
+        assertTrue(surface.tileAt(alaric.x, alaric.y).walkable)
+        assertTrue(surface.tileAt(alden.x, alden.y).walkable)
     }
 }
