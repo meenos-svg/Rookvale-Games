@@ -13,6 +13,7 @@ import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -367,5 +368,116 @@ class RemotePlayerSmoothSyncTest {
         assertFalse("Unit must switch back to idle once arrived", state.isGliding)
         assertEquals("Walk phase must reset to 0 on idle arrival", 0f, state.walkPhase, 0.001f)
     }
+
+    @Test
+    fun heartbeatReplyMeasuresRttWithEmaSmoothingAndClearsOnDisconnect() {
+        var animClock = 20_000L
+        val mgr = RealtimeMultiplayerManager(
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+            nowProvider = { 1_700_000_000_000L },
+            animClockProvider = { animClock }
+        )
+        val localPayload = LocalPlayerPresencePayload(
+            playerId = "p_ping",
+            name = "Vael",
+            level = 8,
+            vocation = Vocation.PALADIN,
+            tunicColorIndex = 0,
+            hairColorIndex = 0,
+            x = 120,
+            y = 120,
+            floor = 0,
+            hp = 140,
+            maxHp = 140,
+            joinedAt = 1000L,
+            regionId = "rookvale_overworld"
+        )
+        mgr.connect(localPayload)
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:floor:0","event":"phx_reply","payload":{"status":"ok"},"ref":"1"}"""
+        )
+        assertNull("Ping should be null before first heartbeat reply", mgr.uiState.value.pingMs)
+
+        // First probe: 60ms RTT
+        mgr.recordOutgoingHeartbeatRef("hb_1", animClock)
+        animClock += 60L
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"phoenix","event":"phx_reply","payload":{"status":"ok","response":{}},"ref":"hb_1"}"""
+        )
+        assertEquals(60, mgr.uiState.value.pingMs)
+
+        // Second probe: 100ms RTT -> 70% new / 30% prev EMA: (60 * 0.30 + 100 * 0.70) = 88ms
+        mgr.recordOutgoingHeartbeatRef("hb_2", animClock)
+        animClock += 100L
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"phoenix","event":"phx_reply","payload":{"status":"ok","response":{}},"ref":"hb_2"}"""
+        )
+        assertEquals(88, mgr.uiState.value.pingMs)
+
+        // Disconnect must clear stale ping
+        mgr.disconnect()
+        assertNull("Ping must reset to null after disconnect", mgr.uiState.value.pingMs)
+    }
+
+    @Test
+    fun fastPathMovementBroadcastUpdatesKnownPeerWithoutDisruptingHostOrRoster() {
+        var animClock = 30_000L
+        val mgr = RealtimeMultiplayerManager(
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+            nowProvider = { 1_700_000_000_000L },
+            animClockProvider = { animClock }
+        )
+        val localPayload = LocalPlayerPresencePayload(
+            playerId = "p_host",
+            name = "Aldric",
+            level = 18,
+            vocation = Vocation.KNIGHT,
+            tunicColorIndex = 0,
+            hairColorIndex = 0,
+            x = 200,
+            y = 200,
+            floor = 0,
+            hp = 300,
+            maxHp = 300,
+            joinedAt = 100L,
+            regionId = "rookvale_overworld"
+        )
+        mgr.connect(localPayload)
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:floor:0","event":"phx_reply","payload":{"status":"ok"},"ref":"1"}"""
+        )
+
+        // First packet registers peer on floor 0 (joined later, so local player remains floor host)
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:floor:0","event":"broadcast","payload":{"event":"player_move","payload":{"playerId":"p_guest","name":"Nyx","x":202,"y":200,"targetX":203,"targetY":200,"floor":0,"regionId":"rookvale_overworld","facing":"EAST","actionState":"WALKING","hp":180,"maxHp":200,"joinedAt":500}}}"""
+        )
+        assertTrue("Earlier joiner must be floor host", mgr.uiState.value.isFloorHost)
+        assertEquals(2, mgr.uiState.value.floorOnlineCount)
+
+        // Second rapid packet hits the fast path (same floor/region/joinedAt/spectator)
+        animClock += 50L
+        mgr.handleIncomingPhoenixFrame(
+            """{"topic":"realtime:rookvale:floor:0","event":"broadcast","payload":{"event":"player_move","payload":{"playerId":"p_guest","name":"Nyx","x":203,"y":201,"targetX":204,"targetY":201,"floor":0,"regionId":"rookvale_overworld","facing":"SOUTH","actionState":"WALKING","hp":175,"maxHp":200,"joinedAt":500}}}"""
+        )
+        val guest = mgr.uiState.value.remotePlayers.firstOrNull { it.playerId == "p_guest" }
+        assertNotNull(guest)
+        assertEquals(203, guest!!.x)
+        assertEquals(201, guest.y)
+        assertEquals(204, guest.targetX)
+        assertEquals(Direction.SOUTH, guest.direction)
+        assertEquals(175, guest.hp)
+        assertTrue("Host election must remain intact after fast-path move", mgr.uiState.value.isFloorHost)
+        assertEquals(2, mgr.uiState.value.floorOnlineCount)
+    }
+
+    @Test
+    fun reconnectBackoffUsesFastLadder() {
+        assertEquals(600L, RealtimeMultiplayerManager.reconnectBackoffMs(0))
+        assertEquals(1_500L, RealtimeMultiplayerManager.reconnectBackoffMs(1))
+        assertEquals(3_000L, RealtimeMultiplayerManager.reconnectBackoffMs(2))
+        assertEquals(6_000L, RealtimeMultiplayerManager.reconnectBackoffMs(3))
+        assertEquals(6_000L, RealtimeMultiplayerManager.reconnectBackoffMs(10))
+    }
 }
+
 

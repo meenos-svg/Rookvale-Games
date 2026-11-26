@@ -126,6 +126,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     )
     private var worldTickJob: Job? = null
     private var attackSubTickJob: Job? = null
+    private var fastMonsterSyncJob: Job? = null
     private var walkLoopJob: Job? = null
     private var movementBroadcastJob: Job? = null
     private var onlinePresenceSyncJob: Job? = null
@@ -137,6 +138,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private var lastLocalMoveUptimeMs: Long = 0L
     @Volatile
     private var lastMoveBroadcastUptimeMs: Long = 0L
+    @Volatile
+    private var lastMoveBroadcastSignature: Long = 0L
+    @Volatile
+    private var lastHostMonsterSyncHash: Int = 0
     @Volatile
     private var lastMoveSpeedTilesPerSec: Float = RemotePlayerInterpolator.WALK_SPEED_TILES_PER_SEC
     private var lastBackgroundSaveMs: Long = 0L
@@ -214,6 +219,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     next
                 }
                 flushOutboundLootSpawns(now)
+                if (isHost) {
+                    val mpNow = multiplayerManager.uiState.value
+                    if (mpNow.status == ConnectionStatus.ONLINE && mpNow.remotePlayers.isNotEmpty()) {
+                        broadcastHostMonsterSyncIfChanged(force = true)
+                    }
+                }
                 if (leveledUp) {
                     multiplayerManager.broadcastSystemCallout("$playerName advanced to Level $newLevel!", curFloor)
                     broadcastCurrentState()
@@ -663,10 +674,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private fun startGameLoops() {
         stopGameLoops()
 
-        // 200ms combat sub-tick so variable weapon speeds (0.8s fast vs 1.0s balanced vs 1.4s heavy) feel snappy
+        // 100ms combat sub-tick so variable weapon speeds and multiplayer hit broadcasts stay ultra-responsive
         attackSubTickJob = viewModelScope.launch {
             while (true) {
-                delay(200L)
+                delay(100L)
                 val now = SystemClock.uptimeMillis()
                 var leveledUp = false
                 var xpGained = false
@@ -795,16 +806,25 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 // Elected Floor Host broadcasts authoritative monster positions, HP & targetPlayerId
                 val updatedMp = multiplayerManager.uiState.value
                 if (updatedMp.status == ConnectionStatus.ONLINE && updatedMp.isFloorHost && !floorChanged) {
-                    multiplayerManager.broadcastMonsterSync(
-                        floor = latest.floor,
-                        monsters = GameEngine.buildFloorMonsterSnapshots(latest)
-                    )
+                    broadcastHostMonsterSyncIfChanged(force = true)
                 }
 
                 if (diedOrLeveled || floorChanged || skillLevelUp) {
                     persistCurrentState(silent = true)
                 } else if (skillPointsGained) {
                     scheduleDebouncedSkillSave()
+                }
+            }
+        }
+
+        // Fast 350ms delta-aware Floor Host monster sync (only active while online with peers on the same floor)
+        fastMonsterSyncJob = viewModelScope.launch {
+            while (true) {
+                delay(350L)
+                if (_screen.value != AppScreen.PLAYING) continue
+                val mp = multiplayerManager.uiState.value
+                if (mp.status == ConnectionStatus.ONLINE && mp.isFloorHost && mp.remotePlayers.isNotEmpty()) {
+                    broadcastHostMonsterSyncIfChanged(force = false)
                 }
             }
         }
@@ -845,11 +865,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // High-frequency 100ms Supabase Realtime Broadcast movement streamer (ack = false, zero DB writes)
+        // Adaptive 50ms Supabase Realtime Broadcast movement streamer (fast while moving, silent when idle)
         movementBroadcastJob = viewModelScope.launch {
             var wasMoving = false
             while (true) {
-                delay(100L)
+                delay(50L)
                 if (_screen.value != AppScreen.PLAYING) {
                     wasMoving = false
                     continue
@@ -860,9 +880,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 val isMoving = cur.walkPath.isNotEmpty() ||
                     cur.longRangeGoal != null ||
                     (cur.autoFollowTarget && cur.targetMonsterId != null) ||
-                    (nowUptime - lastLocalMoveUptimeMs) <= 260L
+                    (nowUptime - lastLocalMoveUptimeMs) <= 220L
                 if (isMoving) {
-                    if (nowUptime - lastMoveBroadcastUptimeMs >= 90L) {
+                    val signature = computeMovementSignature(cur)
+                    val elapsed = nowUptime - lastMoveBroadcastUptimeMs
+                    if ((signature != lastMoveBroadcastSignature && elapsed >= 45L) || elapsed >= 140L) {
                         broadcastMovement(PlayerActionState.WALKING, nowUptime)
                     }
                     wasMoving = true
@@ -873,28 +895,40 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Supabase Realtime Presence & Broadcast heartbeat + periodic REST fallback poll on public.players
+        // Adaptive online presence & REST peer discovery (immediate first fetch, 3s offline recovery, 10s online check)
         onlinePresenceSyncJob = viewModelScope.launch(Dispatchers.IO) {
-            var tick = 0
+            var offlineTicks = 0
+            var initialFetchDone = false
             while (true) {
-                delay(4_000L)
+                if (initialFetchDone) {
+                    val statusBeforeSleep = multiplayerManager.uiState.value.status
+                    val pollDelayMs = when (statusBeforeSleep) {
+                        ConnectionStatus.ONLINE -> 10_000L
+                        ConnectionStatus.CONNECTING -> 3_000L
+                        ConnectionStatus.OFFLINE_SOLO -> 3_000L
+                    }
+                    delay(pollDelayMs)
+                }
                 if (_screen.value != AppScreen.PLAYING) {
-                    tick = 0
+                    offlineTicks = 0
+                    initialFetchDone = false
+                    delay(1_000L)
                     continue
                 }
                 val cur = _world.value
-                if (cur.saveId.isBlank()) continue
-                tick++
+                if (cur.saveId.isBlank()) {
+                    delay(500L)
+                    continue
+                }
+                initialFetchDone = true
 
                 val status = multiplayerManager.uiState.value.status
-                if (status == ConnectionStatus.ONLINE) {
-                    multiplayerManager.broadcastLocalState(cur.toPresencePayload())
-                }
-
-                // Every 16s (and on initial tick 1): ensure Realtime connection is active and poll recently active peers
-                if ((tick == 1 || tick % 4 == 0) && MultiplayerConfig.isConfigured()) {
+                if (MultiplayerConfig.isConfigured()) {
                     if (status == ConnectionStatus.OFFLINE_SOLO) {
+                        offlineTicks++
                         multiplayerManager.ensureConnectedOrRetry(cur.toPresencePayload())
+                    } else {
+                        offlineTicks = 0
                     }
                     val polled = runCatching {
                         cloudRepository.fetchRecentOnlinePlayers(
@@ -911,7 +945,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                         localPlayerName = cur.playerName
                     )
                     // If WebSocket is blocked by network/firewall, periodically flush cloud presence so REST peers see us
-                    if (status == ConnectionStatus.OFFLINE_SOLO && activeCloudSession != null && tick % 8 == 0) {
+                    if (status == ConnectionStatus.OFFLINE_SOLO && activeCloudSession != null && offlineTicks % 6 == 0) {
                         runCatching {
                             cloudSaveController.flushNow(cur, force = false, logConsoleFeedback = false)
                         }
@@ -924,11 +958,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private fun stopGameLoops() {
         attackSubTickJob?.cancel()
         worldTickJob?.cancel()
+        fastMonsterSyncJob?.cancel()
         walkLoopJob?.cancel()
         movementBroadcastJob?.cancel()
         onlinePresenceSyncJob?.cancel()
         attackSubTickJob = null
         worldTickJob = null
+        fastMonsterSyncJob = null
         walkLoopJob = null
         movementBroadcastJob = null
         onlinePresenceSyncJob = null
@@ -1023,6 +1059,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun computeMovementSignature(state: GameWorldState): Long {
+        val nextStep = state.walkPath.firstOrNull()
+        var h = state.floor.toLong() * 31L + state.playerX.toLong()
+        h = h * 31L + state.playerY.toLong()
+        h = h * 31L + state.playerFacing.ordinal.toLong()
+        h = h * 31L + (nextStep?.first ?: state.playerX).toLong()
+        h = h * 31L + (nextStep?.second ?: state.playerY).toLong()
+        h = h * 31L + state.hp.toLong()
+        return h
+    }
+
+    private fun broadcastHostMonsterSyncIfChanged(force: Boolean) {
+        val latest = _world.value
+        val snapshots = GameEngine.buildFloorMonsterSnapshots(latest)
+        val syncHash = 31 * latest.floor + snapshots.hashCode()
+        if (!force && syncHash == lastHostMonsterSyncHash) return
+        lastHostMonsterSyncHash = syncHash
+        multiplayerManager.broadcastMonsterSync(
+            floor = latest.floor,
+            monsters = snapshots
+        )
+    }
+
     private fun broadcastMovement(
         actionState: PlayerActionState = PlayerActionState.WALKING,
         nowUptimeMs: Long = SystemClock.uptimeMillis()
@@ -1030,6 +1089,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val cur = _world.value
         if (cur.saveId.isNotBlank()) {
             lastMoveBroadcastUptimeMs = nowUptimeMs
+            lastMoveBroadcastSignature = computeMovementSignature(cur)
             multiplayerManager.broadcastMovementPacket(cur.toPresencePayload(actionState, nowUptimeMs))
         }
     }

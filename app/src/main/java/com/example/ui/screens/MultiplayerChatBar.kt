@@ -58,6 +58,7 @@ import com.example.game.multiplayer.ConnectionStatus
 import com.example.game.multiplayer.MultiplayerUiState
 import com.example.ui.theme.BasaltDark
 import com.example.ui.theme.ExpEmerald
+import com.example.ui.theme.HealthCrimson
 import com.example.ui.theme.ObsidianVoid
 import com.example.ui.theme.ParchmentLight
 import com.example.ui.theme.ParchmentMuted
@@ -113,6 +114,21 @@ fun MultiplayerStatusBadge(
                 color = if (mpState.status == ConnectionStatus.OFFLINE_SOLO) ParchmentMuted else dotColor,
                 maxLines = 1
             )
+            val ping = mpState.pingMs
+            if (mpState.status == ConnectionStatus.ONLINE && ping != null) {
+                val pingColor = when {
+                    ping <= 90 -> ExpEmerald
+                    ping <= 180 -> TorchGold
+                    else -> HealthCrimson
+                }
+                Text(
+                    text = "• ${ping}ms",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    color = pingColor,
+                    maxLines = 1,
+                    modifier = Modifier.testTag("multiplayer_badge_ping")
+                )
+            }
         }
     }
 }

@@ -51,13 +51,13 @@ class RemotePlayerInterpolator {
         const val MANUAL_STEP_SPEED_TILES_PER_SEC: Float = 1000f / 155f
 
         /** Maximum dead-reckoning prediction lead beyond last received networkX/Y. */
-        const val MAX_PREDICT_LEAD_TILES: Float = 1.85f
+        const val MAX_PREDICT_LEAD_TILES: Float = 1.55f
 
-        /** Stop dead-reckoning if no fresh packet arrives within 420ms so peers never overshoot walls. */
-        const val MAX_PREDICT_WINDOW_SEC: Float = 0.42f
+        /** Stop dead-reckoning if no fresh packet arrives within 340ms so peers never overshoot walls. */
+        const val MAX_PREDICT_WINDOW_SEC: Float = 0.34f
 
-        /** Frame-rate independent exponential smoothing factor (at 60 FPS -> ~0.20 per frame). */
-        const val SMOOTH_LERP_RATE: Float = 13.5f
+        /** Frame-rate independent exponential smoothing factor (at 60 FPS -> ~0.31 per frame for crisp tracking). */
+        const val SMOOTH_LERP_RATE: Float = 22.0f
 
         /** Continuous walk stride cycles per second (~1 full left-right stride per ~385ms). */
         const val WALK_CYCLES_PER_SEC: Float = 2.6f
@@ -193,10 +193,10 @@ class RemotePlayerInterpolator {
             nextRenderX = goalX
             nextRenderY = goalY
         } else {
-            val lerpAlpha = (1f - exp(-SMOOTH_LERP_RATE * dtSec)).coerceIn(0.06f, 1f)
+            val lerpAlpha = (1f - exp(-SMOOTH_LERP_RATE * dtSec)).coerceIn(0.08f, 1f)
             val expStep = distToGoal * lerpAlpha
-            val minWalkStep = min(distToGoal, walkSpeed * 0.85f * dtSec)
-            val maxSpeedMult = if (distToNet > 1.5f) 1.55f else 1.25f
+            val minWalkStep = min(distToGoal, walkSpeed * 0.92f * dtSec)
+            val maxSpeedMult = if (distToNet > 1.2f) 1.85f else 1.40f
             val maxWalkStep = walkSpeed * maxSpeedMult * dtSec
             val step = expStep.coerceAtLeast(minWalkStep).coerceAtMost(maxWalkStep).coerceAtMost(distToGoal)
             nextRenderX = prev.renderX + (dx / distToGoal) * step

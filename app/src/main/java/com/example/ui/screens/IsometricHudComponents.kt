@@ -606,7 +606,8 @@ private data class CharacterVitalsSnapshot(
     val burning: Boolean,
     val saveBanner: String?,
     val connectionStatus: ConnectionStatus,
-    val floorOnlineCount: Int
+    val floorOnlineCount: Int,
+    val pingMs: Int? = null
 )
 
 @Composable
@@ -648,7 +649,8 @@ private fun CharacterVitalsHudCard(
         burning = state.fireTicks > 0,
         saveBanner = saveBanner,
         connectionStatus = multiplayerState.status,
-        floorOnlineCount = maxOf(multiplayerState.realmOnlineCount, multiplayerState.floorOnlineCount)
+        floorOnlineCount = maxOf(multiplayerState.realmOnlineCount, multiplayerState.floorOnlineCount),
+        pingMs = multiplayerState.pingMs
     )
     CharacterVitalsHudCardContent(
         snapshot = snapshot,
@@ -670,7 +672,7 @@ private fun CharacterVitalsHudCardContent(
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.2.dp, StoneBorderLight),
         modifier = Modifier
-            .widthIn(min = 212.dp, max = 278.dp)
+            .widthIn(min = 216.dp, max = 304.dp)
             .testTag("character_vitals_hud")
     ) {
         Row(
@@ -730,6 +732,7 @@ private fun CharacterVitalsHudCardContent(
                     CompactOnlineIndicator(
                         status = snapshot.connectionStatus,
                         floorOnlineCount = snapshot.floorOnlineCount,
+                        pingMs = snapshot.pingMs,
                         onClick = onMultiplayerStatusTapped
                     )
                 }
@@ -825,6 +828,7 @@ private fun CharacterVitalsHudCardContent(
 private fun CompactOnlineIndicator(
     status: ConnectionStatus,
     floorOnlineCount: Int,
+    pingMs: Int?,
     onClick: () -> Unit
 ) {
     val dotColor = when (status) {
@@ -838,23 +842,51 @@ private fun CompactOnlineIndicator(
         ConnectionStatus.OFFLINE_SOLO -> "Offline"
     }
     Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(dotColor.copy(alpha = 0.16f))
-            .border(1.dp, dotColor.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 5.dp, vertical = 1.5.dp)
-            .testTag("multiplayer_status_pill"),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(dotColor))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
-            color = dotColor,
-            maxLines = 1
-        )
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(dotColor.copy(alpha = 0.16f))
+                .border(1.dp, dotColor.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                .testTag("multiplayer_status_pill"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(dotColor))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                color = dotColor,
+                maxLines = 1
+            )
+        }
+        if (status == ConnectionStatus.ONLINE && pingMs != null) {
+            val pingColor = when {
+                pingMs <= 90 -> ExpEmerald
+                pingMs <= 180 -> TorchGold
+                else -> HealthCrimson
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(pingColor.copy(alpha = 0.16f))
+                    .border(1.dp, pingColor.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
+                    .clickable(onClick = onClick)
+                    .padding(horizontal = 4.dp, vertical = 1.5.dp)
+                    .testTag("multiplayer_ping_badge")
+            ) {
+                Text(
+                    text = "${pingMs}ms",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp, fontWeight = FontWeight.ExtraBold),
+                    color = pingColor,
+                    maxLines = 1
+                )
+            }
+        }
     }
 }
 

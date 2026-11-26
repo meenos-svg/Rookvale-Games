@@ -49,9 +49,9 @@ class RealtimeMultiplayerManager(
 
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
+            .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
-            .pingInterval(20, TimeUnit.SECONDS)
+            .pingInterval(15, TimeUnit.SECONDS)
             .build()
     }
 
@@ -111,16 +111,24 @@ class RealtimeMultiplayerManager(
     private val topicJoinRefs = HashMap<String, String>()
     private val joinedTopics = HashSet<String>()
     private val nearbyNotifiedPlayers = LinkedHashMap<String, String>()
+    private val pendingHeartbeatSentMs = HashMap<String, Long>()
 
     companion object {
         private const val NEARBY_ENTER_TILES = 24
         private const val NEARBY_EXIT_TILES = 32
-        private const val PRESENCE_RETRACK_MIN_MS = 4_000L
-        private const val WORLD_PRESENCE_RETRACK_MIN_MS = 15_000L
-        private const val HEARTBEAT_INTERVAL_MS = 20_000L
+        private const val PRESENCE_RETRACK_MIN_MS = 2_500L
+        private const val WORLD_PRESENCE_RETRACK_MIN_MS = 8_000L
+        private const val HEARTBEAT_INTERVAL_MS = 8_000L
         private const val POLLED_STALE_MS = 65_000L
         private const val REALTIME_PRIORITY_WINDOW_MS = 8_000L
         const val MOVEMENT_BROADCAST_EVENT = "player_move"
+
+        internal fun reconnectBackoffMs(attempt: Int): Long = when (attempt) {
+            0 -> 600L
+            1 -> 1_500L
+            2 -> 3_000L
+            else -> 6_000L
+        }
     }
 
     enum class RetryResult {
@@ -189,6 +197,7 @@ class RealtimeMultiplayerManager(
         synchronized(topicJoinRefs) {
             topicJoinRefs.clear()
             joinedTopics.clear()
+            pendingHeartbeatSentMs.clear()
         }
         synchronized(presenceMap) {
             presenceMap.clear()
@@ -821,6 +830,7 @@ class RealtimeMultiplayerManager(
                     return
                 }
                 reconnectAttempt = 0
+                sendHeartbeatProbe(webSocket)
                 startHeartbeat(webSocket)
                 joinWorldChannel(webSocket)
                 joinFloorChannel(webSocket, currentFloor)
@@ -851,6 +861,7 @@ class RealtimeMultiplayerManager(
         synchronized(topicJoinRefs) {
             topicJoinRefs.clear()
             joinedTopics.clear()
+            pendingHeartbeatSentMs.clear()
         }
         synchronized(presenceMap) {
             // Drop WebSocket-only presence entries while keeping active polled peers intact until next poll
@@ -880,19 +891,15 @@ class RealtimeMultiplayerManager(
                     floorOnlineCount = floorCount,
                     remotePlayers = remaining,
                     realmOnlineCount = realmCount,
-                    realmOnlinePlayers = remainingRealm
+                    realmOnlinePlayers = remainingRealm,
+                    pingMs = null
                 )
             }
         }
 
         if (sessionActive && MultiplayerConfig.isConfigured()) {
             reconnectJob?.cancel()
-            val backoffMs = when (reconnectAttempt) {
-                0 -> 2500L
-                1 -> 5000L
-                2 -> 10000L
-                else -> 15000L
-            }
+            val backoffMs = reconnectBackoffMs(reconnectAttempt)
             reconnectAttempt++
             reconnectJob = scope.launch(Dispatchers.IO) {
                 delay(backoffMs)
@@ -910,7 +917,8 @@ class RealtimeMultiplayerManager(
                 floorOnlineCount = 1,
                 remotePlayers = emptyList(),
                 realmOnlineCount = 1,
-                realmOnlinePlayers = emptyList()
+                realmOnlinePlayers = emptyList(),
+                pingMs = null
             )
         }
     }
@@ -920,13 +928,34 @@ class RealtimeMultiplayerManager(
         heartbeatJob = scope.launch(Dispatchers.IO) {
             while (sessionActive) {
                 delay(HEARTBEAT_INTERVAL_MS)
-                sendPhoenixFrame(webSocket, "phoenix", "heartbeat", emptyMap())
+                sendHeartbeatProbe(webSocket)
                 val local = latestLocalPayload
                 if (local != null && !local.isSpectator && _uiState.value.status == ConnectionStatus.ONLINE) {
-                    trackWorldPresence(webSocket)
-                    trackLocalPresence(webSocket, currentFloor)
+                    val now = nowProvider()
+                    if (now - lastWorldPresenceTrackMs >= WORLD_PRESENCE_RETRACK_MIN_MS) {
+                        trackWorldPresence(webSocket)
+                    }
+                    if (now - lastPresenceTrackMs >= PRESENCE_RETRACK_MIN_MS) {
+                        trackLocalPresence(webSocket, currentFloor)
+                    }
                 }
             }
+        }
+    }
+
+    private fun sendHeartbeatProbe(webSocket: WebSocket) {
+        val ref = sendPhoenixFrame(webSocket, "phoenix", "heartbeat", emptyMap())
+        if (ref != null) {
+            recordOutgoingHeartbeatRef(ref, animClockProvider())
+        }
+    }
+
+    internal fun recordOutgoingHeartbeatRef(ref: String, sentAtAnimMs: Long) {
+        synchronized(topicJoinRefs) {
+            if (pendingHeartbeatSentMs.size > 16) {
+                pendingHeartbeatSentMs.clear()
+            }
+            pendingHeartbeatSentMs[ref] = sentAtAnimMs
         }
     }
 
@@ -1032,7 +1061,7 @@ class RealtimeMultiplayerManager(
         event: String,
         payload: Map<String, Any?>,
         includeJoinRef: Boolean = false
-    ) {
+    ): String? {
         val ref = refCounter.getAndIncrement().toString()
         val frame = LinkedHashMap<String, Any?>()
         frame["topic"] = topic
@@ -1051,8 +1080,9 @@ class RealtimeMultiplayerManager(
                 frame["join_ref"] = joinRef
             }
         }
-        val json = runCatching { mapAdapter.toJson(frame) }.getOrNull() ?: return
+        val json = runCatching { mapAdapter.toJson(frame) }.getOrNull() ?: return null
         webSocket.send(json)
+        return ref
     }
 
     internal fun handleIncomingPhoenixFrame(rawJson: String, webSocket: WebSocket? = null) {
@@ -1068,7 +1098,18 @@ class RealtimeMultiplayerManager(
             "phx_reply" -> {
                 val status = payload["status"] as? String
                 val replyRef = frame["ref"]?.toString()
-                if (status == "ok" && (topic == expectedFloorTopic || isWorldTopic)) {
+                if (status == "ok" && topic == "phoenix" && replyRef != null) {
+                    val sentAt = synchronized(topicJoinRefs) { pendingHeartbeatSentMs.remove(replyRef) }
+                    if (sentAt != null) {
+                        val rawRtt = (animClockProvider() - sentAt).coerceIn(1L, 9_999L).toInt()
+                        _uiState.update { st ->
+                            val smoothed = st.pingMs?.let { prev ->
+                                ((prev * 0.30f) + (rawRtt * 0.70f)).toInt().coerceAtLeast(1)
+                            } ?: rawRtt
+                            st.copy(pingMs = smoothed)
+                        }
+                    }
+                } else if (status == "ok" && (topic == expectedFloorTopic || isWorldTopic)) {
                     // Only treat a phx_reply as a channel-join confirmation when it matches our phx_join ref
                     // (or on first ack when tests inject phx_reply directly without openSocket).
                     // This prevents presence track replies from re-triggering trackLocalPresence in an infinite loop!
@@ -1138,10 +1179,10 @@ class RealtimeMultiplayerManager(
                 val innerEvent = payload["event"] as? String ?: return
                 val innerBody = payload["payload"].asStringMap() ?: return
                 when (innerEvent) {
-                    MOVEMENT_BROADCAST_EVENT -> if (topic == expectedFloorTopic) applyRemotePlayerState(innerBody, fromWorldChannel = false)
+                    MOVEMENT_BROADCAST_EVENT -> if (topic == expectedFloorTopic) applyRemotePlayerState(innerBody, fromWorldChannel = false, isFastMovement = true)
                     "player_state" -> {
-                        if (topic == expectedFloorTopic) applyRemotePlayerState(innerBody, fromWorldChannel = false)
-                        else if (isWorldTopic) applyRemotePlayerState(innerBody, fromWorldChannel = true)
+                        if (topic == expectedFloorTopic) applyRemotePlayerState(innerBody, fromWorldChannel = false, isFastMovement = false)
+                        else if (isWorldTopic) applyRemotePlayerState(innerBody, fromWorldChannel = true, isFastMovement = false)
                     }
                     "player_leave" -> {
                         if (topic == expectedFloorTopic) applyRemotePlayerLeave(innerBody, fromWorldChannel = false)
@@ -1379,11 +1420,16 @@ class RealtimeMultiplayerManager(
         }
     }
 
-    private fun applyRemotePlayerState(body: Map<String, Any?>, fromWorldChannel: Boolean = false) {
+    private fun applyRemotePlayerState(
+        body: Map<String, Any?>,
+        fromWorldChannel: Boolean = false,
+        isFastMovement: Boolean = false
+    ) {
         val id = MultiplayerSanitizer.sanitizeId(body["playerId"] as? String)
         if (id.isBlank() || isLocalPlayer(id, body["name"] as? String)) return
         val animNow = animClockProvider()
 
+        var fastFloorRemotes: List<RemotePlayerState>? = null
         synchronized(presenceMap) {
             val existingRealm = realmPresenceMap[id]
             val existingFloor = presenceMap[id]
@@ -1402,10 +1448,19 @@ class RealtimeMultiplayerManager(
                 polledOnlyIds.remove(id)
                 realtimeLastRxMs.remove(id)
             } else {
+                val visibleOnFloor = isRegionVisible(parsed.floor, parsed.regionId, currentFloor, currentRegionId)
+                val canUseFastFloorPath = isFastMovement &&
+                    !fromWorldChannel &&
+                    existingFloor != null &&
+                    visibleOnFloor &&
+                    existingFloor.floor == parsed.floor &&
+                    existingFloor.regionId == parsed.regionId &&
+                    existingFloor.joinedAt == parsed.joinedAt
+
                 realmPresenceMap[id] = parsed
                 realmPolledOnlyIds.remove(id)
                 realmRealtimeLastRxMs[id] = animNow
-                if (!isRegionVisible(parsed.floor, parsed.regionId, currentFloor, currentRegionId)) {
+                if (!visibleOnFloor) {
                     presenceMap.remove(id)
                     polledOnlyIds.remove(id)
                     realtimeLastRxMs.remove(id)
@@ -1417,10 +1472,24 @@ class RealtimeMultiplayerManager(
                         polledOnlyIds.remove(id)
                         if (!fromWorldChannel) realtimeLastRxMs[id] = animNow
                     }
+                    if (canUseFastFloorPath) {
+                        fastFloorRemotes = presenceMap.values
+                            .filter { !it.isSpectator && isRegionVisible(it.floor, it.regionId, currentFloor, currentRegionId) }
+                            .toList()
+                    }
                 }
             }
         }
-        recomputePresenceAndHost()
+        val fastRemotes = fastFloorRemotes
+        if (fastRemotes != null) {
+            // Fast path for 20 Hz movement packets: publish updated floor remotePlayers immediately
+            // without sorting the entire realm roster or re-running host election.
+            _uiState.update { st ->
+                if (st.remotePlayers == fastRemotes) st else st.copy(remotePlayers = fastRemotes)
+            }
+        } else {
+            recomputePresenceAndHost()
+        }
     }
 
     private fun applyRemotePlayerLeave(body: Map<String, Any?>, fromWorldChannel: Boolean = false) {
