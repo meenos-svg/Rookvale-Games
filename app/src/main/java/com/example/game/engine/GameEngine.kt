@@ -183,6 +183,13 @@ object GameEngine {
                 targetY += V3_TO_V4_OFFSET_Y
             }
         }
+        // Map v5 rebuilt the Deep Delve floors (-1..-4) as larger 96x96 layouts: anyone saved inside
+        // one of them resumes at that floor's forward-camp entrance instead of an unrelated spot.
+        if (save.mapVersion < DEEP_DELVE_REBUILD_MAP_VERSION && save.floor in -4..-1) {
+            val (lx, ly) = WorldMaps.fallbackLandingForFloor(save.floor)
+            targetX = lx
+            targetY = ly
+        }
         val npcCoordsOnFloor = WorldMaps.npcs.filter { it.floor == save.floor }.map { it.x to it.y }.toSet()
         val isBlockedOrOut = targetX !in 0 until floorMap.width ||
             targetY !in 0 until floorMap.height ||
@@ -4276,7 +4283,11 @@ object GameEngine {
         var bestDist = initialH
         var found = false
         var explored = 0
-        val maxExpansions = if (width >= 200) 4500 else 1200
+        val maxExpansions = when {
+            width >= 200 -> 4500
+            width >= 80 -> 3000   // 96x96 Deep Delve floors: long winding routes through mazes and caverns
+            else -> 1200
+        }
 
         while (open.isNotEmpty() && explored < maxExpansions) {
             val (_, curKey) = open.poll() ?: break

@@ -6,7 +6,10 @@ import com.example.game.multiplayer.LocalPlayerActionFxEvent
 import com.example.game.world.WeatherType
 import com.squareup.moshi.JsonClass
 
-const val CURRENT_MAP_VERSION = 4
+const val CURRENT_MAP_VERSION = 5
+
+/** Map version that rebuilt Deep Delve floors -1..-4 as 96x96 layouts (saves inside them move to the entrance). */
+const val DEEP_DELVE_REBUILD_MAP_VERSION = 5
 const val V1_SURFACE_OFFSET = 32
 const val V2_TO_V3_OFFSET_X = 149
 const val V2_TO_V3_OFFSET_Y = 146

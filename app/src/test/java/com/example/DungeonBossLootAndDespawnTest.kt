@@ -244,15 +244,29 @@ class DungeonBossLootAndDespawnTest {
 
     @Test
     fun broodmotherAndIgnisTelegraphDangerZonesBroadcastSlayAndRespawnOnFiveMinuteTimer() {
+        // Stage each boss in its real lair, at its real spawn, with the hero on open ground nearby
+        val arachneSpawn = WorldMaps.monsterSpawns.first { it.type == MonsterType.BROODMOTHER_ARACHNE }
+        val ignisSpawn = WorldMaps.monsterSpawns.first { it.type == MonsterType.IGNIS_LORD_OF_THE_PIT }
+        fun openNear(floorId: Int, x: Int, y: Int, dist: Int): Pair<Int, Int> {
+            val f = WorldMaps.getFloor(floorId)
+            return listOf(0 to -dist, 0 to dist, -dist to 0, dist to 0)
+                .map { (dx, dy) -> x + dx to y + dy }
+                .first { (px, py) -> f.tileAt(px, py).walkable }
+        }
+        val (ax, ay) = arachneSpawn.x to arachneSpawn.y
+        val (h1x, h1y) = openNear(arachneSpawn.floor, ax, ay, 2)
+        val (k1x, k1y) = openNear(arachneSpawn.floor, ax, ay, 1)
+        val (ix, iy) = ignisSpawn.x to ignisSpawn.y
+        val (h2x, h2y) = openNear(ignisSpawn.floor, ix, iy, 2)
         // 1. Broodmother Arachne Venom Nova telegraph -> detonation inflicts POISON
         val arachne = MonsterEntity(
             id = 701,
             type = MonsterType.BROODMOTHER_ARACHNE,
-            floor = -1,
-            x = 24,
-            y = 34,
-            spawnX = 24,
-            spawnY = 34,
+            floor = arachneSpawn.floor,
+            x = ax,
+            y = ay,
+            spawnX = ax,
+            spawnY = ay,
             hp = MonsterType.BROODMOTHER_ARACHNE.maxHp,
             maxHp = MonsterType.BROODMOTHER_ARACHNE.maxHp,
             aoeCooldownTicks = 0,
@@ -261,9 +275,9 @@ class DungeonBossLootAndDespawnTest {
         assertEquals(BossSpecialKind.VENOM_NOVA, arachne.type.specialKind)
         val heroF1 = GameEngine.createNewWorld("Roland").copy(
             saveId = "p_host",
-            floor = -1,
-            playerX = 24,
-            playerY = 32,
+            floor = arachneSpawn.floor,
+            playerX = h1x,
+            playerY = h1y,
             hp = 450,
             maxHp = 450,
             monsters = listOf(arachne)
@@ -271,7 +285,7 @@ class DungeonBossLootAndDespawnTest {
         val tick1 = GameEngine.processCombatTick(heroF1, nowMs = 1_000L, isFloorHost = true)
         val boss1 = tick1.monsters.first { it.id == 701 }
         assertTrue("Broodmother Arachne must telegraph Venom Nova danger tiles", boss1.pendingAoeTiles.isNotEmpty())
-        assertTrue("Player tile (24,32) must be inside Venom Nova radius", (24 to 32) in boss1.pendingAoeTiles)
+        assertTrue("Player tile must be inside Venom Nova radius", (h1x to h1y) in boss1.pendingAoeTiles)
 
         val tick2 = GameEngine.processCombatTick(tick1, nowMs = 2_000L, isFloorHost = true)
         assertTrue("Venom Nova telegraph clears after detonation", tick2.monsters.first { it.id == 701 }.pendingAoeTiles.isEmpty())
@@ -286,11 +300,11 @@ class DungeonBossLootAndDespawnTest {
         val ignis = MonsterEntity(
             id = 702,
             type = MonsterType.IGNIS_LORD_OF_THE_PIT,
-            floor = -2,
-            x = 24,
-            y = 12,
-            spawnX = 24,
-            spawnY = 12,
+            floor = ignisSpawn.floor,
+            x = ix,
+            y = iy,
+            spawnX = ix,
+            spawnY = iy,
             hp = MonsterType.IGNIS_LORD_OF_THE_PIT.maxHp,
             maxHp = MonsterType.IGNIS_LORD_OF_THE_PIT.maxHp,
             aoeCooldownTicks = 0,
@@ -299,9 +313,9 @@ class DungeonBossLootAndDespawnTest {
         assertEquals(BossSpecialKind.FLAME_BURST, ignis.type.specialKind)
         val heroF2 = GameEngine.createNewWorld("Roland").copy(
             saveId = "p_host",
-            floor = -2,
-            playerX = 24,
-            playerY = 14,
+            floor = ignisSpawn.floor,
+            playerX = h2x,
+            playerY = h2y,
             hp = 500,
             maxHp = 500,
             monsters = listOf(ignis)
@@ -309,7 +323,7 @@ class DungeonBossLootAndDespawnTest {
         val ignisTick1 = GameEngine.processCombatTick(heroF2, nowMs = 1_000L, isFloorHost = true)
         val ignisAfter1 = ignisTick1.monsters.first { it.id == 702 }
         assertTrue("Ignis must telegraph Flame Burst danger tiles", ignisAfter1.pendingAoeTiles.isNotEmpty())
-        assertTrue("Player tile (24,14) must be inside Flame Burst danger zone", (24 to 14) in ignisAfter1.pendingAoeTiles)
+        assertTrue("Player tile must be inside Flame Burst danger zone", (h2x to h2y) in ignisAfter1.pendingAoeTiles)
 
         val ignisTick2 = GameEngine.processCombatTick(ignisTick1, nowMs = 2_000L, isFloorHost = true)
         assertTrue("Player caught in Flame Burst must take damage", ignisTick2.hp < ignisTick1.hp)
@@ -318,8 +332,8 @@ class DungeonBossLootAndDespawnTest {
         // 3. Slaying a Boss emits a [BOSS] slay alert, sets 180s corpse timer, and respawns after 5 minutes (300_000L ms)
         val killTimeMs = 10_000L
         val readyKill = heroF1.copy(
-            playerX = 23,
-            playerY = 34,
+            playerX = k1x,
+            playerY = k1y,
             targetMonsterId = 701,
             lastPlayerAttackMs = 0L,
             monsters = listOf(arachne.copy(hp = 1))
@@ -346,7 +360,7 @@ class DungeonBossLootAndDespawnTest {
         )
 
         // Before 5 minutes: boss has not respawned yet
-        val movedAway = afterKill.copy(playerX = 12, playerY = 12, outboundSystemAlerts = emptyList())
+        val movedAway = afterKill.copy(playerX = h1x, playerY = h1y, outboundSystemAlerts = emptyList())
         val beforeTimer = GameEngine.processCombatTick(movedAway, nowMs = killTimeMs + BOSS_RESPAWN_MS - 1_000L, isFloorHost = true)
         assertTrue("Boss must NOT respawn before 5 minutes", beforeTimer.monsters.none { it.type == MonsterType.BROODMOTHER_ARACHNE })
 
