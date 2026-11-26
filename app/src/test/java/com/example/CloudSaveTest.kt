@@ -55,37 +55,103 @@ private class FakeSupabasePlayersServer : Interceptor {
     val rowsById = linkedMapOf<String, JSONObject>()
     var offline = false
     var upsertCount = 0
+    var adminClaimOpen = false
+    private val failures = mutableMapOf<String, Int>()
 
     override fun intercept(chain: Interceptor.Chain): Response {
         if (offline) throw IOException("Simulated offline network")
         val req = chain.request()
         val url = req.url
 
-        if (req.method == "POST") {
-            val buf = Buffer()
-            req.body?.writeTo(buf)
-            val bodyJson = JSONObject(buf.readUtf8())
-            val pid = bodyJson.getString("player_id")
-            rowsById[pid] = bodyJson
+        if (req.method == "POST" && url.encodedPath.endsWith("/rpc/rv_load_player")) {
+            val args = readBody(req)
+            val pid = args.optString("p_player_id", "")
+            val name = args.optString("p_character_name", "")
+            val row = if (pid.isNotBlank()) rowsById[pid] else findByName(name)
+            if (row == null) return jsonResponse(req, 200, JSONObject().put("status", "not_found").toString())
+            val status = checkPin(row, args.optString("p_pin_hash"))
+            if (status != "ok") return jsonResponse(req, 200, JSONObject().put("status", status).toString())
+            val out = JSONObject()
+                .put("status", "ok")
+                .put("player_id", row.getString("player_id"))
+                .put("character_name", row.getString("character_name"))
+                .put("save_data", row.get("save_data"))
+                .put("updated_at", row.getString("updated_at"))
+                .put("is_admin", row.optBoolean("is_admin", false))
+            return jsonResponse(req, 200, out.toString())
+        }
+
+        if (req.method == "POST" && url.encodedPath.endsWith("/rpc/rv_save_player")) {
+            val args = readBody(req)
+            val pid = args.getString("p_player_id")
+            val existing = rowsById[pid]
+            if (existing != null) {
+                val status = checkPin(existing, args.optString("p_pin_hash"))
+                if (status != "ok") return jsonResponse(req, 200, JSONObject().put("status", status).toString())
+                existing.put("save_data", args.getJSONObject("p_save_data"))
+                existing.put("updated_at", args.getString("p_updated_at"))
+                upsertCount++
+                return jsonResponse(req, 200, JSONObject().put("status", "ok").put("is_admin", existing.optBoolean("is_admin")).toString())
+            }
+            val name = args.getString("p_character_name")
+            var isAdmin = false
+            if (name.trim().lowercase() == "admin") {
+                if (!adminClaimOpen) return jsonResponse(req, 200, JSONObject().put("status", "reserved").toString())
+                adminClaimOpen = false
+                isAdmin = true
+            } else if (findByName(name) != null) {
+                return jsonResponse(req, 200, JSONObject().put("status", "name_taken").toString())
+            }
+            rowsById[pid] = JSONObject()
+                .put("player_id", pid)
+                .put("character_name", name)
+                .put("pin_hash", args.getString("p_pin_hash"))
+                .put("save_data", args.getJSONObject("p_save_data"))
+                .put("updated_at", args.getString("p_updated_at"))
+                .put("is_admin", isAdmin)
             upsertCount++
-            return jsonResponse(req, 201, "[]")
+            return jsonResponse(req, 200, JSONObject().put("status", "ok").put("is_admin", isAdmin).toString())
         }
 
         if (req.method == "GET") {
+            // Public roster / name-check reads; pin_hash is never selectable.
             val idFilter = url.queryParameter("player_id")?.removePrefix("eq.")
             val nameFilter = url.queryParameter("character_name")?.removePrefix("eq.")
-            val pinFilter = url.queryParameter("pin_hash")?.removePrefix("eq.")
             val matched = JSONArray()
             for (row in rowsById.values) {
                 val okId = idFilter == null || row.optString("player_id") == idFilter
                 val okName = nameFilter == null || row.optString("character_name") == nameFilter
-                val okPin = pinFilter == null || row.optString("pin_hash") == pinFilter
-                if (okId && okName && okPin) matched.put(row)
+                if (okId && okName) {
+                    val pub = JSONObject(row.toString())
+                    pub.remove("pin_hash")
+                    matched.put(pub)
+                }
             }
             return jsonResponse(req, 200, matched.toString())
         }
 
         return jsonResponse(req, 405, "{}")
+    }
+
+    private fun readBody(req: okhttp3.Request): JSONObject {
+        val buf = Buffer()
+        req.body?.writeTo(buf)
+        return JSONObject(buf.readUtf8())
+    }
+
+    private fun findByName(name: String): JSONObject? =
+        rowsById.values.firstOrNull { it.optString("character_name").trim().lowercase() == name.trim().lowercase() }
+
+    private fun checkPin(row: JSONObject, pinHash: String): String {
+        val key = row.optString("character_name").lowercase()
+        if ((failures[key] ?: 0) >= 5) return "locked"
+        return if (row.optString("pin_hash") == pinHash) {
+            failures.remove(key)
+            "ok"
+        } else {
+            failures[key] = (failures[key] ?: 0) + 1
+            "bad"
+        }
     }
 
     private fun jsonResponse(req: okhttp3.Request, code: Int, body: String): Response =
@@ -276,5 +342,55 @@ class CloudSaveTest {
         assertTrue(autoLoginA is CloudAuthResult.Success)
         assertEquals(9, (autoLoginA as CloudAuthResult.Success).saveData.level)
         assertEquals(1400, autoLoginA.saveData.gold)
+    }
+
+    @Test
+    fun serverEnforcesPinLockoutReservedAdminAndRefusesForeignOverwrites() = runBlocking {
+        val server = FakeSupabasePlayersServer()
+        val client = OkHttpClient.Builder().addInterceptor(server).build()
+        fun repo() = SupabaseCloudSaveRepository(
+            localStore = LocalCloudBackupStore(InMemoryCloudKeyValueStore()),
+            httpClient = client,
+            urlProvider = { "https://demo.supabase.co" },
+            anonKeyProvider = { "sb_publishable_demo" }
+        )
+
+        val owner = repo().createCharacter("Lyra", "2468") { GameEngine.toSaveData(GameEngine.createNewWorld(it)) }
+        assertTrue(owner is CloudAuthResult.Success)
+        val ownerSession = (owner as CloudAuthResult.Success).session
+        assertFalse("New heroes are never admin", ownerSession.isAdmin)
+
+        // An attacker who knows Lyra's public player id cannot overwrite her save without the PIN
+        val attacker = repo()
+        val before = server.rowsById[ownerSession.playerId]!!.getJSONObject("save_data").toString()
+        val forged = ownerSession.copy(pinHash = PinHasher.hashPin("Lyra", "0000"))
+        val wiped = owner.saveData.copy(level = 1, gold = 0, x = 1, y = 1)
+        assertEquals(CloudSaveOutcome.SAVED_LOCAL_OFFLINE, attacker.saveProgress(forged, wiped))
+        assertEquals(before, server.rowsById[ownerSession.playerId]!!.getJSONObject("save_data").toString())
+
+        // Five wrong PINs lock the hero, even for the correct PIN afterwards
+        repeat(4) { attacker.loginAndRecover("Lyra", "1111") }
+        val locked = attacker.loginAndRecover("Lyra", "2468")
+        assertTrue(locked is CloudAuthResult.Failure)
+        assertEquals(SupabaseCloudSaveRepository.TOO_MANY_ATTEMPTS_MESSAGE, (locked as CloudAuthResult.Failure).message)
+
+        // "Admin" is reserved until the owner opens the claim window
+        val denied = repo().createCharacter("Admin", "1119") { GameEngine.toSaveData(GameEngine.createNewWorld(it)) }
+        assertTrue(denied is CloudAuthResult.Failure)
+
+        server.adminClaimOpen = true
+        val claimed = repo().createCharacter("admin", "5555") { GameEngine.toSaveData(GameEngine.createNewWorld(it)) }
+        assertTrue(claimed is CloudAuthResult.Success)
+        claimed as CloudAuthResult.Success
+        assertTrue(claimed.session.isAdmin)
+        assertTrue(claimed.saveData.isAdmin)
+        assertEquals("Admin", claimed.saveData.name)
+
+        // Logging in elsewhere picks up admin status from the server, not from the name
+        val adminLogin = repo().loginAndRecover("Admin", "5555")
+        assertTrue(adminLogin is CloudAuthResult.Success)
+        assertTrue((adminLogin as CloudAuthResult.Success).saveData.isAdmin)
+        val normalLogin = repo().loginAndRecover("Lyra", "2468")
+        assertTrue(normalLogin is CloudAuthResult.Failure) // still locked
     }
 }

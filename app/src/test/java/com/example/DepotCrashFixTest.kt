@@ -55,9 +55,9 @@ private class RecordingSupabaseInterceptor : Interceptor {
             return Response.Builder()
                 .request(req)
                 .protocol(Protocol.HTTP_1_1)
-                .code(201)
-                .message("Created")
-                .body("[]".toResponseBody("application/json".toMediaType()))
+                .code(200)
+                .message("OK")
+                .body("{\"status\":\"ok\",\"is_admin\":false}".toResponseBody("application/json".toMediaType()))
                 .build()
         }
         return Response.Builder()
@@ -223,7 +223,7 @@ class DepotCrashFixTest {
 
         assertEquals(CloudSaveOutcome.SYNCED_CLOUD, outcome)
         assertEquals(1, interceptor.postedPayloads.size)
-        val uploadedSaveData = interceptor.postedPayloads.first().getJSONObject("save_data")
+        val uploadedSaveData = interceptor.postedPayloads.first().getJSONObject("p_save_data")
         val uploadedDepot = uploadedSaveData.getJSONArray("depotItems")
         assertEquals(1, uploadedDepot.length())
         assertEquals("blank_rune", uploadedDepot.getJSONObject(0).getString("id"))

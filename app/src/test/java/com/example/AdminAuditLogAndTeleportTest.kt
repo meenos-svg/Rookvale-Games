@@ -218,12 +218,14 @@ class AdminAuditLogAndTeleportTest {
         val validAdminSession = CloudSession(
             playerId = "admin-slot-1",
             characterName = AdminAccountPolicy.ADMIN_CANONICAL_NAME,
-            pinHash = PinHasher.hashPin(AdminAccountPolicy.ADMIN_CANONICAL_NAME, "1119")
+            pinHash = PinHasher.hashPin(AdminAccountPolicy.ADMIN_CANONICAL_NAME, "5555"),
+            isAdmin = true // server-verified
         )
         val spoofedSession = CloudSession(
             playerId = "fake-admin",
             characterName = "Admin",
-            pinHash = PinHasher.hashPin("Admin", "0000")
+            pinHash = PinHasher.hashPin("Admin", "0000"),
+            isAdmin = false // named "Admin" but not verified by the server
         )
 
         // Non-Admin flag or spoofed session must be rejected cleanly
@@ -257,7 +259,7 @@ class AdminAuditLogAndTeleportTest {
             details = mapOf(
                 "from" to "Lv 1",
                 "to" to "Lv 120",
-                "pin" to "1119",
+                "pin" to "5555",
                 "pinHash" to "deadbeef",
                 "apiKey" to "should-not-log",
                 "secretToken" to "nope"
@@ -305,7 +307,8 @@ class AdminAuditLogAndTeleportTest {
         val validAdminSession = CloudSession(
             playerId = "admin-slot-1",
             characterName = AdminAccountPolicy.ADMIN_CANONICAL_NAME,
-            pinHash = PinHasher.hashPin(AdminAccountPolicy.ADMIN_CANONICAL_NAME, "1119")
+            pinHash = PinHasher.hashPin(AdminAccountPolicy.ADMIN_CANONICAL_NAME, "5555"),
+            isAdmin = true // server-verified
         )
         val serverRows = mutableListOf<JSONObject>()
         val observedMethods = mutableListOf<String>()
@@ -320,9 +323,11 @@ class AdminAuditLogAndTeleportTest {
                     "POST" -> {
                         val buf = okio.Buffer()
                         req.body?.writeTo(buf)
-                        val arr = JSONArray(buf.readUtf8())
+                        val body = JSONObject(buf.readUtf8())
+                        assertEquals("admin-slot-1", body.getString("p_player_id"))
+                        val arr = body.getJSONArray("p_entries")
                         for (i in 0 until arr.length()) {
-                            val row = arr.getJSONObject(i)
+                            val row = arr.getJSONObject(i).put("actor_name", "Admin")
                             val id = row.getString("event_id")
                             if (serverRows.none { it.getString("event_id") == id }) {
                                 serverRows += row
@@ -331,9 +336,9 @@ class AdminAuditLogAndTeleportTest {
                         Response.Builder()
                             .request(req)
                             .protocol(Protocol.HTTP_1_1)
-                            .code(201)
-                            .message("Created")
-                            .body("".toResponseBody("application/json".toMediaType()))
+                            .code(200)
+                            .message("OK")
+                            .body("{\"status\":\"ok\"}".toResponseBody("application/json".toMediaType()))
                             .build()
                     }
                     "GET" -> {
@@ -403,7 +408,7 @@ class AdminAuditLogAndTeleportTest {
 
         // Verify strictly append-only HTTP methods (POST & GET only — zero PATCH/PUT/DELETE)
         assertTrue(observedMethods.all { it == "POST" || it == "GET" })
-        assertTrue(observedUrls.any { it.contains("on_conflict=event_id") })
+        assertTrue(observedUrls.any { it.endsWith("/rest/v1/rpc/rv_append_admin_audit") })
         assertTrue(observedUrls.any { it.contains("order=created_at.desc") })
 
         // Verify sanitizer caps long input cleanly

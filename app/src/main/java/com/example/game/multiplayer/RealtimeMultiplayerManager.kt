@@ -95,6 +95,31 @@ class RealtimeMultiplayerManager(
     private var floorJoinedAtMs = 0L
     @Volatile
     private var latestLocalPayload: LocalPlayerPresencePayload? = null
+
+    /**
+     * Admins as reported by the server roster (`players.is_admin`), keyed by player id with the
+     * normalized character name as value. Realtime frames are unauthenticated, so a client's own
+     * `isAdmin` claim is only honored when its id AND name match a server-verified admin.
+     */
+    @Volatile
+    private var verifiedAdmins: Map<String, String> = emptyMap()
+
+    private fun adminNameKey(name: String?): String = name.orEmpty().trim().lowercase()
+
+    internal fun isVerifiedAdmin(playerId: String?, name: String?): Boolean {
+        val id = playerId?.trim().orEmpty()
+        if (id.isEmpty()) return false
+        return verifiedAdmins[id]?.let { it == adminNameKey(name) } == true
+    }
+
+    internal fun updateVerifiedAdmins(polled: List<RemotePlayerState>) {
+        val next = verifiedAdmins.toMutableMap()
+        for (p in polled) {
+            if (p.playerId.isBlank()) continue
+            if (p.isAdmin) next[p.playerId] = adminNameKey(p.name) else next.remove(p.playerId)
+        }
+        verifiedAdmins = next
+    }
     @Volatile
     private var lastChatSentMs = 0L
     @Volatile
@@ -342,6 +367,7 @@ class RealtimeMultiplayerManager(
         localPlayerId: String,
         localPlayerName: String
     ) {
+        updateVerifiedAdmins(polled)
         val normalizedRegion = normalizeRegionId(localRegionId)
         if (localFloor != currentFloor) return
         val now = nowProvider()
@@ -746,6 +772,7 @@ class RealtimeMultiplayerManager(
             mapOf(
                 "id" to localMsg.id,
                 "sender" to localMsg.senderName,
+                "sid" to latestLocalPayload?.playerId.orEmpty(),
                 "senderIsAdmin" to senderIsAdmin,
                 "text" to localMsg.text,
                 "ch" to channel.name,
@@ -1757,8 +1784,10 @@ class RealtimeMultiplayerManager(
         val floor = body["floor"].asIntOrNull() ?: currentFloor
         val msgId = MultiplayerSanitizer.sanitizeId(body["id"] as? String).ifBlank { "r_${UUID.randomUUID()}" }
         val ts = body["ts"].asLongOrNull() ?: nowProvider()
-        val senderIsAdmin = ((body["senderIsAdmin"] as? Boolean) == true) ||
+        val claimsAdmin = ((body["senderIsAdmin"] as? Boolean) == true) ||
             ((body["isAdmin"] as? Boolean) == true)
+        val senderId = MultiplayerSanitizer.sanitizeId(body["sid"] as? String)
+        val senderIsAdmin = claimsAdmin && isVerifiedAdmin(senderId, sender)
 
         appendChatMessage(
             ChatMessage(
@@ -1966,7 +1995,7 @@ class RealtimeMultiplayerManager(
         val parsedHelmetId = parseGearId("helmetId", null, existing?.helmetId)
         val parsedBootsId = parseGearId("bootsId", null, existing?.bootsId)
 
-        val parsedIsAdmin = (meta["isAdmin"] as? Boolean) ?: existing?.isAdmin ?: false
+        val parsedIsAdmin = isVerifiedAdmin(id, (meta["name"] as? String) ?: existing?.name)
         val parsedIsSpectator = (meta["isSpectator"] as? Boolean) ?: false
 
         return RemotePlayerState(

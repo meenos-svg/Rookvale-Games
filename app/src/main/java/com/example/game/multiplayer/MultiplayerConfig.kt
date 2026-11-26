@@ -49,6 +49,17 @@ object MultiplayerConfig {
         return "https://$host/rest/v1/players"
     }
 
+    /** PostgREST endpoint for a server-side function in supabase/players_security.sql. */
+    fun restRpcUrl(
+        functionName: String,
+        url: String = SUPABASE_URL,
+        anonKey: String = SUPABASE_ANON_KEY
+    ): String? {
+        if (!isConfigured(url, anonKey)) return null
+        val host = parseValidHttpsHost(url) ?: return null
+        return "https://$host/rest/v1/rpc/$functionName"
+    }
+
     fun restAdminAuditLogsBaseUrl(
         url: String = SUPABASE_URL,
         anonKey: String = SUPABASE_ANON_KEY

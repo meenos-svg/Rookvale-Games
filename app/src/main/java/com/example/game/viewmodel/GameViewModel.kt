@@ -369,15 +369,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val result = cloudRepository.loginAndRecover(
                 rawName = name,
-                pin = pin,
-                adminSaveBuilder = { adminName ->
-                    val freshAdmin = GameEngine.createNewWorld(
-                        name = adminName,
-                        vocation = Vocation.ADVENTURER,
-                        isAdmin = true
-                    )
-                    GameEngine.toSaveData(freshAdmin)
-                }
+                pin = pin
             )
             when (result) {
                 is CloudAuthResult.Success -> enterGameWithCloudResult(result)

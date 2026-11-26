@@ -538,13 +538,9 @@ class AdminAuditLogRepository(
 
     fun loadLocalEntries(): List<AdminAuditEntry> = localStore.loadEntries()
 
-    fun isAuthorizedAdmin(isAdminFlag: Boolean, session: CloudSession?): Boolean {
-        if (!isAdminFlag) return false
-        if (session != null && !AdminAccountPolicy.verifyAdminSession(session.characterName, session.pinHash)) {
-            return false
-        }
-        return true
-    }
+    /** Admin status comes from the server (`players.is_admin`) via the PIN-verified cloud session. */
+    fun isAuthorizedAdmin(isAdminFlag: Boolean, session: CloudSession?): Boolean =
+        isAdminFlag && session?.isAdmin == true
 
     /**
      * Appends a new Admin Audit Log event locally (QUEUED) and immediately attempts a server-side
@@ -577,7 +573,7 @@ class AdminAuditLogRepository(
         )
 
         var entries = localStore.appendEntry(entry)
-        val pushed = if (isCloudConfigured()) insertAuditRows(listOf(entry)) else false
+        val pushed = if (isCloudConfigured()) insertAuditRows(listOf(entry), session) else false
         if (pushed) {
             entries = localStore.markSynced(setOf(entry.eventId))
         }
@@ -619,7 +615,7 @@ class AdminAuditLogRepository(
                 statusMessage = "${pending.size} queued locally (cloud offline)"
             )
         }
-        val pushed = insertAuditRows(pending)
+        val pushed = insertAuditRows(pending, session)
         val updated = if (pushed) localStore.markSynced(pending.map { it.eventId }.toSet()) else current
         val remaining = updated.count { it.syncStatus == AdminAuditSyncStatus.QUEUED }
         AdminAuditRefreshResult(
@@ -677,36 +673,42 @@ class AdminAuditLogRepository(
         }
     }
 
-    private fun insertAuditRows(entries: List<AdminAuditEntry>): Boolean {
+    /**
+     * Appends rows through the server-side `rv_append_admin_audit` function, which re-verifies the
+     * caller's PIN and admin flag and records the real character name as the actor.
+     */
+    private fun insertAuditRows(entries: List<AdminAuditEntry>, session: CloudSession?): Boolean {
         if (entries.isEmpty()) return true
-        val base = MultiplayerConfig.restAdminAuditLogsBaseUrl(urlProvider(), anonKeyProvider()) ?: return false
-        val url = base.toHttpUrlOrNull()?.newBuilder()
-            ?.addQueryParameter("on_conflict", "event_id")
-            ?.build()
-            ?: return false
+        if (session == null) return false
+        val url = MultiplayerConfig.restRpcUrl(RPC_APPEND_AUDIT, urlProvider(), anonKeyProvider()) ?: return false
 
-        val payload = JSONArray()
+        val rows = JSONArray()
         for (entry in entries) {
             val detailsObj = JSONObject()
             entry.details.forEach { (k, v) -> detailsObj.put(k, v) }
-            payload.put(JSONObject().apply {
+            rows.put(JSONObject().apply {
                 put("event_id", entry.eventId)
                 put("created_at", IsoTimestampUtil.formatUtc(entry.createdAtMs))
                 put("action_type", entry.actionType.wireName)
-                put("actor_name", entry.actorName)
                 put("target_name", entry.targetName)
                 put("summary", entry.summary)
                 put("details", detailsObj)
             })
         }
+        val payload = JSONObject().apply {
+            put("p_player_id", session.playerId)
+            put("p_pin_hash", session.pinHash)
+            put("p_entries", rows)
+        }
 
-        val req = baseRequestBuilder(url.toString())
-            .header("Prefer", "resolution=ignore-duplicates,return=minimal")
+        val req = baseRequestBuilder(url)
             .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
             .build()
 
         return runCatching {
-            httpClient.newCall(req).execute().use { resp -> resp.isSuccessful }
+            httpClient.newCall(req).execute().use { resp ->
+                resp.isSuccessful && JSONObject(resp.body?.string().orEmpty()).optString("status") == "ok"
+            }
         }.getOrDefault(false)
     }
 
@@ -778,6 +780,7 @@ class AdminAuditLogRepository(
 
     companion object {
         private const val PREFS_NAME = "rookvale_admin_audit_prefs"
+        private const val RPC_APPEND_AUDIT = "rv_append_admin_audit"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         private fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
