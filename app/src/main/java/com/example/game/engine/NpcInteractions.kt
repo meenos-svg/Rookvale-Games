@@ -21,6 +21,12 @@ object NpcInteractions {
 
     private fun closedMovement(s: GameWorldState) = s.copy(walkPath = emptyList(), longRangeGoal = null, longRangeWaypoints = emptyList())
 
+    private fun vendorIdFor(npc: NpcSpot): String? = when (npc.name) {
+        "Odra" -> VendorCatalog.MIRE_OUTFITTER
+        "Tahir" -> VendorCatalog.SUN_CARAVANEER
+        else -> vendorIdFor(npc.role)
+    }
+
     private fun vendorIdFor(role: NpcRole): String? = when (role) {
         NpcRole.FISHERMAN -> VendorCatalog.FISHERMAN
         NpcRole.BLACKSMITH -> VendorCatalog.BLACKSMITH
@@ -31,7 +37,7 @@ object NpcInteractions {
 
     /** Handles a tap on one of the new townsfolk. Returns null for roles handled elsewhere. */
     fun talkTo(state: GameWorldState, npc: NpcSpot, wallClockMs: Long = System.currentTimeMillis()): GameWorldState? {
-        vendorIdFor(npc.role)?.let { vid ->
+        vendorIdFor(npc)?.let { vid ->
             val v = VendorCatalog.vendor(vid) ?: return null
             var s = closedMovement(state).copy(activePanel = ActivePanel.SHOP, activeShopId = vid).addLogInternal(v.greeting)
             if (vid == VendorCatalog.WANDERER) {
@@ -42,15 +48,17 @@ object NpcInteractions {
         }
         return when (npc.role) {
             NpcRole.HUNT_MASTER -> {
+                val board = HuntBoards.byMaster(npc.name)
+                val who = board.masterName
                 val active = activeContract(state)
                 val line = if (active != null) {
                     val kills = huntKills(state)
-                    if (kills >= active.count) "Captain Hale: 'Well done! Claim your reward for ${active.title}.'"
-                    else "Captain Hale: '${active.title}: ${kills}/${active.count} ${active.target.displayName}. Keep at it.'"
+                    if (kills >= active.count) "$who: 'Well done! Claim your reward for ${active.title}.'"
+                    else "$who: '${active.title}: ${kills}/${active.count} ${active.target.displayName}. Keep at it.'"
                 } else {
-                    "Captain Hale: 'Looking for work? Pick a contract from the board.'"
+                    "$who: 'Looking for work? Pick a contract from the board.'"
                 }
-                closedMovement(state).copy(activePanel = ActivePanel.HUNT_BOARD, activeShopId = null).addLogInternal(line)
+                closedMovement(state).copy(activePanel = ActivePanel.HUNT_BOARD, activeShopId = HuntBoards.panelId(board.id)).addLogInternal(line)
             }
             NpcRole.BESTIARY_SAGE -> {
                 val ready = completedUnclaimed(state).size
@@ -58,7 +66,11 @@ object NpcInteractions {
                 else "Sage Ilsa: 'Slay creatures and I'll record what you learn. Each finished entry makes you deadlier against that beast.'"
                 closedMovement(state).copy(activePanel = ActivePanel.BESTIARY, activeShopId = null).addLogInternal(line)
             }
-            NpcRole.TOWN_CRIER -> crierNews(closedMovement(state), wallClockMs)
+            NpcRole.TOWN_CRIER -> when (npc.name) {
+                "Crier Pell" -> mirewatchCrier(closedMovement(state), wallClockMs)
+                "Crier Nadim" -> sunspireCrier(closedMovement(state), wallClockMs)
+                else -> crierNews(closedMovement(state), wallClockMs)
+            }
             NpcRole.DUNGEON_GUIDE -> closedMovement(state).addLogInternal(DungeonGuides.messageFor(npc.name))
             else -> null
         }
@@ -90,6 +102,24 @@ object NpcInteractions {
             .addLogInternal("Crier Tobias: 'Captain Hale posts bounties by the plaza, and Sage Ilsa rewards monster lore at the Academy!'")
     }
 
+    fun mirewatchCrier(state: GameWorldState, wallClockMs: Long = System.currentTimeMillis()): GameWorldState {
+        val featured = TownCrier.featuredMarshCreature(wallClockMs)
+        val pct = (TownCrier.FEATURED_XP_BONUS * 100).toInt()
+        return state
+            .addLogInternal("Crier Pell: 'Hear ye! Marsh hunt of the day: every ${featured.displayName} slain gives +$pct% XP, for the next ${TownCrier.hoursUntilTomorrow(wallClockMs)}h!'")
+            .addLogInternal("Crier Pell: 'Warden Brisk posts marsh bounties on the moot platform, and Odra buys bog goods at the wharf.'")
+            .addLogInternal("Crier Pell: 'Murkfen Hollow lies just west of town. Mind the wisps, they lead you into deep water.'")
+    }
+
+    fun sunspireCrier(state: GameWorldState, wallClockMs: Long = System.currentTimeMillis()): GameWorldState {
+        val featured = TownCrier.featuredBadlandsCreature(wallClockMs)
+        val pct = (TownCrier.FEATURED_XP_BONUS * 100).toInt()
+        return state
+            .addLogInternal("Crier Nadim: 'Hear ye! Desert hunt of the day: every ${featured.displayName} slain gives +$pct% XP, for the next ${TownCrier.hoursUntilTomorrow(wallClockMs)}h!'")
+            .addLogInternal("Crier Nadim: 'Sergeant Kasim posts desert bounties in the Sun Plaza, and Tahir trades at the caravanserai.'")
+            .addLogInternal("Crier Nadim: 'The Tomb, the Labyrinth and the Scorchglass Rift all lie to the south-west. Carry water!'")
+    }
+
     // ---------------------------------------------------------------- Hunt contracts
 
     fun activeContract(state: GameWorldState): HuntContract? =
@@ -98,10 +128,16 @@ object NpcInteractions {
     fun huntKills(state: GameWorldState): Int = state.npcProgress[HUNT_KILLS] ?: 0
     fun huntsCompleted(state: GameWorldState): Int = state.npcProgress[HUNTS_DONE] ?: 0
 
+    /** The hunt master behind the board the player has open (or the contract's own board). */
+    private fun masterFor(state: GameWorldState, contract: HuntContract? = null): String =
+        if (state.activeShopId?.startsWith("hunt:") == true) HuntBoards.fromPanelId(state.activeShopId).masterName
+        else HuntBoards.byId(contract?.board).masterName
+
     fun acceptContract(state: GameWorldState, contractId: String): GameWorldState {
         val c = HuntContracts.byId(contractId) ?: return state
-        if (activeContract(state) != null) return state.addLogInternal("Captain Hale: 'Finish or abandon your current contract first.'")
-        if (state.level < c.minLevel) return state.addLogInternal("Captain Hale: 'Come back at level ${c.minLevel} for that one.'")
+        val who = masterFor(state, c)
+        if (activeContract(state) != null) return state.addLogInternal("$who: 'Finish or abandon your current contract first.'")
+        if (state.level < c.minLevel) return state.addLogInternal("$who: 'Come back at level ${c.minLevel} for that one.'")
         val idx = HuntContracts.indexOf(c.id)
         return state.copy(npcProgress = state.npcProgress + (HUNT_ACTIVE to idx + 1) + (HUNT_KILLS to 0))
             .addLogInternal("Contract accepted: ${c.title}. Slay ${c.count} ${c.target.displayName}. ${c.hint}")
@@ -115,14 +151,15 @@ object NpcInteractions {
 
     fun turnInContract(state: GameWorldState, nowMs: Long): GameWorldState {
         val c = activeContract(state) ?: return state
-        if (huntKills(state) < c.count) return state.addLogInternal("Captain Hale: 'Not done yet: ${huntKills(state)}/${c.count}.'")
+        val who = masterFor(state, c)
+        if (huntKills(state) < c.count) return state.addLogInternal("$who: 'Not done yet: ${huntKills(state)}/${c.count}.'")
         var s = state.copy(
             gold = state.gold + c.goldReward,
             npcProgress = state.npcProgress + (HUNT_ACTIVE to 0) + (HUNT_KILLS to 0) + (HUNTS_DONE to huntsCompleted(state) + 1)
         )
         s = GameEngine.grantExperience(s, c.xpReward, s.playerX.toFloat(), s.playerY.toFloat(), nowMs)
         return s.addFloatingInternal(s.floor, s.playerX.toFloat(), s.playerY.toFloat(), "+${c.goldReward} gp", FloatingTextKind.HEAL, nowMs)
-            .addLogInternal("Captain Hale: 'Contract complete!' (+${c.goldReward} gp, +${c.xpReward} XP)")
+            .addLogInternal("$who: 'Contract complete!' (+${c.goldReward} gp, +${c.xpReward} XP)")
     }
 
     // ---------------------------------------------------------------- Bestiary
@@ -166,7 +203,7 @@ object NpcInteractions {
         var s = GameEngine.grantExperience(state, m.scaledXpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
         if (m.isSummon) return s
 
-        if (m.type == TownCrier.featuredCreature(wallClockMs)) {
+        if (m.type in TownCrier.featuredCreatures(wallClockMs)) {
             val bonus = (m.scaledXpReward * TownCrier.FEATURED_XP_BONUS).toLong()
             if (bonus > 0) {
                 s = GameEngine.grantExperience(s, bonus, m.x.toFloat(), m.y.toFloat() - 0.4f, nowMs)
@@ -187,7 +224,7 @@ object NpcInteractions {
             if (k < contract.count) {
                 progress = progress + (HUNT_KILLS to k + 1)
                 s = if (k + 1 >= contract.count) {
-                    s.addLogInternal("Contract complete: ${contract.title}! Report to Captain Hale in the plaza.")
+                    s.addLogInternal("Contract complete: ${contract.title}! Report to any hunt master (${HuntBoards.byId(contract.board).masterName} posted it).")
                 } else if ((k + 1) % 5 == 0) {
                     s.addLogInternal("${contract.title}: ${k + 1}/${contract.count}")
                 } else s

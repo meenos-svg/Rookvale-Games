@@ -156,6 +156,14 @@ object WorldMaps {
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 186, ROOKVALE_ORIGIN_Y + 199, "Captain Hale", NpcRole.HUNT_MASTER))
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 242, ROOKVALE_ORIGIN_Y + 179, "Sage Ilsa", NpcRole.BESTIARY_SAGE))
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 200, ROOKVALE_ORIGIN_Y + 199, "Crier Tobias", NpcRole.TOWN_CRIER))
+            // Mirewatch (marsh stilt city) townsfolk
+            add(NpcSpot(0, 535, 600, "Warden Brisk", NpcRole.HUNT_MASTER))
+            add(NpcSpot(0, 545, 567, "Crier Pell", NpcRole.TOWN_CRIER))
+            add(NpcSpot(0, 580, 572, "Odra", NpcRole.FISHERMAN))
+            // Sunspire (walled desert oasis) townsfolk
+            add(NpcSpot(0, 366, 790, "Sergeant Kasim", NpcRole.HUNT_MASTER))
+            add(NpcSpot(0, 375, 757, "Crier Nadim", NpcRole.TOWN_CRIER))
+            add(NpcSpot(0, 347, 773, "Tahir", NpcRole.WANDERING_MERCHANT))
             // Dungeon guides beside each Rookvale dungeon entrance
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 86, ROOKVALE_ORIGIN_Y + 318, "Scout Bryn", NpcRole.DUNGEON_GUIDE))
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 314, ROOKVALE_ORIGIN_Y + 318, "Ranger Tamsin", NpcRole.DUNGEON_GUIDE))
@@ -1511,14 +1519,14 @@ object WorldMaps {
         return WorldFloor(
             floorId = -5,
             name = "The Grimmaw Quarry",
-            subtitle = "Endgame Dungeon • Floor -5 • Forward Camp PZ",
+            subtitle = "Frostpeak Foothills Dungeon • Floor -5 • Forward Camp PZ",
             width = s,
             height = s,
             chunkedGrid = ChunkedTileGrid.fromArray(g),
             isProtectionZone = { x, y -> camp.contains(x, y) },
-            dangerLevel = "Extreme",
+            dangerLevel = "High",
             recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(-5),
-            dangerSeverity = 4
+            dangerSeverity = 3
         )
     }
 

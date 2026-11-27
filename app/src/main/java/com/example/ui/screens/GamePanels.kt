@@ -160,7 +160,7 @@ fun SlideUpGamePanel(
         ActivePanel.SKILLS -> stringResource(R.string.panel_skills)
         ActivePanel.DEPOT -> stringResource(R.string.panel_depot)
         ActivePanel.SHOP -> VendorCatalog.vendor(state.activeShopId)?.title ?: stringResource(R.string.panel_shop)
-        ActivePanel.HUNT_BOARD -> "Captain Hale's Hunt Board"
+        ActivePanel.HUNT_BOARD -> com.example.game.engine.HuntBoards.fromPanelId(state.activeShopId).title
         ActivePanel.BESTIARY -> "Sage Ilsa's Bestiary"
         ActivePanel.FURNACE -> "Smelting Furnace"
         ActivePanel.ANVIL -> "Blacksmith Anvil"
@@ -2146,7 +2146,7 @@ private fun HuntBoardContent(state: GameWorldState, onAction: (String) -> Unit) 
                 color = ParchmentMuted
             )
         }
-        items(HuntContracts.all, key = { it.id }) { c ->
+        items(HuntContracts.forBoard(com.example.game.engine.HuntBoards.fromPanelId(state.activeShopId).id), key = { it.id }) { c ->
             val unlocked = state.level >= c.minLevel
             val isActive = active?.id == c.id
             Surface(

@@ -145,7 +145,7 @@ object BiomeProgressionRules {
         -2 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Watchwood Caverns (Lvl 9-13) & Molten Pit Throne boss (Lvl 14)
         -3 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Abyssal Crypt (Lvl 13-17) & Demon Lord (Lvl 18)
         -4 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Obsidian Wyrm Sanctum (Lvl 16-20) & Elder Dragon (Lvl 20)
-        -5 -> OverlandBiomeTier.SUNSCORCH_BADLANDS   // Grimmaw Quarry & Deep Quarry Pit (Lvl 60-65)
+        -5 -> OverlandBiomeTier.FROSTPEAK_HIGHLANDS  // Grimmaw Quarry & Deep Quarry Pit (Lvl 42-47), in the Frostpeak foothills
         -6 -> OverlandBiomeTier.SUNSCORCH_BADLANDS   // Gorek Labyrinth & Inner Sanctum (Lvl 36-41), rebalanced to its badlands home
         -7 -> OverlandBiomeTier.WHISPERING_MARSH     // Sunken Mire Vaults & Sluice Depths (Lvl 26-31)
         -8 -> OverlandBiomeTier.WHISPERING_MARSH     // Overgrown Ziggurat & Sun-Altar (Lvl 32-37)
@@ -171,7 +171,7 @@ object BiomeProgressionRules {
     fun effectiveDungeonDepth(floorId: Int): Int = when (parentUpperFloorFor(floorId)) {
         -6, -7, -9, -11, -12, -13 -> 1
         -8, -10, -14, -15 -> 2
-        -29, -30 -> 0   // entry dungeons of their biomes: monsters start at the biome's own minimum level
+        -5, -29, -30 -> 0   // entry dungeons of their biomes: monsters start at the biome's own minimum level
         else -> abs(parentUpperFloorFor(floorId)).coerceAtLeast(1)
     }
 

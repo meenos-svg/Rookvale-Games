@@ -219,7 +219,7 @@ fun AdventureTrackerCard(
                 if (contract != null) {
                     val done = kills >= contract.count
                     Text(
-                        if (done) "${contract.title}: done! See Captain Hale" else "${contract.title}: $kills/${contract.count}",
+                        if (done) "${contract.title}: done! See ${com.example.game.engine.HuntBoards.byId(contract.board).masterName}" else "${contract.title}: $kills/${contract.count}",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
                         color = if (done) ExpEmerald else ParchmentLight,
                         maxLines = 1,

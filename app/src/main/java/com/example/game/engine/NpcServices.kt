@@ -37,6 +37,11 @@ object VendorCatalog {
     const val BLACKSMITH = "borin"
     const val FLETCHER = "wren"
     const val WANDERER = "wanderer"
+    const val MIRE_OUTFITTER = "odra"
+    const val SUN_CARAVANEER = "tahir"
+
+    private val marshGoods = setOf("bile_gland", "spider_silk", "mire_silver_ore", "peat_coal_ore", "bog_iron_ore", "ghoul_gem", "jagged_ivory", "marsh_pike")
+    private val badlandsGoods = setOf("vesperite_ore", "gorek_obsidian_horn", "colossus_tendon", "ancient_bone", "runic_slate", "ember_heart", "sunfin_snapper")
 
     /** Specialists pay 25% more than Alaric for goods in their trade. */
     const val SPECIALIST_SELL_BONUS = 1.25
@@ -94,6 +99,32 @@ object VendorCatalog {
                 it.id == "wood_log" || it.id == "wild_feather" ||
                     it.category == ItemCategory.AMMO || it.category == ItemCategory.WEAPON_DISTANCE
             },
+            preferredSellMultiplier = SPECIALIST_SELL_BONUS
+        ),
+        Vendor(
+            id = MIRE_OUTFITTER,
+            npcName = "Odra",
+            title = "Odra's Bog Outfitters",
+            greeting = "Odra: 'Bloodworms, venom shafts, a good steel pick. And I pay best in Mirewatch for bog goods.'",
+            stock = listOf(
+                offer("fishing_rod"), offer("mire_bloodworm"),
+                offer("health_potion"), offer("mana_potion"), offer("rope"),
+                offer("venom_shafts", 12), offer("tempered_steel_pickaxe", 520)
+            ),
+            prefers = { it.id in marshGoods },
+            preferredSellMultiplier = SPECIALIST_SELL_BONUS
+        ),
+        Vendor(
+            id = SUN_CARAVANEER,
+            npcName = "Tahir",
+            title = "Tahir's Caravanserai",
+            greeting = "Tahir: 'Water, worms and a vesperite pick for the deep veins. Horns, tendons and ore fetch a fine price here.'",
+            stock = listOf(
+                offer("fishing_rod"), offer("dune_sandworm"),
+                offer("health_potion"), offer("mana_potion"), offer("rope"),
+                offer("quenchsteel_quarrels", 14), offer("vesperite_tipped_pickaxe", 980)
+            ),
+            prefers = { it.id in badlandsGoods },
             preferredSellMultiplier = SPECIALIST_SELL_BONUS
         ),
         Vendor(
@@ -174,15 +205,41 @@ data class HuntContract(
     val minLevel: Int,
     val goldReward: Int,
     val xpReward: Long,
-    val hint: String
+    val hint: String,
+    val board: String = HuntBoards.ROOKVALE
 )
 
-object HuntContracts {
-    private fun regular(id: String, title: String, t: MonsterType, count: Int, minLevel: Int, gold: Int, hint: String) =
-        HuntContract(id, title, t, count, minLevel, gold, (count * t.xpReward * 0.8).toLong().coerceAtLeast(100L), hint)
+/** A town's hunt board and the hunt master who runs it. */
+data class HuntBoard(val id: String, val masterName: String, val title: String, val where: String)
 
-    private fun boss(id: String, t: MonsterType, minLevel: Int, gold: Int, hint: String) =
-        HuntContract(id, "Bounty: ${t.displayName}", t, 1, minLevel, gold, (t.xpReward * 1.0).toLong().coerceAtLeast(500L), hint)
+object HuntBoards {
+    const val ROOKVALE = "rookvale"
+    const val MIREWATCH = "mirewatch"
+    const val SUNSPIRE = "sunspire"
+
+    val all: List<HuntBoard> = listOf(
+        HuntBoard(ROOKVALE, "Captain Hale", "Captain Hale's Hunt Board", "Rookvale's plaza"),
+        HuntBoard(MIREWATCH, "Warden Brisk", "Warden Brisk's Marsh Bounties", "Mirewatch's moot platform"),
+        HuntBoard(SUNSPIRE, "Sergeant Kasim", "Sergeant Kasim's Desert Bounties", "Sunspire's Sun Plaza")
+    )
+
+    fun byId(id: String?): HuntBoard = all.firstOrNull { it.id == id } ?: all.first()
+    fun byMaster(name: String): HuntBoard = all.firstOrNull { it.masterName == name } ?: all.first()
+
+    /** The hunt board panel keeps which board is open in `activeShopId` as `hunt:<board>`. */
+    fun panelId(board: String) = "hunt:$board"
+    fun fromPanelId(panelId: String?): HuntBoard = byId(panelId?.removePrefix("hunt:"))
+}
+
+object HuntContracts {
+    private fun regular(id: String, title: String, t: MonsterType, count: Int, minLevel: Int, gold: Int, hint: String, board: String = HuntBoards.ROOKVALE) =
+        HuntContract(id, title, t, count, minLevel, gold, (count * t.xpReward * 0.8).toLong().coerceAtLeast(100L), hint, board)
+
+    private fun boss(id: String, t: MonsterType, minLevel: Int, gold: Int, hint: String, board: String = HuntBoards.ROOKVALE) =
+        HuntContract(id, "Bounty: ${t.displayName}", t, 1, minLevel, gold, (t.xpReward * 1.0).toLong().coerceAtLeast(500L), hint, board)
+
+    private const val M = HuntBoards.MIREWATCH
+    private const val S = HuntBoards.SUNSPIRE
 
     val all: List<HuntContract> = listOf(
         regular("rats", "Rat Catcher", MonsterType.CAVE_RAT, 15, 1, 60, "Cave rats scurry in the meadows around town."),
@@ -203,13 +260,39 @@ object HuntContracts {
         boss("b_ignis", MonsterType.IGNIS_LORD_OF_THE_PIT, 12, 900, "In the Molten Pit beneath the Watchwood Caverns."),
         boss("b_stonehelm", MonsterType.WARDEN_STONEHELM, 15, 1200, "Behind the Sealed Vault of Crag Deep Hollow."),
         boss("b_demonlord", MonsterType.DEMON_LORD, 16, 1600, "Deep in the Abyssal Crypt."),
-        boss("b_elderdragon", MonsterType.ELDER_DRAGON, 18, 3000, "On the throne of the Obsidian Wyrm Sanctum.")
+        boss("b_elderdragon", MonsterType.ELDER_DRAGON, 18, 3000, "On the throne of the Obsidian Wyrm Sanctum."),
+        // --- Mirewatch: Warden Brisk's marsh bounties (Lv 20-37). Appended so saved contract indexes stay valid. ---
+        regular("m_ghouls", "Ghouls in the Reeds", MonsterType.GHOUL, 25, 20, 1500, "Ghouls haunt the marsh wilds around Mirewatch.", M),
+        regular("m_hags", "Hag Hunt", MonsterType.BOG_HAG, 20, 20, 1600, "Murkfen Hollow, just west of Mirewatch.", M),
+        regular("m_gators", "Gator Wallows", MonsterType.GATOR_BRUTE, 20, 20, 1600, "Gator brutes wallow in Murkfen Hollow's southern pools.", M),
+        regular("m_wisps", "Snuff the Wisps", MonsterType.FEN_WISP, 20, 20, 1500, "Fen wisps drift through Murkfen's northern glades.", M),
+        regular("m_lurkers", "Clear the Vaults", MonsterType.MIRE_LURKER, 20, 25, 2200, "Mire lurkers fill the Sunken Mire Vaults, north-west of town.", M),
+        regular("m_leeches", "Leech Weavers", MonsterType.BOG_LEECH_WEAVER, 20, 25, 2200, "They nest in the Mire Vaults' south-east caverns.", M),
+        regular("m_serpents", "Temple Serpents", MonsterType.TEMPLE_SERPENT_GUARD, 15, 30, 2800, "Serpent guards hold the Overgrown Ziggurat, far to the south.", M),
+        regular("m_acolytes", "Silence the Acolytes", MonsterType.SUN_PRIEST_ACOLYTE, 15, 30, 2800, "Sun-priest acolytes chant in the Ziggurat's cloisters.", M),
+        boss("m_b_hagmother", MonsterType.HAGMOTHER_VESSA, 22, 3500, "On her moated island at the far east of Murkfen Hollow.", M),
+        boss("m_b_miremaw", MonsterType.MIREMAW_THE_DROWNED, 27, 5000, "Down the Sluice Sump stairs beneath the Mire Vaults.", M),
+        boss("m_b_xolatl", MonsterType.XOLATL_THE_SUN_FANG, 32, 6500, "Below the Ziggurat's summit altar.", M),
+        // --- Sunspire: Sergeant Kasim's desert bounties (Lv 30-46) ---
+        regular("s_scorpions", "Scorpion Sweep", MonsterType.DUNE_SCORPION, 20, 30, 2600, "Tomb of Akhet, south-west of Sunspire.", S),
+        regular("s_wraiths", "Lay the Wraiths", MonsterType.SAND_WRAITH, 20, 30, 2600, "Sand wraiths drift through the Tomb's burial wings.", S),
+        regular("s_basilisks", "Basilisk Hides", MonsterType.SUNSCALE_BASILISK, 20, 31, 2800, "Sunscale basilisks bask in the Tomb's Hall of Kings.", S),
+        regular("s_devils", "Fire Devils", MonsterType.FIRE_DEVIL, 20, 32, 2600, "Fire devils roam the open badlands around Sunspire.", S),
+        regular("s_raiders", "Break the Warband", MonsterType.GOREK_RAIDER, 20, 36, 3600, "Gorek raiders hold the Gorek Labyrinth, far to the south-west.", S),
+        regular("s_hexcallers", "Hex-Caller Hunt", MonsterType.GOREK_HEX_CALLER, 15, 37, 3800, "Hex-callers guard the Labyrinth's obsidian ring.", S),
+        regular("s_stalkers", "Glass Stalkers", MonsterType.SCORCHGLASS_STALKER, 20, 41, 4400, "Scorchglass Rift, west of the Tomb.", S),
+        regular("s_dustdevils", "Calm the Dust Devils", MonsterType.DUST_DEVIL, 20, 41, 4400, "Dust devils whirl in the Rift's Dust Bowl.", S),
+        regular("s_golems", "Salt-Crust Golems", MonsterType.SALTGLASS_GOLEM, 15, 42, 4600, "Saltglass golems guard the Rift's Salt Flats.", S),
+        boss("s_b_akhet", MonsterType.AKHET_THE_SAND_PHARAOH, 32, 6000, "Sealed in the Sanctum at the top of the Tomb of Akhet.", S),
+        boss("s_b_vaelgor", MonsterType.VAELGOR_LABYRINTH_WARDEN, 38, 8000, "Down the stairs north of the Gorek Labyrinth's ring.", S),
+        boss("s_b_sirocco", MonsterType.SIROCCO_THE_STORM_DJINN, 43, 9500, "Inside the Djinn's Eye at the top of the Scorchglass Rift.", S)
     )
 
     fun byId(id: String?): HuntContract? = all.firstOrNull { it.id == id }
     fun byIndex(index: Int): HuntContract? = all.getOrNull(index)
     fun indexOf(id: String): Int = all.indexOfFirst { it.id == id }
     fun availableFor(level: Int): List<HuntContract> = all.filter { level >= it.minLevel }
+    fun forBoard(board: String): List<HuntContract> = all.filter { it.board == board }
 }
 
 // =========================================================================================
@@ -250,10 +333,33 @@ object TownCrier {
         MonsterType.HOLLOW_CROSSBOWMAN, MonsterType.VAULT_SENTINEL, MonsterType.DRAGON_HATCHLING
     )
 
+    private val marshPool = listOf(
+        MonsterType.BOG_HAG, MonsterType.GATOR_BRUTE, MonsterType.FEN_WISP, MonsterType.MIRE_LURKER,
+        MonsterType.BOG_LEECH_WEAVER, MonsterType.SWAMP_TROLL, MonsterType.GHOUL,
+        MonsterType.TEMPLE_SERPENT_GUARD, MonsterType.SUN_PRIEST_ACOLYTE
+    )
+    private val badlandsPool = listOf(
+        MonsterType.DUNE_SCORPION, MonsterType.SAND_WRAITH, MonsterType.SUNSCALE_BASILISK, MonsterType.FIRE_DEVIL,
+        MonsterType.GOREK_RAIDER, MonsterType.GOREK_PHALANX, MonsterType.GOREK_HEX_CALLER,
+        MonsterType.SCORCHGLASS_STALKER, MonsterType.DUST_DEVIL, MonsterType.SALTGLASS_GOLEM
+    )
+
     fun featuredCreature(wallClockMs: Long = System.currentTimeMillis()): MonsterType {
         val day = wallClockMs / DAY_MS
         return featuredPool[VendorCatalog.positiveHash(day, 77L) % featuredPool.size]
     }
+
+    /** Mirewatch's crier announces a marsh creature each day. */
+    fun featuredMarshCreature(wallClockMs: Long = System.currentTimeMillis()): MonsterType =
+        marshPool[VendorCatalog.positiveHash(wallClockMs / DAY_MS, 131L) % marshPool.size]
+
+    /** Sunspire's crier announces a badlands creature each day. */
+    fun featuredBadlandsCreature(wallClockMs: Long = System.currentTimeMillis()): MonsterType =
+        badlandsPool[VendorCatalog.positiveHash(wallClockMs / DAY_MS, 197L) % badlandsPool.size]
+
+    /** Every creature that earns today's bonus XP (one per town). */
+    fun featuredCreatures(wallClockMs: Long = System.currentTimeMillis()): Set<MonsterType> =
+        setOf(featuredCreature(wallClockMs), featuredMarshCreature(wallClockMs), featuredBadlandsCreature(wallClockMs))
 
     fun hoursUntilTomorrow(wallClockMs: Long = System.currentTimeMillis()): Long =
         ((DAY_MS - (wallClockMs % DAY_MS)) + 3_599_999L) / 3_600_000L
