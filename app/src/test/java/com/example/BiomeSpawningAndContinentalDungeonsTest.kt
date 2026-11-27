@@ -446,9 +446,9 @@ class BiomeSpawningAndContinentalDungeonsTest {
             )
         }
 
-        // 3. All 6 separate Rookvale Heartland dungeons (-1, -2, -11, -12, -13, -14) stay strictly in Lv 1..20
+        // 3. Every Rookvale dungeon (incl. the Deep Delve floors -3/-4) stays strictly in Lv 1..20
         val allMonsters = WorldMaps.initialMonsters()
-        val rookvaleDungeonFloors = listOf(-1, -2, -11, -12, -13, -14)
+        val rookvaleDungeonFloors = listOf(-1, -2, -3, -4, -11, -12, -13, -14)
         for (fId in rookvaleDungeonFloors) {
             val monsters = allMonsters.filter { it.floor == fId }
             assertTrue("Rookvale dungeon Floor $fId must spawn monsters", monsters.isNotEmpty())
