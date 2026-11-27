@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import com.example.game.engine.GameEngine
+import com.example.game.engine.MonsterTapTargeting
 
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -45,6 +46,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import com.example.game.model.BossSpecialKind
 import com.example.game.model.CorpseEntity
 import com.example.game.model.DEFAULT_TIME_OF_DAY_HOURS
@@ -415,9 +417,18 @@ fun GameCanvasView(
                             if (!wasMultiTouch && !movedTooFar) {
                                 val st = readState()
                                 val floorMap = WorldMaps.getFloor(st.floor)
-                                val (tx, ty) = nativeCamera.screenToWorldTile(lastPos.x, lastPos.y)
-                                if (tx in 0 until floorMap.width && ty in 0 until floorMap.height) {
-                                    latestOnTileTapped(tx, ty)
+                                // 1. Generous hit boxes around each monster's whole drawn body (feet to head),
+                                //    at its current gliding position. Tapping the highlighted monster again
+                                //    un-highlights it (the engine toggles the target).
+                                val tappedMonster = pickTappedMonster(st, nativeCamera, lastPos.x, lastPos.y, frameUptimeMsState.longValue, readGraphicsQuality(), 26.dp.toPx())
+                                if (tappedMonster != null) {
+                                    latestOnTileTapped(tappedMonster.x, tappedMonster.y)
+                                } else {
+                                    // 2. Otherwise the tile under the finger (walk, interact, NPCs...)
+                                    val (tx, ty) = nativeCamera.screenToWorldTile(lastPos.x, lastPos.y)
+                                    if (tx in 0 until floorMap.width && ty in 0 until floorMap.height) {
+                                        latestOnTileTapped(tx, ty)
+                                    }
                                 }
                             }
                             break
@@ -756,9 +767,8 @@ fun GameCanvasView(
                         st.monsters.forEach { m ->
                             if (m.floor == st.floor && m.x in (bounds.minTx - 1)..(bounds.maxTx + 1) && m.y in (bounds.minTy - 1)..(bounds.maxTy + 1)) {
                                 activeMonsterIds.add(m.id)
-                                val mFrac = ((now - m.lastMoveTimeMs).toFloat() / 220f).coerceIn(0f, 1f)
-                                val mxF = m.lastMoveFromX + (m.x - m.lastMoveFromX) * mFrac
-                                val myF = m.lastMoveFromY + (m.y - m.lastMoveFromY) * mFrac
+                                val mFrac = ((now - m.lastMoveTimeMs).toFloat() / MonsterTapTargeting.MONSTER_GLIDE_MS).coerceIn(0f, 1f)
+                                val (mxF, myF) = MonsterTapTargeting.visualTile(m, now)
                                 if (m.type.isBoss && collectLights && visibleLights.size < 46) {
                                     worldCamera.tileCenterToScreenOut(mxF, myF, reusableScreenXY)
                                     val bossCore: Color
@@ -1642,6 +1652,36 @@ private fun DrawScope.drawIsometricRemotePlayer(
     rec.primaryText = "${rp.name} [Lvl ${rp.level}]"
     rec.isAdmin = rp.isAdmin
     rec.textColorArgb = if (rp.isAdmin) android.graphics.Color.parseColor("#FFE27A") else android.graphics.Color.parseColor("#8CF0FF")
+}
+
+/**
+ * Finds the monster whose drawn body contains the tap, using the same on-screen size and gliding
+ * position the renderer uses (see [MonsterTapTargeting]).
+ */
+private fun pickTappedMonster(
+    st: GameWorldState,
+    camera: IsometricCamera,
+    tapX: Float,
+    tapY: Float,
+    nowMs: Long,
+    quality: GraphicsQuality,
+    minHalfWidthPx: Float
+): MonsterEntity? {
+    val spritePx = (camera.tileW * 0.78f * quality.spriteScaleMultiplier).coerceIn(36f, 320f)
+    val candidates = ArrayList<MonsterTapTargeting.Candidate>()
+    val byId = HashMap<Int, MonsterEntity>()
+    for (m in st.monsters) {
+        if (m.floor != st.floor || m.hp <= 0) continue
+        if (abs(m.x - st.playerX) > 24 || abs(m.y - st.playerY) > 24) continue
+        val (fx, fy) = MonsterTapTargeting.visualTile(m, nowMs)
+        val c = camera.tileCenterToScreen(fx, fy)
+        val feetY = c.y + camera.halfH * 0.14f
+        val bodyHeight = spritePx * VolumetricShading.HEROIC_MONSTER_SCALE * OrganicMonsterRenderer.heightScaleFor(m.type)
+        candidates += MonsterTapTargeting.Candidate(m.id, c.x, feetY, bodyHeight)
+        byId[m.id] = m
+    }
+    val id = MonsterTapTargeting.pick(candidates, tapX, tapY, camera.tileW, camera.tileH, minHalfWidthPx) ?: return null
+    return byId[id]
 }
 
 private fun DrawScope.drawIsometricLocalPlayer(
