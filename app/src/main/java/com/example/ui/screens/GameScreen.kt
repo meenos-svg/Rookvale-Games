@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import com.example.game.model.HudElement
 import com.example.game.model.HudLayout
+import com.example.game.model.VitalsStyle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -208,8 +209,13 @@ fun GameScreen(
             val hud = displaySettings.hud
             val hudIdle = state.activePanel == ActivePanel.NONE || hudEditMode
 
-            // TOP-LEFT: health/mana orb (or classic bars), minimap and character info
-            HudMovable(HudElement.VITALS, Alignment.TopStart, hud, hudEditMode, onUpdateHudLayout) {
+            // TOP-LEFT: orb, minimap and name/stats bar are separate pieces, each movable on its own.
+            // Default spots line them up left to right.
+            val orbShown = hud.vitalsStyle == VitalsStyle.ORB
+            val minimapStart = if (orbShown) 124.dp else 0.dp
+            val infoStart = minimapStart + if (state.showMinimap) 136.dp else 0.dp
+            @Composable
+            fun topLeftPart(orb: Boolean, minimap: Boolean, info: Boolean) {
                 TopLeftHudCluster(
                     state = state,
                     multiplayerState = multiplayerState,
@@ -224,8 +230,30 @@ fun GameScreen(
                     onOpenAdminScroll = { if (state.isAdmin) adminControlExpanded = true },
                     onOrbHealth = { onOrbTap(true) },
                     onOrbMana = { onOrbTap(false) },
-                    vitalsStyle = hud.vitalsStyle
+                    vitalsStyle = hud.vitalsStyle,
+                    showOrbPart = orb,
+                    showMinimapPart = minimap,
+                    showInfoPart = info
                 )
+            }
+            if (orbShown) {
+                HudMovable(HudElement.ORB, Alignment.TopStart, hud, hudEditMode, onUpdateHudLayout) {
+                    topLeftPart(orb = true, minimap = false, info = false)
+                }
+            }
+            if (state.showMinimap) {
+                HudMovable(
+                    HudElement.MINIMAP, Alignment.TopStart, hud, hudEditMode, onUpdateHudLayout,
+                    modifier = Modifier.padding(start = minimapStart)
+                ) {
+                    topLeftPart(orb = false, minimap = true, info = false)
+                }
+            }
+            HudMovable(
+                HudElement.INFO, Alignment.TopStart, hud, hudEditMode, onUpdateHudLayout,
+                modifier = Modifier.padding(start = infoStart)
+            ) {
+                topLeftPart(orb = false, minimap = false, info = true)
             }
 
             // LEFT: adventure tracker (contract, today's hunt, bestiary, current walk)

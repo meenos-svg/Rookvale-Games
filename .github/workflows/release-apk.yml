@@ -123,6 +123,41 @@ jobs:
       - name: Rename APK for easy download
         run: cp "${{ steps.signing.outputs.apk_path }}" Rookvale-latest.apk
 
+      - name: Verify APK contents (only Rookvale, nothing extra)
+        id: verify
+        run: |
+          set -euo pipefail
+          APK=Rookvale-latest.apk
+          AAPT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt
+          echo "Using $AAPT"
+
+          # 1. Package name must be ours
+          PKG=$("$AAPT" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")
+          echo "Package: $PKG"
+          [ "$PKG" = "com.aistudio.rookvale.qmxrkp" ] || { echo "::error::Unexpected package name $PKG"; exit 1; }
+
+          # 2. Permissions: only internet access (plus AndroidX's private receiver guard)
+          "$AAPT" dump permissions "$APK" | sed -n "s/^uses-permission: name='\([^']*\)'.*/\1/p" | sort -u > perms.txt
+          cat perms.txt
+          BAD_PERMS=$(grep -v -E '^(android\.permission\.INTERNET|android\.permission\.ACCESS_NETWORK_STATE|.*\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION)$' perms.txt || true)
+          if [ -n "$BAD_PERMS" ]; then echo "::error::Unexpected permissions: $BAD_PERMS"; exit 1; fi
+
+          # 3. No other apps, scripts or executables hidden inside
+          unzip -Z1 "$APK" > contents.txt
+          BAD_FILES=$(grep -i -E '\.(apk|aab|jar|exe|dll|bat|sh|ps1|dylib|zip)$' contents.txt || true)
+          if [ -n "$BAD_FILES" ]; then echo "::error::Unexpected files inside APK: $BAD_FILES"; exit 1; fi
+
+          # 4. Fingerprint so anyone can confirm their download is this exact file
+          sha256sum "$APK" | tee Rookvale-latest.apk.sha256
+          echo "sha256=$(cut -d' ' -f1 Rookvale-latest.apk.sha256)" >> "$GITHUB_OUTPUT"
+          {
+            echo "### APK check passed"
+            echo "- Package: \`$PKG\`"
+            echo "- Permissions: $(paste -sd, perms.txt)"
+            echo "- Files inside: $(wc -l < contents.txt)"
+            echo "- SHA-256: \`$(cut -d' ' -f1 Rookvale-latest.apk.sha256)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v3
         with:
@@ -131,7 +166,12 @@ jobs:
           body: |
             Automated Android APK build (`v1.0.${{ github.run_number }}`, `versionCode ${{ github.run_number }}`, `${{ steps.signing.outputs.build_variant }}` signed) from latest `main` push.
             Tap **Rookvale-latest.apk** below to download and install as an in-place update on Android.
-          files: Rookvale-latest.apk
+
+            Verified build: only internet permissions, no extra apps or scripts inside.
+            SHA-256: `${{ steps.verify.outputs.sha256 }}`
+          files: |
+            Rookvale-latest.apk
+            Rookvale-latest.apk.sha256
           fail_on_unmatched_files: true
           overwrite_files: true
           draft: false

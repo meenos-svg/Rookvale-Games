@@ -414,6 +414,10 @@ fun androidx.compose.foundation.layout.BoxScope.HudMovable(
     content: @Composable () -> Unit
 ) {
     if (!editMode && !hud.isVisible(element)) return
+    // The drag handler outlives recompositions: read the newest layout when the drag ends,
+    // otherwise saving one piece would restore stale positions for the others.
+    val latestHud by androidx.compose.runtime.rememberUpdatedState(hud)
+    val latestOnMoved by androidx.compose.runtime.rememberUpdatedState(onMoved)
     val saved = hud.offsetOf(element)
     var dragX by remember(saved) { mutableStateOf(saved.first) }
     var dragY by remember(saved) { mutableStateOf(saved.second) }
@@ -433,7 +437,8 @@ fun androidx.compose.foundation.layout.BoxScope.HudMovable(
                     .background(TorchGold.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
                     .pointerInput(element) {
                         detectDragGestures(
-                            onDragEnd = { onMoved(hud.withOffset(element, dragX, dragY)) }
+                            onDragEnd = { latestOnMoved(latestHud.withOffset(element, dragX, dragY)) },
+                            onDragCancel = { latestOnMoved(latestHud.withOffset(element, dragX, dragY)) }
                         ) { change, drag ->
                             change.consume()
                             with(density) {
