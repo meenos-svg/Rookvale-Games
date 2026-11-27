@@ -355,7 +355,10 @@ object MonsterLootTable {
                 WeightedLootDrop("vesperite_bulwark", 1, 1, dropChance = 0.20f, weight = 9),
                 WeightedLootDrop("vesperite_aegis_mail", 1, 1, dropChance = 0.20f, weight = 9),
                 WeightedLootDrop("vesperite_resonance_necklace", 1, 1, dropChance = 0.18f, weight = 8),
-                WeightedLootDrop("vesperite_catalyst_ring", 1, 1, dropChance = 0.18f, weight = 8)
+                WeightedLootDrop("vesperite_catalyst_ring", 1, 1, dropChance = 0.18f, weight = 8),
+                WeightedLootDrop("frostpeak_arbalest", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("rime_plate_javelin", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("rimeheart_talisman", 1, 1, dropChance = 0.12f, weight = 7)
             ),
             bonusWeightRolls = 2
         ),
@@ -906,7 +909,9 @@ object MonsterLootTable {
                 WeightedLootDrop("cinderite_treads", 1, 1, dropChance = 0.14f, weight = 8),
                 WeightedLootDrop("emberforged_helm", 1, 1, dropChance = 0.08f, weight = 5),
                 WeightedLootDrop("emberforged_greaves", 1, 1, dropChance = 0.08f, weight = 5),
-                WeightedLootDrop("emberforged_sabatons", 1, 1, dropChance = 0.08f, weight = 5)
+                WeightedLootDrop("emberforged_sabatons", 1, 1, dropChance = 0.08f, weight = 5),
+                WeightedLootDrop("cinderite_arbalest", 1, 1, dropChance = 0.12f, weight = 7),
+                WeightedLootDrop("cinderite_javelin", 1, 1, dropChance = 0.12f, weight = 7)
             ),
             bonusWeightRolls = 2
         ),
@@ -958,7 +963,10 @@ object MonsterLootTable {
                 WeightedLootDrop("emberforged_scepter", 1, 1, dropChance = 0.16f, weight = 9),
                 WeightedLootDrop("emberforged_aegis", 1, 1, dropChance = 0.14f, weight = 8),
                 WeightedLootDrop("emberforged_warplate", 1, 1, dropChance = 0.14f, weight = 8),
-                WeightedLootDrop("emberforged_signet", 1, 1, dropChance = 0.12f, weight = 7)
+                WeightedLootDrop("emberforged_signet", 1, 1, dropChance = 0.12f, weight = 7),
+                WeightedLootDrop("emberforged_siegebow", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("emberforged_javelin", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("emberforged_pendant", 1, 1, dropChance = 0.12f, weight = 7)
             ),
             bonusWeightRolls = 2
         ),
@@ -1067,7 +1075,9 @@ object MonsterLootTable {
                 WeightedLootDrop("vesperite_conduit_staff", 1, 1, dropChance = 0.22f, weight = 16),
                 WeightedLootDrop("vesperite_aegis_mail", 1, 1, dropChance = 0.20f, weight = 14),
                 WeightedLootDrop("frostfang_coil", 1, 1, dropChance = 0.26f, weight = 14),
-                WeightedLootDrop("vesperite_resonance_necklace", 1, 1, dropChance = 0.20f, weight = 14)
+                WeightedLootDrop("vesperite_resonance_necklace", 1, 1, dropChance = 0.20f, weight = 14),
+                WeightedLootDrop("glacier_seal_ring", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("rimeheart_talisman", 1, 1, dropChance = 0.12f, weight = 7)
             ),
             bonusWeightRolls = 2
         ),
@@ -1142,7 +1152,8 @@ object MonsterLootTable {
                 WeightedLootDrop("emberforged_worldbreaker", 1, 1, dropChance = 0.22f, weight = 12),
                 WeightedLootDrop("emberforged_aegis", 1, 1, dropChance = 0.22f, weight = 12),
                 WeightedLootDrop("emberforged_warplate", 1, 1, dropChance = 0.20f, weight = 12),
-                WeightedLootDrop("vesperite_warmaul", 1, 1, dropChance = 0.24f, weight = 12)
+                WeightedLootDrop("vesperite_warmaul", 1, 1, dropChance = 0.24f, weight = 12),
+                WeightedLootDrop("emberforged_pendant", 1, 1, dropChance = 0.14f, weight = 8)
             ),
             bonusWeightRolls = 2
         ),
@@ -1165,7 +1176,8 @@ object MonsterLootTable {
                 WeightedLootDrop("emberforged_greatsword", 1, 1, dropChance = 0.22f, weight = 12),
                 WeightedLootDrop("emberforged_longbow", 1, 1, dropChance = 0.22f, weight = 12),
                 WeightedLootDrop("emberforged_scepter", 1, 1, dropChance = 0.22f, weight = 12),
-                WeightedLootDrop("dragon_mail", 1, 1, dropChance = 0.36f, weight = 12)
+                WeightedLootDrop("dragon_mail", 1, 1, dropChance = 0.36f, weight = 12),
+                WeightedLootDrop("emberforged_siegebow", 1, 1, dropChance = 0.16f, weight = 9)
             ),
             bonusWeightRolls = 2
         )
