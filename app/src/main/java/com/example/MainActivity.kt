@@ -123,6 +123,7 @@ class MainActivity : ComponentActivity() {
                             onWithdrawItem = gameViewModel::withdrawItem,
                             onDepositGold = gameViewModel::depositGold,
                             onDepositAllGold = gameViewModel::depositAllGold,
+                            onDepositAllMaterials = gameViewModel::depositAllMaterials,
                             onWithdrawGold = gameViewModel::withdrawGold,
                             onWithdrawAllGold = gameViewModel::withdrawAllGold,
                             onBuyItem = gameViewModel::buyItem,

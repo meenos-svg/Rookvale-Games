@@ -348,7 +348,8 @@ object AdminTeleportCatalog {
 
     /**
      * Warp targets grouped by zone (Rookvale Lv 1-20 first, then each zone in level order).
-     * Within a zone: towns, then camps, then dungeons in floor order (F-1, F-2, ...).
+     * Within a zone: towns, then camps, then dungeons from lowest to highest level
+     * (ties keep floor order: F-1 before F-11).
      */
     val zones: List<AdminWarpZone> = OverlandBiomeTier.entries
         .sortedBy { it.minLevel }
@@ -357,10 +358,14 @@ object AdminTeleportCatalog {
                 tier = tier,
                 towns = townsAndEmpires.filter { it.biomeTier == tier },
                 camps = overlandCamps.filter { it.biomeTier == tier },
-                dungeons = dungeonCamps.filter { it.biomeTier == tier }.sortedByDescending { it.floor }
+                dungeons = dungeonCamps.filter { it.biomeTier == tier }.sortedWith(compareBy<AdminTeleportPreset>({ dungeonLevel(it.floor) }, { -it.floor }))
             )
         }
         .filter { it.allPresets.isNotEmpty() }
+
+    /** Lowest monster level of a dungeon floor, used to list warps from easiest to hardest. */
+    fun dungeonLevel(floor: Int): Int =
+        BiomeProgressionRules.dungeonBaseLevel(BiomeProgressionRules.surfaceBiomeForDungeonFloor(floor).minLevel, floor)
 
     /** Zone the admin is standing in, used to open that zone's section by default. */
     fun zoneTierForFloor(floor: Int): OverlandBiomeTier =

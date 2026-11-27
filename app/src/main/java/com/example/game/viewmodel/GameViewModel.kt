@@ -1911,6 +1911,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (changed) persistCurrentState(silent = true)
     }
 
+    fun depositAllMaterials() {
+        var changed = false
+        _world.update { prev ->
+            val next = GameEngine.depositAllMaterials(prev)
+            if (next.depot != prev.depot || next.backpack != prev.backpack) changed = true
+            next
+        }
+        if (changed) persistCurrentState(silent = true)
+    }
+
     fun withdrawItem(itemId: String, count: Int = 1) {
         if (itemId.isBlank() || count <= 0) return
         var changed = false

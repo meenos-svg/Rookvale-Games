@@ -416,7 +416,7 @@ class AdminAuditLogAndTeleportTest {
     }
 
     @Test
-    fun warpZonesAreInLevelOrderWithRookvaleFirstAndDungeonsInFloorOrder() {
+    fun warpZonesAreInLevelOrderWithRookvaleFirstAndDungeonsInLevelOrder() {
         val zones = AdminTeleportCatalog.zones
         assertEquals(com.example.game.world.OverlandBiomeTier.ROOKVALE_HEARTLAND, zones.first().tier)
         assertEquals(zones.map { it.tier.minLevel }.sorted(), zones.map { it.tier.minLevel })
@@ -427,12 +427,18 @@ class AdminAuditLogAndTeleportTest {
         assertEquals(zoned.size, zoned.toSet().size)
 
         val rookvale = zones.first()
-        assertEquals(listOf(-1, -2, -3, -4, -11, -12, -13, -14), rookvale.dungeons.map { it.floor })
+        assertEquals(setOf(-1, -2, -3, -4, -11, -12, -13, -14), rookvale.dungeons.map { it.floor }.toSet())
+        assertEquals(-1, rookvale.dungeons.first().floor)
+        assertEquals(-4, rookvale.dungeons.last().floor)
         assertTrue(rookvale.towns.any { it.id == "rookvale_plaza" })
         zones.forEach { zone ->
-            assertEquals(zone.dungeons.map { it.floor }.sortedDescending(), zone.dungeons.map { it.floor })
+            val levels = zone.dungeons.map { AdminTeleportCatalog.dungeonLevel(it.floor) }
+            assertEquals("${zone.tier} dungeons must go from easiest to hardest", levels.sorted(), levels)
         }
         // Rookvale dungeon badges never go past Lv 20
+        // Ashen: Cinderfall (55) and Emberhold (61) come before the Foundry and Ember Sanctum (67)
+        val ashen = zones.single { it.tier == com.example.game.world.OverlandBiomeTier.ASHEN_CALDERA }
+        assertEquals(listOf(-33, -34), ashen.dungeons.take(2).map { it.floor })
         rookvale.dungeons.forEach { d ->
             val top = Regex("Lv \\d+-(\\d+)").find(d.levelRangeLabel)?.groupValues?.get(1)?.toInt()
             if (top != null) assertTrue("${d.id} badge ${d.levelRangeLabel}", top <= 20)

@@ -4189,6 +4189,32 @@ object GameEngine {
         }
     }
 
+    /** Crafting goods the depot's "Deposit all materials" button stores: ores, bars, materials, valuables and caught fish. */
+    fun isDepositMaterial(def: ItemDefinition): Boolean =
+        def.category in setOf(ItemCategory.RAW_ORE, ItemCategory.METAL_INGOT, ItemCategory.CRAFT_MATERIAL, ItemCategory.LOOT_VALUABLE) ||
+            def.id in com.example.game.model.FishingCatalog.allFishIds
+
+    /** Stores every carried crafting material in the depot in one go; gear, tools, potions, runes, ammo and bait stay in the bag. */
+    fun depositAllMaterials(state: GameWorldState): GameWorldState {
+        val stacks = state.backpack
+            .filter { it.count > 0 && isDepositMaterial(ItemCatalog.get(it.itemId)) }
+            .groupBy { it.itemId }
+            .mapValues { (_, l) -> l.sumOf { it.count } }
+        if (stacks.isEmpty()) return state.addLogInternal("You carry no materials to deposit.")
+        var s = state
+        var stored = 0
+        stacks.forEach { (id, count) ->
+            val before = s.itemCount(id)
+            val next = depositItem(s, id, count)
+            val moved = before - next.itemCount(id)
+            if (moved > 0) { s = next; stored += moved }
+        }
+        if (stored == 0) return state.addLogInternal("Could not deposit your materials.")
+        // depositItem logs one line per stack; replace them with a single summary line
+        val trimmed = s.copy(statusLog = state.statusLog)
+        return trimmed.addLogInternal("Stored ${stacks.size} kinds of materials ($stored items) in your Depot.")
+    }
+
     fun withdrawItem(state: GameWorldState, itemId: String, requestedCount: Int = 1): GameWorldState {
         return try {
             val cleanId = itemId.trim()
