@@ -24,6 +24,7 @@ import com.example.game.model.Vocation
 import com.example.game.model.WORLD_OVERLAND_HEIGHT
 import com.example.game.model.WORLD_OVERLAND_WIDTH
 import com.example.game.world.NpcRole
+import com.example.game.world.DeepDelveFloors
 import com.example.game.world.WorldMaps
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -325,10 +326,11 @@ class ExampleUnitTest {
         assertEquals(WORLD_OVERLAND_WIDTH, surface.width)
         assertEquals(WORLD_OVERLAND_HEIGHT, surface.height)
 
+        // The four Deep Delve floors under Rookvale are large 96x96 hand-shaped layouts
         for (floorId in listOf(-1, -2, -3, -4)) {
             val f = WorldMaps.getFloor(floorId)
-            assertEquals(48, f.width)
-            assertEquals(48, f.height)
+            assertEquals(DeepDelveFloors.SIZE, f.width)
+            assertEquals(DeepDelveFloors.SIZE, f.height)
         }
 
         for (portal in WorldMaps.portals) {
@@ -341,14 +343,16 @@ class ExampleUnitTest {
         }
 
         val f3 = WorldMaps.getFloor(-3)
-        assertFalse(f3.isProtectionZone(24, 21))
         var hasFurnace = false
         var hasAnvil = false
         var hasMiniDepot = false
         for (y in 0 until f3.height) {
             for (x in 0 until f3.width) {
                 when (f3.tileAt(x, y)) {
-                    TileType.SMELTING_FURNACE -> hasFurnace = true
+                    TileType.SMELTING_FURNACE -> {
+                        hasFurnace = true
+                        assertFalse("Deep Forge Outpost is deliberately outside the PZ", f3.isProtectionZone(x, y))
+                    }
                     TileType.BLACKSMITH_ANVIL -> hasAnvil = true
                     TileType.MINI_DEPOT -> hasMiniDepot = true
                     else -> Unit

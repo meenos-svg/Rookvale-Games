@@ -23,6 +23,7 @@ import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 import kotlin.random.Random
 
 object GameEngine {
@@ -182,6 +183,13 @@ object GameEngine {
                 targetX += V3_TO_V4_OFFSET_X
                 targetY += V3_TO_V4_OFFSET_Y
             }
+        }
+        // Map v5 rebuilt the Deep Delve floors (-1..-4) as larger 96x96 layouts: anyone saved inside
+        // one of them resumes at that floor's forward-camp entrance instead of an unrelated spot.
+        if (save.mapVersion < DEEP_DELVE_REBUILD_MAP_VERSION && save.floor in -4..-1) {
+            val (lx, ly) = WorldMaps.fallbackLandingForFloor(save.floor)
+            targetX = lx
+            targetY = ly
         }
         val npcCoordsOnFloor = WorldMaps.npcs.filter { it.floor == save.floor }.map { it.x to it.y }.toSet()
         val isBlockedOrOut = targetX !in 0 until floorMap.width ||
@@ -359,6 +367,34 @@ object GameEngine {
         )
     }
 
+    /** Time per tile at level 1. */
+    const val BASE_STEP_INTERVAL_MS: Long = 210L
+    /** Fastest possible walking pace. */
+    const val MIN_STEP_INTERVAL_MS: Long = 120L
+    private const val STEP_SPEED_LEVEL_SCALE: Double = 40.0
+
+    /**
+     * Walking gets faster as the hero levels up, with diminishing returns:
+     * Lv 1 = 210 ms per tile, Lv 20 ~ 182 ms, Lv 50 ~ 146 ms, Lv 100 ~ 127 ms (never below 120 ms).
+     * The same interval drives the step timer, the walk animation and remote-player interpolation.
+     */
+    fun stepIntervalMs(level: Int): Long {
+        val lv = (level - 1).coerceAtLeast(0)
+        val span = (BASE_STEP_INTERVAL_MS - MIN_STEP_INTERVAL_MS).toDouble()
+        return (MIN_STEP_INTERVAL_MS + span * kotlin.math.exp(-lv / STEP_SPEED_LEVEL_SCALE)).roundToLong()
+            .coerceIn(MIN_STEP_INTERVAL_MS, BASE_STEP_INTERVAL_MS)
+    }
+
+    fun walkSpeedTilesPerSec(level: Int): Float = 1000f / stepIntervalMs(level)
+
+    /** True when the previous step's animation has finished and the hero may take the next step. */
+    fun isStepReady(state: GameWorldState, nowMs: Long): Boolean =
+        state.lastPlayerMoveMs <= 0L || nowMs - state.lastPlayerMoveMs >= stepIntervalMs(state.level)
+
+    /** 0..1 progress of the current step's glide, used by the renderer. */
+    fun stepGlideFraction(state: GameWorldState, nowMs: Long): Float =
+        ((nowMs - state.lastPlayerMoveMs).toFloat() / stepIntervalMs(state.level)).coerceIn(0f, 1f)
+
     fun handleTileTap(
         state: GameWorldState,
         tx: Int,
@@ -402,7 +438,7 @@ object GameEngine {
                 walkPath = emptyList(),
                 playerFacing = directionToward(dismissedState.playerX, dismissedState.playerY, tappedMonster.x, tappedMonster.y)
             ).addLogInternal(msg)
-            return if (engageMeleeFollow && distToMonster > 1) {
+            return if (engageMeleeFollow && distToMonster > 1 && isStepReady(targeted, nowMs)) {
                 stepAutoFollowOrPath(targeted, nowMs, remotePlayersOnFloor)
             } else {
                 targeted
@@ -562,7 +598,9 @@ object GameEngine {
             val clean = baseState.copy(longRangeGoal = null, longRangeWaypoints = emptyList())
             val path = findPath(clean, tx, ty, remotePlayersOnFloor)
             if (path.isNotEmpty()) {
-                return stepAlongPath(clean.copy(walkPath = path), nowMs, remotePlayersOnFloor)
+                val queued = clean.copy(walkPath = path)
+                // Mid-step taps just re-route; the walk loop takes the next step on rhythm (no double steps)
+                return if (isStepReady(queued, nowMs)) stepAlongPath(queued, nowMs, remotePlayersOnFloor) else queued
             }
         }
         return baseState
@@ -1698,7 +1736,7 @@ object GameEngine {
         ownerPlayerId: String? = null,
         ownerName: String? = null
     ): CorpseEntity {
-        val rolled = MonsterLootTable.rollLoot(m.type)
+        val rolled = MonsterLootTable.rollLoot(m.type, monsterLevel = m.level)
         val scaledGold = if (m.scaledGoldMax > m.type.goldMax) {
             Random.nextInt(m.scaledGoldMin, m.scaledGoldMax + 1)
         } else {
@@ -4276,7 +4314,11 @@ object GameEngine {
         var bestDist = initialH
         var found = false
         var explored = 0
-        val maxExpansions = if (width >= 200) 4500 else 1200
+        val maxExpansions = when {
+            width >= 200 -> 4500
+            width >= 80 -> 3000   // 96x96 Deep Delve floors: long winding routes through mazes and caverns
+            else -> 1200
+        }
 
         while (open.isNotEmpty() && explored < maxExpansions) {
             val (_, curKey) = open.poll() ?: break

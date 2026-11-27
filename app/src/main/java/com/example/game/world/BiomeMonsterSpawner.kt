@@ -180,6 +180,15 @@ object BiomeMonsterSpawner {
     private const val HEARTLAND_WILDS_RADIUS = 142.0
     private const val HEARTLAND_MAX_RADIUS = 235.0
 
+    private class HeartlandSpawnRing(val innerRadius: Double, val outerRadius: Double, val spacing: Double, val packChancePct: Int)
+
+    /** Starter Meadows (Lv 1-5) dense, Wilds (Lv 5-12) moderate, Frontier (Lv 12-20) sparse. */
+    private val HEARTLAND_SPAWN_RINGS = listOf(
+        HeartlandSpawnRing(innerRadius = 60.0, outerRadius = HEARTLAND_MEADOW_RADIUS, spacing = 10.0, packChancePct = 0),
+        HeartlandSpawnRing(innerRadius = HEARTLAND_MEADOW_RADIUS, outerRadius = HEARTLAND_WILDS_RADIUS, spacing = 19.0, packChancePct = 30),
+        HeartlandSpawnRing(innerRadius = HEARTLAND_WILDS_RADIUS, outerRadius = 290.0, spacing = 34.0, packChancePct = 25)
+    )
+
     // Open rustic Lv 12-20 Rookvale Outlaw Camp centers (global Floor 0 coordinates)
     const val SW_OUTLAW_CAMP_X = WorldMaps.ROOKVALE_ORIGIN_X + 88   // 1288 (Briar Outlaw Camp, Lv 12-16)
     const val SW_OUTLAW_CAMP_Y = WorldMaps.ROOKVALE_ORIGIN_Y + 320  // 720
@@ -343,8 +352,8 @@ object BiomeMonsterSpawner {
     fun biomeForDungeonFloor(floorId: Int): BiomeType = when (BiomeProgressionRules.parentUpperFloorFor(floorId)) {
         -1 -> BiomeType.HEARTLAND_WILDS
         -2 -> BiomeType.HEARTLAND_FRONTIER
-        -3 -> BiomeType.BLIGHTWOOD_REACH
-        -4 -> BiomeType.ASHEN_CALDERA
+        -3 -> BiomeType.HEARTLAND_FRONTIER
+        -4 -> BiomeType.HEARTLAND_FRONTIER
         -5 -> BiomeType.FROSTPEAK_HIGHLANDS
         -6 -> BiomeType.ASHEN_CALDERA
         -7 -> BiomeType.WHISPERING_MARSH
@@ -388,7 +397,7 @@ object BiomeMonsterSpawner {
             val raw = when (biome) {
                 BiomeType.HEARTLAND_MEADOWS -> {
                     // Gentle Lv 1-5 ramp right outside Rookvale's gates
-                    val t = ((dist - 48.0) / (HEARTLAND_MEADOW_RADIUS - 48.0)).coerceIn(0.0, 1.0)
+                    val t = ((dist - 60.0) / (HEARTLAND_MEADOW_RADIUS - 60.0)).coerceIn(0.0, 1.0)
                     (1.0 + t * 4.0).roundToInt() + jitter
                 }
                 BiomeType.HEARTLAND_WILDS -> {
@@ -518,23 +527,36 @@ object BiomeMonsterSpawner {
             return false
         }
 
-        // 1. Rookvale Heartland (1200..1599, 400..799) — denser starter/wilderness scatter (strictly Lv 1-20)
-        val hStep = 34
-        for (gy in (WorldMaps.ROOKVALE_ORIGIN_Y + 24) until (WorldMaps.ROOKVALE_ORIGIN_Y + 378) step hStep) {
-            for (gx in (WorldMaps.ROOKVALE_ORIGIN_X + 24) until (WorldMaps.ROOKVALE_ORIGIN_X + 356) step hStep) {
-                val h = positiveHash(gx, gy, 101)
-                val jx = (h % 17) - 8
-                val jy = ((h ushr 5) % 17) - 8
-                val cx = gx + jx
-                val cy = gy + jy
-                if (tryPlaceBiomeSpawn(cx, cy, 211)) {
-                    // Natural small packmate (~35% chance) 4-6 tiles away in same biome
-                    if (((h ushr 10) % 100) < 35) {
-                        val px = cx + (((h ushr 17) % 9) - 4).let { if (it in -1..1) 4 else it }
-                        val py = cy + (((h ushr 21) % 9) - 4).let { if (it in -1..1) -4 else it }
-                        tryPlaceBiomeSpawn(px, py, 307)
+        // 1. Rookvale Heartland — placed ring by ring around the city so new players find plenty of
+        //    Lv 1-5 creatures right outside the gates, a healthy Lv 5-12 band beyond, and a sparser
+        //    Lv 12-20 frontier at the edges (an even grid used to hand most spawns to the huge outer ring).
+        val heartMinX = WorldMaps.ROOKVALE_ORIGIN_X + 12
+        val heartMaxX = WorldMaps.ROOKVALE_ORIGIN_X + 387
+        val heartMinY = WorldMaps.ROOKVALE_ORIGIN_Y + 12
+        val heartMaxY = WorldMaps.ROOKVALE_ORIGIN_Y + 387
+        for ((ringIdx, ring) in HEARTLAND_SPAWN_RINGS.withIndex()) {
+            var radius = ring.innerRadius + ring.spacing / 2.0
+            var lap = 0
+            while (radius < ring.outerRadius) {
+                val count = (2.0 * Math.PI * radius / ring.spacing).toInt().coerceAtLeast(6)
+                val phase = (positiveHash(ringIdx, lap, 131) % 1000) / 1000.0 * 2.0 * Math.PI
+                for (k in 0 until count) {
+                    val h = positiveHash(lap * 977 + k, ringIdx, 149)
+                    val ang = phase + 2.0 * Math.PI * k / count + ((h % 100) - 50) / 400.0
+                    val rr = radius + ((h ushr 8) % 7) - 3
+                    val cx = (WorldMaps.TEMPLE_SPAWN_X + kotlin.math.cos(ang) * rr).roundToInt()
+                    val cy = (WorldMaps.TEMPLE_SPAWN_Y + kotlin.math.sin(ang) * rr).roundToInt()
+                    if (cx !in heartMinX..heartMaxX || cy !in heartMinY..heartMaxY) continue
+                    if (normalizeRegionId(WorldRegionMeta.forGlobalTile(cx, cy).regionId) != "rookvale_valley") continue
+                    if (tryPlaceBiomeSpawn(cx, cy, 211 + ringIdx) && ((h ushr 16) % 100) < ring.packChancePct) {
+                        // Natural packmate 4-6 tiles away in the same biome
+                        val px = cx + (((h ushr 20) % 9) - 4).let { if (it in -1..1) 4 else it }
+                        val py = cy + (((h ushr 24) % 9) - 4).let { if (it in -1..1) -4 else it }
+                        tryPlaceBiomeSpawn(px, py, 307 + ringIdx)
                     }
                 }
+                radius += ring.spacing
+                lap++
             }
         }
 

@@ -15,6 +15,7 @@ import com.example.game.model.LightingDetailMode
 import com.example.game.model.TileType
 import com.example.game.world.BuildingFootprint
 import com.example.game.world.WorldFloor
+import com.example.game.world.WorldMaps
 import com.example.ui.theme.FireOrange
 import com.example.ui.theme.TorchAmber
 import com.example.ui.theme.TorchGold
@@ -537,6 +538,26 @@ object IsometricTileDrawer {
         scope.drawPath(path, color = effOutline, style = Stroke(width = strokeW))
     }
 
+    private val notGroundTiles = setOf(
+        TileType.STAIRS_UP, TileType.STAIRS_DOWN, TileType.ROPE_HOLE_DOWN, TileType.ROPE_SPOT_UP,
+        TileType.IRON_BAR_GATE, TileType.STONE_BRIDGE, TileType.WOOD_BRIDGE
+    )
+
+    /** First plain walkable floor tile next to (tx, ty), checking N, S, W, E. */
+    private fun undergroundGroundAround(floorMap: WorldFloor, tx: Int, ty: Int): TileType? {
+        for ((dx, dy) in NEIGHBOR_OFFSETS) {
+            val t = floorMap.tileAt(tx + dx, ty + dy)
+            if (t.walkable && t !in notGroundTiles) return t
+        }
+        return null
+    }
+
+    private val NEIGHBOR_OFFSETS = arrayOf(0 to -1, 0 to 1, -1 to 0, 1 to 0)
+
+    // Runecrafting Academy inlaid rune circle (was still using pre-expansion coordinates 221..229 x 177..183)
+    private val ACADEMY_RUNE_X = (WorldMaps.ROOKVALE_ORIGIN_X + 221)..(WorldMaps.ROOKVALE_ORIGIN_X + 229)
+    private val ACADEMY_RUNE_Y = (WorldMaps.ROOKVALE_ORIGIN_Y + 177)..(WorldMaps.ROOKVALE_ORIGIN_Y + 183)
+
     fun drawGroundTile(
         scope: DrawScope,
         path: Path,
@@ -556,7 +577,7 @@ object IsometricTileDrawer {
         val shimmer = if (quality == GraphicsQuality.LOW) 0f else sin(nowMs * 0.0038 + tx * 0.9 + ty * 0.7).toFloat()
 
         // Ground base underneath props/walls matches local setting cleanly
-        val baseTile = when (tile) {
+        val ruleBaseTile = when (tile) {
             TileType.TREE, TileType.TREE_STUMP, TileType.HEDGE, TileType.WOOD_FENCE -> when {
                 floorMap.floorId == 0 && tx >= 1472 && ty in 400..799 -> TileType.DARK_GRASS
                 floorMap.floorId == 0 && ty < 265 && tx >= 1145 -> TileType.SNOW
@@ -593,6 +614,13 @@ object IsometricTileDrawer {
             TileType.CAMPFIRE_BRAZIER -> if (floorMap.floorId == 0) TileType.COBBLESTONE else TileType.CRYPT_FLOOR
             TileType.IRON_BAR_GATE -> TileType.CRYPT_FLOOR
             else -> tile
+        }
+        // Underground, props (crates, pews, roots, banners, gates...) sit on whatever floor surrounds them
+        // (e.g. planks in the outlaw hideout, loam in the root caverns) rather than a fixed surface tile.
+        val baseTile = if (floorMap.floorId < 0 && ruleBaseTile != tile) {
+            undergroundGroundAround(floorMap, tx, ty) ?: ruleBaseTile
+        } else {
+            ruleBaseTile
         }
 
         val isNearLandWater = if (baseTile == TileType.WATER) {
@@ -778,7 +806,7 @@ object IsometricTileDrawer {
             }
             TileType.ARCANE_FLOOR -> {
                 // Glowing violet arcane rune circle inlaid in Runecrafting Academy floor
-                if (quality != GraphicsQuality.LOW && tx in 221..229 && ty in 177..183) {
+                if (quality != GraphicsQuality.LOW && tx in ACADEMY_RUNE_X && ty in ACADEMY_RUNE_Y) {
                     val pulse = 0.35f + 0.18f * sin(nowMs * 0.0045 + tx + ty).toFloat()
                     scope.drawOval(
                         color = Color(0xFFB388FF).copy(alpha = pulse),

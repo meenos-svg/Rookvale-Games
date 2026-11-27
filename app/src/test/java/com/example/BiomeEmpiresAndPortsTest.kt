@@ -56,8 +56,8 @@ class BiomeEmpiresAndPortsTest {
             assertTrue("Scaled maxDmg (${m.scaledMaxDmg}) must exceed base maxDmg (${m.type.maxDmg})", m.scaledMaxDmg > m.type.maxDmg)
         }
 
-        // Verify underground dungeons scale strictly from surfaceMinLevel + abs(floor) * 6
-        for (floorId in listOf(-1, -2, -3, -4, -5, -6)) {
+        // Outer-continent dungeons scale strictly from surfaceMinLevel + abs(floor) * 6
+        for (floorId in listOf(-5, -6)) {
             val surfaceMin = BiomeProgressionRules.surfaceBiomeForDungeonFloor(floorId).minLevel
             val expectedBase = surfaceMin + abs(floorId) * 6
             val floorMonsters = monsters.filter { it.floor == floorId }
@@ -72,6 +72,15 @@ class BiomeEmpiresAndPortsTest {
                     "Floor $floorId ${m.type.displayName} level ${m.level} must lie in $expectedRange",
                     m.level in expectedRange
                 )
+            }
+        }
+
+        // The Deep Delve chain under Rookvale climbs through Lv 5-20 (bosses capped at 20)
+        val deepDelveBands = mapOf(-1 to 5..9, -2 to 9..13, -3 to 13..17, -4 to 16..20)
+        for ((floorId, band) in deepDelveBands) {
+            for (m in monsters.filter { it.floor == floorId }) {
+                val expectedRange = if (m.type.isBoss) (band.first + 5).coerceAtMost(20)..(band.first + 5).coerceAtMost(20) else band
+                assertTrue("Floor $floorId ${m.type.displayName} level ${m.level} must lie in $expectedRange", m.level in expectedRange)
             }
         }
 

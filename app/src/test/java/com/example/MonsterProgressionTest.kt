@@ -121,14 +121,15 @@ class MonsterProgressionTest {
 
     @Test
     fun rangedKiterRetreatsFromMeleeAndFiresVisibleProjectileAtRange() {
+        val (cx, cy) = TestArenas.openCenter(-1)
         val goblin = MonsterEntity(
             id = 501,
             type = MonsterType.GOBLIN_SCOUT,
             floor = -1,
-            x = 20,
-            y = 18,
-            spawnX = 20,
-            spawnY = 18,
+            x = cx + 1,
+            y = cy,
+            spawnX = cx + 1,
+            spawnY = cy,
             hp = MonsterType.GOBLIN_SCOUT.maxHp,
             maxHp = MonsterType.GOBLIN_SCOUT.maxHp
         )
@@ -137,22 +138,22 @@ class MonsterProgressionTest {
         // Adjacent (dist = 1): Goblin Scout retreats to dist 2
         val adjacentState = GameEngine.createNewWorld("Lyra").copy(
             floor = -1,
-            playerX = 19,
-            playerY = 18,
+            playerX = cx,
+            playerY = cy,
             monsters = listOf(goblin)
         )
         val afterRetreat = GameEngine.processCombatTick(adjacentState, nowMs = 1000L, isFloorHost = true)
         val movedGoblin = afterRetreat.monsters.first { it.id == 501 }
-        val newDist = maxOf(kotlin.math.abs(movedGoblin.x - 19), kotlin.math.abs(movedGoblin.y - 18))
+        val newDist = maxOf(kotlin.math.abs(movedGoblin.x - cx), kotlin.math.abs(movedGoblin.y - cy))
         assertTrue("Goblin Scout must kite away when player is adjacent (dist=$newDist)", newDist >= 2)
 
         // At optimal range (dist = 3): Goblin Scout holds position and fires THROWN_STONE + queues co-op attack
-        val rangedGoblin = goblin.copy(x = 22, y = 18)
+        val rangedGoblin = goblin.copy(x = cx + 3, y = cy)
         val rangedState = adjacentState.copy(monsters = listOf(rangedGoblin))
         val afterShot = GameEngine.processCombatTick(rangedState, nowMs = 2000L, isFloorHost = true)
         val heldGoblin = afterShot.monsters.first { it.id == 501 }
-        assertEquals(22, heldGoblin.x)
-        assertEquals(18, heldGoblin.y)
+        assertEquals(cx + 3, heldGoblin.x)
+        assertEquals(cy, heldGoblin.y)
         assertTrue(
             "Goblin Scout must fire visible THROWN_STONE projectile",
             afterShot.projectiles.any { it.kind == ProjectileKind.THROWN_STONE }
@@ -165,14 +166,15 @@ class MonsterProgressionTest {
 
     @Test
     fun bossTelegraphsFireWaveDetonatesNextTickRespectsMaxTwoSummonsAndSyncsCoop() {
+        val (cx, cy) = TestArenas.openCenter(-3)
         val boss = MonsterEntity(
             id = 900,
             type = MonsterType.DEMON_LORD,
             floor = -3,
-            x = 12,
-            y = 14,
-            spawnX = 12,
-            spawnY = 14,
+            x = cx - 1,
+            y = cy,
+            spawnX = cx - 1,
+            spawnY = cy,
             hp = MonsterType.DEMON_LORD.maxHp,
             maxHp = MonsterType.DEMON_LORD.maxHp,
             aoeCooldownTicks = 0,
@@ -181,8 +183,8 @@ class MonsterProgressionTest {
         val hero = GameEngine.createNewWorld("Roland").copy(
             saveId = "p_host",
             floor = -3,
-            playerX = 14,
-            playerY = 14,
+            playerX = cx + 1,
+            playerY = cy,
             hp = 400,
             maxHp = 400,
             monsters = listOf(boss),
@@ -194,7 +196,7 @@ class MonsterProgressionTest {
         val tick1 = GameEngine.processCombatTick(hero, nowMs = 1000L, isFloorHost = true)
         val bossAfter1 = tick1.monsters.first { it.id == 900 }
         assertTrue("Boss must telegraph pendingAoeTiles on tick 1", bossAfter1.pendingAoeTiles.isNotEmpty())
-        assertTrue("Player tile (14,14) should be inside east-aimed wave cone", (14 to 14) in bossAfter1.pendingAoeTiles)
+        assertTrue("Player tile should be inside east-aimed wave cone", (cx + 1 to cy) in bossAfter1.pendingAoeTiles)
 
         // Tick 2: Boss detonates Fire Wave -> clears telegraph, damages player in cone, sets Burning, broadcasts AoE event
         val tick2 = GameEngine.processCombatTick(tick1, nowMs = 2000L, isFloorHost = true)
