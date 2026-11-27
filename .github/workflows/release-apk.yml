@@ -3,6 +3,9 @@ name: Build & Release Rookvale APK
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'supabase/**'
   workflow_dispatch:
 
 permissions:
