@@ -81,7 +81,9 @@ enum class WorldPinCategory {
     CAMP,
     FORGE,
     FERRY,
-    DUNGEON
+    DUNGEON,
+    /** A named quarter inside a city, shown only when zoomed in close. */
+    DISTRICT
 }
 
 /**
@@ -529,6 +531,9 @@ object WorldBiomeBlueprint {
      * Empires, Cities, Ocean Ports, and Major Dungeons show at overview zoom (`1.0x`);
      * Forward Camps (`CAMP`) and exact settlement level badges auto-reveal when zoomed in (`>= 1.6x`).
      */
+    /** City district pins appear once the map is zoomed in close enough to see the streets. */
+    const val DISTRICT_MIN_ZOOM = 2.5f
+
     val worldMapPins: List<WorldMapPin> by lazy {
         buildList {
             // Capital Heartland Empire
@@ -622,6 +627,13 @@ object WorldBiomeBlueprint {
             add(WorldMapPin("dng_tomb", "Tomb of Akhet (-30)", FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -30 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-30)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-30), 1.0f))
             add(WorldMapPin("dng_rift", "Scorchglass Rift (-31)", FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -31 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-31)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-31), 1.0f))
             add(WorldMapPin("dng_rimeheart", "Rimeheart Caverns (-32)", FrontierSiteFloors.RIMEHEART_ENTRY_X, FrontierSiteFloors.RIMEHEART_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -32 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-32)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-32), 1.0f))
+            BiomeCities.districts.forEach { (city, list) ->
+                list.forEach { d ->
+                    val slug = d.name.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
+                    val citySlug = city.lowercase().replace(Regex("[^a-z0-9]+"), "_")
+                    add(WorldMapPin("district_${citySlug}_$slug", d.name, d.x, d.y, WorldPinCategory.DISTRICT, "$city district", "", DISTRICT_MIN_ZOOM))
+                }
+            }
             add(WorldMapPin("dng_cinderfall", "Cinderfall Mines (-33)", FrontierSiteFloors.CINDERFALL_ENTRY_X, FrontierSiteFloors.CINDERFALL_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -33 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-33)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-33), 1.0f))
             add(WorldMapPin("dng_emberhold", "Emberhold, the Buried City (-34)", FrontierSiteFloors.EMBERHOLD_ENTRY_X, FrontierSiteFloors.EMBERHOLD_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -34 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-34)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-34), 1.0f))
             add(WorldMapPin("dng_ember", "The Ember Sanctum (-15)", 1510, 975, WorldPinCategory.DUNGEON, "Floor -15 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-15)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-15), 1.0f))

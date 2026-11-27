@@ -13,6 +13,8 @@ import com.example.game.model.TileType
 import com.example.game.world.BiomeCities
 import com.example.game.world.BiomeProgressionRules
 import com.example.game.world.WorldMaps
+import com.example.game.world.WorldBiomeBlueprint
+import com.example.game.world.WorldPinCategory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -171,6 +173,40 @@ class CityServicesTest {
         assertTrue(VendorCatalog.sellPrice(VendorCatalog.ASH_SLAGWRIGHT, "molten_core") > VendorCatalog.sellPrice(null, "molten_core"))
         assertEquals(HuntBoards.ASHEN, HuntBoards.fromPanelId(talk("Warmaster Dravek").activeShopId).id)
         assertTrue(talk("Crier Ignatius").statusLog.any { it.startsWith("Crier Ignatius") })
+    }
+
+    @Test
+    fun cityDistrictsAreTappableMapPinsOnReachableGround() {
+        val f0 = WorldMaps.getFloor(0)
+        val gates = mapOf("Mirewatch" to (545 to 590), "Sunspire" to (375 to 752), "Frostpeak" to (1396 to 150), "Ashen Bastion" to (328 to 254))
+        val cities = mapOf("Mirewatch" to BiomeCities.mirewatch, "Sunspire" to BiomeCities.sunspire, "Frostpeak" to BiomeCities.frostpeak, "Ashen Bastion" to BiomeCities.ashen)
+        assertEquals(gates.keys, BiomeCities.districts.keys)
+        for ((city, list) in BiomeCities.districts) {
+            assertTrue("$city needs several districts", list.size >= 5)
+            assertEquals("$city district names must be unique", list.size, list.map { it.name }.toSet().size)
+            val box = cities.getValue(city)
+            val (sx, sy) = gates.getValue(city)
+            val seen = HashSet<Pair<Int, Int>>(); val q = ArrayDeque<Pair<Int, Int>>()
+            seen += sx to sy; q.add(sx to sy)
+            while (q.isNotEmpty()) {
+                val (x, y) = q.removeFirst()
+                for ((dx, dy) in listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)) {
+                    val n = x + dx to y + dy
+                    if (n.first in box.minX - 8..box.maxX + 8 && n.second in box.minY - 8..box.maxY + 8 && n !in seen && f0.tileAt(n.first, n.second).walkable) { seen += n; q.add(n) }
+                }
+            }
+            list.forEach { d ->
+                assertTrue("${d.name} must lie inside $city", box.contains(d.x, d.y))
+                assertTrue("${d.name} must be open ground", f0.tileAt(d.x, d.y).walkable)
+                assertTrue("${d.name} must be reachable from the gate", (d.x to d.y) in seen)
+            }
+        }
+        // Each district is a world-map pin that only appears once zoomed in close
+        val pins = WorldBiomeBlueprint.worldMapPins.filter { it.category == WorldPinCategory.DISTRICT }
+        assertEquals(BiomeCities.districts.values.sumOf { it.size }, pins.size)
+        assertEquals(pins.size, pins.map { it.id }.toSet().size)
+        pins.forEach { assertTrue(it.minZoomToShow > 1.6f) }
+        assertTrue(pins.any { it.label == "Crucible Plaza" && it.subtitle == "Ashen Bastion district" })
     }
 
     @Test
