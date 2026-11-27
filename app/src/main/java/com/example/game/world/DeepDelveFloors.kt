@@ -225,7 +225,7 @@ object DeepDelveFloors {
 
         c.sealPockets(F1_LANDING_X, F1_LANDING_Y)
         c.ores(TileType.ORE_BOG_IRON, count = 6, x1 = 4, y1 = 14, x2 = 40, y2 = 92)
-        c.ores(TileType.ORE_VESPERITE, count = 6, x1 = 56, y1 = 40, x2 = 92, y2 = 92)
+        c.ores(TileType.ORE_TIN, count = 6, x1 = 56, y1 = 40, x2 = 92, y2 = 92)
         c.torches(spacing = 6)
 
         val spawns = c.spawns(
@@ -343,8 +343,8 @@ object DeepDelveFloors {
         c.sealPockets(F2_LANDING_X, F2_LANDING_Y)
         c.ores(TileType.ORE_MIRE_SILVER, count = 4, x1 = 62, y1 = 28, x2 = 94, y2 = 60)
         c.ores(TileType.ORE_PEAT_COAL, count = 4, x1 = 4, y1 = 54, x2 = 94, y2 = 92)
-        c.ores(TileType.ORE_VESPERITE, count = 5, x1 = 4, y1 = 28, x2 = 60, y2 = 60)
-        c.ores(TileType.ORE_CINDERITE, count = 6, x1 = 4, y1 = 2, x2 = 94, y2 = 32)
+        c.ores(TileType.ORE_COPPER, count = 5, x1 = 4, y1 = 28, x2 = 60, y2 = 60)
+        c.ores(TileType.ORE_BOG_IRON, count = 6, x1 = 4, y1 = 2, x2 = 94, y2 = 32)
         c.torches(spacing = 7)
 
         val spawns = c.spawns(
@@ -474,8 +474,9 @@ object DeepDelveFloors {
 
         // Ore outcrops standing in the districts (mined from adjacent ground)
         c.sealPockets(F3_LANDING_X, F3_LANDING_Y)
-        for ((x, y) in listOf(13 to 56, 37 to 67, 22 to 67, 83 to 67, 59 to 67, 83 to 57, 59 to 57, 38 to 90)) c[x, y] = TileType.ORE_VESPERITE
-        for ((x, y) in listOf(16 to 67, 37 to 57, 58 to 90, 37 to 81, 59 to 81, 82 to 39, 59 to 27, 13 to 27)) c[x, y] = TileType.ORE_CINDERITE
+        for ((x, y) in listOf(13 to 56, 37 to 67, 22 to 67, 83 to 67, 59 to 67, 83 to 57, 59 to 57, 38 to 90)) c[x, y] = TileType.ORE_BOG_IRON
+        for ((x, y) in listOf(16 to 67, 37 to 57, 58 to 90, 37 to 81)) c[x, y] = TileType.ORE_PEAT_COAL
+        for ((x, y) in listOf(59 to 81, 82 to 39, 59 to 27, 13 to 27)) c[x, y] = TileType.ORE_MIRE_SILVER
 
         c.torches(spacing = 6)
 
@@ -551,9 +552,9 @@ object DeepDelveFloors {
         c.sealPockets(F4_LANDING_X, F4_LANDING_Y)
 
         // Veins: frozen vent minerals on the cliff, cinderite around the throne
-        for ((x, y) in listOf(8 to 63, 15 to 71)) c[x, y] = TileType.ORE_GLACIER_QUARTZ
-        for ((x, y) in listOf(8 to 69, 74 to 73)) c[x, y] = TileType.ORE_FROST_IRON
-        for ((x, y) in listOf(32 to 18, 64 to 18, 30 to 29, 66 to 29, 48 to 13, 22 to 41, 79 to 49)) c[x, y] = TileType.ORE_CINDERITE
+        for ((x, y) in listOf(8 to 63, 15 to 71)) c[x, y] = TileType.ORE_MIRE_SILVER
+        for ((x, y) in listOf(8 to 69, 74 to 73)) c[x, y] = TileType.ORE_PEAT_COAL
+        for ((x, y) in listOf(32 to 18, 64 to 18, 30 to 29, 66 to 29, 48 to 13, 22 to 41, 79 to 49)) c[x, y] = TileType.ORE_BOG_IRON
 
         c.torches(spacing = 8)
 

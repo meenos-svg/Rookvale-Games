@@ -225,7 +225,7 @@ object ContinentalDungeonGenerator {
             bridgeTile = TileType.STONE_BRIDGE,
             stallTile = TileType.BIOME_STALL_FROSTPEAK,
             primaryOre = TileType.ORE_GLACIER_QUARTZ,
-            secondaryOre = TileType.ORE_VESPERITE,
+            secondaryOre = TileType.ORE_FROST_IRON,
             seed = 919,
             layoutArchetype = DungeonLayoutArchetype.TOMB_CRUCIFORM
         ),
@@ -424,7 +424,7 @@ object ContinentalDungeonGenerator {
             hazardTile = TileType.WATER,
             bridgeTile = TileType.WOOD_BRIDGE,
             primaryOre = TileType.ORE_BOG_IRON,
-            secondaryOre = TileType.ORE_VESPERITE,
+            secondaryOre = TileType.ORE_TIN,
             seed = 1601,
             arenaVariant = 0
         ),
@@ -446,8 +446,8 @@ object ContinentalDungeonGenerator {
             accentFloorTile = TileType.CRYPT_FLOOR,
             hazardTile = TileType.LAVA,
             bridgeTile = TileType.STONE_BRIDGE,
-            primaryOre = TileType.ORE_VESPERITE,
-            secondaryOre = TileType.ORE_CINDERITE,
+            primaryOre = TileType.ORE_BOG_IRON,
+            secondaryOre = TileType.ORE_COPPER,
             seed = 2111,
             arenaVariant = 1
         ),
@@ -469,7 +469,7 @@ object ContinentalDungeonGenerator {
             accentFloorTile = TileType.DIRT_FLOOR,
             hazardTile = TileType.WATER,
             bridgeTile = TileType.STONE_BRIDGE,
-            primaryOre = TileType.ORE_VESPERITE,
+            primaryOre = TileType.ORE_FROST_IRON,
             secondaryOre = TileType.ORE_GLACIER_QUARTZ,
             seed = 2207,
             arenaVariant = 2
@@ -492,8 +492,8 @@ object ContinentalDungeonGenerator {
             accentFloorTile = TileType.CRYPT_FLOOR,
             hazardTile = TileType.LAVA,
             bridgeTile = TileType.STONE_BRIDGE,
-            primaryOre = TileType.ORE_CINDERITE,
-            secondaryOre = TileType.ORE_VESPERITE,
+            primaryOre = TileType.ORE_VESPERITE,
+            secondaryOre = TileType.ORE_BOG_IRON,
             seed = 2309,
             arenaVariant = 3
         )

@@ -1490,10 +1490,10 @@ object WorldMaps {
         listOf(18 to 10, 30 to 10, 18 to 14, 30 to 14).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
 
         // Rich Vesperite Ore Veins across quarry alcoves & Kragor's pit rim
-        listOf(
-            10 to 32, 10 to 37, 38 to 32, 38 to 37,
-            10 to 23, 38 to 23, 15 to 8, 33 to 8
-        ).forEach { (vx, vy) -> g[vy][vx] = TileType.ORE_VESPERITE }
+        // Frostpeak foothill veins: frost-iron & glacier-quartz (Mining 42) plus a little vesperite
+        listOf(10 to 32, 38 to 32, 10 to 23, 38 to 23).forEach { (vx, vy) -> g[vy][vx] = TileType.ORE_FROST_IRON }
+        listOf(10 to 37, 38 to 37).forEach { (vx, vy) -> g[vy][vx] = TileType.ORE_GLACIER_QUARTZ }
+        listOf(15 to 8, 33 to 8).forEach { (vx, vy) -> g[vy][vx] = TileType.ORE_VESPERITE }
 
         // Atmospheric Flickering Iron Wall Torches
         listOf(
