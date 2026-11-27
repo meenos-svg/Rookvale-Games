@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.game.engine.GameEngine
+
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -503,7 +505,7 @@ fun GameCanvasView(
                         val animFrame = ((now / 420L) % 2L).toInt()
                         val floorMap = WorldMaps.getFloor(st.floor)
 
-                        val moveFrac = ((now - st.lastPlayerMoveMs).toFloat() / 180f).coerceIn(0f, 1f)
+                        val moveFrac = GameEngine.stepGlideFraction(st, now)
                         val camPlayerX = st.prevPlayerX + (st.playerX - st.prevPlayerX) * moveFrac
                         val camPlayerY = st.prevPlayerY + (st.playerY - st.prevPlayerY) * moveFrac
 
@@ -1079,7 +1081,7 @@ fun GameCanvasView(
                         val dispSettings = readDisplaySettings()
                         val curSmoothZoom = smoothZoomState.floatValue
                         val curSmoothYaw = smoothYawState.floatValue
-                        val moveFrac = ((now - st.lastPlayerMoveMs).toFloat() / 180f).coerceIn(0f, 1f)
+                        val moveFrac = GameEngine.stepGlideFraction(st, now)
                         val camPlayerX = st.prevPlayerX + (st.playerX - st.prevPlayerX) * moveFrac
                         val camPlayerY = st.prevPlayerY + (st.playerY - st.prevPlayerY) * moveFrac
 
@@ -1663,7 +1665,15 @@ private fun DrawScope.drawIsometricLocalPlayer(
     val heightPx = spritePx * VolumetricShading.HEROIC_HUMANOID_SCALE
     val u = heightPx / 46f
 
-    val walkPhase = if (moveFrac < 0.99f) (now / 62f) else 0f
+    // Stride cadence matches remote players (2.6 cycles/s at base pace) and speeds up with the
+    // hero's level-based walking speed. The walking pose holds between consecutive steps of a walk
+    // instead of snapping to idle on the last frame of every tile.
+    val stepMs = GameEngine.stepIntervalMs(state.level)
+    val sinceStep = now - state.lastPlayerMoveMs
+    val continuingWalk = (state.walkPath.isNotEmpty() || state.longRangeGoal != null || state.autoFollowTarget) && sinceStep < stepMs * 2
+    val walking = moveFrac < 0.999f || continuingWalk
+    val cyclesPerSec = RemotePlayerInterpolator.WALK_CYCLES_PER_SEC * (GameEngine.BASE_STEP_INTERVAL_MS.toFloat() / stepMs)
+    val walkPhase = if (walking) (((now % 600_000L) / 1000f * cyclesPerSec) % 1f).coerceAtLeast(0.02f) else 0f
     val attackAge = now - state.lastPlayerAttackMs
     val attackProgress = if (attackAge in 0L..340L) (attackAge.toFloat() / 340f) else 0f
     val atkEase = if (attackProgress in 0.001f..0.999f) sin(attackProgress * PI.toFloat()) else 0f
