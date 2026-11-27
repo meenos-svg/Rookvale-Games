@@ -396,7 +396,8 @@ enum class BiomeEquipmentClass(
     MIRE_WOVEN("Mire-Woven / Bog-Steel", "MIRE-WOVEN", "Whispering Marsh", 20, 0xFF66E688L),
     VESPERITE_SUNSCORCH("Vesperite / Sunscorch", "VESPERITE", "Sunscorch & Grimmaw Quarry", 28, 0xFFB692FFL),
     RIME_PLATE("Rime-Plate / Frostpeak", "RIME-PLATE", "Frostpeak Highlands", 36, 0xFF6BE8FFL),
-    CINDERITE_ASHEN("Cinderite / Ashen", "CINDERITE", "Ashen Caldera & Gorek Labyrinth", 45, 0xFFFF6A2BL)
+    CINDERITE_ASHEN("Cinderite / Ashen", "CINDERITE", "Ashen Caldera & Gorek Labyrinth", 45, 0xFFFF6A2BL),
+    EMBERFORGED("Emberforged / Ashen Depths", "EMBERFORGED", "Ashen Caldera Depths", 60, 0xFFFFC14DL)
 }
 
 enum class CraftingStationType(

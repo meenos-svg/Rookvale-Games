@@ -232,6 +232,38 @@ class FrontierCitiesAndDungeonsTest {
         }
     }
 
+    /** Emberforged (Lv 60) is the top tier, made at the Ashen Foundry and still worth dropping in the Lv 66-75 endgame. */
+    @Test
+    fun emberforgedTierCompletesTheEndgame() {
+        val set = ItemCatalog.all.values.filter { it.id.startsWith("emberforged_") && it.id != "emberforged_ingot" }
+        assertEquals(11, set.size)
+        val recipes = RecipeCatalog.forgingRecipes + RecipeCatalog.smeltingRecipes
+        set.forEach { item ->
+            assertEquals(6, item.equipmentTier)
+            assertEquals(60, item.requiredLevel)
+            val r = recipes.single { it.outputItemId == item.id }
+            assertEquals(com.example.game.model.CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY, r.requiredBiomeStation)
+            // Lv 60 gear is never "outgrown" anywhere in the game (top monsters are Lv 75)
+            assertFalse(com.example.game.model.LootLevels.isOutgrown(item.id, 75))
+        }
+        assertTrue(recipes.any { it.outputItemId == "emberforged_ingot" })
+        // Every Ashen boss carries a Sovereign Ember
+        val monsters = WorldMaps.initialMonsters()
+        for (boss in listOf(MonsterType.ORDRAK_THE_MOLTEN_FOREMAN, MonsterType.SEVRA_THE_ASH_CROWNED, MonsterType.VULKARIS_THE_FORGE_TITAN, MonsterType.IGNIVAR_ASH_WING_WYRM)) {
+            assertTrue("$boss drops a Sovereign Ember", MonsterLootTable.entryFor(boss).guaranteedDrops.any { it.itemId == "sovereign_ember" })
+            val level = monsters.first { it.type == boss }.level
+            assertTrue(com.example.game.model.LootLevels.canDrop("sovereign_ember", level))
+        }
+        // Sevra and the Lv 72 bosses now drop gear instead of salvaging it all into ore
+        val rng = kotlin.random.Random(11)
+        var gear = 0
+        repeat(400) {
+            val loot = MonsterLootTable.rollLoot(MonsterType.VULKARIS_THE_FORGE_TITAN, rng, monsterLevel = 72)
+            gear += loot.items.count { it.itemId.startsWith("emberforged_") && it.itemId != "emberforged_ingot" }
+        }
+        assertTrue("Vulkaris should drop Emberforged gear", gear > 0)
+    }
+
     @Test
     fun sunspireSurroundingsAreBadlands() {
         assertEquals(com.example.game.world.OverlandBiomeTier.SUNSCORCH_BADLANDS, BiomeProgressionRules.biomeForGlobalTile(375, 790))
@@ -248,7 +280,7 @@ class FrontierCitiesAndDungeonsTest {
         val recipes = RecipeCatalog.forgingRecipes
         for (cat in listOf(com.example.game.model.ItemCategory.HELMET, com.example.game.model.ItemCategory.LEGS, com.example.game.model.ItemCategory.BOOTS)) {
             val pieces = ItemCatalog.all.values.filter { it.category == cat && !it.adminOnly }
-            for (lvl in listOf(20, 28, 36, 45)) {
+            for (lvl in listOf(20, 28, 36, 45, 60)) {
                 val p = pieces.singleOrNull { it.requiredLevel == lvl }
                 assertTrue("$cat missing a Lv $lvl piece", p != null)
                 assertTrue("${p!!.id} must be craftable", recipes.any { it.outputItemId == p.id })

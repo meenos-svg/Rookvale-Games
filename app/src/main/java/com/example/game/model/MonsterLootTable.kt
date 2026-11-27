@@ -883,6 +883,7 @@ object MonsterLootTable {
         MonsterType.ORDRAK_THE_MOLTEN_FOREMAN to MonsterLootEntry(
             minGp = 390, maxGp = 700,
             guaranteedDrops = listOf(
+                ItemStack("sovereign_ember", 1),
                 ItemStack("cinderite_bar", 2),
                 ItemStack("cinderite_ore", 3),
                 ItemStack("molten_core", 1)
@@ -894,7 +895,10 @@ object MonsterLootTable {
                 WeightedLootDrop("cinderite_greataxe", 1, 1, dropChance = 0.14f, weight = 9),
                 WeightedLootDrop("cinderite_crown", 1, 1, dropChance = 0.14f, weight = 8),
                 WeightedLootDrop("cinderite_tassets", 1, 1, dropChance = 0.14f, weight = 8),
-                WeightedLootDrop("cinderite_treads", 1, 1, dropChance = 0.14f, weight = 8)
+                WeightedLootDrop("cinderite_treads", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("emberforged_helm", 1, 1, dropChance = 0.08f, weight = 5),
+                WeightedLootDrop("emberforged_greaves", 1, 1, dropChance = 0.08f, weight = 5),
+                WeightedLootDrop("emberforged_sabatons", 1, 1, dropChance = 0.08f, weight = 5)
             ),
             bonusWeightRolls = 2
         ),
@@ -933,6 +937,7 @@ object MonsterLootTable {
         MonsterType.SEVRA_THE_ASH_CROWNED to MonsterLootEntry(
             minGp = 400, maxGp = 730,
             guaranteedDrops = listOf(
+                ItemStack("sovereign_ember", 1),
                 ItemStack("cinderite_bar", 3),
                 ItemStack("molten_core", 2),
                 ItemStack("runic_slate", 2)
@@ -940,12 +945,12 @@ object MonsterLootTable {
             weightedDrops = listOf(
                 WeightedLootDrop("sd_rune", 2, 4, dropChance = 0.66f, weight = 18),
                 WeightedLootDrop("ember_heart", 2, 4, dropChance = 0.70f, weight = 18),
-                WeightedLootDrop("cinderite_greatsword", 1, 1, dropChance = 0.16f, weight = 9),
-                WeightedLootDrop("cinderite_ashen_bow", 1, 1, dropChance = 0.16f, weight = 9),
-                WeightedLootDrop("cinderite_soulspire", 1, 1, dropChance = 0.16f, weight = 9),
-                WeightedLootDrop("cinderite_bastion", 1, 1, dropChance = 0.14f, weight = 8),
-                WeightedLootDrop("cinderite_warplate", 1, 1, dropChance = 0.14f, weight = 8),
-                WeightedLootDrop("cinderite_overlord_band", 1, 1, dropChance = 0.12f, weight = 7)
+                WeightedLootDrop("emberforged_greatsword", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("emberforged_longbow", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("emberforged_scepter", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("emberforged_aegis", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("emberforged_warplate", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("emberforged_signet", 1, 1, dropChance = 0.12f, weight = 7)
             ),
             bonusWeightRolls = 2
         ),
@@ -1066,7 +1071,8 @@ object MonsterLootTable {
                 WeightedLootDrop("vesperite_ore", 2, 3, dropChance = 0.52f, weight = 26),
                 WeightedLootDrop("ember_heart", 1, 2, dropChance = 0.42f, weight = 20),
                 WeightedLootDrop("health_potion", 2, 3, dropChance = 0.40f, weight = 14),
-                WeightedLootDrop("vesperite_warmaul", 1, 1, dropChance = 0.08f, weight = 10)
+                WeightedLootDrop("vesperite_warmaul", 1, 1, dropChance = 0.08f, weight = 10),
+                WeightedLootDrop("emberforged_worldbreaker", 1, 1, dropChance = 0.02f, weight = 3)
             ),
             bonusWeightRolls = 1
         ),
@@ -1078,7 +1084,8 @@ object MonsterLootTable {
                 WeightedLootDrop("fireball_rune", 2, 4, dropChance = 0.56f, weight = 26),
                 WeightedLootDrop("sd_rune", 1, 3, dropChance = 0.42f, weight = 22),
                 WeightedLootDrop("mana_potion", 2, 3, dropChance = 0.44f, weight = 16),
-                WeightedLootDrop("vesperite_conduit_staff", 1, 1, dropChance = 0.08f, weight = 8)
+                WeightedLootDrop("vesperite_conduit_staff", 1, 1, dropChance = 0.08f, weight = 8),
+                WeightedLootDrop("emberforged_scepter", 1, 1, dropChance = 0.02f, weight = 3)
             ),
             bonusWeightRolls = 1
         ),
@@ -1090,7 +1097,8 @@ object MonsterLootTable {
                 WeightedLootDrop("cinderite_ore", 1, 2, dropChance = 0.52f, weight = 26),
                 WeightedLootDrop("dragon_ham", 1, 2, dropChance = 0.48f, weight = 22),
                 WeightedLootDrop("dragon_tooth", 1, 2, dropChance = 0.34f, weight = 14),
-                WeightedLootDrop("dragon_mail", 1, 1, dropChance = 0.14f, weight = 10)
+                WeightedLootDrop("dragon_mail", 1, 1, dropChance = 0.14f, weight = 10),
+                WeightedLootDrop("emberforged_longbow", 1, 1, dropChance = 0.02f, weight = 3)
             ),
             bonusWeightRolls = 1
         ),
@@ -1102,53 +1110,54 @@ object MonsterLootTable {
                 WeightedLootDrop("cinderite_ore", 1, 2, dropChance = 0.48f, weight = 26),
                 WeightedLootDrop("sd_rune", 2, 3, dropChance = 0.46f, weight = 22),
                 WeightedLootDrop("mana_potion", 2, 3, dropChance = 0.40f, weight = 16),
-                WeightedLootDrop("vesperite_catalyst_ring", 1, 1, dropChance = 0.08f, weight = 8)
+                WeightedLootDrop("vesperite_catalyst_ring", 1, 1, dropChance = 0.08f, weight = 8),
+                WeightedLootDrop("emberforged_signet", 1, 1, dropChance = 0.02f, weight = 3)
             ),
             bonusWeightRolls = 1
         ),
         MonsterType.VULKARIS_THE_FORGE_TITAN to MonsterLootEntry(
             minGp = 395, maxGp = 720,
             guaranteedDrops = listOf(
+                ItemStack("sovereign_ember", 1),
                 ItemStack("cinderite_bar", 2),
                 ItemStack("ember_heart", 3),
                 ItemStack("health_potion", 3)
             ),
             weightedDrops = listOf(
-                WeightedLootDrop("cinderite_tassets", 1, 1, dropChance = 0.16f, weight = 8),
-                WeightedLootDrop("cinderite_treads", 1, 1, dropChance = 0.16f, weight = 8),
+                WeightedLootDrop("emberforged_greaves", 1, 1, dropChance = 0.16f, weight = 8),
+                WeightedLootDrop("emberforged_sabatons", 1, 1, dropChance = 0.16f, weight = 8),
                 WeightedLootDrop("molten_core", 2, 3, dropChance = 0.80f, weight = 20),
-                WeightedLootDrop("cinderite_greataxe", 1, 1, dropChance = 0.20f, weight = 10),
-                WeightedLootDrop("cinderite_overlord_band", 1, 1, dropChance = 0.16f, weight = 8),
+                WeightedLootDrop("emberforged_greataxe", 1, 1, dropChance = 0.20f, weight = 10),
+                WeightedLootDrop("emberforged_signet", 1, 1, dropChance = 0.16f, weight = 8),
                 WeightedLootDrop("cinderite_ore", 3, 5, dropChance = 0.78f, weight = 22),
                 WeightedLootDrop("vesperite_bar", 2, 3, dropChance = 0.65f, weight = 18),
-                WeightedLootDrop("cinderite_worldbreaker", 1, 1, dropChance = 0.22f, weight = 12),
-                WeightedLootDrop("cinderite_bastion", 1, 1, dropChance = 0.22f, weight = 12),
-                WeightedLootDrop("cinderite_warplate", 1, 1, dropChance = 0.20f, weight = 12),
-                WeightedLootDrop("vesperite_warmaul", 1, 1, dropChance = 0.24f, weight = 12),
-                WeightedLootDrop("cinderheart_sovereign_torc", 1, 1, dropChance = 0.18f, weight = 12)
+                WeightedLootDrop("emberforged_worldbreaker", 1, 1, dropChance = 0.22f, weight = 12),
+                WeightedLootDrop("emberforged_aegis", 1, 1, dropChance = 0.22f, weight = 12),
+                WeightedLootDrop("emberforged_warplate", 1, 1, dropChance = 0.20f, weight = 12),
+                WeightedLootDrop("vesperite_warmaul", 1, 1, dropChance = 0.24f, weight = 12)
             ),
             bonusWeightRolls = 2
         ),
         MonsterType.IGNIVAR_ASH_WING_WYRM to MonsterLootEntry(
             minGp = 415, maxGp = 750,
             guaranteedDrops = listOf(
+                ItemStack("sovereign_ember", 1),
                 ItemStack("wyrmscale_plate", 3),
                 ItemStack("cinderite_bar", 2),
                 ItemStack("dragon_tooth", 3)
             ),
             weightedDrops = listOf(
-                WeightedLootDrop("cinderite_crown", 1, 1, dropChance = 0.16f, weight = 8),
+                WeightedLootDrop("emberforged_helm", 1, 1, dropChance = 0.16f, weight = 8),
                 WeightedLootDrop("molten_core", 2, 3, dropChance = 0.80f, weight = 20),
-                WeightedLootDrop("cinderite_bastion", 1, 1, dropChance = 0.18f, weight = 9),
-                WeightedLootDrop("cinderite_warplate", 1, 1, dropChance = 0.18f, weight = 9),
-                WeightedLootDrop("cinderheart_sovereign_torc", 1, 1, dropChance = 0.16f, weight = 8),
+                WeightedLootDrop("emberforged_aegis", 1, 1, dropChance = 0.18f, weight = 9),
+                WeightedLootDrop("emberforged_warplate", 1, 1, dropChance = 0.18f, weight = 9),
+                WeightedLootDrop("emberforged_signet", 1, 1, dropChance = 0.16f, weight = 8),
                 WeightedLootDrop("cinderite_ore", 3, 5, dropChance = 0.80f, weight = 22),
                 WeightedLootDrop("sd_rune", 2, 4, dropChance = 0.70f, weight = 18),
-                WeightedLootDrop("cinderite_greatsword", 1, 1, dropChance = 0.22f, weight = 12),
-                WeightedLootDrop("cinderite_ashen_bow", 1, 1, dropChance = 0.22f, weight = 12),
-                WeightedLootDrop("cinderite_soulspire", 1, 1, dropChance = 0.22f, weight = 12),
-                WeightedLootDrop("dragon_mail", 1, 1, dropChance = 0.36f, weight = 12),
-                WeightedLootDrop("cinderite_overlord_band", 1, 1, dropChance = 0.18f, weight = 12)
+                WeightedLootDrop("emberforged_greatsword", 1, 1, dropChance = 0.22f, weight = 12),
+                WeightedLootDrop("emberforged_longbow", 1, 1, dropChance = 0.22f, weight = 12),
+                WeightedLootDrop("emberforged_scepter", 1, 1, dropChance = 0.22f, weight = 12),
+                WeightedLootDrop("dragon_mail", 1, 1, dropChance = 0.36f, weight = 12)
             ),
             bonusWeightRolls = 2
         )
