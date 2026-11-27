@@ -20,6 +20,12 @@ import com.example.game.world.HeartlandSiteFloors.Layout
  * - **-30 Tomb of Akhet** (badlands, Lv 30-34, new): a buried pharaoh's tomb. Sand-fall galleries,
  *   the Hall of Kings, burial wings full of niches, a scorpion nest and the sealed sanctum where
  *   Akhet the Sand Pharaoh waits.
+ * - **-33 Cinderfall Mines** (Ashen Caldera, Lv 55-60): an abandoned obsidian mine. Haulage
+ *   tunnels, the Great Shaft over a lava pit, collapsed galleries, magma vents and the Foreman's
+ *   Forge where Ordrak waits.
+ * - **-34 Emberhold, the Buried City** (Ashen Caldera, Lv 61-66): a city swallowed by an eruption.
+ *   Ash-choked streets and ruined houses, the hound kennels, the witches' coven and Queen Sevra's
+ *   palace.
  */
 object FrontierSiteFloors {
     const val SIZE = 96
@@ -33,11 +39,15 @@ object FrontierSiteFloors {
     val RIFT = Anchors(8, 88, 9, 87, 9, 87, 9, 87)
     val BARROW = Anchors(48, 90, 48, 89, 48, 6, 48, 7)
     val RIMEHEART = Anchors(90, 48, 89, 48, 89, 48, 89, 48)
+    val CINDERFALL = Anchors(48, 90, 48, 89, 48, 89, 48, 89)
+    val EMBERHOLD = Anchors(5, 48, 6, 48, 6, 48, 6, 48)
 
     const val MURKFEN_FLOOR = -29
     const val TOMB_FLOOR = -30
     const val RIFT_FLOOR = -31
     const val RIMEHEART_FLOOR = -32
+    const val CINDERFALL_FLOOR = -33
+    const val EMBERHOLD_FLOOR = -34
 
     /** Overland entrances of the two new dungeons. */
     const val MURKFEN_ENTRY_X = 452
@@ -48,8 +58,12 @@ object FrontierSiteFloors {
     const val RIFT_ENTRY_Y = 880
     const val RIMEHEART_ENTRY_X = 1410
     const val RIMEHEART_ENTRY_Y = 90
+    const val CINDERFALL_ENTRY_X = 382
+    const val CINDERFALL_ENTRY_Y = 150
+    const val EMBERHOLD_ENTRY_X = 289
+    const val EMBERHOLD_ENTRY_Y = 330
 
-    val newFloorIds: List<Int> = listOf(MURKFEN_FLOOR, TOMB_FLOOR, RIFT_FLOOR, RIMEHEART_FLOOR)
+    val newFloorIds: List<Int> = listOf(MURKFEN_FLOOR, TOMB_FLOOR, RIFT_FLOOR, RIMEHEART_FLOOR, CINDERFALL_FLOOR, EMBERHOLD_FLOOR)
 
     fun anchorsFor(floorId: Int): Anchors? = when (floorId) {
         -6 -> GOREK
@@ -60,6 +74,8 @@ object FrontierSiteFloors {
         RIFT_FLOOR -> RIFT
         -9 -> BARROW
         RIMEHEART_FLOOR -> RIMEHEART
+        CINDERFALL_FLOOR -> CINDERFALL
+        EMBERHOLD_FLOOR -> EMBERHOLD
         else -> null
     }
 
@@ -72,6 +88,8 @@ object FrontierSiteFloors {
         RIFT_FLOOR -> scorchglassRift
         -9 -> barrowCatacombs
         RIMEHEART_FLOOR -> rimeheartCaverns
+        CINDERFALL_FLOOR -> cinderfallMines
+        EMBERHOLD_FLOOR -> emberhold
         else -> null
     }
 
@@ -83,6 +101,8 @@ object FrontierSiteFloors {
     val scorchglassRift: Layout by lazy { buildRift() }
     val barrowCatacombs: Layout by lazy { buildBarrow() }
     val rimeheartCaverns: Layout by lazy { buildRimeheart() }
+    val cinderfallMines: Layout by lazy { buildCinderfall() }
+    val emberhold: Layout by lazy { buildEmberhold() }
 
     private fun layout(
         floorId: Int,
@@ -860,5 +880,191 @@ object FrontierSiteFloors {
             LandmarkLabel(RIMEHEART_FLOOR, 18, 31, "THRONE OF RIME")
         )
         return layout(RIMEHEART_FLOOR, c, camp, a, spawns, landmarks)
+    }
+
+    // =====================================================================================
+    // Floor -33: Cinderfall Mines (Ashen Caldera, Lv 55-60)
+    // =====================================================================================
+    private fun buildCinderfall(): Layout {
+        val a = CINDERFALL
+        val c = DeepDelveFloors.Canvas(SIZE, TileType.MOUNTAIN_ROCK, seed = 3301)
+        val dirt = TileType.DIRT_FLOOR
+        val ash = TileType.VOLCANIC_ASH
+        val glass = TileType.OBSIDIAN_FLOOR
+        val lava = TileType.LAVA
+        val camp = UndergroundCampZone(
+            floorId = CINDERFALL_FLOOR, name = "CINDERFALL MINES CAMP (PZ)",
+            minX = 41, minY = 84, maxX = 55, maxY = 91,
+            healerX = 43, healerY = 87, healerName = "Ash Mender Hesta",
+            merchantX = 53, merchantY = 87, merchantName = "Shaft Boss Grenn"
+        )
+        southCamp(c, a, ash, TileType.BIOME_STALL_ASHEN, camp)
+
+        // Haulage tunnel north from the camp, lined with old ore carts
+        c.rect(46, 66, 50, 83, dirt)
+        for (y in 70..80 step 5) c[45, y] = TileType.CRATE_BARREL
+
+        // The Great Shaft (centre): a wide cavern around a lava pit, crossed by a stone bridge
+        c.blob(48, 54, 13, dirt)
+        c.ellipse(48, 52, 5, 4, lava)
+        c.rect(46, 47, 50, 57, TileType.STONE_BRIDGE)
+        c.scatterReplace(34, 40, 62, 68, dirt, ash, 4)
+
+        // Collapsed Galleries (west): long galleries choked with fallen pillars
+        c.rect(6, 40, 28, 78, dirt)
+        for (y in 44..74 step 6) c.rect(8, y, 26, y, TileType.MOUNTAIN_ROCK)
+        for (y in 44..74 step 6) { val gx = if ((y / 6) % 2 == 0) 9 else 23; c.rect(gx, y, gx + 2, y, dirt) }
+        c.scatter(6, 40, 28, 78, TileType.GRANITE_WALL, density = 11, onlyOn = setOf(dirt), keepClear = 1)
+        c.tunnel(listOf(28 to 58, 36 to 56), 4, dirt)
+
+        // Magma Vents (east): ash fields broken by bubbling lava pools
+        c.blob(76, 64, 13, ash)
+        for ((px, py, rx, ry) in listOf(listOf(70, 60, 3, 2), listOf(82, 66, 4, 3), listOf(76, 74, 3, 2), listOf(86, 56, 2, 2))) c.ellipse(px, py, rx, ry, lava)
+        c.scatterReplace(62, 50, 90, 80, ash, glass, 6)
+        c.tunnel(listOf(60 to 56, 66 to 62), 4, dirt)
+        c.tunnel(listOf(56 to 80, 70 to 78), 3, ash)
+
+        // Slinger Roost (north-west): a high cave of glassy ledges
+        c.blob(22, 20, 10, glass)
+        c.scatter(14, 12, 30, 28, TileType.CRYSTAL_PILLAR, density = 9, onlyOn = setOf(glass), keepClear = 1)
+        c.tunnel(listOf(18 to 30, 16 to 40), 3, dirt)
+        c.tunnel(listOf(32 to 22, 42 to 40), 3, dirt)
+
+        // The Foreman's Forge (north-east): an obsidian hall over lava channels, one gate in
+        c.rect(60, 6, 90, 30, glass)
+        c.outline(60, 6, 90, 30, TileType.OBSIDIAN_WALL)
+        c.rect(64, 16, 86, 17, lava)
+        c.rect(73, 16, 77, 17, TileType.STONE_BRIDGE)
+        for (x in 66..84 step 6) { c[x, 8] = TileType.SMELTING_FURNACE; c[x, 28] = TileType.BLACKSMITH_ANVIL }
+        c[75, 10] = TileType.CAMPFIRE_BRAZIER
+        for (x in 73..77) c[x, 30] = TileType.IRON_BAR_GATE
+        c.tunnel(listOf(56 to 44, 75 to 34, 75 to 31), 4, dirt)
+        c.tunnel(listOf(48 to 41, 56 to 44), 4, dirt)
+
+        c.sealPockets(a.landingX, a.landingY)
+        c.ores(TileType.ORE_CINDERITE, count = 10, x1 = 4, y1 = 4, x2 = 92, y2 = 82)
+        c.torches(spacing = 9)
+
+        val miner = MonsterType.ASHBORN_MINER
+        val crawler = MonsterType.MAGMA_CRAWLER
+        val slinger = MonsterType.CINDER_SLINGER
+        val spawns = c.spawns(
+            CINDERFALL_FLOOR, camp,
+            miner to (48 to 72),
+            miner to (40 to 60), crawler to (56 to 60), slinger to (42 to 46), miner to (56 to 46), crawler to (38 to 52),
+            miner to (12 to 42), miner to (20 to 54), slinger to (14 to 66), miner to (22 to 76), crawler to (10 to 72),
+            crawler to (70 to 66), crawler to (80 to 60), slinger to (84 to 72), crawler to (72 to 76), miner to (66 to 54),
+            slinger to (18 to 16), slinger to (26 to 24), crawler to (22 to 32),
+            miner to (66 to 24), slinger to (84 to 24), crawler to (68 to 12),
+            MonsterType.ORDRAK_THE_MOLTEN_FOREMAN to (75 to 12)
+        )
+        val landmarks = listOf(
+            LandmarkLabel(CINDERFALL_FLOOR, 48, 38, "THE GREAT SHAFT"),
+            LandmarkLabel(CINDERFALL_FLOOR, 17, 37, "COLLAPSED GALLERIES"),
+            LandmarkLabel(CINDERFALL_FLOOR, 76, 48, "MAGMA VENTS"),
+            LandmarkLabel(CINDERFALL_FLOOR, 22, 8, "SLINGER ROOST"),
+            LandmarkLabel(CINDERFALL_FLOOR, 75, 3, "THE FOREMAN'S FORGE")
+        )
+        return layout(CINDERFALL_FLOOR, c, camp, a, spawns, landmarks)
+    }
+
+    // =====================================================================================
+    // Floor -34: Emberhold, the Buried City (Ashen Caldera, Lv 61-66)
+    // =====================================================================================
+    private fun buildEmberhold(): Layout {
+        val a = EMBERHOLD
+        val c = DeepDelveFloors.Canvas(SIZE, TileType.MOUNTAIN_ROCK, seed = 3401)
+        val ash = TileType.VOLCANIC_ASH
+        val street = TileType.COBBLESTONE
+        val wall = TileType.OBSIDIAN_WALL
+        val floor = TileType.OBSIDIAN_FLOOR
+        val lava = TileType.LAVA
+        val camp = UndergroundCampZone(
+            floorId = EMBERHOLD_FLOOR, name = "EMBERHOLD DIGSITE CAMP (PZ)",
+            minX = 2, minY = 42, maxX = 13, maxY = 54,
+            healerX = 4, healerY = 44, healerName = "Ash Cleric Orsa",
+            merchantX = 4, merchantY = 52, merchantName = "Relic Digger Fenn"
+        )
+        // Diggers' camp (west), where the excavation broke into the buried city
+        c.rect(2, 42, 13, 54, ash)
+        c[12, 43] = TileType.CAMPFIRE_BRAZIER; c[12, 53] = TileType.CAMPFIRE_BRAZIER
+        c[8, 43] = TileType.BIOME_STALL_ASHEN; c[8, 53] = TileType.CRATE_BARREL
+        c[a.stairsUpX, a.stairsUpY] = TileType.STAIRS_UP
+        c[a.landingX, a.landingY] = TileType.COBBLESTONE
+
+        // The buried city: a grid of ash-choked streets
+        c.rect(14, 10, 62, 86, ash)
+        for (y in listOf(20, 36, 48, 60, 76)) c.rect(14, y - 1, 62, y + 1, street)
+        for (x in listOf(24, 38, 52)) c.rect(x - 1, 10, x + 1, 86, street)
+        c.scatterReplace(14, 10, 62, 86, street, ash, 5)
+        // ruined houses in every block, walls broken by the eruption
+        val blocksX = listOf(15 to 22, 26 to 36, 40 to 50, 54 to 62)
+        val blocksY = listOf(11 to 18, 22 to 34, 38 to 46, 62 to 74, 78 to 86)
+        for ((bx1, bx2) in blocksX) for ((by1, by2) in blocksY) {
+            val x1 = bx1 + 1; val x2 = bx2 - 1; val y1 = by1 + 1; val y2 = by2 - 1
+            if (x2 - x1 < 4 || y2 - y1 < 4) continue
+            c.rect(x1, y1, x2, y2, floor)
+            c.outline(x1, y1, x2, y2, wall)
+            c[(x1 + x2) / 2, y2] = floor; c[(x1 + x2) / 2, y1] = floor
+            if (c.hash(x1, y1, 5) % 2 == 0) c[x1, (y1 + y2) / 2] = ash else c[x2, (y1 + y2) / 2] = ash
+        }
+
+        // Ashfall Plaza (centre): a cracked fountain now brimming with lava
+        c.rect(26, 50, 50, 58, street)
+        c.ellipse(38, 54, 3, 2, lava)
+        for ((x, y) in listOf(30 to 51, 46 to 51, 30 to 57, 46 to 57)) c[x, y] = TileType.CRYSTAL_PILLAR
+
+        // Hound Kennels (south-east): a scorched yard of pens
+        c.blob(76, 80, 10, ash)
+        for (px in 68..84 step 5) c.rect(px, 73, px, 76, TileType.IRON_BAR_GATE)
+        c.tunnel(listOf(62 to 80, 68 to 80), 4, street)
+
+        // Witches' Coven (north-east): a ring of braziers around a lava well
+        c.blob(78, 16, 10, floor)
+        c.ellipse(78, 16, 2, 2, lava)
+        for (k in 0 until 8) {
+            val ang = k * Math.PI * 2 / 8
+            c[78 + (6 * Math.cos(ang)).toInt(), 16 + (5 * Math.sin(ang)).toInt()] = TileType.CAMPFIRE_BRAZIER
+        }
+        c.tunnel(listOf(62 to 20, 70 to 18), 4, street)
+
+        // Palace of Sevra (east): a gated hall with the ash throne
+        c.rect(66, 32, 92, 64, TileType.TEMPLE_FLOOR)
+        c.outline(66, 32, 92, 64, wall)
+        for (y in listOf(36, 60)) for (x in 70..88 step 6) c[x, y] = TileType.CRYSTAL_PILLAR
+        c.rect(84, 44, 90, 52, floor)
+        c[90, 48] = TileType.TEMPLE_ALTAR                               // the ash throne
+        c.rect(78, 40, 79, 56, lava); c.rect(78, 46, 79, 50, TileType.STONE_BRIDGE)
+        c.tunnel(listOf(62 to 48, 65 to 48), 5, street)
+        for (y in 46..50) c[66, y] = TileType.IRON_BAR_GATE
+
+        // diggers' trench into the city
+        c.tunnel(listOf(13 to 48, 16 to 48), 5, ash)
+
+        c.sealPockets(a.landingX, a.landingY)
+        c.ores(TileType.ORE_CINDERITE, count = 9, x1 = 4, y1 = 4, x2 = 92, y2 = 92)
+        c.torches(spacing = 9)
+
+        val rev = MonsterType.ASHEN_REVENANT
+        val hound = MonsterType.SMOLDER_HOUND
+        val witch = MonsterType.CINDER_WITCH
+        val spawns = c.spawns(
+            EMBERHOLD_FLOOR, camp,
+            rev to (20 to 48), hound to (24 to 40),
+            rev to (32 to 54), witch to (44 to 54), rev to (38 to 36), hound to (52 to 48), rev to (24 to 60),
+            rev to (18 to 20), witch to (30 to 14), rev to (44 to 28), hound to (56 to 20), rev to (52 to 70), witch to (30 to 80), hound to (42 to 76),
+            hound to (72 to 82), hound to (80 to 78), rev to (84 to 84),
+            witch to (74 to 14), witch to (84 to 18), witch to (78 to 24),
+            rev to (70 to 40), rev to (72 to 58), witch to (74 to 48),
+            MonsterType.SEVRA_THE_ASH_CROWNED to (86 to 48)
+        )
+        val landmarks = listOf(
+            LandmarkLabel(EMBERHOLD_FLOOR, 38, 47, "ASHFALL PLAZA"),
+            LandmarkLabel(EMBERHOLD_FLOOR, 38, 8, "BURIED STREETS"),
+            LandmarkLabel(EMBERHOLD_FLOOR, 76, 70, "HOUND KENNELS"),
+            LandmarkLabel(EMBERHOLD_FLOOR, 78, 4, "WITCHES' COVEN"),
+            LandmarkLabel(EMBERHOLD_FLOOR, 80, 29, "PALACE OF SEVRA")
+        )
+        return layout(EMBERHOLD_FLOOR, c, camp, a, spawns, landmarks)
     }
 }

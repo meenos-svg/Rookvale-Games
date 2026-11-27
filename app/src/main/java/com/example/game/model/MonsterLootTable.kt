@@ -849,6 +849,106 @@ object MonsterLootTable {
             ),
             bonusWeightRolls = 2
         ),
+        // --- Cinderfall Mines (-33) ---
+        MonsterType.ASHBORN_MINER to MonsterLootEntry(
+            minGp = 112, maxGp = 225,
+            weightedDrops = listOf(
+                WeightedLootDrop("cinderite_ore", 1, 2, dropChance = 0.50f, weight = 28),
+                WeightedLootDrop("ancient_bone", 1, 2, dropChance = 0.40f, weight = 20),
+                WeightedLootDrop("health_potion", 1, 2, dropChance = 0.40f, weight = 16),
+                WeightedLootDrop("cinderite_treads", 1, 1, dropChance = 0.03f, weight = 3)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.MAGMA_CRAWLER to MonsterLootEntry(
+            minGp = 108, maxGp = 218,
+            weightedDrops = listOf(
+                WeightedLootDrop("ember_heart", 1, 2, dropChance = 0.46f, weight = 24),
+                WeightedLootDrop("cinderite_ore", 1, 2, dropChance = 0.42f, weight = 22),
+                WeightedLootDrop("health_potion", 1, 2, dropChance = 0.36f, weight = 16),
+                WeightedLootDrop("cinderite_tassets", 1, 1, dropChance = 0.03f, weight = 3)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.CINDER_SLINGER to MonsterLootEntry(
+            minGp = 110, maxGp = 220,
+            weightedDrops = listOf(
+                WeightedLootDrop("ember_heart", 1, 2, dropChance = 0.44f, weight = 24),
+                WeightedLootDrop("cinderite_ore", 1, 2, dropChance = 0.40f, weight = 22),
+                WeightedLootDrop("mana_potion", 1, 2, dropChance = 0.40f, weight = 16),
+                WeightedLootDrop("cinderite_crown", 1, 1, dropChance = 0.03f, weight = 3)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.ORDRAK_THE_MOLTEN_FOREMAN to MonsterLootEntry(
+            minGp = 390, maxGp = 700,
+            guaranteedDrops = listOf(
+                ItemStack("cinderite_bar", 2),
+                ItemStack("cinderite_ore", 3),
+                ItemStack("molten_core", 1)
+            ),
+            weightedDrops = listOf(
+                WeightedLootDrop("sd_rune", 2, 4, dropChance = 0.66f, weight = 18),
+                WeightedLootDrop("ember_heart", 2, 4, dropChance = 0.70f, weight = 18),
+                WeightedLootDrop("cinderite_core_pickaxe", 1, 1, dropChance = 0.12f, weight = 8),
+                WeightedLootDrop("cinderite_greataxe", 1, 1, dropChance = 0.14f, weight = 9),
+                WeightedLootDrop("cinderite_crown", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("cinderite_tassets", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("cinderite_treads", 1, 1, dropChance = 0.14f, weight = 8)
+            ),
+            bonusWeightRolls = 2
+        ),
+        // --- Emberhold, the Buried City (-34) ---
+        MonsterType.ASHEN_REVENANT to MonsterLootEntry(
+            minGp = 120, maxGp = 240,
+            weightedDrops = listOf(
+                WeightedLootDrop("cinderite_ore", 1, 2, dropChance = 0.46f, weight = 24),
+                WeightedLootDrop("molten_core", 1, 1, dropChance = 0.22f, weight = 14),
+                WeightedLootDrop("ancient_bone", 1, 2, dropChance = 0.40f, weight = 18),
+                WeightedLootDrop("health_potion", 1, 2, dropChance = 0.38f, weight = 16),
+                WeightedLootDrop("cinderite_bastion", 1, 1, dropChance = 0.03f, weight = 3)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.SMOLDER_HOUND to MonsterLootEntry(
+            minGp = 114, maxGp = 228,
+            weightedDrops = listOf(
+                WeightedLootDrop("ember_heart", 1, 2, dropChance = 0.48f, weight = 26),
+                WeightedLootDrop("jagged_ivory", 1, 2, dropChance = 0.40f, weight = 20),
+                WeightedLootDrop("health_potion", 1, 2, dropChance = 0.36f, weight = 16),
+                WeightedLootDrop("cinderite_treads", 1, 1, dropChance = 0.03f, weight = 3)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.CINDER_WITCH to MonsterLootEntry(
+            minGp = 118, maxGp = 236,
+            weightedDrops = listOf(
+                WeightedLootDrop("runic_slate", 1, 2, dropChance = 0.46f, weight = 24),
+                WeightedLootDrop("molten_core", 1, 1, dropChance = 0.22f, weight = 14),
+                WeightedLootDrop("mana_potion", 1, 2, dropChance = 0.42f, weight = 16),
+                WeightedLootDrop("cinderite_soulspire", 1, 1, dropChance = 0.03f, weight = 3)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.SEVRA_THE_ASH_CROWNED to MonsterLootEntry(
+            minGp = 400, maxGp = 730,
+            guaranteedDrops = listOf(
+                ItemStack("cinderite_bar", 3),
+                ItemStack("molten_core", 2),
+                ItemStack("runic_slate", 2)
+            ),
+            weightedDrops = listOf(
+                WeightedLootDrop("sd_rune", 2, 4, dropChance = 0.66f, weight = 18),
+                WeightedLootDrop("ember_heart", 2, 4, dropChance = 0.70f, weight = 18),
+                WeightedLootDrop("cinderite_greatsword", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("cinderite_ashen_bow", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("cinderite_soulspire", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("cinderite_bastion", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("cinderite_warplate", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("cinderite_overlord_band", 1, 1, dropChance = 0.12f, weight = 7)
+            ),
+            bonusWeightRolls = 2
+        ),
         // --- Rimeheart Caverns (-32) ---
         MonsterType.YETI_RAVAGER to MonsterLootEntry(
             minGp = 110, maxGp = 220,

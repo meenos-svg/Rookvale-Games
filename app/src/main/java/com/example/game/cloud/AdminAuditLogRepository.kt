@@ -335,7 +335,9 @@ object AdminTeleportCatalog {
         dungeonCampPreset("floor_m29", "F-29 Murkfen Hollow", -29, FrontierSiteFloors.MURKFEN.landingX, FrontierSiteFloors.MURKFEN.landingY),
         dungeonCampPreset("floor_m30", "F-30 Tomb of Akhet", -30, FrontierSiteFloors.TOMB.landingX, FrontierSiteFloors.TOMB.landingY),
         dungeonCampPreset("floor_m31", "F-31 Scorchglass Rift", -31, FrontierSiteFloors.RIFT.landingX, FrontierSiteFloors.RIFT.landingY),
-        dungeonCampPreset("floor_m32", "F-32 Rimeheart Caverns", -32, FrontierSiteFloors.RIMEHEART.landingX, FrontierSiteFloors.RIMEHEART.landingY)
+        dungeonCampPreset("floor_m32", "F-32 Rimeheart Caverns", -32, FrontierSiteFloors.RIMEHEART.landingX, FrontierSiteFloors.RIMEHEART.landingY),
+        dungeonCampPreset("floor_m33", "F-33 Cinderfall Mines", -33, FrontierSiteFloors.CINDERFALL.landingX, FrontierSiteFloors.CINDERFALL.landingY),
+        dungeonCampPreset("floor_m34", "F-34 Emberhold", -34, FrontierSiteFloors.EMBERHOLD.landingX, FrontierSiteFloors.EMBERHOLD.landingY)
     )
 
     val overlandLandmarks: List<AdminTeleportPreset> = townsAndEmpires + overlandCamps

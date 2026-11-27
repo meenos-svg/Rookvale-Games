@@ -24,7 +24,7 @@ class MonsterProgressionTest {
 
     @Test
     fun allTwentyFiveMonstersScaleAcrossSixTiersAndSpawnOnWalkableNonPzTiles() {
-        assertEquals(74, MonsterType.entries.size)
+        assertEquals(82, MonsterType.entries.size)
         val tierAvgHp = (1..6).map { t ->
             MonsterType.entries.filter { it.tier == t && !it.isBoss }.map { it.maxHp }.average()
         }

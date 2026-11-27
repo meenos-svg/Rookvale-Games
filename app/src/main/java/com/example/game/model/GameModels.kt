@@ -1253,6 +1253,54 @@ enum class MonsterType(
         aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 3, rangedProjectile = ProjectileKind.ENERGY_BOLT,
         isBoss = true, summonTypeName = "GLACIER_SHAMAN", maxSummons = 2,
         specialKind = BossSpecialKind.QUARRY_QUAKE, bossTitle = "Frozen Tyrant of the Rimeheart Deep"
+    ),
+
+    // --- Cinderfall Mines (Floor -33, Ashen Caldera Lv 55-60) ---
+    ASHBORN_MINER(
+        displayName = "Ashborn Miner", tier = 5, threatLevel = 18, maxHp = 610, armor = 20,
+        xpReward = 770, minDmg = 40, maxDmg = 72, goldMin = 112, goldMax = 225, moveIntervalTicks = 2
+    ),
+    MAGMA_CRAWLER(
+        displayName = "Magma Crawler", tier = 5, threatLevel = 18, maxHp = 560, armor = 22,
+        xpReward = 750, minDmg = 38, maxDmg = 70, goldMin = 108, goldMax = 218, moveIntervalTicks = 1,
+        inflictsFire = true
+    ),
+    CINDER_SLINGER(
+        displayName = "Cinder Slinger", tier = 5, threatLevel = 18, maxHp = 520, armor = 16,
+        xpReward = 750, minDmg = 38, maxDmg = 70, goldMin = 110, goldMax = 220, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
+        inflictsFire = true
+    ),
+    ORDRAK_THE_MOLTEN_FOREMAN(
+        displayName = "Ordrak the Molten Foreman", tier = 5, threatLevel = 22, maxHp = 1400, armor = 23,
+        xpReward = 1950, minDmg = 50, maxDmg = 90, goldMin = 390, goldMax = 700, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 3, rangedProjectile = ProjectileKind.FIREBALL,
+        inflictsFire = true, isBoss = true, summonTypeName = "ASHBORN_MINER", maxSummons = 2,
+        specialKind = BossSpecialKind.QUARRY_QUAKE, bossTitle = "Slag-Crowned Master of the Cinderfall Mines"
+    ),
+
+    // --- Emberhold, the Buried City (Floor -34, Ashen Caldera Lv 61-66) ---
+    ASHEN_REVENANT(
+        displayName = "Ashen Revenant", tier = 5, threatLevel = 19, maxHp = 650, armor = 22,
+        xpReward = 820, minDmg = 42, maxDmg = 76, goldMin = 120, goldMax = 240, moveIntervalTicks = 2
+    ),
+    SMOLDER_HOUND(
+        displayName = "Smolder Hound", tier = 5, threatLevel = 18, maxHp = 550, armor = 18,
+        xpReward = 790, minDmg = 40, maxDmg = 72, goldMin = 114, goldMax = 228, moveIntervalTicks = 1,
+        inflictsFire = true
+    ),
+    CINDER_WITCH(
+        displayName = "Cinder Witch", tier = 5, threatLevel = 19, maxHp = 560, armor = 17,
+        xpReward = 800, minDmg = 41, maxDmg = 74, goldMin = 118, goldMax = 236, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.NECRO_BOLT,
+        inflictsFire = true
+    ),
+    SEVRA_THE_ASH_CROWNED(
+        displayName = "Sevra the Ash-Crowned", tier = 5, threatLevel = 23, maxHp = 1440, armor = 23,
+        xpReward = 2020, minDmg = 52, maxDmg = 93, goldMin = 400, goldMax = 730, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.NECRO_BOLT,
+        inflictsFire = true, isBoss = true, summonTypeName = "ASHEN_REVENANT", maxSummons = 2,
+        specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Buried Queen of Emberhold"
     );
 
     fun threatBandFor(playerLevel: Int): ThreatBand = when {

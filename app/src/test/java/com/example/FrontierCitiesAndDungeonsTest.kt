@@ -85,7 +85,7 @@ class FrontierCitiesAndDungeonsTest {
     @Test
     fun rebuiltAndNewFrontierDungeonsAreLargeConnectedAndPopulated() {
         val monsters = WorldMaps.initialMonsters()
-        for (floorId in listOf(-6, -7, -8, -9, -29, -30, -31, -32)) {
+        for (floorId in listOf(-6, -7, -8, -9, -29, -30, -31, -32, -33, -34)) {
             val fl = WorldMaps.getFloor(floorId)
             assertEquals(FrontierSiteFloors.SIZE, fl.width)
             val entry = WorldMaps.portals.single { it.fromFloor == 0 && it.toFloor == floorId }
@@ -131,7 +131,14 @@ class FrontierCitiesAndDungeonsTest {
         val rime = monsters.filter { it.floor == FrontierSiteFloors.RIMEHEART_FLOOR }
         assertEquals(listOf(MonsterType.HRIMGAR_THE_GLACIER_KING), rime.filter { it.type.isBoss }.map { it.type })
         rime.forEach { assertTrue("Rimeheart ${it.type} Lv ${it.level}", it.level in 54..59) }
-        assertEquals(-32, BiomeProgressionRules.MIN_DUNGEON_FLOOR)
+        // Cinderfall Mines and Emberhold open the Ashen Caldera band below the Foundry and Sanctum
+        val cinder = monsters.filter { it.floor == FrontierSiteFloors.CINDERFALL_FLOOR }
+        assertEquals(listOf(MonsterType.ORDRAK_THE_MOLTEN_FOREMAN), cinder.filter { it.type.isBoss }.map { it.type })
+        cinder.forEach { assertTrue("Cinderfall ${it.type} Lv ${it.level}", it.level in 55..60) }
+        val ember = monsters.filter { it.floor == FrontierSiteFloors.EMBERHOLD_FLOOR }
+        assertEquals(listOf(MonsterType.SEVRA_THE_ASH_CROWNED), ember.filter { it.type.isBoss }.map { it.type })
+        ember.forEach { assertTrue("Emberhold ${it.type} Lv ${it.level}", it.level in 61..66) }
+        assertEquals(-34, BiomeProgressionRules.MIN_DUNGEON_FLOOR)
         assertFalse(BiomeProgressionRules.isLowerBossFloor(-29))
     }
 
@@ -163,6 +170,8 @@ class FrontierCitiesAndDungeonsTest {
             (base..base + 5).toList()
         }.toSet()
         assertTrue("Frostpeak dungeons must cover Lv 42-58: $frost", (42..58).all { it in frost })
+        val ashen = band(listOf(-33, -34, -10, -15, -27, -28))
+        assertTrue("Ashen dungeons must cover Lv 55-72: $ashen", (55..72).all { it in ashen })
         assertTrue("Marsh dungeons must cover Lv 20-32: $marsh", (20..32).all { it in marsh })
         assertTrue("Badlands dungeons must cover Lv 30-45: $badlands", (30..45).all { it in badlands })
     }
@@ -201,7 +210,7 @@ class FrontierCitiesAndDungeonsTest {
             }
         }
         // Loot sanity in the marsh & badlands dungeons and their lairs
-        for (floorId in listOf(-5, -6, -7, -8, -9, -22, -23, -24, -25, -26, -29, -30, -31, -32)) {
+        for (floorId in listOf(-5, -6, -7, -8, -9, -22, -23, -24, -25, -26, -29, -30, -31, -32, -33, -34)) {
             monsters.filter { it.floor == floorId }.map { it.type to it.level }.distinct().forEach { (type, level) ->
                 MonsterLootTable.entryFor(type).weightedDrops.forEach { d ->
                     val req = ItemCatalog.all[d.itemId]?.requiredLevel ?: 1

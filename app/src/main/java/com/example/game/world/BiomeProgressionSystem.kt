@@ -92,7 +92,7 @@ enum class OverlandBiomeTier(
  * floors off their surface biome (`surfaceMinLevel + abs(floor) * 6`).
  */
 object BiomeProgressionRules {
-    const val MIN_DUNGEON_FLOOR: Int = -32
+    const val MIN_DUNGEON_FLOOR: Int = -34
     const val DUNGEON_DEPTH_STEP_LEVELS: Int = 6
 
     /** Highest monster level anywhere in Rookvale (surface and every dungeon beneath it). */
@@ -133,6 +133,7 @@ object BiomeProgressionRules {
 
     fun biomeForGlobalTile(x: Int, y: Int): OverlandBiomeTier =
         if (BiomeCities.isSunspireBadlandsRim(x, y)) OverlandBiomeTier.SUNSCORCH_BADLANDS
+        else if (BiomeCities.isAshenBastionRim(x, y)) OverlandBiomeTier.ASHEN_CALDERA
         else biomeForRegion(WorldRegionMeta.forGlobalTile(x, y).regionId)
 
     /**
@@ -160,6 +161,8 @@ object BiomeProgressionRules {
         -30 -> OverlandBiomeTier.SUNSCORCH_BADLANDS  // Tomb of Akhet & Sanctum (Lvl 30-35)
         -31 -> OverlandBiomeTier.SUNSCORCH_BADLANDS  // Scorchglass Rift & the Djinn's Eye (Lvl 41-46)
         -32 -> OverlandBiomeTier.FROSTPEAK_HIGHLANDS // Rimeheart Caverns & the Throne of Rime (Lvl 54-59)
+        -33 -> OverlandBiomeTier.ASHEN_CALDERA       // Cinderfall Mines & the Foreman's Forge (Lvl 55-60)
+        -34 -> OverlandBiomeTier.ASHEN_CALDERA       // Emberhold, the Buried City & Sevra's palace (Lvl 61-66)
         else -> OverlandBiomeTier.ROOKVALE_HEARTLAND
     }
 
@@ -170,9 +173,9 @@ object BiomeProgressionRules {
      * paired Lower Boss Floors (-16..-28) inherit their parent dungeon's depth.
      */
     fun effectiveDungeonDepth(floorId: Int): Int = when (parentUpperFloorFor(floorId)) {
-        -6, -7, -9, -11, -12, -13 -> 1
+        -6, -7, -9, -11, -12, -13, -34 -> 1
         -8, -10, -14, -15, -32 -> 2
-        -5, -29, -30 -> 0   // entry dungeons of their biomes: monsters start at the biome's own minimum level
+        -5, -29, -30, -33 -> 0   // entry dungeons of their biomes: monsters start at the biome's own minimum level
         else -> abs(parentUpperFloorFor(floorId)).coerceAtLeast(1)
     }
 

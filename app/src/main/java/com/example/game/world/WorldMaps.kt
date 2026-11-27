@@ -183,6 +183,8 @@ object WorldMaps {
             add(NpcSpot(0, FrontierSiteFloors.TOMB_ENTRY_X + 3, FrontierSiteFloors.TOMB_ENTRY_Y + 1, "Tomb Robber Sefa", NpcRole.DUNGEON_GUIDE))
             add(NpcSpot(0, FrontierSiteFloors.RIFT_ENTRY_X + 3, FrontierSiteFloors.RIFT_ENTRY_Y + 1, "Rift Scout Imran", NpcRole.DUNGEON_GUIDE))
             add(NpcSpot(0, FrontierSiteFloors.RIMEHEART_ENTRY_X + 3, FrontierSiteFloors.RIMEHEART_ENTRY_Y + 1, "Icewarden Kjell", NpcRole.DUNGEON_GUIDE))
+            add(NpcSpot(0, FrontierSiteFloors.CINDERFALL_ENTRY_X + 3, FrontierSiteFloors.CINDERFALL_ENTRY_Y + 1, "Pitwarden Brask", NpcRole.DUNGEON_GUIDE))
+            add(NpcSpot(0, FrontierSiteFloors.EMBERHOLD_ENTRY_X + 3, FrontierSiteFloors.EMBERHOLD_ENTRY_Y + 1, "Digmaster Yeva", NpcRole.DUNGEON_GUIDE))
 
             // 6 Strictly Coastline-Validated Ocean Harbor Ferry Captains
             WorldBiomeBlueprint.harborPorts.forEach { port ->
@@ -281,6 +283,8 @@ object WorldMaps {
             add(LandmarkLabel(0, FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y, "TOMB OF AKHET (FLOOR -30)"))
             add(LandmarkLabel(0, FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y, "SCORCHGLASS RIFT (FLOOR -31)"))
             add(LandmarkLabel(0, FrontierSiteFloors.RIMEHEART_ENTRY_X, FrontierSiteFloors.RIMEHEART_ENTRY_Y, "RIMEHEART CAVERNS (FLOOR -32)"))
+            add(LandmarkLabel(0, FrontierSiteFloors.CINDERFALL_ENTRY_X, FrontierSiteFloors.CINDERFALL_ENTRY_Y, "CINDERFALL MINES (FLOOR -33)"))
+            add(LandmarkLabel(0, FrontierSiteFloors.EMBERHOLD_ENTRY_X, FrontierSiteFloors.EMBERHOLD_ENTRY_Y, "EMBERHOLD (FLOOR -34)"))
             // City fishing spots (each worm bites best in its own biome's waters)
             add(LandmarkLabel(0, 580, 549, "WHARF FISHING (BLOODWORMS)"))
             add(LandmarkLabel(0, 375, 765, "OASIS FISHING (SANDWORMS)"))
@@ -345,6 +349,12 @@ object WorldMaps {
         // Rimeheart Crevasse (Frostpeak, north of the citadel) <-> Floor -32 Rimeheart Caverns
         FloorPortal(0, FrontierSiteFloors.RIMEHEART_ENTRY_X, FrontierSiteFloors.RIMEHEART_ENTRY_Y, -32, FrontierSiteFloors.RIMEHEART.landingX, FrontierSiteFloors.RIMEHEART.landingY, requiresRope = false),
         FloorPortal(-32, FrontierSiteFloors.RIMEHEART.stairsUpX, FrontierSiteFloors.RIMEHEART.stairsUpY, 0, FrontierSiteFloors.RIMEHEART_ENTRY_X, FrontierSiteFloors.RIMEHEART_ENTRY_Y + 1, requiresRope = false),
+        // Cinderfall Pithead (north of Ashen Bastion) <-> Floor -33 Cinderfall Mines
+        FloorPortal(0, FrontierSiteFloors.CINDERFALL_ENTRY_X, FrontierSiteFloors.CINDERFALL_ENTRY_Y, -33, FrontierSiteFloors.CINDERFALL.landingX, FrontierSiteFloors.CINDERFALL.landingY, requiresRope = false),
+        FloorPortal(-33, FrontierSiteFloors.CINDERFALL.stairsUpX, FrontierSiteFloors.CINDERFALL.stairsUpY, 0, FrontierSiteFloors.CINDERFALL_ENTRY_X, FrontierSiteFloors.CINDERFALL_ENTRY_Y + 1, requiresRope = false),
+        // Emberhold Digsite (south-west of Ashen Bastion) <-> Floor -34 Emberhold, the Buried City
+        FloorPortal(0, FrontierSiteFloors.EMBERHOLD_ENTRY_X, FrontierSiteFloors.EMBERHOLD_ENTRY_Y, -34, FrontierSiteFloors.EMBERHOLD.landingX, FrontierSiteFloors.EMBERHOLD.landingY, requiresRope = false),
+        FloorPortal(-34, FrontierSiteFloors.EMBERHOLD.stairsUpX, FrontierSiteFloors.EMBERHOLD.stairsUpY, 0, FrontierSiteFloors.EMBERHOLD_ENTRY_X, FrontierSiteFloors.EMBERHOLD_ENTRY_Y + 1, requiresRope = false),
         // Ashen Caldera Shaft <-> Floor -10 The Ashen Caldera Foundry
         FloorPortal(0, 318, 252, -10, 24, 40, requiresRope = false),
         FloorPortal(-10, 24, 41, 0, 318, 253, requiresRope = false),
@@ -454,6 +464,8 @@ object WorldMaps {
             put(-29, frontierFloor(FrontierSiteFloors.murkfenHollow, "Murkfen Hollow", "Whispering Marsh Dungeon • Floor -29 • Hagmother's Bower • Camp PZ", "Moderate", 2))
             put(-32, frontierFloor(FrontierSiteFloors.rimeheartCaverns, "Rimeheart Caverns", "Frostpeak Highlands Dungeon • Floor -32 • Throne of Rime • Camp PZ", "Very High", 4))
             put(-31, frontierFloor(FrontierSiteFloors.scorchglassRift, "Scorchglass Rift", "Sunscorch Badlands Dungeon • Floor -31 • The Djinn's Eye • Camp PZ", "High", 3))
+            put(-33, frontierFloor(FrontierSiteFloors.cinderfallMines, "Cinderfall Mines", "Ashen Caldera Dungeon • Floor -33 • The Foreman's Forge • Camp PZ", "Very High", 4))
+            put(-34, frontierFloor(FrontierSiteFloors.emberhold, "Emberhold, the Buried City", "Ashen Caldera Dungeon • Floor -34 • Palace of Sevra • Camp PZ", "Extreme", 4))
             put(-30, frontierFloor(FrontierSiteFloors.tombOfAkhet, "Tomb of Akhet", "Sunscorch Badlands Dungeon • Floor -30 • Sanctum of Akhet • Camp PZ", "High", 3))
         }
     }
@@ -479,6 +491,8 @@ object WorldMaps {
         -30 -> FrontierSiteFloors.TOMB.landingX to FrontierSiteFloors.TOMB.landingY
         -31 -> FrontierSiteFloors.RIFT.landingX to FrontierSiteFloors.RIFT.landingY
         -32 -> FrontierSiteFloors.RIMEHEART.landingX to FrontierSiteFloors.RIMEHEART.landingY
+        -33 -> FrontierSiteFloors.CINDERFALL.landingX to FrontierSiteFloors.CINDERFALL.landingY
+        -34 -> FrontierSiteFloors.EMBERHOLD.landingX to FrontierSiteFloors.EMBERHOLD.landingY
         in -15..-7 -> ContinentalDungeonGenerator.landingFor(floorId)
         in -28..-16 -> ContinentalDungeonGenerator.LOWER_LANDING_X to ContinentalDungeonGenerator.LOWER_LANDING_Y
         else -> TEMPLE_SPAWN_X to TEMPLE_SPAWN_Y
