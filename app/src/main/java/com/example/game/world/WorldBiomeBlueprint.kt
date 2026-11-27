@@ -582,6 +582,7 @@ object WorldBiomeBlueprint {
             add(WorldMapPin("dng_caldera", "Ashen Caldera Foundry (-10)", 318, 252, WorldPinCategory.DUNGEON, "Floor -10 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-10)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-10), 1.0f))
             add(WorldMapPin("dng_murkfen", "Murkfen Hollow (-29)", FrontierSiteFloors.MURKFEN_ENTRY_X, FrontierSiteFloors.MURKFEN_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -29 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-29)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-29), 1.0f))
             add(WorldMapPin("dng_tomb", "Tomb of Akhet (-30)", FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -30 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-30)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-30), 1.0f))
+            add(WorldMapPin("dng_rift", "Scorchglass Rift (-31)", FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -31 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-31)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-31), 1.0f))
             add(WorldMapPin("dng_ember", "The Ember Sanctum (-15)", 1510, 975, WorldPinCategory.DUNGEON, "Floor -15 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-15)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-15), 1.0f))
         }
     }
@@ -657,7 +658,8 @@ object WorldBiomeBlueprint {
         packCoord(720, 1020) to TileType.STAIRS_DOWN,  // Jungle Ruin Vault -> Floor -2
         packCoord(1510, 975) to TileType.STAIRS_DOWN,  // Ember Sanctum -> Floor -2
         packCoord(FrontierSiteFloors.MURKFEN_ENTRY_X, FrontierSiteFloors.MURKFEN_ENTRY_Y) to TileType.STAIRS_DOWN, // Murkfen Hollow -> Floor -29
-        packCoord(FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y) to TileType.STAIRS_DOWN        // Tomb of Akhet -> Floor -30
+        packCoord(FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y) to TileType.STAIRS_DOWN,       // Tomb of Akhet -> Floor -30
+        packCoord(FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y) to TileType.STAIRS_DOWN        // Scorchglass Rift -> Floor -31
     )
 
     // --- Coarse Regional Waypoint Graph for Instant Cross-World Hierarchical Auto-Walk ---

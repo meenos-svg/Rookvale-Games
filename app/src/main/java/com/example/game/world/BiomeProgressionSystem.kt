@@ -92,7 +92,7 @@ enum class OverlandBiomeTier(
  * floors off their surface biome (`surfaceMinLevel + abs(floor) * 6`).
  */
 object BiomeProgressionRules {
-    const val MIN_DUNGEON_FLOOR: Int = -30
+    const val MIN_DUNGEON_FLOOR: Int = -31
     const val DUNGEON_DEPTH_STEP_LEVELS: Int = 6
 
     /** Highest monster level anywhere in Rookvale (surface and every dungeon beneath it). */
@@ -157,6 +157,7 @@ object BiomeProgressionRules {
         -15 -> OverlandBiomeTier.ASHEN_CALDERA       // Ember Sanctum & Caldera Dragon Throne (Lvl 67-72+)
         -29 -> OverlandBiomeTier.WHISPERING_MARSH    // Murkfen Hollow & Hagmother's Bower (Lvl 20-25)
         -30 -> OverlandBiomeTier.SUNSCORCH_BADLANDS  // Tomb of Akhet & Sanctum (Lvl 30-35)
+        -31 -> OverlandBiomeTier.SUNSCORCH_BADLANDS  // Scorchglass Rift & the Djinn's Eye (Lvl 41-46)
         else -> OverlandBiomeTier.ROOKVALE_HEARTLAND
     }
 
@@ -191,6 +192,8 @@ object BiomeProgressionRules {
                 -13 -> return 9
             }
         }
+        // Scorchglass Rift tops off the badlands band (Lv 41-45, boss 46) above Gorek (36-41)
+        if (canonical == -31) return surfaceMinLevel.coerceAtLeast(1) + 11
         val depth = effectiveDungeonDepth(canonical)
         return (surfaceMinLevel.coerceAtLeast(1) + depth * DUNGEON_DEPTH_STEP_LEVELS)
     }

@@ -170,6 +170,7 @@ object MonsterLootTable {
         MonsterType.ORC_WARRIOR to MonsterLootEntry(
             minGp = 40, maxGp = 90,
             weightedDrops = listOf(
+                WeightedLootDrop("colossus_tendon", 1, 1, dropChance = 0.14f, weight = 12),
                 WeightedLootDrop("duskmetal_falchion", 1, 1, dropChance = 0.16f, weight = 18),
                 WeightedLootDrop("rookvale_gladius", 1, 1, dropChance = 0.22f, weight = 22),
                 WeightedLootDrop("brass_armor", 1, 1, dropChance = 0.15f, weight = 16),
@@ -353,60 +354,59 @@ object MonsterLootTable {
 
         // --- TIER 6: Gorek Badlands War-Camp & Floor -6 The Gorek Labyrinth (Pinnacle Obsidian Beast-Kin) ---
         MonsterType.GOREK_RAIDER to MonsterLootEntry(
-            minGp = 180, maxGp = 350,
+            minGp = 90, maxGp = 190,
             weightedDrops = listOf(
-                WeightedLootDrop("cinderite_ore", 1, 2, dropChance = 0.54f, weight = 30),
-                WeightedLootDrop("gorek_obsidian_horn", 1, 1, dropChance = 0.30f, weight = 22),
-                WeightedLootDrop("health_potion", 2, 3, dropChance = 0.45f, weight = 20),
-                WeightedLootDrop("fireball_rune", 2, 3, dropChance = 0.36f, weight = 18),
-                WeightedLootDrop("cinderite_greatsword", 1, 1, dropChance = 0.05f, weight = 4)
+                WeightedLootDrop("vesperite_ore", 1, 2, dropChance = 0.50f, weight = 30),
+                WeightedLootDrop("gorek_obsidian_horn", 1, 1, dropChance = 0.32f, weight = 24),
+                WeightedLootDrop("health_potion", 1, 2, dropChance = 0.42f, weight = 20),
+                WeightedLootDrop("fireball_rune", 1, 2, dropChance = 0.30f, weight = 16),
+                WeightedLootDrop("vesperite_longblade", 1, 1, dropChance = 0.04f, weight = 4)
             ),
             bonusWeightRolls = 1
         ),
         MonsterType.GOREK_PHALANX to MonsterLootEntry(
-            minGp = 210, maxGp = 400,
+            minGp = 100, maxGp = 210,
             weightedDrops = listOf(
-                WeightedLootDrop("cinderite_ore", 2, 3, dropChance = 0.60f, weight = 28),
-                WeightedLootDrop("gorek_obsidian_horn", 1, 2, dropChance = 0.36f, weight = 24),
-                WeightedLootDrop("cinderite_bar", 1, 1, dropChance = 0.24f, weight = 18),
-                WeightedLootDrop("dragon_shield", 1, 1, dropChance = 0.16f, weight = 12),
-                WeightedLootDrop("cinderite_greataxe", 1, 1, dropChance = 0.06f, weight = 5),
-                WeightedLootDrop("cinderite_worldbreaker", 1, 1, dropChance = 0.06f, weight = 5)
+                WeightedLootDrop("vesperite_ore", 1, 2, dropChance = 0.52f, weight = 28),
+                WeightedLootDrop("gorek_obsidian_horn", 1, 1, dropChance = 0.36f, weight = 24),
+                WeightedLootDrop("colossus_tendon", 1, 1, dropChance = 0.26f, weight = 18),
+                WeightedLootDrop("dragon_shield", 1, 1, dropChance = 0.10f, weight = 10),
+                WeightedLootDrop("vesperite_bulwark", 1, 1, dropChance = 0.04f, weight = 4),
+                WeightedLootDrop("vesperite_warmaul", 1, 1, dropChance = 0.04f, weight = 4)
             ),
             bonusWeightRolls = 1
         ),
         MonsterType.GOREK_HEX_CALLER to MonsterLootEntry(
-            minGp = 225, maxGp = 430,
+            minGp = 105, maxGp = 220,
             weightedDrops = listOf(
-                WeightedLootDrop("cinderite_ore", 2, 3, dropChance = 0.58f, weight = 26),
-                WeightedLootDrop("runic_slate", 2, 3, dropChance = 0.50f, weight = 22),
-                WeightedLootDrop("gorek_obsidian_horn", 1, 2, dropChance = 0.36f, weight = 22),
-                WeightedLootDrop("sd_rune", 2, 4, dropChance = 0.50f, weight = 18),
-                WeightedLootDrop("cinderite_soulspire", 1, 1, dropChance = 0.06f, weight = 5),
-                WeightedLootDrop("cinderite_ashen_bow", 1, 1, dropChance = 0.06f, weight = 5)
+                WeightedLootDrop("runic_slate", 1, 2, dropChance = 0.48f, weight = 26),
+                WeightedLootDrop("gorek_obsidian_horn", 1, 1, dropChance = 0.34f, weight = 22),
+                WeightedLootDrop("vesperite_ore", 1, 2, dropChance = 0.40f, weight = 20),
+                WeightedLootDrop("sd_rune", 1, 3, dropChance = 0.42f, weight = 18),
+                WeightedLootDrop("vesperite_conduit_staff", 1, 1, dropChance = 0.04f, weight = 4),
+                WeightedLootDrop("vesperite_recurve_bow", 1, 1, dropChance = 0.04f, weight = 4)
             ),
             bonusWeightRolls = 1
         ),
         MonsterType.VAELGOR_LABYRINTH_WARDEN to MonsterLootEntry(
-            minGp = 560, maxGp = 980,
+            minGp = 320, maxGp = 560,
             guaranteedDrops = listOf(
-                ItemStack("cinderite_bar", 2),
+                ItemStack("vesperite_bar", 2),
                 ItemStack("gorek_obsidian_horn", 2),
-                ItemStack("sd_rune", 3)
+                ItemStack("sd_rune", 2)
             ),
             weightedDrops = listOf(
-                WeightedLootDrop("cinderite_ore", 3, 5, dropChance = 0.80f, weight = 20),
-                WeightedLootDrop("health_potion", 3, 4, dropChance = 0.70f, weight = 16),
-                WeightedLootDrop("mana_potion", 3, 4, dropChance = 0.65f, weight = 16),
-                WeightedLootDrop("cinderite_greatsword", 1, 1, dropChance = 0.24f, weight = 10),
-                WeightedLootDrop("cinderite_greataxe", 1, 1, dropChance = 0.24f, weight = 10),
-                WeightedLootDrop("cinderite_worldbreaker", 1, 1, dropChance = 0.22f, weight = 10),
-                WeightedLootDrop("cinderite_ashen_bow", 1, 1, dropChance = 0.22f, weight = 10),
-                WeightedLootDrop("cinderite_soulspire", 1, 1, dropChance = 0.22f, weight = 10),
-                WeightedLootDrop("cinderite_bastion", 1, 1, dropChance = 0.20f, weight = 9),
-                WeightedLootDrop("cinderite_warplate", 1, 1, dropChance = 0.20f, weight = 9),
-                WeightedLootDrop("cinderheart_sovereign_torc", 1, 1, dropChance = 0.18f, weight = 8),
-                WeightedLootDrop("cinderite_overlord_band", 1, 1, dropChance = 0.18f, weight = 8)
+                WeightedLootDrop("vesperite_ore", 2, 4, dropChance = 0.80f, weight = 20),
+                WeightedLootDrop("health_potion", 2, 4, dropChance = 0.70f, weight = 16),
+                WeightedLootDrop("mana_potion", 2, 4, dropChance = 0.65f, weight = 16),
+                WeightedLootDrop("vesperite_longblade", 1, 1, dropChance = 0.20f, weight = 10),
+                WeightedLootDrop("vesperite_warmaul", 1, 1, dropChance = 0.18f, weight = 10),
+                WeightedLootDrop("vesperite_recurve_bow", 1, 1, dropChance = 0.18f, weight = 10),
+                WeightedLootDrop("vesperite_conduit_staff", 1, 1, dropChance = 0.18f, weight = 10),
+                WeightedLootDrop("vesperite_bulwark", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("vesperite_aegis_mail", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("vesperite_resonance_necklace", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("vesperite_catalyst_ring", 1, 1, dropChance = 0.14f, weight = 8)
             ),
             bonusWeightRolls = 2
         ),
@@ -665,6 +665,10 @@ object MonsterLootTable {
                 ItemStack("health_potion", 2)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("mire_silver_ingot", 2, 3, dropChance = 0.50f, weight = 14),
+                WeightedLootDrop("bog_steel_mace", 1, 1, dropChance = 0.14f, weight = 10),
+                WeightedLootDrop("mire_woven_brigandine", 1, 1, dropChance = 0.14f, weight = 10),
+                WeightedLootDrop("mire_woven_longbow", 1, 1, dropChance = 0.12f, weight = 8),
                 WeightedLootDrop("venom_shafts", 12, 20, dropChance = 0.68f, weight = 22),
                 WeightedLootDrop("healing_rune", 2, 4, dropChance = 0.60f, weight = 20),
                 WeightedLootDrop("quenchsteel_bastard", 1, 1, dropChance = 0.28f, weight = 16),
@@ -714,6 +718,9 @@ object MonsterLootTable {
                 ItemStack("mana_potion", 2)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("mire_woven_staff", 1, 1, dropChance = 0.14f, weight = 10),
+                WeightedLootDrop("bog_steel_sabre", 1, 1, dropChance = 0.14f, weight = 10),
+                WeightedLootDrop("bog_steel_shield", 1, 1, dropChance = 0.12f, weight = 8),
                 WeightedLootDrop("hmm_rune", 3, 6, dropChance = 0.66f, weight = 22),
                 WeightedLootDrop("healing_rune", 2, 4, dropChance = 0.58f, weight = 20),
                 WeightedLootDrop("tallowbone_crosier", 1, 1, dropChance = 0.26f, weight = 16),
@@ -746,6 +753,7 @@ object MonsterLootTable {
         MonsterType.SUNSCALE_BASILISK to MonsterLootEntry(
             minGp = 74, maxGp = 158,
             weightedDrops = listOf(
+                WeightedLootDrop("colossus_tendon", 1, 1, dropChance = 0.30f, weight = 20),
                 WeightedLootDrop("ember_heart", 1, 2, dropChance = 0.44f, weight = 28),
                 WeightedLootDrop("jagged_ivory", 1, 2, dropChance = 0.42f, weight = 24),
                 WeightedLootDrop("fireball_rune", 1, 2, dropChance = 0.26f, weight = 18),
@@ -761,11 +769,66 @@ object MonsterLootTable {
                 ItemStack("sd_rune", 2)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("gorek_obsidian_horn", 1, 2, dropChance = 0.40f, weight = 14),
+                WeightedLootDrop("quenchsteel_arbalest", 1, 1, dropChance = 0.16f, weight = 10),
                 WeightedLootDrop("fireball_rune", 2, 4, dropChance = 0.68f, weight = 22),
                 WeightedLootDrop("starlight_quarrels", 10, 18, dropChance = 0.54f, weight = 20),
                 WeightedLootDrop("dragon_mail", 1, 1, dropChance = 0.26f, weight = 16),
                 WeightedLootDrop("vesperite_longblade", 1, 1, dropChance = 0.18f, weight = 14),
                 WeightedLootDrop("stormglass_pendant", 1, 1, dropChance = 0.24f, weight = 12)
+            ),
+            bonusWeightRolls = 2
+        ),
+        // --- Scorchglass Rift (-31) ---
+        MonsterType.SCORCHGLASS_STALKER to MonsterLootEntry(
+            minGp = 80, maxGp = 168,
+            weightedDrops = listOf(
+                WeightedLootDrop("colossus_tendon", 1, 1, dropChance = 0.34f, weight = 24),
+                WeightedLootDrop("jagged_ivory", 1, 2, dropChance = 0.44f, weight = 22),
+                WeightedLootDrop("gorek_obsidian_horn", 1, 1, dropChance = 0.20f, weight = 16),
+                WeightedLootDrop("health_potion", 1, 2, dropChance = 0.38f, weight = 16),
+                WeightedLootDrop("vesperite_longblade", 1, 1, dropChance = 0.04f, weight = 4)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.DUST_DEVIL to MonsterLootEntry(
+            minGp = 76, maxGp = 160,
+            weightedDrops = listOf(
+                WeightedLootDrop("runic_slate", 1, 2, dropChance = 0.44f, weight = 26),
+                WeightedLootDrop("vesperite_ore", 1, 2, dropChance = 0.40f, weight = 22),
+                WeightedLootDrop("sd_rune", 1, 2, dropChance = 0.30f, weight = 18),
+                WeightedLootDrop("mana_potion", 1, 2, dropChance = 0.40f, weight = 16),
+                WeightedLootDrop("vesperite_catalyst_ring", 1, 1, dropChance = 0.03f, weight = 3)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.SALTGLASS_GOLEM to MonsterLootEntry(
+            minGp = 84, maxGp = 176,
+            weightedDrops = listOf(
+                WeightedLootDrop("vesperite_ore", 2, 3, dropChance = 0.52f, weight = 28),
+                WeightedLootDrop("colossus_tendon", 1, 1, dropChance = 0.26f, weight = 18),
+                WeightedLootDrop("bog_iron_ore", 1, 2, dropChance = 0.40f, weight = 16),
+                WeightedLootDrop("health_potion", 1, 2, dropChance = 0.36f, weight = 14),
+                WeightedLootDrop("vesperite_aegis_mail", 1, 1, dropChance = 0.03f, weight = 3)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.SIROCCO_THE_STORM_DJINN to MonsterLootEntry(
+            minGp = 300, maxGp = 520,
+            guaranteedDrops = listOf(
+                ItemStack("vesperite_bar", 2),
+                ItemStack("gorek_obsidian_horn", 2),
+                ItemStack("runic_slate", 2)
+            ),
+            weightedDrops = listOf(
+                WeightedLootDrop("sd_rune", 2, 4, dropChance = 0.66f, weight = 18),
+                WeightedLootDrop("colossus_tendon", 1, 2, dropChance = 0.60f, weight = 16),
+                WeightedLootDrop("stormglass_pendant", 1, 1, dropChance = 0.26f, weight = 12),
+                WeightedLootDrop("vesperite_cleaver", 1, 1, dropChance = 0.18f, weight = 10),
+                WeightedLootDrop("vesperite_recurve_bow", 1, 1, dropChance = 0.18f, weight = 10),
+                WeightedLootDrop("vesperite_conduit_staff", 1, 1, dropChance = 0.18f, weight = 10),
+                WeightedLootDrop("vesperite_resonance_necklace", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("vesperite_catalyst_ring", 1, 1, dropChance = 0.16f, weight = 9)
             ),
             bonusWeightRolls = 2
         ),
@@ -828,6 +891,7 @@ object MonsterLootTable {
         MonsterType.SLAG_AUTOMATON to MonsterLootEntry(
             minGp = 155, maxGp = 305,
             weightedDrops = listOf(
+                WeightedLootDrop("molten_core", 1, 1, dropChance = 0.30f, weight = 18),
                 WeightedLootDrop("cinderite_ore", 1, 2, dropChance = 0.56f, weight = 30),
                 WeightedLootDrop("vesperite_ore", 2, 3, dropChance = 0.52f, weight = 26),
                 WeightedLootDrop("ember_heart", 1, 2, dropChance = 0.42f, weight = 20),
@@ -839,6 +903,7 @@ object MonsterLootTable {
         MonsterType.ASH_PYROMANCER to MonsterLootEntry(
             minGp = 148, maxGp = 290,
             weightedDrops = listOf(
+                WeightedLootDrop("molten_core", 1, 1, dropChance = 0.22f, weight = 18),
                 WeightedLootDrop("cinderite_ore", 1, 2, dropChance = 0.50f, weight = 28),
                 WeightedLootDrop("fireball_rune", 2, 4, dropChance = 0.56f, weight = 26),
                 WeightedLootDrop("sd_rune", 1, 3, dropChance = 0.42f, weight = 22),
@@ -850,6 +915,7 @@ object MonsterLootTable {
         MonsterType.EMBER_DRAKE to MonsterLootEntry(
             minGp = 160, maxGp = 315,
             weightedDrops = listOf(
+                WeightedLootDrop("molten_core", 1, 1, dropChance = 0.24f, weight = 18),
                 WeightedLootDrop("wyrmscale_plate", 1, 2, dropChance = 0.54f, weight = 28),
                 WeightedLootDrop("cinderite_ore", 1, 2, dropChance = 0.52f, weight = 26),
                 WeightedLootDrop("dragon_ham", 1, 2, dropChance = 0.48f, weight = 22),
@@ -861,6 +927,7 @@ object MonsterLootTable {
         MonsterType.OBSIDIAN_CULTIST to MonsterLootEntry(
             minGp = 152, maxGp = 298,
             weightedDrops = listOf(
+                WeightedLootDrop("molten_core", 1, 1, dropChance = 0.22f, weight = 18),
                 WeightedLootDrop("runic_slate", 2, 3, dropChance = 0.54f, weight = 28),
                 WeightedLootDrop("cinderite_ore", 1, 2, dropChance = 0.48f, weight = 26),
                 WeightedLootDrop("sd_rune", 2, 3, dropChance = 0.46f, weight = 22),
@@ -877,6 +944,9 @@ object MonsterLootTable {
                 ItemStack("health_potion", 3)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("molten_core", 2, 3, dropChance = 0.80f, weight = 20),
+                WeightedLootDrop("cinderite_greataxe", 1, 1, dropChance = 0.20f, weight = 10),
+                WeightedLootDrop("cinderite_overlord_band", 1, 1, dropChance = 0.16f, weight = 8),
                 WeightedLootDrop("cinderite_ore", 3, 5, dropChance = 0.78f, weight = 22),
                 WeightedLootDrop("vesperite_bar", 2, 3, dropChance = 0.65f, weight = 18),
                 WeightedLootDrop("cinderite_worldbreaker", 1, 1, dropChance = 0.22f, weight = 12),
@@ -895,6 +965,10 @@ object MonsterLootTable {
                 ItemStack("dragon_tooth", 3)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("molten_core", 2, 3, dropChance = 0.80f, weight = 20),
+                WeightedLootDrop("cinderite_bastion", 1, 1, dropChance = 0.18f, weight = 9),
+                WeightedLootDrop("cinderite_warplate", 1, 1, dropChance = 0.18f, weight = 9),
+                WeightedLootDrop("cinderheart_sovereign_torc", 1, 1, dropChance = 0.16f, weight = 8),
                 WeightedLootDrop("cinderite_ore", 3, 5, dropChance = 0.80f, weight = 22),
                 WeightedLootDrop("sd_rune", 2, 4, dropChance = 0.70f, weight = 18),
                 WeightedLootDrop("cinderite_greatsword", 1, 1, dropChance = 0.22f, weight = 12),

@@ -94,6 +94,10 @@ object OrganicMonsterRenderer {
         MonsterType.SAND_WRAITH -> 1.10f
         MonsterType.SUNSCALE_BASILISK -> 1.12f
         MonsterType.AKHET_THE_SAND_PHARAOH -> 1.32f
+        MonsterType.SCORCHGLASS_STALKER -> 1.06f
+        MonsterType.DUST_DEVIL -> 1.0f
+        MonsterType.SALTGLASS_GOLEM -> 1.26f
+        MonsterType.SIROCCO_THE_STORM_DJINN -> 1.34f
         else -> 1.0f
     }
 
@@ -302,6 +306,10 @@ object OrganicMonsterRenderer {
             MonsterType.SAND_WRAITH,
             MonsterType.SUNSCALE_BASILISK,
             MonsterType.AKHET_THE_SAND_PHARAOH,
+            MonsterType.SCORCHGLASS_STALKER,
+            MonsterType.DUST_DEVIL,
+            MonsterType.SALTGLASS_GOLEM,
+            MonsterType.SIROCCO_THE_STORM_DJINN,
             MonsterType.VULKARIS_THE_FORGE_TITAN -> drawCustomDungeonBiped(
                 ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
                 type = type, useSpec = useSpec, useRim = useRim, quality = quality, path = path
@@ -2500,6 +2508,27 @@ object OrganicMonsterRenderer {
             Color(0xFF1F4FA8), Color(0xFFFFC947), Color(0xFF7BE8FF), Color(0xFFFFC947),
             torsoWidth = 12.4f, weapon = CustomWeaponKind.STAFF, hasCape = true, hasCrown = true,
             bossAuraColor = Color(0xFFFFC947)
+        )
+        MonsterType.SCORCHGLASS_STALKER -> CustomDungeonVisual(
+            Color(0xFF9C5A2A), Color(0xFFE0904A), Color(0xFF4A2610),
+            Color(0xFF6E3A18), Color(0xFFFFB86B), Color(0xFF7BFFEA), Color(0xFFB8FFF4),
+            torsoWidth = 9.4f, weapon = CustomWeaponKind.CLAWS, hasHorns = true
+        )
+        MonsterType.DUST_DEVIL -> CustomDungeonVisual(
+            Color(0xFFC9A86A), Color(0xFFF2DDAE), Color(0xFF7A6238),
+            Color(0xFF9C8250), Color(0xFFE8CF96), Color(0xFFFFF1C2), Color(0xFFFFE08A),
+            torsoWidth = 8.0f, weapon = CustomWeaponKind.ORB, hasCape = true
+        )
+        MonsterType.SALTGLASS_GOLEM -> CustomDungeonVisual(
+            Color(0xFFE6E8EA), Color(0xFFFFFFFF), Color(0xFF9AA3AB),
+            Color(0xFFB8C4CC), Color(0xFF8FE3FF), Color(0xFF4DD2FF), Color(0xFF8FE3FF),
+            torsoWidth = 13.0f, weapon = CustomWeaponKind.CLAWS
+        )
+        MonsterType.SIROCCO_THE_STORM_DJINN -> CustomDungeonVisual(
+            Color(0xFF3FA8C9), Color(0xFF8FE3FF), Color(0xFF1C5A73),
+            Color(0xFFC9A86A), Color(0xFFFFD86B), Color(0xFFFFFFFF), Color(0xFFFFD86B),
+            torsoWidth = 12.6f, weapon = CustomWeaponKind.STAFF, hasCape = true, hasCrown = true,
+            bossAuraColor = Color(0xFF8FE3FF)
         )
         else -> CustomDungeonVisual( // VULKARIS_THE_FORGE_TITAN
             Color(0xFF2B2226), Color(0xFF6B535C), Color(0xFF140F12),

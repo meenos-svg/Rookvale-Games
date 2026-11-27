@@ -2,7 +2,12 @@ package com.example
 
 import com.example.game.engine.GameEngine
 import com.example.game.model.FRONTIER_SITE_REBUILD_MAP_VERSION
+import com.example.game.model.CraftingStationType
+import com.example.game.model.ItemCatalog
+import com.example.game.model.MonsterLootTable
 import com.example.game.model.MonsterType
+import com.example.game.model.OreVeinKind
+import com.example.game.model.RecipeCatalog
 import com.example.game.model.TileType
 import com.example.game.world.BiomeCities
 import com.example.game.world.BiomeProgressionRules
@@ -80,7 +85,7 @@ class FrontierCitiesAndDungeonsTest {
     @Test
     fun rebuiltAndNewFrontierDungeonsAreLargeConnectedAndPopulated() {
         val monsters = WorldMaps.initialMonsters()
-        for (floorId in listOf(-6, -7, -8, -29, -30)) {
+        for (floorId in listOf(-6, -7, -8, -29, -30, -31)) {
             val fl = WorldMaps.getFloor(floorId)
             assertEquals(FrontierSiteFloors.SIZE, fl.width)
             val entry = WorldMaps.portals.single { it.fromFloor == 0 && it.toFloor == floorId }
@@ -118,7 +123,11 @@ class FrontierCitiesAndDungeonsTest {
         // Gorek Labyrinth now matches its badlands home (Lv 36-41) instead of Lv 90+
         monsters.filter { it.floor == -6 }.forEach { assertTrue("Gorek ${it.type} Lv ${it.level}", it.level in 36..41) }
         assertEquals("Lvl 36-41", BiomeProgressionRules.dungeonRecommendedLevelLabel(-6))
-        assertEquals(-30, BiomeProgressionRules.MIN_DUNGEON_FLOOR)
+        // Scorchglass Rift tops off the badlands band above Gorek
+        val rift = monsters.filter { it.floor == FrontierSiteFloors.RIFT_FLOOR }
+        assertEquals(listOf(MonsterType.SIROCCO_THE_STORM_DJINN), rift.filter { it.type.isBoss }.map { it.type })
+        rift.forEach { assertTrue("Rift ${it.type} Lv ${it.level}", it.level in 41..46) }
+        assertEquals(-31, BiomeProgressionRules.MIN_DUNGEON_FLOOR)
         assertFalse(BiomeProgressionRules.isLowerBossFloor(-29))
     }
 
@@ -135,6 +144,73 @@ class FrontierCitiesAndDungeonsTest {
         val deep = GameEngine.createNewWorld("Delver").copy(floor = -30, playerX = 48, playerY = 89)
         val back = GameEngine.fromSaveData(GameEngine.toSaveData(deep))
         assertEquals(-30, back.floor)
+    }
+
+    /** Marsh (Lv 20-32) and badlands (Lv 30-45) dungeon ladders leave no level gaps. */
+    @Test
+    fun marshAndBadlandsDungeonLaddersCoverTheirWholeBands() {
+        val monsters = WorldMaps.initialMonsters()
+        fun band(floors: List<Int>) = floors.flatMap { f -> monsters.filter { it.floor == f }.map { it.level } }.toSet()
+        val marsh = band(listOf(-29, -7, -24, -8, -25))
+        val badlands = band(listOf(-30, -6, -23, -31))
+        assertTrue("Marsh dungeons must cover Lv 20-32: $marsh", (20..32).all { it in marsh })
+        assertTrue("Badlands dungeons must cover Lv 30-45: $badlands", (30..45).all { it in badlands })
+    }
+
+    /**
+     * Gear crafted at Mirewatch and Sunspire must be makeable from materials that drop or can be
+     * mined inside (or below) that biome's level band, and dungeon loot in these two biomes must not
+     * hand out gear far above the level of the monster dropping it.
+     */
+    @Test
+    fun marshAndBadlandsGearUsesLocalMaterialsAndFairDrops() {
+        val monsters = WorldMaps.initialMonsters()
+        val minLevel = monsters.groupBy { it.type }.mapValues { (_, l) -> l.minOf { it.level } }
+        fun obtainable(itemId: String, maxLevel: Int, depth: Int = 0): Boolean {
+            if (depth > 4) return false
+            if (OreVeinKind.entries.any { it.oreItemId == itemId && it.requiredMiningLevel <= maxLevel }) return true
+            if ((ItemCatalog.all[itemId]?.buyPrice ?: 0) > 0) return true
+            if (itemId == "wood_log") return true
+            if (MonsterLootTable.entries.any { (t, e) ->
+                    (minLevel[t] ?: Int.MAX_VALUE) <= maxLevel &&
+                        (e.guaranteedDrops.any { it.itemId == itemId } || e.weightedDrops.any { it.itemId == itemId })
+                }) return true
+            return RecipeCatalog.smeltingRecipes.filter { it.outputItemId == itemId }
+                .any { r -> r.ingredients.all { obtainable(it.itemId, maxLevel, depth + 1) } }
+        }
+        val stations = mapOf(
+            CraftingStationType.STILT_TOWN_MIRE_BENCH to 32,
+            CraftingStationType.SUNSCORCH_OASIS_SMELTERY to 45
+        )
+        val recipes = RecipeCatalog.smeltingRecipes + RecipeCatalog.forgingRecipes + RecipeCatalog.fletchingRecipes + RecipeCatalog.runecraftingRecipes
+        for ((station, cap) in stations) {
+            recipes.filter { it.requiredBiomeStation == station }.forEach { r ->
+                r.ingredients.forEach { ing ->
+                    assertTrue("${r.id} needs ${ing.itemId}, which isn't obtainable by Lv $cap", obtainable(ing.itemId, cap))
+                }
+            }
+        }
+        // Loot sanity in the marsh & badlands dungeons and their lairs
+        for (floorId in listOf(-6, -7, -8, -23, -24, -25, -29, -30, -31)) {
+            monsters.filter { it.floor == floorId }.map { it.type to it.level }.distinct().forEach { (type, level) ->
+                MonsterLootTable.entryFor(type).weightedDrops.forEach { d ->
+                    val req = ItemCatalog.all[d.itemId]?.requiredLevel ?: 1
+                    assertTrue("${type.name} (Lv $level) drops ${d.itemId} needing Lv $req", req <= level + 5)
+                }
+            }
+        }
+    }
+
+    /** No weapon out-damages the top (Lv 45) tier of its class, so lower-level gear never wins. */
+    @Test
+    fun topTierWeaponsHaveTheBestDamagePerSecond() {
+        val weapons = ItemCatalog.all.values.filter { !it.adminOnly && it.category.name.startsWith("WEAPON_") && it.attack > 0 }
+        for ((cat, list) in weapons.groupBy { it.category }) {
+            val dps = list.associateWith { it.attack * 1000.0 / it.attackIntervalMs }
+            val best = dps.maxByOrNull { it.value }!!.key
+            val topLevel = list.maxOf { it.requiredLevel }
+            assertEquals("$cat best DPS is ${best.id} (Lv ${best.requiredLevel})", topLevel, best.requiredLevel)
+        }
     }
 
     private fun f0Tile(x: Int, y: Int) = WorldMaps.getFloor(0).tileAt(x, y)

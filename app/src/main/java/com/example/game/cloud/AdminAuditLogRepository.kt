@@ -333,7 +333,8 @@ object AdminTeleportCatalog {
         dungeonCampPreset("floor_m14", "F-14 Crag Deep Hollow", -14, HeartlandSiteFloors.CRAG.landingX, HeartlandSiteFloors.CRAG.landingY),
         dungeonCampPreset("floor_m15", "F-15 Ember Sanctum", -15, 24, 40, openEndedTop = true),
         dungeonCampPreset("floor_m29", "F-29 Murkfen Hollow", -29, FrontierSiteFloors.MURKFEN.landingX, FrontierSiteFloors.MURKFEN.landingY),
-        dungeonCampPreset("floor_m30", "F-30 Tomb of Akhet", -30, FrontierSiteFloors.TOMB.landingX, FrontierSiteFloors.TOMB.landingY)
+        dungeonCampPreset("floor_m30", "F-30 Tomb of Akhet", -30, FrontierSiteFloors.TOMB.landingX, FrontierSiteFloors.TOMB.landingY),
+        dungeonCampPreset("floor_m31", "F-31 Scorchglass Rift", -31, FrontierSiteFloors.RIFT.landingX, FrontierSiteFloors.RIFT.landingY)
     )
 
     val overlandLandmarks: List<AdminTeleportPreset> = townsAndEmpires + overlandCamps
