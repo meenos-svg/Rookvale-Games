@@ -356,11 +356,11 @@ private fun IsometricMinimapCard(
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.4.dp, if (rotateDragMode) TorchGold else StoneBorderLight),
         modifier = Modifier
-            .width(108.dp)
+            .width(128.dp)
             .testTag("minimap_overlay")
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Box(modifier = Modifier.size(108.dp)) {
+            Box(modifier = Modifier.size(128.dp)) {
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
@@ -567,7 +567,7 @@ private fun MinimapTinyButton(
 ) {
     Box(
         modifier = Modifier
-            .size(20.dp)
+            .size(28.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(ObsidianVoid.copy(alpha = 0.84f))
             .border(1.dp, if (enabled) StoneBorderLight else StoneBorderDark, RoundedCornerShape(4.dp))
@@ -579,7 +579,7 @@ private fun MinimapTinyButton(
             imageVector = icon,
             contentDescription = contentDesc,
             tint = if (enabled) ParchmentLight else ParchmentMuted.copy(alpha = 0.4f),
-            modifier = Modifier.size(13.dp)
+            modifier = Modifier.size(17.dp)
         )
     }
 }
@@ -1076,6 +1076,7 @@ fun TopRightUtilityAndBattleCluster(
     onTargetMonster: (Int) -> Unit,
     onInspectAlly: (String) -> Unit,
     onWalkToTile: (Int, Int) -> Unit = { _, _ -> },
+    showUtilityBar: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val nearbyMonsters = remember(state.monsters, state.floor, state.playerX, state.playerY) {
@@ -1111,6 +1112,7 @@ fun TopRightUtilityAndBattleCluster(
         onTargetMonster = onTargetMonster,
         onInspectAlly = onInspectAlly,
         onWalkToTile = onWalkToTile,
+        showUtilityBar = showUtilityBar,
         modifier = modifier
     )
 }
@@ -1124,6 +1126,7 @@ private fun TopRightUtilityAndBattleClusterContent(
     onTargetMonster: (Int) -> Unit,
     onInspectAlly: (String) -> Unit,
     onWalkToTile: (Int, Int) -> Unit,
+    showUtilityBar: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     var battleExpanded by rememberSaveable { mutableStateOf(true) }
@@ -1136,8 +1139,8 @@ private fun TopRightUtilityAndBattleClusterContent(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Quick-Menu Icon Bar
-        Surface(
+        // Quick-Menu Icon Bar (replaced by the right-edge action rail in the main HUD)
+        if (showUtilityBar) Surface(
             color = BasaltDark.copy(alpha = 0.90f),
             shape = RoundedCornerShape(8.dp),
             border = BorderStroke(1.2.dp, StoneBorderLight)
@@ -1846,7 +1849,7 @@ fun BottomCenterQuickHotbar(
                         shape = RoundedCornerShape(6.dp),
                         border = BorderStroke(1.dp, StoneBorderLight.copy(alpha = 0.65f)),
                         modifier = Modifier
-                            .size(width = 48.dp, height = 48.dp)
+                            .size(width = 54.dp, height = 54.dp)
                             .combinedClickable(
                                 onClick = { bindingSlotIndex = slotIdx },
                                 onLongClick = { bindingSlotIndex = slotIdx }
@@ -1861,7 +1864,7 @@ fun BottomCenterQuickHotbar(
                             Icon(Icons.Default.Add, "Bind Custom Slot ${slotIdx + 1}", tint = TorchGold, modifier = Modifier.size(18.dp))
                             Text(
                                 text = "Slot ${slotIdx + 1}",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
                                 color = ParchmentMuted
                             )
                         }
@@ -1903,7 +1906,7 @@ private fun IsoHotbarSlot(
         shape = RoundedCornerShape(6.dp),
         border = BorderStroke(1.2.dp, if (count > 0) accent.copy(alpha = 0.85f) else StoneBorderDark),
         modifier = Modifier
-            .size(width = 48.dp, height = 48.dp)
+            .size(width = 54.dp, height = 54.dp)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .testTag(testTag)
     ) {
@@ -1911,7 +1914,7 @@ private fun IsoHotbarSlot(
             PixelSpritePreview(
                 bitmap = icon,
                 modifier = Modifier
-                    .size(24.dp)
+                    .size(26.dp)
                     .align(Alignment.TopCenter)
                     .background(ObsidianVoid, RoundedCornerShape(4.dp))
             )
@@ -1924,13 +1927,13 @@ private fun IsoHotbarSlot(
             ) {
                 Text(
                     text = "$count",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp, fontWeight = FontWeight.ExtraBold),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.ExtraBold),
                     color = if (count > 0) TorchGold else ParchmentMuted
                 )
             }
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp, fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
                 color = ParchmentLight.copy(alpha = alpha),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

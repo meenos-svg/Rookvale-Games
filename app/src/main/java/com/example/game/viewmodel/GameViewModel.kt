@@ -1519,6 +1519,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private var routePlanJob: Job? = null
 
+    /** Stop the current auto-walk (from the tracker's X button). */
+    fun cancelWalk() {
+        routePlanJob?.cancel()
+        _world.update {
+            it.copy(walkPath = emptyList(), longRangeGoal = null, longRangeWaypoints = emptyList())
+                .addLogInternal("Stopped walking.")
+        }
+    }
+
     /**
      * Map "walk here": long routes are planned off the main thread so the screen never freezes,
      * then applied if the hero is still where the plan started.

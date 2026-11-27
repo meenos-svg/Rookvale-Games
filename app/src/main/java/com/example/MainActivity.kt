@@ -130,6 +130,7 @@ class MainActivity : ComponentActivity() {
                             onCraftRecipe = gameViewModel::craftRecipe,
                             onBindRune = gameViewModel::bindRuneToHotbar,
                             onNpcAction = gameViewModel::onNpcAction,
+                            onCancelWalk = gameViewModel::cancelWalk,
                             onChooseVocationAtOracle = gameViewModel::chooseVocationAtOracle,
                             onMultiplayerStatusTapped = gameViewModel::onMultiplayerStatusTapped,
                             onToggleChat = gameViewModel::toggleChat,

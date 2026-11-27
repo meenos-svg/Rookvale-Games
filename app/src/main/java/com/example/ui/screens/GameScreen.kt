@@ -125,6 +125,7 @@ fun GameScreen(
     onCraftRecipe: (String) -> Unit,
     onBindRune: (String) -> Unit = {},
     onNpcAction: (String) -> Unit = {},
+    onCancelWalk: () -> Unit = {},
     onChooseVocationAtOracle: (Vocation) -> Unit,
     onMultiplayerStatusTapped: () -> Unit = {},
     onToggleChat: () -> Unit = {},
@@ -214,13 +215,24 @@ fun GameScreen(
                 modifier = Modifier.align(Alignment.TopStart)
             )
 
-            // LEFT EDGE VERTICAL SKILL DOCK (skips recomposition unless PlayerSkills changes)
-            VerticalSkillDock(
-                skills = state.skills,
-                onOpenSkills = { onOpenPanel(ActivePanel.SKILLS) },
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(top = 132.dp, bottom = 52.dp)
+            // LEFT: adventure tracker (contract, today's hunt, bestiary, current walk)
+            if (state.activePanel == ActivePanel.NONE) {
+                AdventureTrackerCard(
+                    state = state,
+                    onCancelWalk = onCancelWalk,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(top = 132.dp, bottom = 52.dp)
+                )
+            }
+
+            // RIGHT EDGE: big labelled menu buttons
+            RightActionRail(
+                activePanel = state.activePanel,
+                onOpenPanel = onOpenPanel,
+                onSaveManual = onSaveManual,
+                onReturnTitle = onReturnTitle,
+                modifier = Modifier.align(Alignment.TopEnd)
             )
 
             // TOP-CENTER LIVE FPS PILL, WEATHER BADGE, BOSS HP NAMEPLATE & FLOOR DESCENT BANNER
@@ -244,7 +256,10 @@ fun GameScreen(
                 onTargetMonster = onTargetMonster,
                 onInspectAlly = onInspectAlly,
                 onWalkToTile = onWalkToTile,
-                modifier = Modifier.align(Alignment.TopEnd)
+                showUtilityBar = false,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = RIGHT_RAIL_WIDTH + 6.dp)
             )
 
             // BOTTOM-LEFT TRANSLUCENT CONSOLE & COLLAPSIBLE CHAT
@@ -257,6 +272,16 @@ fun GameScreen(
                     onSelectChannel = onSelectChatChannel,
                     onSendMessage = onSendChat,
                     modifier = Modifier.align(Alignment.BottomStart)
+                )
+            }
+
+            // TARGET FRAME just above the hotbar (bosses keep their big nameplate up top)
+            if (state.activePanel == ActivePanel.NONE) {
+                TargetFrame(
+                    state = state,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 66.dp)
                 )
             }
 
@@ -511,6 +536,7 @@ private fun TopCenterStatusOverlay(
                 BossHpNameplateBar(boss = boss)
             }
         }
+
         AnimatedVisibility(
             visible = state.floorWarningBanner != null && state.activePanel == ActivePanel.NONE,
             enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
