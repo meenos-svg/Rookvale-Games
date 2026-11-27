@@ -71,7 +71,9 @@ data class GeneratedContinentalDungeon(
     val stairsDownX: Int,
     val stairsDownY: Int,
     val returnFromLowerX: Int,
-    val returnFromLowerY: Int
+    val returnFromLowerY: Int,
+    /** Named areas inside the floor (hand-shaped floors only). */
+    val areaLandmarks: List<LandmarkLabel> = emptyList()
 )
 
 /**
@@ -505,10 +507,10 @@ object ContinentalDungeonGenerator {
             dangerSeverity = s.dangerSeverity.coerceAtLeast(2),
             bossType = s.bossType,
             bossLandmarkName = s.lowerLairName.uppercase(),
-            parentStairsDownX = DESCENT_X,
-            parentStairsDownY = DESCENT_Y,
-            parentReturnX = DESCENT_RETURN_X,
-            parentReturnY = DESCENT_RETURN_Y,
+            parentStairsDownX = HeartlandSiteFloors.anchorsFor(s.floorId)?.descentX ?: DESCENT_X,
+            parentStairsDownY = HeartlandSiteFloors.anchorsFor(s.floorId)?.descentY ?: DESCENT_Y,
+            parentReturnX = HeartlandSiteFloors.anchorsFor(s.floorId)?.descentReturnX ?: DESCENT_RETURN_X,
+            parentReturnY = HeartlandSiteFloors.anchorsFor(s.floorId)?.descentReturnY ?: DESCENT_RETURN_Y,
             wallTile = s.wallTile,
             floorTile = s.floorTile,
             accentFloorTile = s.accentFloorTile,
@@ -537,7 +539,51 @@ object ContinentalDungeonGenerator {
         generatedLowerBossLairs.associateBy { it.spec.floorId }
     }
 
+    /** Entry landing for an upper dungeon floor (hand-shaped floors use their own coordinates). */
+    fun landingFor(floorId: Int): Pair<Int, Int> =
+        HeartlandSiteFloors.anchorsFor(floorId)?.let { it.landingX to it.landingY } ?: (LANDING_X to LANDING_Y)
+
+    /** Exit (stairs/rope up) tile for an upper dungeon floor. */
+    fun exitFor(floorId: Int): Pair<Int, Int> =
+        HeartlandSiteFloors.anchorsFor(floorId)?.let { it.stairsUpX to it.stairsUpY } ?: (STAIRS_UP_X to STAIRS_UP_Y)
+
+    private fun generateFromLayout(spec: ContinentalDungeonSpec, layout: HeartlandSiteFloors.Layout): GeneratedContinentalDungeon {
+        val camp = layout.camp
+        val floor = WorldFloor(
+            floorId = spec.floorId,
+            name = spec.name,
+            subtitle = spec.subtitle,
+            width = layout.tiles.size,
+            height = layout.tiles.size,
+            chunkedGrid = ChunkedTileGrid.fromArray(layout.tiles),
+            isProtectionZone = { x, y -> camp.contains(x, y) },
+            dangerLevel = spec.dangerLevel,
+            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(spec.floorId),
+            dangerSeverity = spec.dangerSeverity
+        )
+        return GeneratedContinentalDungeon(
+            spec = spec,
+            floor = floor,
+            camp = camp,
+            spawns = layout.spawns,
+            descentLandmark = LandmarkLabel(
+                spec.floorId, layout.descentX, layout.descentY - 2,
+                "DESCENT TO ${spec.lowerLairName.uppercase()}"
+            ),
+            stairsUpX = layout.stairsUpX,
+            stairsUpY = layout.stairsUpY,
+            landingX = layout.landingX,
+            landingY = layout.landingY,
+            stairsDownX = layout.descentX,
+            stairsDownY = layout.descentY,
+            returnFromLowerX = layout.descentReturnX,
+            returnFromLowerY = layout.descentReturnY,
+            areaLandmarks = layout.landmarks
+        )
+    }
+
     fun generate(spec: ContinentalDungeonSpec): GeneratedContinentalDungeon {
+        HeartlandSiteFloors.layoutFor(spec.floorId)?.let { return generateFromLayout(spec, it) }
         val s = GRID_SIZE
         val g = Array(s) { Array(s) { spec.wallTile } }
 

@@ -581,7 +581,7 @@ object DeepDelveFloors {
     internal class Canvas(val size: Int, private val base: TileType, private val seed: Int) {
         val g: Array<Array<TileType>> = Array(size) { Array(size) { base } }
 
-        private val wallTiles = setOf(TileType.CAVE_WALL, TileType.STONE_WALL)
+        private val wallTiles = setOf(TileType.CAVE_WALL, TileType.STONE_WALL, base)
 
         operator fun get(x: Int, y: Int): TileType = if (x in 0 until size && y in 0 until size) g[y][x] else base
 
