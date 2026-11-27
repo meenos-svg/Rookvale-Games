@@ -1056,6 +1056,7 @@ object EntitySpriteAtlas {
         val buf = buf16()
         val def = ItemCatalog.get(itemId)
         val tierTint = when {
+            itemId.contains("emberforged") || itemId.contains("sovereign_ember") -> 0xFFFFD66B.toInt()
             itemId.contains("cinderite") -> 0xFFFFAA2B.toInt()
             itemId.contains("rime_plate") || itemId.contains("frostpeak") || itemId.contains("glacier") || itemId.contains("frost_iron") -> 0xFF72E4FF.toInt()
             itemId.contains("vesperite") -> 0xFFB48CFF.toInt()
@@ -1144,6 +1145,7 @@ object EntitySpriteAtlas {
                             "grimmaw_stone_core" -> 0xFFA682FF.toInt()
                             "gorek_obsidian_horn" -> 0xFFFFA833.toInt()
                             "molten_core" -> 0xFFFF3D1F.toInt()
+                            "sovereign_ember" -> 0xFFFFD66B.toInt()
                             else -> 0xFFD4C9B0.toInt()
                         }
                         rect(buf, ITEM_S, 4, 4, 8, 8, c)
@@ -1311,6 +1313,7 @@ object EntitySpriteAtlas {
             }
             ItemCategory.SHIELD -> {
                 val (col, trim) = when (itemId) {
+                    "emberforged_aegis" -> 0xFF3A2A1C.toInt() to 0xFFFFD66B.toInt()
                     "cinderite_bastion" -> 0xFF33211E.toInt() to 0xFFFF8826.toInt()
                     "rime_plate_wall_shield" -> 0xFF456D8A.toInt() to 0xFF88ECFF.toInt()
                     "vesperite_bulwark" -> 0xFF6B4EB8.toInt() to 0xFFD9C7FF.toInt()
@@ -1325,6 +1328,7 @@ object EntitySpriteAtlas {
             }
             ItemCategory.ARMOR -> {
                 val (col, trim) = when (itemId) {
+                    "emberforged_warplate" -> 0xFF3A2A1C.toInt() to 0xFFFFC14D.toInt()
                     "cinderite_warplate" -> 0xFF2F1F1C.toInt() to 0xFFFF7A29.toInt()
                     "rime_plate_cuirass" -> 0xFF456D8A.toInt() to 0xFF88ECFF.toInt()
                     "vesperite_aegis_mail" -> 0xFF684EB2.toInt() to 0xFFD9C7FF.toInt()
@@ -1367,6 +1371,7 @@ object EntitySpriteAtlas {
             }
             ItemCategory.RING -> {
                 val (bandCol, gemCol) = when (itemId) {
+                    "emberforged_signet" -> 0xFFE8C26A.toInt() to 0xFFFF8A2B.toInt()
                     "cinderite_overlord_band" -> 0xFF3A241E.toInt() to 0xFFFF7A29.toInt()
                     "vesperite_catalyst_ring" -> 0xFFCDC4EB.toInt() to 0xFFB280FF.toInt()
                     "frostfang_coil" -> 0xFFBBD7E6.toInt() to 0xFF5CE0FF.toInt()
@@ -1404,6 +1409,7 @@ object EntitySpriteAtlas {
     }
 
     private fun biomeArmorIconColor(itemId: String): Int? = when {
+        itemId.startsWith("emberforged_") -> 0xFFFFC14D.toInt()
         itemId.startsWith("cinderite_") -> 0xFFFF7A1F.toInt()
         itemId.startsWith("rime_plate_") -> 0xFF9FD8F5.toInt()
         itemId.startsWith("vesperite_") -> 0xFFB07BFF.toInt()

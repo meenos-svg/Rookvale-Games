@@ -79,6 +79,7 @@ internal fun tierBadgeColor(tier: Int): Color = when (tier) {
     3 -> Color(0xFF66B2FF)
     4 -> Color(0xFFBA8CFF)
     5 -> Color(0xFFFF7A38)
+    6 -> Color(0xFFFFD66B)
     else -> TorchGold
 }
 
@@ -88,6 +89,7 @@ internal fun tierBadgeLabel(tier: Int): String = when (tier) {
     3 -> "TIER 3 • STEEL"
     4 -> "TIER 4 • VESPERITE"
     5 -> "TIER 5 • CINDERITE"
+    6 -> "TIER 6 • EMBERFORGED"
     else -> "GEAR"
 }
 

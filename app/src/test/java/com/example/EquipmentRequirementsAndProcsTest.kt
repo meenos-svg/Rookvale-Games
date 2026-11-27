@@ -227,8 +227,12 @@ class EquipmentRequirementsAndProcsTest {
         assertTrue("vesperite_resonance_necklace" in kragorPool)
         assertTrue("vesperite_catalyst_ring" in kragorPool)
 
-        val vaelgorPool = (MonsterLootTable.entryFor(MonsterType.VULKARIS_THE_FORGE_TITAN).weightedDrops +
+        // Cinderite (T5) comes from Ordrak (Lv 60); the Lv 66-72 Ashen bosses drop Emberforged (T6)
+        val vaelgorPool = MonsterLootTable.entryFor(MonsterType.ORDRAK_THE_MOLTEN_FOREMAN).weightedDrops.map { it.itemId }.toSet()
+        val endgamePool = (MonsterLootTable.entryFor(MonsterType.VULKARIS_THE_FORGE_TITAN).weightedDrops +
             MonsterLootTable.entryFor(MonsterType.IGNIVAR_ASH_WING_WYRM).weightedDrops).map { it.itemId }.toSet()
+        assertTrue("emberforged_warplate" in endgamePool)
+        assertTrue("emberforged_signet" in endgamePool)
         assertTrue("cinderite_bastion" in vaelgorPool)
         assertTrue("cinderite_warplate" in vaelgorPool)
         assertTrue("cinderheart_sovereign_torc" in vaelgorPool)

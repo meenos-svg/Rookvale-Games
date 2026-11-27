@@ -128,8 +128,7 @@ class RookvaleLoreExpansionTest {
         val allRecipes = RecipeCatalog.forgingRecipes + RecipeCatalog.fletchingRecipes + RecipeCatalog.runecraftingRecipes
         val kragorDrops = MonsterLootTable.entries.getValue(MonsterType.KRAGOR_THE_STONE_EYED).weightedDrops.map { it.itemId }.toSet()
         // Cinderite (T5) gear drops from the Ashen Caldera bosses; Gorek/Vaelgor now sit in the Lv 36-41 badlands band
-        val vaelgorDrops = (MonsterLootTable.entries.getValue(MonsterType.VULKARIS_THE_FORGE_TITAN).weightedDrops +
-            MonsterLootTable.entries.getValue(MonsterType.IGNIVAR_ASH_WING_WYRM).weightedDrops).map { it.itemId }.toSet()
+        val vaelgorDrops = MonsterLootTable.entries.getValue(MonsterType.ORDRAK_THE_MOLTEN_FOREMAN).weightedDrops.map { it.itemId }.toSet()
 
         for ((weaponId, expectedVisual) in tier4And5Expected) {
             val def = ItemCatalog.all[weaponId]
@@ -141,7 +140,7 @@ class RookvaleLoreExpansionTest {
             if (weaponId.startsWith("vesperite_")) {
                 assertTrue("Kragor must have $weaponId in weighted loot table", weaponId in kragorDrops)
             } else {
-                assertTrue("Ashen bosses must have $weaponId in weighted loot table", weaponId in vaelgorDrops)
+                assertTrue("Ordrak must have $weaponId in weighted loot table", weaponId in vaelgorDrops)
             }
             val paperDoll = PaperDollAppearance.fromItemIds(
                 vocation = Vocation.KNIGHT,

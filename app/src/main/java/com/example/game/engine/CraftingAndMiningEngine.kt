@@ -357,6 +357,7 @@ object CraftingAndMiningEngine {
             BiomeEquipmentClass.VESPERITE_SUNSCORCH -> "Vesperite gear"
             BiomeEquipmentClass.RIME_PLATE -> "Rime-Plate gear"
             BiomeEquipmentClass.CINDERITE_ASHEN -> "Cinderite gear"
+            BiomeEquipmentClass.EMBERFORGED -> "Emberforged gear"
             BiomeEquipmentClass.NONE -> outDef.name
         }
         return "Must be at the ${recipe.requiredBiomeStation.displayName} to forge $gearLabel"

@@ -85,6 +85,8 @@ object ItemCatalog {
         ItemDefinition("vesperite_bar", "Vesperite Bar", ItemCategory.METAL_INGOT, 22.0, sellPrice = 115, stackable = true, description = "Crystalline violet-silver Tier 4 bar smelted from 2 Vesperite Ore."),
         ItemDefinition("rime_plate_ingot", "Rime-Iron Bar", ItemCategory.METAL_INGOT, 23.0, sellPrice = 152, stackable = true, description = "Frost-imbued steel bar smelted from Frost-Iron Ore and Glacier-Quartz at the Frostpeak Citadel Great Hearth."),
         ItemDefinition("cinderite_bar", "Cinderite Bar", ItemCategory.METAL_INGOT, 25.0, sellPrice = 195, stackable = true, description = "Volcanic obsidian-gold Tier 5 bar smelted from 2 Cinderite Ore."),
+        ItemDefinition("emberforged_ingot", "Emberforged Ingot", ItemCategory.METAL_INGOT, 26.0, sellPrice = 460, stackable = true, description = "White-hot Tier 6 ingot smelted from 2 Cinderite Bars and a Molten Core at the Ashen Obsidian Foundry."),
+        ItemDefinition("sovereign_ember", "Sovereign Ember", ItemCategory.CRAFT_MATERIAL, 2.0, sellPrice = 650, stackable = true, description = "A coal that never cools, carried by the Ashen Caldera's bosses. The heart of every Emberforged weapon, shield and warplate."),
         ItemDefinition("moonforge_ingot", "Moonforge Bar", ItemCategory.METAL_INGOT, 24.0, sellPrice = 165, stackable = true, description = "Radiant deep-forged bar alloyed from Vesperite Ore and Cinderite Ore."),
 
         // --- Original Monster & Gathering Crafting Materials ---
@@ -841,6 +843,110 @@ object ItemCatalog {
             ),
             description = "Tier 5 obsidian-and-gold signet granting +8 ATK, +8% Proc Chance, +25% Proc Power, and +1 AOE Target."
         ),
+        // --- Tier 6: Emberforged (Lv 60), forged at the Ashen Obsidian Foundry from Emberforged Ingots and Sovereign Embers ---
+        ItemDefinition(
+            "emberforged_greatsword", "Emberforged Greatsword", ItemCategory.WEAPON_MELEE, 66.0, sellPrice = 2100,
+            attack = 82, defense = 32, attackIntervalMs = 1200L, equipmentTier = 6, requiredLevel = 60,
+            requiredSkill = SkillType.SWORD to 52, isTwoHanded = true, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.EMBERFORGED,
+            proc = EquipmentProc(
+                name = "Sunfall Cleave", triggerChancePercent = 26, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.6f, maxTargets = 6, damageMultiplier = 1.2f, elementColor = 0xFFFFC14DL,
+                bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.ARCANE_NOVA,
+                summary = "Splits the ground in a white-hot arc, scorching up to 6 monsters."
+            ),
+            description = "Emberforged 2H greatsword quenched in a sovereign's ember. Tier 6."
+        ),
+        ItemDefinition(
+            "emberforged_greataxe", "Emberforged Greataxe", ItemCategory.WEAPON_MELEE, 72.0, sellPrice = 2180,
+            attack = 86, defense = 26, attackIntervalMs = 1300L, equipmentTier = 6, requiredLevel = 60,
+            requiredSkill = SkillType.AXE to 52, isTwoHanded = true, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.EMBERFORGED,
+            proc = EquipmentProc(
+                name = "Caldera Rupture", triggerChancePercent = 25, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.5f, maxTargets = 6, damageMultiplier = 1.24f, elementColor = 0xFFFF8A2BL,
+                bonusEffect = ProcBonusEffect.ARMOR_SHATTER, visualStyle = ProcVisualStyle.METEOR_BURST,
+                summary = "Cracks open a vent of magma beneath foes, shattering armor on up to 6 monsters."
+            ),
+            description = "Emberforged 2H greataxe with a wyrmscale-bound haft. Tier 6."
+        ),
+        ItemDefinition(
+            "emberforged_worldbreaker", "Emberforged Worldbreaker", ItemCategory.WEAPON_MELEE, 78.0, sellPrice = 2260,
+            attack = 93, defense = 30, attackIntervalMs = 1400L, equipmentTier = 6, requiredLevel = 60,
+            requiredSkill = SkillType.CLUB to 52, isTwoHanded = true, preferredVocation = Vocation.KNIGHT,
+            biomeClass = BiomeEquipmentClass.EMBERFORGED,
+            proc = EquipmentProc(
+                name = "Eruption Slam", triggerChancePercent = 26, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.7f, maxTargets = 7, damageMultiplier = 1.28f, elementColor = 0xFFFFB347L,
+                bonusEffect = ProcBonusEffect.STAGGER_SLOW, visualStyle = ProcVisualStyle.METEOR_BURST,
+                summary = "Slams down a molten shockwave that staggers up to 7 monsters."
+            ),
+            description = "Emberforged 2H maul with a still-glowing core. Tier 6."
+        ),
+        ItemDefinition(
+            "emberforged_longbow", "Emberforged Longbow", ItemCategory.WEAPON_DISTANCE, 34.0, sellPrice = 2140,
+            attack = 72, range = 6, attackIntervalMs = 950L, equipmentTier = 6, requiredLevel = 60,
+            requiredSkill = SkillType.DISTANCE to 52, requiredAmmoKind = AmmoKind.SHAFTS, isTwoHanded = true,
+            preferredVocation = Vocation.PALADIN, biomeClass = BiomeEquipmentClass.EMBERFORGED,
+            proc = EquipmentProc(
+                name = "Phoenix Volley", triggerChancePercent = 25, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.6f, maxTargets = 6, damageMultiplier = 1.15f, elementColor = 0xFFFFC14DL,
+                bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.METEOR_BURST,
+                summary = "Looses a fan of burning arrows across up to 6 monsters."
+            ),
+            description = "Emberforged 2H longbow strung with drake sinew. Tier 6."
+        ),
+        ItemDefinition(
+            "emberforged_scepter", "Emberforged Scepter", ItemCategory.WEAPON_WAND, 34.0, sellPrice = 2200,
+            attack = 77, range = 6, attackIntervalMs = 1050L, manaCost = 16, equipmentTier = 6, requiredLevel = 60,
+            requiredSkill = SkillType.MAGIC to 52, isTwoHanded = true, preferredVocation = Vocation.MAGE,
+            biomeClass = BiomeEquipmentClass.EMBERFORGED,
+            proc = EquipmentProc(
+                name = "Sovereign Flare", triggerChancePercent = 26, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.7f, maxTargets = 7, damageMultiplier = 1.3f, elementColor = 0xFFFFD66BL,
+                bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.ARCANE_NOVA,
+                summary = "Bursts a crown of soulfire around the target, scorching up to 7 foes."
+            ),
+            description = "Emberforged 2H scepter crowned with a sovereign's ember. Tier 6."
+        ),
+        ItemDefinition(
+            "emberforged_aegis", "Emberforged Aegis", ItemCategory.SHIELD, 74.0, sellPrice = 2300,
+            defense = 56, equipmentTier = 6, requiredLevel = 60, requiredSkill = SkillType.SHIELDING to 52,
+            biomeClass = BiomeEquipmentClass.EMBERFORGED,
+            proc = EquipmentProc(
+                name = "Molten Rebuke", triggerChancePercent = 22, triggerType = ProcTriggerType.ON_DEFEND,
+                aoeRadiusTiles = 2.0f, maxTargets = 6, damageMultiplier = 1.32f, elementColor = 0xFFFFB347L,
+                bonusEffect = ProcBonusEffect.AEGIS_WARD, visualStyle = ProcVisualStyle.THORNS_PULSE,
+                summary = "When struck, flares molten light that burns up to 6 foes and restores guard."
+            ),
+            description = "Emberforged tower shield faced with wyrmscale. Tier 6."
+        ),
+        ItemDefinition(
+            "emberforged_warplate", "Emberforged Warplate", ItemCategory.ARMOR, 104.0, sellPrice = 2500,
+            armor = 31, equipmentTier = 6, requiredLevel = 60, requiredSkill = SkillType.SHIELDING to 52,
+            biomeClass = BiomeEquipmentClass.EMBERFORGED,
+            proc = EquipmentProc(
+                name = "Cinder Mantle", triggerChancePercent = 22, triggerType = ProcTriggerType.ON_DEFEND,
+                aoeRadiusTiles = 2.0f, maxTargets = 6, damageMultiplier = 1.34f, elementColor = 0xFFFF8A2BL,
+                bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.THORNS_PULSE,
+                summary = "When struck, sheds burning slag onto up to 6 adjacent monsters."
+            ),
+            description = "Emberforged warplate layered over wyrmscale. Tier 6."
+        ),
+        ItemDefinition("emberforged_helm", "Emberforged Helm", ItemCategory.HELMET, 30.0, sellPrice = 1300, armor = 16, equipmentTier = 6, requiredLevel = 60, requiredSkill = SkillType.SHIELDING to 50, biomeClass = BiomeEquipmentClass.EMBERFORGED, description = "Emberforged great helm with a slit that glows like a forge mouth. Tier 6."),
+        ItemDefinition("emberforged_greaves", "Emberforged Greaves", ItemCategory.LEGS, 52.0, sellPrice = 1420, armor = 16, equipmentTier = 6, requiredLevel = 60, requiredSkill = SkillType.SHIELDING to 50, biomeClass = BiomeEquipmentClass.EMBERFORGED, description = "Emberforged greaves with molten seams. Tier 6."),
+        ItemDefinition("emberforged_sabatons", "Emberforged Sabatons", ItemCategory.BOOTS, 28.0, sellPrice = 1080, armor = 10, equipmentTier = 6, requiredLevel = 60, requiredSkill = SkillType.SHIELDING to 50, biomeClass = BiomeEquipmentClass.EMBERFORGED, description = "Emberforged sabatons that leave glowing footprints. Tier 6."),
+        ItemDefinition(
+            "emberforged_signet", "Emberforged Signet", ItemCategory.RING, 1.8, sellPrice = 2240,
+            attack = 10, equipmentTier = 6, requiredLevel = 60, procChanceBonusPct = 10, procPowerBonusPct = 30, procExtraTargets = 1,
+            proc = EquipmentProc(
+                name = "Sovereign Spark", triggerChancePercent = 24, triggerType = ProcTriggerType.ON_ATTACK,
+                aoeRadiusTiles = 2.5f, maxTargets = 6, damageMultiplier = 1.15f, elementColor = 0xFFFFC14DL,
+                bonusEffect = ProcBonusEffect.IGNITE_BURN, visualStyle = ProcVisualStyle.METEOR_BURST,
+                summary = "Detonates an ember spark scorching up to 6 enemies with burn DoT."
+            ),
+            description = "Tier 6 signet set with a sovereign's ember: +10 ATK, +10% Proc Chance, +30% Proc Power and +1 AOE Target."
+        ),
         ItemDefinition(
             id = "admin_sovereign_scroll",
             name = "Sovereign's Scroll",
@@ -1059,6 +1165,13 @@ object RecipeCatalog {
             requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY
         ),
         CraftingRecipe(
+            id = "smelt_emberforged",
+            outputItemId = "emberforged_ingot",
+            ingredients = listOf(ItemStack("cinderite_bar", 2), ItemStack("molten_core", 1)),
+            station = ActivePanel.FURNACE,
+            requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY
+        ),
+        CraftingRecipe(
             id = "smelt_moonforge",
             outputItemId = "moonforge_ingot",
             ingredients = listOf(ItemStack("vesperite_ore", 1), ItemStack("cinderite_ore", 1)),
@@ -1170,7 +1283,18 @@ object RecipeCatalog {
         CraftingRecipe("forge_vesperite_resonance_necklace", "vesperite_resonance_necklace", 1, listOf(ItemStack("vesperite_bar", 2), ItemStack("gorek_obsidian_horn", 1), ItemStack("runic_slate", 1)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
         CraftingRecipe("forge_vesperite_catalyst_ring", "vesperite_catalyst_ring", 1, listOf(ItemStack("vesperite_bar", 2), ItemStack("gorek_obsidian_horn", 1)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.SUNSCORCH_OASIS_SMELTERY),
         CraftingRecipe("forge_cinderheart_sovereign_torc", "cinderheart_sovereign_torc", 1, listOf(ItemStack("cinderite_bar", 3), ItemStack("molten_core", 1), ItemStack("ember_heart", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
-        CraftingRecipe("forge_cinderite_overlord_band", "cinderite_overlord_band", 1, listOf(ItemStack("cinderite_bar", 3), ItemStack("molten_core", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY)
+        CraftingRecipe("forge_cinderite_overlord_band", "cinderite_overlord_band", 1, listOf(ItemStack("cinderite_bar", 3), ItemStack("molten_core", 2)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_emberforged_greatsword", "emberforged_greatsword", 1, listOf(ItemStack("emberforged_ingot", 4), ItemStack("sovereign_ember", 1), ItemStack("molten_core", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_emberforged_greataxe", "emberforged_greataxe", 1, listOf(ItemStack("emberforged_ingot", 4), ItemStack("sovereign_ember", 1), ItemStack("wyrmscale_plate", 1), ItemStack("molten_core", 1)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_emberforged_worldbreaker", "emberforged_worldbreaker", 1, listOf(ItemStack("emberforged_ingot", 5), ItemStack("sovereign_ember", 1), ItemStack("molten_core", 2)), ActivePanel.ANVIL, CraftingTab.KNIGHT, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_emberforged_longbow", "emberforged_longbow", 1, listOf(ItemStack("emberforged_ingot", 4), ItemStack("sovereign_ember", 1), ItemStack("colossus_tendon", 2), ItemStack("wyrmscale_plate", 1)), ActivePanel.ANVIL, CraftingTab.PALADIN, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_emberforged_scepter", "emberforged_scepter", 1, listOf(ItemStack("emberforged_ingot", 4), ItemStack("sovereign_ember", 1), ItemStack("ember_heart", 3), ItemStack("runic_slate", 1)), ActivePanel.ANVIL, CraftingTab.MAGE, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_emberforged_aegis", "emberforged_aegis", 1, listOf(ItemStack("emberforged_ingot", 4), ItemStack("sovereign_ember", 1), ItemStack("wyrmscale_plate", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_emberforged_warplate", "emberforged_warplate", 1, listOf(ItemStack("emberforged_ingot", 5), ItemStack("sovereign_ember", 1), ItemStack("wyrmscale_plate", 2)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_emberforged_helm", "emberforged_helm", 1, listOf(ItemStack("emberforged_ingot", 3), ItemStack("molten_core", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_emberforged_greaves", "emberforged_greaves", 1, listOf(ItemStack("emberforged_ingot", 3), ItemStack("molten_core", 1), ItemStack("ember_heart", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_emberforged_sabatons", "emberforged_sabatons", 1, listOf(ItemStack("emberforged_ingot", 2), ItemStack("molten_core", 1)), ActivePanel.ANVIL, CraftingTab.TOOLS, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY),
+        CraftingRecipe("forge_emberforged_signet", "emberforged_signet", 1, listOf(ItemStack("emberforged_ingot", 3), ItemStack("sovereign_ember", 1), ItemStack("molten_core", 1)), ActivePanel.ANVIL, CraftingTab.JEWELRY, requiredBiomeStation = CraftingStationType.ASHEN_OBSIDIAN_FOUNDRY)
     )
 
     val fletchingRecipes: List<CraftingRecipe> = listOf(
