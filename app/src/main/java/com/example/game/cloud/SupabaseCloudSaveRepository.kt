@@ -27,7 +27,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,7 +38,9 @@ import javax.crypto.spec.PBEKeySpec
 data class CloudSession(
     val playerId: String,
     val characterName: String,
-    val pinHash: String
+    val pinHash: String,
+    /** Last admin status reported by the server (`players.is_admin`). Never set client-side. */
+    val isAdmin: Boolean = false
 )
 
 data class CloudAuthUiState(
@@ -68,7 +69,8 @@ data class RemotePlayerRow(
     val characterName: String,
     val pinHash: String,
     val saveData: PlayerSaveData,
-    val updatedAtMs: Long
+    val updatedAtMs: Long,
+    val isAdmin: Boolean = false
 )
 
 sealed class CloudAuthResult {
@@ -126,42 +128,21 @@ object PinHasher {
 }
 
 /**
- * Dedicated policy for Rookvale's playable Admin account (`Admin` + passcode `1119`).
- * Uses constant-time PBKDF2 hash comparison so raw passcodes are never persisted or logged,
- * prevents standard accounts from spoofing `isAdmin = true`, and reserves `"Admin"` against hijacking.
+ * Admin status is decided by the server (`players.is_admin`, see supabase/players_security.sql).
+ * The client never holds an admin secret; it only mirrors the flag the server returned for the
+ * PIN-verified session. The name "Admin" is reserved server-side and can only be claimed by the
+ * project owner opening a one-time claim window.
  */
 object AdminAccountPolicy {
     const val ADMIN_CANONICAL_NAME = "Admin"
-    private const val ADMIN_PASSCODE = "1119"
-
-    private val expectedAdminPinHash: String by lazy {
-        PinHasher.hashPin(ADMIN_CANONICAL_NAME, ADMIN_PASSCODE)
-    }
 
     fun isAdminName(rawName: String): Boolean =
         PinHasher.normalizeNameKey(rawName) == "admin"
 
-    fun verifyAdminPin(pin: String): Boolean {
-        if (!PinHasher.isValidPin(pin)) return false
-        val candidate = PinHasher.hashPin(ADMIN_CANONICAL_NAME, pin)
-        return MessageDigest.isEqual(
-            candidate.toByteArray(Charsets.UTF_8),
-            expectedAdminPinHash.toByteArray(Charsets.UTF_8)
-        )
-    }
-
-    fun verifyAdminSession(characterName: String, pinHash: String): Boolean {
-        if (!isAdminName(characterName) || pinHash.isBlank()) return false
-        return MessageDigest.isEqual(
-            pinHash.toByteArray(Charsets.UTF_8),
-            expectedAdminPinHash.toByteArray(Charsets.UTF_8)
-        )
-    }
-
     fun enforceAdminFlag(session: CloudSession, saveData: PlayerSaveData): PlayerSaveData {
-        val verified = verifyAdminSession(session.characterName, session.pinHash)
+        val verified = session.isAdmin
         return saveData.copy(
-            name = if (verified) ADMIN_CANONICAL_NAME else saveData.name,
+            name = if (verified && isAdminName(session.characterName)) ADMIN_CANONICAL_NAME else saveData.name,
             isAdmin = verified
         )
     }
@@ -548,7 +529,7 @@ class LocalCloudBackupStore(private val store: CloudKeyValueStore) {
         val name = store.getString(KEY_ACTIVE_CHARACTER_NAME)?.trim().orEmpty()
         val pinHash = store.getString(KEY_ACTIVE_PIN_HASH)?.trim().orEmpty()
         if (id.isBlank() || name.isBlank() || pinHash.isBlank()) return null
-        return CloudSession(id, name, pinHash)
+        return CloudSession(id, name, pinHash, store.getBoolean(KEY_ACTIVE_IS_ADMIN, false))
     }
 
     fun saveCachedSession(session: CloudSession) {
@@ -556,11 +537,12 @@ class LocalCloudBackupStore(private val store: CloudKeyValueStore) {
             put(KEY_ACTIVE_PLAYER_ID, session.playerId)
             put(KEY_ACTIVE_CHARACTER_NAME, session.characterName)
             put(KEY_ACTIVE_PIN_HASH, session.pinHash)
+            put(KEY_ACTIVE_IS_ADMIN, session.isAdmin)
         }
     }
 
     fun clearCachedSession() {
-        store.removeKeys(KEY_ACTIVE_PLAYER_ID, KEY_ACTIVE_CHARACTER_NAME, KEY_ACTIVE_PIN_HASH)
+        store.removeKeys(KEY_ACTIVE_PLAYER_ID, KEY_ACTIVE_CHARACTER_NAME, KEY_ACTIVE_PIN_HASH, KEY_ACTIVE_IS_ADMIN)
     }
 
     fun saveLocalBackup(
@@ -578,6 +560,7 @@ class LocalCloudBackupStore(private val store: CloudKeyValueStore) {
             put(backupPendingKey(session.playerId), pendingCloudSync)
             put(backupNameKey(session.playerId), session.characterName)
             put(backupPinHashKey(session.playerId), session.pinHash)
+            put(backupIsAdminKey(session.playerId), session.isAdmin)
             put(nameIndexKey(nameKey), session.playerId)
         }
     }
@@ -602,7 +585,7 @@ class LocalCloudBackupStore(private val store: CloudKeyValueStore) {
             CloudSavePayloadCodec.decode(JSONObject(rawJson), playerId, name)
         }.getOrNull() ?: return null
         return LocalBackupRecord(
-            session = CloudSession(playerId, name, pinHash),
+            session = CloudSession(playerId, name, pinHash, store.getBoolean(backupIsAdminKey(playerId), false)),
             saveData = parsed,
             updatedAtMs = updatedAtMs,
             pendingCloudSync = pending
@@ -620,12 +603,14 @@ class LocalCloudBackupStore(private val store: CloudKeyValueStore) {
     private fun backupPendingKey(playerId: String) = "backup_pending_$playerId"
     private fun backupNameKey(playerId: String) = "backup_name_$playerId"
     private fun backupPinHashKey(playerId: String) = "backup_pin_$playerId"
+    private fun backupIsAdminKey(playerId: String) = "backup_admin_$playerId"
     private fun nameIndexKey(normalizedName: String) = "name_idx_$normalizedName"
 
     companion object {
         private const val KEY_ACTIVE_PLAYER_ID = "active_player_id"
         private const val KEY_ACTIVE_CHARACTER_NAME = "active_character_name"
         private const val KEY_ACTIVE_PIN_HASH = "active_pin_hash"
+        private const val KEY_ACTIVE_IS_ADMIN = "active_is_admin"
     }
 }
 
@@ -660,7 +645,10 @@ class SupabaseCloudSaveRepository(
     /**
      * Registers a brand new hero with Name + 4-digit PIN.
      * Verifies the name is unclaimed when online, caches session & local backup immediately,
-     * and upserts the initial row to Supabase `public.players`.
+     * and creates the row through the server-side `rv_save_player` function.
+     *
+     * The name "Admin" is reserved by the server; it can only be created online while the
+     * project owner has opened the one-time admin claim window.
      */
     suspend fun createCharacter(
         rawName: String,
@@ -677,18 +665,8 @@ class SupabaseCloudSaveRepository(
             return@withContext CloudAuthResult.Failure("Please enter a 4-digit numeric PIN.")
         }
 
-        // Reserve "Admin" against standard creation; valid Admin passcode routes seamlessly to load-or-init
         if (AdminAccountPolicy.isAdminName(cleanName)) {
-            if (!AdminAccountPolicy.verifyAdminPin(pin)) {
-                return@withContext CloudAuthResult.Failure(
-                    "The name \"Admin\" is reserved. Enter the valid Admin passcode on Load Character or choose another name."
-                )
-            }
-            return@withContext loginAndRecover(
-                rawName = AdminAccountPolicy.ADMIN_CANONICAL_NAME,
-                pin = pin,
-                adminSaveBuilder = initialSaveBuilder
-            )
+            return@withContext claimAdminCharacter(pin, initialSaveBuilder)
         }
 
         val pinHash = PinHasher.hashPin(cleanName, pin)
@@ -713,17 +691,24 @@ class SupabaseCloudSaveRepository(
         localStore.saveCachedSession(session)
         localStore.saveLocalBackup(session, initialSave, now, pendingCloudSync = true)
 
-        val pushed = upsertPlayerRow(session, initialSave, now)
-        if (pushed) {
-            localStore.markCloudSynced(session.playerId, now)
-            CloudAuthResult.Success(
-                session = session,
-                saveData = initialSave,
-                syncedFromCloud = true,
-                notice = "Hero \"$cleanName\" created and saved to cloud."
-            )
-        } else {
-            CloudAuthResult.Success(
+        val pushed = if (isCloudConfigured()) savePlayerRow(session, initialSave, now) else SaveRpcResult.NetworkError
+        when (pushed) {
+            is SaveRpcResult.Saved -> {
+                localStore.markCloudSynced(session.playerId, now)
+                CloudAuthResult.Success(
+                    session = session,
+                    saveData = initialSave,
+                    syncedFromCloud = true,
+                    notice = "Hero \"$cleanName\" created and saved to cloud."
+                )
+            }
+            SaveRpcResult.NameTaken, SaveRpcResult.Reserved, SaveRpcResult.Rejected -> {
+                localStore.clearCachedSession()
+                CloudAuthResult.Failure(
+                    "\"$cleanName\" is already taken. Use Load Character with your PIN, or pick another name."
+                )
+            }
+            SaveRpcResult.Locked, SaveRpcResult.NetworkError -> CloudAuthResult.Success(
                 session = session,
                 saveData = initialSave,
                 syncedFromCloud = false,
@@ -733,60 +718,63 @@ class SupabaseCloudSaveRepository(
     }
 
     /**
-     * Loads/recovers an existing character using Name + 4-digit PIN from Supabase `public.players`.
-     * When logging in as `Admin` with the verified passcode (`1119`), automatically initializes a
-     * Level 1 Admin adventurer if no cloud/local save exists yet.
+     * Creates the reserved "Admin" hero. Only succeeds online, and only while the owner has opened
+     * the claim window in Supabase (`rv_config.admin_claim_open = 'true'`).
+     */
+    private fun claimAdminCharacter(
+        pin: String,
+        initialSaveBuilder: (cleanName: String) -> PlayerSaveData
+    ): CloudAuthResult {
+        if (!isCloudConfigured()) {
+            return CloudAuthResult.Failure("The Admin hero can only be created while online.")
+        }
+        val name = AdminAccountPolicy.ADMIN_CANONICAL_NAME
+        val pinHash = PinHasher.hashPin(name, pin)
+        val baseSave = initialSaveBuilder(name).copy(name = name, isAdmin = false)
+        val draftSession = CloudSession(playerId = baseSave.slotId, characterName = name, pinHash = pinHash)
+        val now = nowProvider()
+        return when (val result = savePlayerRow(draftSession, baseSave, now)) {
+            is SaveRpcResult.Saved -> {
+                val session = draftSession.copy(isAdmin = result.isAdmin)
+                val save = AdminAccountPolicy.enforceAdminFlag(session, baseSave)
+                localStore.saveCachedSession(session)
+                localStore.saveLocalBackup(session, save, now, pendingCloudSync = false)
+                CloudAuthResult.Success(
+                    session = session,
+                    saveData = save,
+                    syncedFromCloud = true,
+                    notice = if (result.isAdmin) "Admin claimed and saved to cloud." else "Hero \"$name\" created."
+                )
+            }
+            SaveRpcResult.NetworkError -> CloudAuthResult.Failure(
+                "Unable to reach Rookvale cloud. The Admin hero can only be created while online."
+            )
+            else -> CloudAuthResult.Failure(
+                "The name \"Admin\" is reserved. Use Load Character with the Admin PIN, or choose another name."
+            )
+        }
+    }
+
+    /**
+     * Loads/recovers an existing character using Name + 4-digit PIN. The PIN is verified by the
+     * server (`rv_load_player`), which also reports whether the character is an admin.
      */
     suspend fun loginAndRecover(
         rawName: String,
-        pin: String,
-        adminSaveBuilder: ((cleanName: String) -> PlayerSaveData)? = null
+        pin: String
     ): CloudAuthResult = withContext(Dispatchers.IO) {
         val rawCleanName = PinHasher.sanitizeName(rawName)
         if (!PinHasher.isValidCharacterName(rawCleanName)) {
             return@withContext CloudAuthResult.Failure("Enter a valid character name (2-18 characters).")
         }
-        val isAdminLogin = AdminAccountPolicy.isAdminName(rawCleanName)
-        if (isAdminLogin) {
-            if (!AdminAccountPolicy.verifyAdminPin(pin)) {
-                return@withContext CloudAuthResult.Failure("Invalid Admin passcode. Please verify your credentials.")
-            }
-        } else if (!PinHasher.isValidPin(pin)) {
+        if (!PinHasher.isValidPin(pin)) {
             return@withContext CloudAuthResult.Failure("Enter your 4-digit numeric PIN.")
         }
 
+        val isAdminLogin = AdminAccountPolicy.isAdminName(rawCleanName)
         val cleanName = if (isAdminLogin) AdminAccountPolicy.ADMIN_CANONICAL_NAME else rawCleanName
         val pinHash = PinHasher.hashPin(cleanName, pin)
         val localMatch = localStore.getLocalBackupByNameAndPin(cleanName, pinHash)
-
-        fun provisionFreshAdminAccount(): CloudAuthResult {
-            val builder = adminSaveBuilder
-                ?: return CloudAuthResult.Failure("Unable to initialize Admin account.")
-            val freshAdminSave = builder(AdminAccountPolicy.ADMIN_CANONICAL_NAME).copy(
-                name = AdminAccountPolicy.ADMIN_CANONICAL_NAME,
-                isAdmin = true
-            )
-            val session = CloudSession(
-                playerId = freshAdminSave.slotId,
-                characterName = AdminAccountPolicy.ADMIN_CANONICAL_NAME,
-                pinHash = pinHash
-            )
-            val now = nowProvider()
-            localStore.saveCachedSession(session)
-            localStore.saveLocalBackup(session, freshAdminSave, now, pendingCloudSync = true)
-            val pushed = if (isCloudConfigured()) upsertPlayerRow(session, freshAdminSave, now) else false
-            if (pushed) localStore.markCloudSynced(session.playerId, now)
-            return CloudAuthResult.Success(
-                session = session,
-                saveData = freshAdminSave,
-                syncedFromCloud = pushed,
-                notice = if (pushed) {
-                    "Admin initialized and synced to cloud. Infinite Health & Sovereign's Scroll active."
-                } else {
-                    "Admin initialized locally. Infinite Health & Sovereign's Scroll active."
-                }
-            )
-        }
 
         if (!isCloudConfigured()) {
             return@withContext if (localMatch != null) {
@@ -798,8 +786,6 @@ class SupabaseCloudSaveRepository(
                     syncedFromCloud = false,
                     notice = "Loaded local backup for ${localMatch.session.characterName} (cloud offline)."
                 )
-            } else if (isAdminLogin && adminSaveBuilder != null) {
-                provisionFreshAdminAccount()
             } else {
                 CloudAuthResult.Failure("Cloud save unavailable offline and no local backup matched that Name + PIN.")
             }
@@ -809,12 +795,13 @@ class SupabaseCloudSaveRepository(
         when (fetchResult) {
             is FetchOutcome.Found -> {
                 val remote = fetchResult.row
-                val session = CloudSession(remote.playerId, cleanName, pinHash)
+                val session = CloudSession(remote.playerId, remote.characterName.ifBlank { cleanName }, pinHash, remote.isAdmin)
                 val existingLocal = localStore.getLocalBackupByPlayerId(remote.playerId) ?: localMatch
                 reconcileAndCache(session, remote, existingLocal)
             }
+            FetchOutcome.Locked -> CloudAuthResult.Failure(TOO_MANY_ATTEMPTS_MESSAGE)
             FetchOutcome.NotFound -> {
-                if (localMatch != null && (localMatch.pendingCloudSync || isAdminLogin)) {
+                if (localMatch != null && localMatch.pendingCloudSync) {
                     val now = nowProvider()
                     val enforced = AdminAccountPolicy.enforceAdminFlag(localMatch.session, localMatch.saveData)
                     localStore.saveCachedSession(localMatch.session)
@@ -826,8 +813,6 @@ class SupabaseCloudSaveRepository(
                         syncedFromCloud = pushed,
                         notice = if (pushed) "Recovered ${localMatch.session.characterName} and synced to cloud." else "Loaded local hero backup."
                     )
-                } else if (isAdminLogin && adminSaveBuilder != null) {
-                    provisionFreshAdminAccount()
                 } else {
                     CloudAuthResult.Failure("No character found matching \"$cleanName\" and that PIN.")
                 }
@@ -842,8 +827,6 @@ class SupabaseCloudSaveRepository(
                         syncedFromCloud = false,
                         notice = "Offline mode: loaded cached backup for ${localMatch.session.characterName}."
                     )
-                } else if (isAdminLogin && adminSaveBuilder != null) {
-                    provisionFreshAdminAccount()
                 } else {
                     CloudAuthResult.Failure("Unable to reach Rookvale cloud. Check your internet connection and try again.")
                 }
@@ -874,13 +857,14 @@ class SupabaseCloudSaveRepository(
         val remoteFetch = when (val byId = fetchPlayerByIdAndPin(cached.playerId, cached.pinHash)) {
             is FetchOutcome.Found -> byId
             FetchOutcome.NotFound -> fetchPlayerByNameAndPin(cached.characterName, cached.pinHash)
+            FetchOutcome.Locked -> FetchOutcome.Locked
             FetchOutcome.NetworkError -> FetchOutcome.NetworkError
         }
 
         when (remoteFetch) {
             is FetchOutcome.Found -> {
                 val remote = remoteFetch.row
-                val resolvedSession = CloudSession(remote.playerId, remote.characterName, cached.pinHash)
+                val resolvedSession = CloudSession(remote.playerId, remote.characterName, cached.pinHash, remote.isAdmin)
                 reconcileAndCache(resolvedSession, remote, localBackup)
             }
             FetchOutcome.NotFound -> {
@@ -901,7 +885,7 @@ class SupabaseCloudSaveRepository(
                     null
                 }
             }
-            FetchOutcome.NetworkError -> {
+            FetchOutcome.Locked, FetchOutcome.NetworkError -> {
                 localBackup?.let {
                     CloudAuthResult.Success(
                         session = cached,
@@ -964,7 +948,7 @@ class SupabaseCloudSaveRepository(
             localStore.saveLocalBackup(session, remote.row.saveData, remote.row.updatedAtMs, pendingCloudSync = false)
             return@withContext CloudSaveOutcome.SYNCED_CLOUD
         }
-        if (remote is FetchOutcome.NetworkError) {
+        if (remote is FetchOutcome.NetworkError || remote is FetchOutcome.Locked) {
             return@withContext CloudSaveOutcome.SAVED_LOCAL_OFFLINE
         }
 
@@ -1037,47 +1021,45 @@ class SupabaseCloudSaveRepository(
         }.getOrNull()
     }
 
-    internal fun fetchPlayerByNameAndPin(cleanName: String, pinHash: String): FetchOutcome {
-        val base = MultiplayerConfig.restPlayersBaseUrl(urlProvider(), anonKeyProvider())
-            ?: return FetchOutcome.NetworkError
-        val url = base.toHttpUrlOrNull()?.newBuilder()
-            ?.addQueryParameter("select", "player_id,character_name,pin_hash,save_data,updated_at")
-            ?.addQueryParameter("character_name", "eq.$cleanName")
-            ?.addQueryParameter("pin_hash", "eq.$pinHash")
-            ?.addQueryParameter("limit", "1")
-            ?.build()
-            ?: return FetchOutcome.NetworkError
-        return executeFetch(url.toString(), cleanName, pinHash)
-    }
+    internal fun fetchPlayerByNameAndPin(cleanName: String, pinHash: String): FetchOutcome =
+        executeLoadRpc(
+            JSONObject().apply {
+                put("p_pin_hash", pinHash)
+                put("p_character_name", cleanName)
+            },
+            fallbackName = cleanName,
+            pinHash = pinHash
+        )
 
-    internal fun fetchPlayerByIdAndPin(playerId: String, pinHash: String): FetchOutcome {
-        val base = MultiplayerConfig.restPlayersBaseUrl(urlProvider(), anonKeyProvider())
-            ?: return FetchOutcome.NetworkError
-        val url = base.toHttpUrlOrNull()?.newBuilder()
-            ?.addQueryParameter("select", "player_id,character_name,pin_hash,save_data,updated_at")
-            ?.addQueryParameter("player_id", "eq.$playerId")
-            ?.addQueryParameter("pin_hash", "eq.$pinHash")
-            ?.addQueryParameter("limit", "1")
-            ?.build()
-            ?: return FetchOutcome.NetworkError
-        return executeFetch(url.toString(), "", pinHash)
-    }
+    internal fun fetchPlayerByIdAndPin(playerId: String, pinHash: String): FetchOutcome =
+        executeLoadRpc(
+            JSONObject().apply {
+                put("p_pin_hash", pinHash)
+                put("p_player_id", playerId)
+            },
+            fallbackName = "",
+            pinHash = pinHash
+        )
 
-    private fun executeFetch(url: String, fallbackName: String, expectedPinHash: String): FetchOutcome {
-        val req = baseRequestBuilder(url).get().build()
+    /** Calls `rv_load_player`, which verifies the PIN server-side and rate-limits wrong guesses. */
+    private fun executeLoadRpc(args: JSONObject, fallbackName: String, pinHash: String): FetchOutcome {
+        val url = MultiplayerConfig.restRpcUrl(RPC_LOAD_PLAYER, urlProvider(), anonKeyProvider())
+            ?: return FetchOutcome.NetworkError
+        val req = baseRequestBuilder(url)
+            .post(args.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
         return runCatching {
             httpClient.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return FetchOutcome.NetworkError
-                val body = resp.body?.string().orEmpty()
-                val arr = JSONArray(body)
-                if (arr.length() == 0) return FetchOutcome.NotFound
-                val row = arr.getJSONObject(0)
-                val playerId = row.optString("player_id", "").trim()
-                val charName = row.optString("character_name", fallbackName).trim()
-                val rowPinHash = row.optString("pin_hash", "").trim()
-                if (playerId.isBlank() || rowPinHash != expectedPinHash) {
-                    return FetchOutcome.NotFound
+                val row = JSONObject(resp.body?.string().orEmpty())
+                when (row.optString("status")) {
+                    "ok" -> Unit
+                    "locked" -> return FetchOutcome.Locked
+                    else -> return FetchOutcome.NotFound
                 }
+                val playerId = row.optString("player_id", "").trim()
+                if (playerId.isBlank()) return FetchOutcome.NotFound
+                val charName = row.optString("character_name", fallbackName).trim()
                 val saveDataObj = row.optJSONObject("save_data")
                     ?: row.optString("save_data", "").takeIf { it.startsWith("{") }?.let { JSONObject(it) }
                     ?: return FetchOutcome.NotFound
@@ -1087,9 +1069,10 @@ class SupabaseCloudSaveRepository(
                     RemotePlayerRow(
                         playerId = playerId,
                         characterName = charName,
-                        pinHash = rowPinHash,
+                        pinHash = pinHash,
                         saveData = saveData,
-                        updatedAtMs = updatedAtMs
+                        updatedAtMs = updatedAtMs,
+                        isAdmin = row.optBoolean("is_admin", false)
                     )
                 )
             }
@@ -1101,30 +1084,46 @@ class SupabaseCloudSaveRepository(
         saveData: PlayerSaveData,
         updatedAtMs: Long,
         preEncodedSaveJson: JSONObject? = null
-    ): Boolean {
-        val base = MultiplayerConfig.restPlayersBaseUrl(urlProvider(), anonKeyProvider()) ?: return false
-        val url = base.toHttpUrlOrNull()?.newBuilder()
-            ?.addQueryParameter("on_conflict", "player_id")
-            ?.build()
-            ?: return false
+    ): Boolean = savePlayerRow(session, saveData, updatedAtMs, preEncodedSaveJson) is SaveRpcResult.Saved
+
+    /**
+     * Calls `rv_save_player`. For an existing row the server verifies the PIN and only updates
+     * progress (name, PIN and admin flag cannot be changed); otherwise it creates the character.
+     */
+    internal fun savePlayerRow(
+        session: CloudSession,
+        saveData: PlayerSaveData,
+        updatedAtMs: Long,
+        preEncodedSaveJson: JSONObject? = null
+    ): SaveRpcResult {
+        val url = MultiplayerConfig.restRpcUrl(RPC_SAVE_PLAYER, urlProvider(), anonKeyProvider())
+            ?: return SaveRpcResult.NetworkError
 
         val payload = JSONObject().apply {
-            put("player_id", session.playerId)
-            put("character_name", session.characterName)
-            put("pin_hash", session.pinHash)
-            put("save_data", preEncodedSaveJson ?: CloudSavePayloadCodec.encode(saveData))
-            put("updated_at", IsoTimestampUtil.formatUtc(updatedAtMs))
+            put("p_player_id", session.playerId)
+            put("p_character_name", session.characterName)
+            put("p_pin_hash", session.pinHash)
+            put("p_save_data", preEncodedSaveJson ?: CloudSavePayloadCodec.encode(saveData))
+            put("p_updated_at", IsoTimestampUtil.formatUtc(updatedAtMs))
         }
 
-        val body = payload.toString().toRequestBody(JSON_MEDIA_TYPE)
-        val req = baseRequestBuilder(url.toString())
-            .header("Prefer", "resolution=merge-duplicates,return=minimal")
-            .post(body)
+        val req = baseRequestBuilder(url)
+            .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
             .build()
 
         return runCatching {
-            httpClient.newCall(req).execute().use { resp -> resp.isSuccessful }
-        }.getOrDefault(false)
+            httpClient.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return SaveRpcResult.NetworkError
+                val obj = JSONObject(resp.body?.string().orEmpty())
+                when (obj.optString("status")) {
+                    "ok" -> SaveRpcResult.Saved(isAdmin = obj.optBoolean("is_admin", false))
+                    "name_taken" -> SaveRpcResult.NameTaken
+                    "reserved" -> SaveRpcResult.Reserved
+                    "locked" -> SaveRpcResult.Locked
+                    else -> SaveRpcResult.Rejected
+                }
+            }
+        }.getOrDefault(SaveRpcResult.NetworkError)
     }
 
     /**
@@ -1140,7 +1139,7 @@ class SupabaseCloudSaveRepository(
         val base = MultiplayerConfig.restPlayersBaseUrl(urlProvider(), anonKeyProvider()) ?: return@withContext emptyList()
         val isoSince = IsoTimestampUtil.formatUtc(sinceEpochMs)
         val url = base.toHttpUrlOrNull()?.newBuilder()
-            ?.addQueryParameter("select", "player_id,character_name,save_data,updated_at")
+            ?.addQueryParameter("select", "player_id,character_name,save_data,updated_at,is_admin")
             ?.addQueryParameter("updated_at", "gte.$isoSince")
             ?.addQueryParameter("order", "updated_at.desc")
             ?.addQueryParameter("limit", limit.coerceIn(1, 100).toString())
@@ -1214,7 +1213,8 @@ class SupabaseCloudSaveRepository(
                             offhandId = optEq("shieldId") ?: optEq("offhandId"),
                             armorId = optEq("armorId"),
                             helmetId = optEq("helmetId"),
-                            bootsId = optEq("bootsId")
+                            bootsId = optEq("bootsId"),
+                            isAdmin = row.optBoolean("is_admin", false)
                         )
                     )
                 }
@@ -1236,11 +1236,26 @@ class SupabaseCloudSaveRepository(
     internal sealed class FetchOutcome {
         data class Found(val row: RemotePlayerRow) : FetchOutcome()
         data object NotFound : FetchOutcome()
+        data object Locked : FetchOutcome()
         data object NetworkError : FetchOutcome()
+    }
+
+    internal sealed class SaveRpcResult {
+        data class Saved(val isAdmin: Boolean) : SaveRpcResult()
+        data object NameTaken : SaveRpcResult()
+        data object Reserved : SaveRpcResult()
+        data object Locked : SaveRpcResult()
+        /** Wrong PIN or invalid payload. */
+        data object Rejected : SaveRpcResult()
+        data object NetworkError : SaveRpcResult()
     }
 
     companion object {
         private const val PREFS_NAME = "rookvale_cloud_saves"
+        private const val RPC_LOAD_PLAYER = "rv_load_player"
+        private const val RPC_SAVE_PLAYER = "rv_save_player"
+        const val TOO_MANY_ATTEMPTS_MESSAGE =
+            "Too many wrong PINs for this hero. Please wait 15 minutes and try again."
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         private fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()

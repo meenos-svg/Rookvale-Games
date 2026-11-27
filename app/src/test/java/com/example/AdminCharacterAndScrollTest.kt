@@ -3,6 +3,7 @@ package com.example
 import com.example.game.cloud.AdminAccountPolicy
 import com.example.game.cloud.CloudAuthResult
 import com.example.game.cloud.CloudKeyValueStore
+import com.example.game.cloud.CloudSession
 import com.example.game.cloud.LocalCloudBackupStore
 import com.example.game.cloud.SupabaseCloudSaveRepository
 import com.example.game.engine.GameEngine
@@ -67,32 +68,37 @@ class AdminCharacterAndScrollTest {
     }
 
     @Test
-    fun adminLoginAutoInitializesLevel1WithPasscode1119AndMigratesLegacyScrollOutOfBackpack() = runBlocking {
+    fun adminStatusComesOnlyFromServerAndAdminSaveHydratesAndMigratesLegacyScroll() = runBlocking {
         val repo = newOfflineCloudRepo()
 
-        // Wrong passcodes for Admin must fail cleanly on both Login and Create
-        val badLogin = repo.loginAndRecover("Admin", "0000")
-        assertTrue(badLogin is CloudAuthResult.Failure)
-        assertTrue((badLogin as CloudAuthResult.Failure).message.contains("Invalid Admin passcode"))
+        // No client-side passcode exists any more: offline, "Admin" can neither log in nor be created
+        val offlineLogin = repo.loginAndRecover("Admin", "1119")
+        assertTrue(offlineLogin is CloudAuthResult.Failure)
 
-        val badLoginCaseInsensitive = repo.loginAndRecover("admin", "1234")
-        assertTrue(badLoginCaseInsensitive is CloudAuthResult.Failure)
-
-        val badCreate = repo.createCharacter("Admin", "9999") { cleanName ->
+        val offlineCreate = repo.createCharacter("admin", "1119") { cleanName ->
             GameEngine.toSaveData(GameEngine.createNewWorld(cleanName, Vocation.ADVENTURER))
         }
-        assertTrue(badCreate is CloudAuthResult.Failure)
+        assertTrue(offlineCreate is CloudAuthResult.Failure)
 
-        // Valid Admin + 1119 auto-initializes Level 1 starter Admin with infinite health (inline Admin Control replaces scroll)
-        val loginOk = repo.loginAndRecover(
-            rawName = "admin",
-            pin = "1119",
-            adminSaveBuilder = { adminName ->
-                GameEngine.toSaveData(GameEngine.createNewWorld(adminName, Vocation.ADVENTURER, isAdmin = true))
-            }
+        // A session named "Admin" is not admin unless the server said so
+        val baseAdminSave = GameEngine.toSaveData(GameEngine.createNewWorld("Admin", Vocation.ADVENTURER, isAdmin = true))
+        val unverified = AdminAccountPolicy.enforceAdminFlag(
+            CloudSession(playerId = "a1", characterName = "Admin", pinHash = "x", isAdmin = false),
+            baseAdminSave
         )
-        assertTrue("Expected Admin login success, got $loginOk", loginOk is CloudAuthResult.Success)
-        val success = loginOk as CloudAuthResult.Success
+        assertFalse(unverified.isAdmin)
+
+        // Server-verified Admin session (as returned by rv_load_player / rv_save_player)
+        val verifiedSave = AdminAccountPolicy.enforceAdminFlag(
+            CloudSession(playerId = "a1", characterName = "admin", pinHash = "x", isAdmin = true),
+            baseAdminSave
+        )
+        val success = CloudAuthResult.Success(
+            session = CloudSession(playerId = "a1", characterName = "Admin", pinHash = "x", isAdmin = true),
+            saveData = verifiedSave,
+            syncedFromCloud = true,
+            notice = ""
+        )
         assertEquals("Admin", success.saveData.name)
         assertTrue(success.saveData.isAdmin)
         assertEquals(1, success.saveData.level)
@@ -374,6 +380,11 @@ class AdminCharacterAndScrollTest {
             assertTrue(listed.first().isAdmin)
             assertFalse(listed.first().isSpectator)
 
+            // Crowns on realtime frames are honored only for server-verified id + name pairs
+            assertTrue(mp.isVerifiedAdmin("admin-visible", "Admin"))
+            assertFalse("Impersonating the admin's id under another name", mp.isVerifiedAdmin("admin-visible", "Imposter"))
+            assertFalse("Claiming the Admin name with an unverified id", mp.isVerifiedAdmin("random-id", "Admin"))
+
             val payload = LocalPlayerPresencePayload(
                 playerId = "admin-1",
                 name = "Admin",
@@ -395,8 +406,8 @@ class AdminCharacterAndScrollTest {
             )
             assertTrue(payload.isAdmin)
             assertFalse(payload.isSpectator)
-            assertTrue(AdminAccountPolicy.verifyAdminPin("1119"))
-            assertFalse(AdminAccountPolicy.verifyAdminPin("1118"))
+            assertTrue(AdminAccountPolicy.isAdminName(" admin "))
+            assertFalse(AdminAccountPolicy.isAdminName("Administrator"))
         } finally {
             scope.cancel()
         }

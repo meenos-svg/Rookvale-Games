@@ -95,6 +95,9 @@ object BiomeProgressionRules {
     const val MIN_DUNGEON_FLOOR: Int = -28
     const val DUNGEON_DEPTH_STEP_LEVELS: Int = 6
 
+    /** Highest monster level anywhere in Rookvale (surface and every dungeon beneath it). */
+    const val ROOKVALE_MAX_LEVEL: Int = 20
+
     /**
      * Maps any Lower Boss Floor (`-16..-28`) back to its paired Upper Dungeon Floor so biome
      * anchoring and level scaling stay strictly aligned with its host dungeon (keeping all 6
@@ -137,10 +140,10 @@ object BiomeProgressionRules {
      * and their paired Lower Boss Lairs (-16..-28) scale strictly from their host biome.
      */
     fun surfaceBiomeForDungeonFloor(floorId: Int): OverlandBiomeTier = when (parentUpperFloorFor(floorId)) {
-        -1 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Briar Catacombs & Brood Sanctum (Lvl 7-12)
-        -2 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Watchwood Caverns & Molten Pit Throne (Lvl 13-18)
-        -3 -> OverlandBiomeTier.SUNSCORCH_BADLANDS   // Abyssal Crypt (Lvl 48-53)
-        -4 -> OverlandBiomeTier.FROSTPEAK_HIGHLANDS  // Obsidian Wyrm Sanctum (Lvl 66-71)
+        -1 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Briar Catacombs (Lvl 5-9) & Brood Sanctum boss (Lvl 10)
+        -2 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Watchwood Caverns (Lvl 9-13) & Molten Pit Throne boss (Lvl 14)
+        -3 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Abyssal Crypt (Lvl 13-17) & Demon Lord (Lvl 18)
+        -4 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Obsidian Wyrm Sanctum (Lvl 16-20) & Elder Dragon (Lvl 20)
         -5 -> OverlandBiomeTier.SUNSCORCH_BADLANDS   // Grimmaw Quarry & Deep Quarry Pit (Lvl 60-65)
         -6 -> OverlandBiomeTier.ASHEN_CALDERA        // Gorek Labyrinth & Inner Sanctum (Lvl 91-96+)
         -7 -> OverlandBiomeTier.WHISPERING_MARSH     // Sunken Mire Vaults & Sluice Depths (Lvl 26-31)
@@ -176,6 +179,11 @@ object BiomeProgressionRules {
         val canonical = parentUpperFloorFor(floorId)
         if (surfaceMinLevel == OverlandBiomeTier.ROOKVALE_HEARTLAND.minLevel) {
             when (canonical) {
+                // Deep Delve chain under Rookvale climbs steadily through Lv 5-20
+                -1 -> return 5
+                -2 -> return 9
+                -3 -> return 13
+                -4 -> return 16
                 -11 -> return 5
                 -13 -> return 9
             }
@@ -191,13 +199,15 @@ object BiomeProgressionRules {
         spreadOffset: Int = 0
     ): Int {
         val base = dungeonBaseLevel(surfaceMinLevel, floorId)
-        return if (isBoss) base + 5 else base + spreadOffset.coerceIn(0, 4)
+        val level = if (isBoss) base + 5 else base + spreadOffset.coerceIn(0, 4)
+        // Everything beneath Rookvale stays within the Heartland's Lv 1-20 band
+        return if (surfaceMinLevel == OverlandBiomeTier.ROOKVALE_HEARTLAND.minLevel) level.coerceAtMost(ROOKVALE_MAX_LEVEL) else level
     }
 
     fun dungeonRecommendedLevelLabel(floorId: Int, surfaceMinLevel: Int = surfaceBiomeForDungeonFloor(floorId).minLevel): String {
         val canonical = parentUpperFloorFor(floorId)
         val base = dungeonBaseLevel(surfaceMinLevel, canonical)
-        val top = base + 5
+        val top = if (surfaceMinLevel == OverlandBiomeTier.ROOKVALE_HEARTLAND.minLevel) (base + 5).coerceAtMost(ROOKVALE_MAX_LEVEL) else base + 5
         return if (canonical == -6 || canonical == -10 || canonical == -15) "Lvl $base-${top}+" else "Lvl $base-$top"
     }
 

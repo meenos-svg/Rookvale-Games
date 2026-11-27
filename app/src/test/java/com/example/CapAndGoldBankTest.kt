@@ -140,19 +140,14 @@ class CapAndGoldBankTest {
         )
         val afterDeath = GameEngine.processCombatTick(doomed, 5_000L)
 
-        // Carried gold drops into Fallen Backpack; bankGold stays 100% safe
+        // Carried gold is lost on death (no world corpse); bankGold stays 100% safe
         assertEquals(0, afterDeath.gold)
         assertEquals(25_000L, afterDeath.bankGold)
-        val fallen = afterDeath.corpses.firstOrNull { it.isPlayerCorpse }
-        assertNotNull("Player corpse must spawn with dropped gold", fallen)
-        assertEquals(1_234, fallen!!.gold)
+        assertTrue("Death no longer leaves a player corpse", afterDeath.corpses.none { it.isPlayerCorpse })
         assertEquals(1_234, afterDeath.deathReport?.droppedGold)
         assertEquals(25_000L, afterDeath.deathReport?.safeBankGold)
-
-        // Looting the Fallen Backpack recovers all dropped gold at 0.01 oz/gp
-        val recovered = GameEngine.lootGoldFromCorpse(afterDeath, fallen.id, 6_000L)
-        assertEquals(1_234, recovered.gold)
-        assertEquals(25_000L, recovered.bankGold)
+        // Backpack items go to the Reaper's Vault for buy-back at the Temple of Reapers
+        assertTrue(afterDeath.reaperVault.any { it.itemId == "wood_log" && it.count == 5 })
     }
 
     @Test

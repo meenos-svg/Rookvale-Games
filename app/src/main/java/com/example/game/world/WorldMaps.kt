@@ -117,35 +117,7 @@ object WorldMaps {
         harborPorts.firstOrNull { abs(it.dockX - x) <= 3 && abs(it.dockY - y) <= 3 }
 
     val undergroundCamps: List<UndergroundCampZone> by lazy {
-        listOf(
-            UndergroundCampZone(
-                floorId = -1,
-                name = "CATACOMBS VANGUARD CAMP (PZ)",
-                minX = 25, minY = 9, maxX = 31, maxY = 12,
-                healerX = 26, healerY = 10, healerName = "Sister Mara",
-                merchantX = 30, merchantY = 10, merchantName = "Quartermaster Bram"
-            ),
-            UndergroundCampZone(
-                floorId = -2,
-                name = "DEEP CAVERNS FORWARD CAMP (PZ)",
-                minX = 20, minY = 35, maxX = 28, maxY = 40,
-                healerX = 21, healerY = 38, healerName = "Brother Tavin",
-                merchantX = 27, merchantY = 38, merchantName = "Alchemist Veyra"
-            ),
-            UndergroundCampZone(
-                floorId = -3,
-                name = "ABYSSAL CRYPT FORWARD CAMP (PZ)",
-                minX = 20, minY = 6, maxX = 28, maxY = 11,
-                healerX = 21, healerY = 8, healerName = "Chaplain Oren",
-                merchantX = 27, merchantY = 8, merchantName = "Supplier Kora"
-            ),
-            UndergroundCampZone(
-                floorId = -4,
-                name = "WYRM SANCTUM VANGUARD CAMP (PZ)",
-                minX = 19, minY = 35, maxX = 29, maxY = 41,
-                healerX = 21, healerY = 39, healerName = "Priestess Selene",
-                merchantX = 27, merchantY = 39, merchantName = "Quartermaster Dax"
-            ),
+        DeepDelveFloors.camps + listOf(
             UndergroundCampZone(
                 floorId = -5,
                 name = "GRIMMAW QUARRY FORWARD CAMP (PZ)",
@@ -262,9 +234,7 @@ object WorldMaps {
             undergroundCamps.forEach { camp ->
                 add(LandmarkLabel(camp.floorId, (camp.minX + camp.maxX) / 2, (camp.minY + camp.maxY) / 2, camp.name))
             }
-            add(LandmarkLabel(-1, 24, 34, "DESCENT TO BRIAR BROOD SANCTUM"))
-            add(LandmarkLabel(-2, 24, 12, "DESCENT TO MOLTEN PIT THRONE"))
-            add(LandmarkLabel(-3, 24, 18, "DEEP FORGE OUTPOST"))
+            DeepDelveFloors.all.forEach { built -> addAll(built.landmarks) }
             add(LandmarkLabel(-5, 24, 12, "DESCENT TO KRAGOR'S DEEP QUARRY PIT"))
             add(LandmarkLabel(-6, 24, 11, "DESCENT TO VAELGOR'S INNER SANCTUM"))
             ContinentalDungeonGenerator.generatedDungeons.forEach { d ->
@@ -279,11 +249,11 @@ object WorldMaps {
     val portals: List<FloorPortal> = listOf(
         // --- 6 Completely Separate Rookvale Heartland Dungeons (Strictly 1-to-1, Lv 1-20, ZERO inside Rookvale City!) ---
         // 1. SW Briar Outlaw Camp <-> Floor -1 Briar Catacombs (Lvl 7-12, standalone)
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 316, -1, 28, 11, requiresRope = false),
-        FloorPortal(-1, 28, 10, 0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, requiresRope = false),
+        FloorPortal(0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 316, -1, DeepDelveFloors.F1_LANDING_X, DeepDelveFloors.F1_LANDING_Y, requiresRope = false),
+        FloorPortal(-1, DeepDelveFloors.F1_STAIRS_UP_X, DeepDelveFloors.F1_STAIRS_UP_Y, 0, ROOKVALE_ORIGIN_X + 84, ROOKVALE_ORIGIN_Y + 317, requiresRope = false),
         // 2. SE Watchwood Outlaw Camp <-> Floor -2 Watchwood Caverns (Lvl 13-18, sole Deep Delve entry to -3/-4)
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 316, -2, 24, 37, requiresRope = false),
-        FloorPortal(-2, 24, 38, 0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 317, requiresRope = false),
+        FloorPortal(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 316, -2, DeepDelveFloors.F2_LANDING_X, DeepDelveFloors.F2_LANDING_Y, requiresRope = false),
+        FloorPortal(-2, DeepDelveFloors.F2_STAIRS_UP_X, DeepDelveFloors.F2_STAIRS_UP_Y, 0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 317, requiresRope = false),
         // 3. NW Copper Quarry Rope-Hole <-> Floor -11 NW Copper Quarry Mines (Lvl 5-10, standalone)
         FloorPortal(0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 96, -11, 24, 40, requiresRope = false),
         FloorPortal(-11, 24, 41, 0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, requiresRope = true),
@@ -321,17 +291,17 @@ object WorldMaps {
         FloorPortal(-15, 24, 41, 0, 1510, 976, requiresRope = false),
 
         // --- Classic Deep Delve Chain (Exclusive to Watchwood Caverns Floor -2) ---
-        // Floor -2 <-> Floor -3 (Crypt Stairs + Eastern Rope Pit)
-        FloorPortal(-2, 24, 8, -3, 24, 9, requiresRope = false),
-        FloorPortal(-3, 24, 8, -2, 24, 9, requiresRope = false),
-        FloorPortal(-2, 40, 24, -3, 39, 24, requiresRope = false),
-        FloorPortal(-3, 40, 24, -2, 39, 24, requiresRope = true),
+        // Floor -2 <-> Floor -3 (Crypt Stairs in the Ember Fissures + eastern rope hole)
+        FloorPortal(-2, DeepDelveFloors.F2_CRYPT_STAIRS_X, DeepDelveFloors.F2_CRYPT_STAIRS_Y, -3, DeepDelveFloors.F3_LANDING_X, DeepDelveFloors.F3_LANDING_Y, requiresRope = false),
+        FloorPortal(-3, DeepDelveFloors.F3_STAIRS_UP_X, DeepDelveFloors.F3_STAIRS_UP_Y, -2, DeepDelveFloors.F2_CRYPT_RETURN_X, DeepDelveFloors.F2_CRYPT_RETURN_Y, requiresRope = false),
+        FloorPortal(-2, DeepDelveFloors.F2_ROPE_HOLE_X, DeepDelveFloors.F2_ROPE_HOLE_Y, -3, DeepDelveFloors.F3_ROPE_LANDING_X, DeepDelveFloors.F3_ROPE_LANDING_Y, requiresRope = false),
+        FloorPortal(-3, DeepDelveFloors.F3_ROPE_SPOT_X, DeepDelveFloors.F3_ROPE_SPOT_Y, -2, DeepDelveFloors.F2_ROPE_RETURN_X, DeepDelveFloors.F2_ROPE_RETURN_Y, requiresRope = true),
 
-        // Floor -3 <-> Floor -4 (Obsidian Stairs + Western Rope Pit)
-        FloorPortal(-3, 24, 40, -4, 24, 39, requiresRope = false),
-        FloorPortal(-4, 24, 40, -3, 24, 39, requiresRope = false),
-        FloorPortal(-3, 10, 34, -4, 11, 34, requiresRope = false),
-        FloorPortal(-4, 10, 34, -3, 11, 34, requiresRope = true)
+        // Floor -3 <-> Floor -4 (Gate of the Deep stairs + western rope hole)
+        FloorPortal(-3, DeepDelveFloors.F3_DESCENT_X, DeepDelveFloors.F3_DESCENT_Y, -4, DeepDelveFloors.F4_LANDING_X, DeepDelveFloors.F4_LANDING_Y, requiresRope = false),
+        FloorPortal(-4, DeepDelveFloors.F4_STAIRS_UP_X, DeepDelveFloors.F4_STAIRS_UP_Y, -3, DeepDelveFloors.F3_DESCENT_RETURN_X, DeepDelveFloors.F3_DESCENT_RETURN_Y, requiresRope = false),
+        FloorPortal(-3, DeepDelveFloors.F3_ROPE_HOLE_X, DeepDelveFloors.F3_ROPE_HOLE_Y, -4, DeepDelveFloors.F4_ROPE_LANDING_X, DeepDelveFloors.F4_ROPE_LANDING_Y, requiresRope = false),
+        FloorPortal(-4, DeepDelveFloors.F4_ROPE_SPOT_X, DeepDelveFloors.F4_ROPE_SPOT_Y, -3, DeepDelveFloors.F3_ROPE_HOLE_RETURN_X, DeepDelveFloors.F3_ROPE_HOLE_RETURN_Y, requiresRope = true)
     ) + ContinentalDungeonGenerator.lowerBossLairSpecs.flatMap { lair ->
         // Dedicated 1-to-1 Upper Dungeon Floor <-> Lower Boss Lair (-16..-28)
         // Lower Boss Lairs have ONLY STAIRS_UP returning to their paired upper floor (no surface exit).
@@ -357,44 +327,11 @@ object WorldMaps {
         )
     }
 
-    private val dungeonFixedSpawns: List<MonsterSpawn> = listOf(
-        // --- Floor -1: Briar Catacombs (Dedicated Briar Roster — Boss dwells below in Floor -16) ---
-        MonsterSpawn(-1, 26, 13, MonsterType.BRIAR_CRYPT_CRAWLER),
-        MonsterSpawn(-1, 13, 21, MonsterType.CATACOMB_BONE_ARCHER),
-        MonsterSpawn(-1, 37, 13, MonsterType.BRIAR_CRYPT_CRAWLER),
-        MonsterSpawn(-1, 13, 24, MonsterType.SKELETON),
-        MonsterSpawn(-1, 37, 30, MonsterType.POISON_SPIDER),
-        MonsterSpawn(-1, 24, 27, MonsterType.CATACOMB_BONE_ARCHER),
-        MonsterSpawn(-1, 24, 19, MonsterType.BRIAR_CRYPT_CRAWLER),
-        MonsterSpawn(-1, 21, 35, MonsterType.BRIAR_CRYPT_CRAWLER),
-        MonsterSpawn(-1, 27, 35, MonsterType.CATACOMB_BONE_ARCHER),
+    private val dungeonFixedSpawns: List<MonsterSpawn> by lazy {
+        DeepDelveFloors.all.flatMap { it.spawns } + bespokeOuterSpawns
+    }
 
-        // --- Floor -2: Watchwood Caverns (Dedicated Watchwood Roster — Boss dwells below in Floor -21) ---
-        MonsterSpawn(-2, 12, 33, MonsterType.CINDER_IMP),
-        MonsterSpawn(-2, 35, 33, MonsterType.WATCHWOOD_DREAD_KNIGHT),
-        MonsterSpawn(-2, 13, 25, MonsterType.FIRE_DEVIL),
-        MonsterSpawn(-2, 37, 25, MonsterType.GHOUL),
-        MonsterSpawn(-2, 24, 25, MonsterType.WATCHWOOD_DREAD_KNIGHT),
-        MonsterSpawn(-2, 20, 12, MonsterType.CINDER_IMP),
-        MonsterSpawn(-2, 28, 12, MonsterType.WATCHWOOD_DREAD_KNIGHT),
-        MonsterSpawn(-2, 24, 15, MonsterType.FIRE_DEVIL),
-
-        // --- Floor -3: Abyssal Crypt & Boss (Classic Deep Delve below Watchwood Caverns) ---
-        MonsterSpawn(-3, 14, 14, MonsterType.DRAGON_HATCHLING),
-        MonsterSpawn(-3, 34, 14, MonsterType.NECROMANCER),
-        MonsterSpawn(-3, 12, 24, MonsterType.DRAGON_HATCHLING),
-        MonsterSpawn(-3, 35, 24, MonsterType.NECROMANCER),
-        MonsterSpawn(-3, 16, 32, MonsterType.NECROMANCER),
-        MonsterSpawn(-3, 32, 32, MonsterType.DRAGON_HATCHLING),
-        MonsterSpawn(-3, 24, 34, MonsterType.DEMON_LORD),
-
-        // --- Floor -4: Obsidian Wyrm Sanctum (Classic Deep Delve below Abyssal Crypt) ---
-        MonsterSpawn(-4, 18, 32, MonsterType.DRAGON_HATCHLING),
-        MonsterSpawn(-4, 32, 32, MonsterType.FIRE_DEVIL),
-        MonsterSpawn(-4, 14, 24, MonsterType.NECROMANCER),
-        MonsterSpawn(-4, 34, 24, MonsterType.DRAGON_HATCHLING),
-        MonsterSpawn(-4, 24, 16, MonsterType.ELDER_DRAGON),
-
+    private val bespokeOuterSpawns: List<MonsterSpawn> = listOf(
         // --- Floor -5: The Grimmaw Quarry (Dedicated Grimmaw Roster — Kragor dwells below in Floor -22) ---
         MonsterSpawn(-5, 14, 34, MonsterType.GRIMMAW_QUARRYMAN),
         MonsterSpawn(-5, 34, 34, MonsterType.GRIMMAW_QUARRYMAN),
@@ -442,10 +379,10 @@ object WorldMaps {
     val floors: Map<Int, WorldFloor> by lazy {
         buildMap {
             put(0, buildOverlandSurface())
-            put(-1, buildSewersFloor())
-            put(-2, buildCryptsFloor())
-            put(-3, buildForgehallFloor())
-            put(-4, buildWyrmSanctumFloor())
+            put(-1, buildDeepDelveFloor(-1, "Briar Catacombs", "Briar Outlaw Ruins • Floor -1 • Forward Camp PZ", "Moderate", 1))
+            put(-2, buildDeepDelveFloor(-2, "Watchwood Caverns", "Watchwood Outlaw Caverns • Floor -2 • Deep Delve Entry • Forward Camp PZ", "High", 2))
+            put(-3, buildDeepDelveFloor(-3, "Abyssal Crypt", "Sunken Necropolis • Floor -3 • Forward Camp PZ", "Extreme", 3))
+            put(-4, buildDeepDelveFloor(-4, "Obsidian Wyrm Sanctum", "Volcanic Caldera • Floor -4 • Vanguard Camp PZ", "Deadly", 4))
             put(-5, buildGrimmawQuarryFloor())
             put(-6, buildGorekLabyrinthFloor())
             ContinentalDungeonGenerator.generatedDungeons.forEach { d ->
@@ -468,10 +405,10 @@ object WorldMaps {
 
     fun fallbackLandingForFloor(floorId: Int): Pair<Int, Int> = when (floorId) {
         0 -> TEMPLE_SPAWN_X to TEMPLE_SPAWN_Y
-        -1 -> 28 to 11
-        -2 -> 24 to 37
-        -3 -> 24 to 9
-        -4 -> 24 to 39
+        -1 -> DeepDelveFloors.F1_LANDING_X to DeepDelveFloors.F1_LANDING_Y
+        -2 -> DeepDelveFloors.F2_LANDING_X to DeepDelveFloors.F2_LANDING_Y
+        -3 -> DeepDelveFloors.F3_LANDING_X to DeepDelveFloors.F3_LANDING_Y
+        -4 -> DeepDelveFloors.F4_LANDING_X to DeepDelveFloors.F4_LANDING_Y
         -5 -> 24 to 40
         -6 -> 24 to 40
         in -15..-7 -> 24 to 40
@@ -1384,322 +1321,27 @@ object WorldMaps {
         )
     }
 
-    private fun buildSewersFloor(): WorldFloor {
-        val s = 48
-        val g = createBlank(s, s, TileType.CAVE_WALL)
-
-        // 1. NW Cellar & Quarry Crypt (Portals: (10,10) Cellar & (14,14) Quarry)
-        fillRect(g, 8, 9, 16, 17, TileType.CRYPT_FLOOR)
-        fillRect(g, 11, 12, 15, 16, TileType.DIRT_FLOOR)
-        listOf(10 to 13, 15 to 11).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
-
-        // Narrow 3-tile North Sewer Corridor -> North Gatehouse (Iron-Barred Gate threshold)
-        fillRect(g, 17, 11, 24, 13, TileType.CRYPT_FLOOR)
-        g[11][18] = TileType.IRON_BAR_GATE
-        g[12][18] = TileType.IRON_BAR_GATE
-        g[13][18] = TileType.STONE_WALL
-
-        // 2. North Central Sewer Gatehouse (Portal: (28,10) City Sewers)
-        fillRect(g, 25, 9, 31, 15, TileType.CRYPT_FLOOR)
-        g[12][26] = TileType.STONE_WALL
-        g[12][30] = TileType.STONE_WALL
-
-        // Narrow 3-tile NE Corridor -> Mountain Cavern Gallery
-        fillRect(g, 32, 11, 34, 13, TileType.DIRT_FLOOR)
-        g[11][33] = TileType.IRON_BAR_GATE
-        g[12][33] = TileType.IRON_BAR_GATE
-        g[13][33] = TileType.STONE_WALL
-
-        // 3. NE Mountain Cavern Gallery (Portal: (38,10) Mountain Cavern)
-        fillRect(g, 35, 9, 41, 16, TileType.DIRT_FLOOR)
-        g[13][39] = TileType.CAVE_WALL
-
-        // 4. West Pillar-Lined Crypt Chamber (connected via narrow 2-tile vertical corridor)
-        fillRect(g, 12, 18, 13, 19, TileType.CRYPT_FLOOR)
-        fillRect(g, 9, 20, 17, 28, TileType.CRYPT_FLOOR)
-        listOf(11 to 22, 15 to 22, 11 to 26, 15 to 26).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
-
-        // 5. Central Flooded Cistern Chasm + Twin Stone Bridges
-        fillRect(g, 27, 16, 28, 17, TileType.CRYPT_FLOOR) // Link from Gatehouse
-        fillRect(g, 18, 18, 31, 28, TileType.CRYPT_FLOOR)
-        fillRect(g, 18, 21, 31, 25, TileType.WATER) // Subterranean water chasm
-        fillRect(g, 21, 21, 22, 25, TileType.STONE_BRIDGE) // West Stone Bridge
-        fillRect(g, 27, 21, 28, 25, TileType.STONE_BRIDGE) // East Stone Bridge
-        // Iron-barred gate linking West Crypt -> South Cistern Ledge
-        g[26][18] = TileType.IRON_BAR_GATE
-        g[27][18] = TileType.IRON_BAR_GATE
-        g[28][18] = TileType.STONE_WALL
-
-        // 6. Winding East Sinkhole Tunnel & Spider Alcove (Portal: (38,28) Dark Forest Sinkhole)
-        fillRect(g, 38, 17, 39, 24, TileType.DIRT_FLOOR) // North-South winding tunnel
-        fillRect(g, 32, 26, 34, 28, TileType.DIRT_FLOOR) // Cistern-to-East corridor
-        fillRect(g, 35, 25, 41, 33, TileType.DIRT_FLOOR)
-        g[29][36] = TileType.CAVE_WALL
-
-        // 7. Boss Gatehouse Corridor -> Broodmother's Webbed Den (Boss Chamber)
-        fillRect(g, 23, 29, 25, 30, TileType.CRYPT_FLOOR)
-        g[30][23] = TileType.IRON_BAR_GATE
-        g[30][24] = TileType.IRON_BAR_GATE
-        g[30][25] = TileType.IRON_BAR_GATE
-
-        // Broodmother Arachne's Boss Chamber (x=18..30, y=31..40)
-        fillRect(g, 18, 31, 30, 40, TileType.CRYPT_FLOOR)
-        fillRect(g, 20, 32, 28, 38, TileType.DIRT_FLOOR)
-        listOf(20 to 33, 28 to 33, 20 to 37, 28 to 37).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
-
-        // Bog Iron & Vesperite Veins tucked in guarded Floor -1 dungeon alcoves
-        listOf(9 to 15, 10 to 24, 40 to 14).forEach { (x, y) -> g[y][x] = TileType.ORE_BOG_IRON }
-        listOf(16 to 28, 29 to 39, 40 to 31, 19 to 39).forEach { (x, y) -> g[y][x] = TileType.ORE_VESPERITE }
-
-        // Atmospheric Flickering Iron Wall Torches along corridors, bridges, and Boss Den
-        listOf(
-            10 to 8, 14 to 8, 21 to 10, 28 to 8, 38 to 8,
-            10 to 19, 13 to 29, 21 to 17, 29 to 17,
-            37 to 20, 40 to 22, 22 to 30, 26 to 30,
-            17 to 34, 31 to 34, 24 to 41
-        ).forEach { (tx, ty) -> g[ty][tx] = TileType.TORCH_WALL }
-
-        // Subterranean Safe Forward Camp (PZ) around Sewer Gatehouse entry (x=25..31, y=9..12)
-        val camp = undergroundCampForFloor(-1)!!
-        g[9][25] = TileType.WAR_BANNER
-        g[9][31] = TileType.WAR_BANNER
-        g[11][25] = TileType.CAMPFIRE_BRAZIER
-        g[11][31] = TileType.CAMPFIRE_BRAZIER
-        g[10][26] = TileType.COBBLESTONE
-        g[10][30] = TileType.COBBLESTONE
-
-        // Sole dedicated return stairway back up to SW Briar Outlaw Camp (1284, 717)
-        // plus lower boss lair descent stairs at the far end down to Floor -16 (Briar Brood Sanctum)
-        g[10][28] = TileType.STAIRS_UP
-        g[34][24] = TileType.STAIRS_DOWN
-
+    /** Wraps one of the hand-shaped 96x96 Deep Delve layouts from [DeepDelveFloors]. */
+    private fun buildDeepDelveFloor(
+        floorId: Int,
+        name: String,
+        subtitle: String,
+        dangerLevel: String,
+        dangerSeverity: Int
+    ): WorldFloor {
+        val built = DeepDelveFloors.builtFor(floorId)
+        val camp = DeepDelveFloors.campFor(floorId)
         return WorldFloor(
-            floorId = -1,
-            name = "Briar Catacombs",
-            subtitle = "Briar Outlaw Ruins • Floor -1 • Forward Camp PZ",
-            width = s,
-            height = s,
-            chunkedGrid = ChunkedTileGrid.fromArray(g),
+            floorId = floorId,
+            name = name,
+            subtitle = subtitle,
+            width = DeepDelveFloors.SIZE,
+            height = DeepDelveFloors.SIZE,
+            chunkedGrid = ChunkedTileGrid.fromArray(built.tiles),
             isProtectionZone = { x, y -> camp.contains(x, y) },
-            dangerLevel = "Moderate",
-            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(-1),
-            dangerSeverity = 1
-        )
-    }
-
-    private fun buildCryptsFloor(): WorldFloor {
-        val s = 48
-        val g = createBlank(s, s, TileType.STONE_WALL)
-
-        // 1. Southern Rope Landing Vestibule (Portal: (24,38) Rope-Spot Up to Floor -1)
-        fillRect(g, 18, 34, 30, 40, TileType.CRYPT_FLOOR)
-        listOf(20 to 36, 28 to 36).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
-
-        // Narrow 3-tile Central Crypt Corridor with Iron-Barred Gate
-        fillRect(g, 23, 28, 25, 33, TileType.CRYPT_FLOOR)
-        g[33][23] = TileType.IRON_BAR_GATE
-        g[33][24] = TileType.IRON_BAR_GATE
-        g[33][25] = TileType.IRON_BAR_GATE
-
-        // 2. Central Pillar-Lined Ossuary Hall
-        fillRect(g, 19, 22, 29, 27, TileType.CRYPT_FLOOR)
-        listOf(21 to 24, 27 to 24).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
-
-        // 3. West Crag Stairs Hall (Portal: (10,24) Stairs Up to Floor 0 NE Crag Hills)
-        fillRect(g, 15, 23, 18, 25, TileType.CRYPT_FLOOR)
-        g[23][16] = TileType.IRON_BAR_GATE
-        g[24][16] = TileType.IRON_BAR_GATE
-        g[25][16] = TileType.STONE_WALL
-        fillRect(g, 8, 21, 14, 28, TileType.CRYPT_FLOOR)
-        listOf(11 to 22, 11 to 27).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
-
-        // 4. East Brimstone Crypt (Portal: (40,24) Rope Hole Down to Floor -3)
-        fillRect(g, 30, 23, 33, 25, TileType.CRYPT_FLOOR)
-        g[23][32] = TileType.STONE_WALL
-        g[24][32] = TileType.IRON_BAR_GATE
-        g[25][32] = TileType.IRON_BAR_GATE
-        fillRect(g, 34, 21, 42, 28, TileType.CRYPT_FLOOR)
-        listOf(36 to 22, 36 to 27).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
-
-        // 5. Flanking West & East Crypt Vault Wings (winding 2-tile connector loops)
-        fillRect(g, 10, 31, 15, 36, TileType.CRYPT_FLOOR)
-        fillRect(g, 11, 29, 12, 30, TileType.CRYPT_FLOOR)
-        fillRect(g, 16, 35, 17, 36, TileType.CRYPT_FLOOR)
-        fillRect(g, 33, 31, 38, 36, TileType.CRYPT_FLOOR)
-        fillRect(g, 36, 29, 37, 30, TileType.CRYPT_FLOOR)
-        fillRect(g, 31, 35, 32, 36, TileType.CRYPT_FLOOR)
-
-        // 6. Molten Lava Chasm crossed by Central & West Stone Bridges
-        fillRect(g, 14, 18, 34, 21, TileType.LAVA)
-        fillRect(g, 23, 18, 25, 21, TileType.STONE_BRIDGE) // Grand Central Stone Bridge
-        fillRect(g, 16, 18, 17, 21, TileType.STONE_BRIDGE) // Secondary West Stone Bridge
-        fillRect(g, 16, 22, 17, 22, TileType.CRYPT_FLOOR)  // South landing of West Bridge
-        fillRect(g, 16, 17, 17, 17, TileType.CRYPT_FLOOR)  // North landing of West Bridge
-
-        // Boss Sanctum Iron-Barred Gate at North end of Central Bridge
-        g[17][23] = TileType.IRON_BAR_GATE
-        g[17][24] = TileType.IRON_BAR_GATE
-        g[17][25] = TileType.IRON_BAR_GATE
-
-        // 7. Ignis, Lord of the Pit — Molten Pit Sanctum (x=15..33, y=7..16)
-        fillRect(g, 15, 7, 33, 16, TileType.CRYPT_FLOOR)
-        fillRect(g, 17, 8, 31, 15, TileType.OBSIDIAN_FLOOR)
-        fillRect(g, 15, 7, 17, 9, TileType.LAVA)
-        fillRect(g, 31, 7, 33, 9, TileType.LAVA)
-        listOf(19 to 10, 29 to 10, 19 to 14, 29 to 14).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
-
-        // Mire-Silver, Peat-Coal, Vesperite & Deep Cinderite Veins guarded in Floor -2 chambers
-        listOf(10 to 32, 37 to 32).forEach { (x, y) -> g[y][x] = TileType.ORE_MIRE_SILVER }
-        listOf(11 to 35, 36 to 35).forEach { (x, y) -> g[y][x] = TileType.ORE_PEAT_COAL }
-        listOf(8 to 21, 8 to 28, 34 to 35).forEach { (x, y) -> g[y][x] = TileType.ORE_VESPERITE }
-        listOf(18 to 8, 30 to 8, 42 to 27, 19 to 39).forEach { (x, y) -> g[y][x] = TileType.ORE_CINDERITE }
-
-        // Flickering Iron Wall Torches casting warm light pools down every corridor & chamber
-        listOf(
-            24 to 41, 20 to 33, 28 to 33, 13 to 30, 35 to 30,
-            10 to 20, 40 to 20, 22 to 28, 26 to 28,
-            22 to 17, 26 to 17, 14 to 12, 34 to 12, 24 to 6
-        ).forEach { (tx, ty) -> g[ty][tx] = TileType.TORCH_WALL }
-
-        // Subterranean Safe Forward Camp (PZ) in Southern Vestibule (x=20..28, y=35..40)
-        val camp = undergroundCampForFloor(-2)!!
-        g[35][20] = TileType.OBSIDIAN_WALL
-        g[35][28] = TileType.OBSIDIAN_WALL
-        g[36][21] = TileType.CAMPFIRE_BRAZIER
-        g[36][27] = TileType.CAMPFIRE_BRAZIER
-        g[39][22] = TileType.WAR_BANNER
-        g[39][26] = TileType.WAR_BANNER
-        g[38][21] = TileType.COBBLESTONE
-        g[38][27] = TileType.COBBLESTONE
-
-        // Portals: dedicated return stairway back up to SE Watchwood Outlaw Camp (1516, 717),
-        // lower boss lair descent stairs at (24,12) -> Floor -21 (Molten Pit Throne),
-        // plus exclusive Deep Delve portals down to Floor -3 (Abyssal Crypt) & Floor -4 (Wyrm Sanctum)
-        g[38][24] = TileType.STAIRS_UP
-        g[12][24] = TileType.STAIRS_DOWN
-        g[8][24] = TileType.STAIRS_DOWN
-        g[24][40] = TileType.ROPE_HOLE_DOWN
-
-        return WorldFloor(
-            floorId = -2,
-            name = "Watchwood Caverns",
-            subtitle = "Watchwood Outlaw Caverns • Floor -2 • Deep Delve Entry • Forward Camp PZ",
-            width = s,
-            height = s,
-            chunkedGrid = ChunkedTileGrid.fromArray(g),
-            isProtectionZone = { x, y -> camp.contains(x, y) },
-            dangerLevel = "High",
-            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(-2),
-            dangerSeverity = 2
-        )
-    }
-
-    private fun buildForgehallFloor(): WorldFloor {
-        val s = 48
-        val g = createBlank(s, s, TileType.CAVE_WALL)
-
-        // Outer forgehall corridors
-        fillRect(g, 8, 6, 41, 16, TileType.OBSIDIAN_FLOOR)
-        fillRect(g, 8, 16, 17, 37, TileType.OBSIDIAN_FLOOR)
-        fillRect(g, 31, 16, 42, 37, TileType.OBSIDIAN_FLOOR)
-        fillRect(g, 14, 30, 34, 42, TileType.OBSIDIAN_FLOOR)
-
-        // Central Unprotected Deep Forge Outpost (NO Protection Zone — tense risk/reward!)
-        fillRect(g, 19, 17, 29, 27, TileType.COBBLESTONE)
-        fillRect(g, 17, 21, 31, 23, TileType.COBBLESTONE)
-        fillRect(g, 23, 15, 25, 30, TileType.COBBLESTONE)
-        g[20][22] = TileType.SMELTING_FURNACE
-        g[20][26] = TileType.BLACKSMITH_ANVIL
-        g[23][24] = TileType.MINI_DEPOT
-        g[18][21] = TileType.TORCH_WALL
-        g[18][27] = TileType.TORCH_WALL
-
-        // Vesperite Veins & Deep Cinderite Veins
-        listOf(10 to 10, 39 to 10, 10 to 28, 39 to 30).forEach { (x, y) -> g[y][x] = TileType.ORE_VESPERITE }
-        listOf(9 to 35, 38 to 35, 16 to 40, 32 to 40).forEach { (x, y) -> g[y][x] = TileType.ORE_CINDERITE }
-
-        // Subterranean Safe Forward Camp (PZ) at Northern Entry Vestibule (x=20..28, y=6..11)
-        val camp = undergroundCampForFloor(-3)!!
-        g[6][20] = TileType.OBSIDIAN_WALL
-        g[6][28] = TileType.OBSIDIAN_WALL
-        g[10][20] = TileType.CAMPFIRE_BRAZIER
-        g[10][28] = TileType.CAMPFIRE_BRAZIER
-        g[7][22] = TileType.WAR_BANNER
-        g[7][26] = TileType.WAR_BANNER
-        g[8][21] = TileType.COBBLESTONE
-        g[8][27] = TileType.COBBLESTONE
-
-        // Portals
-        g[8][24] = TileType.STAIRS_UP
-        g[24][40] = TileType.ROPE_SPOT_UP
-        g[40][24] = TileType.STAIRS_DOWN
-        g[34][10] = TileType.ROPE_HOLE_DOWN
-
-        return WorldFloor(
-            floorId = -3,
-            name = "Abyssal Crypt",
-            subtitle = "Dungeon Floor -3 • Forward Camp PZ",
-            width = s,
-            height = s,
-            chunkedGrid = ChunkedTileGrid.fromArray(g),
-            isProtectionZone = { x, y -> camp.contains(x, y) },
-            dangerLevel = "Extreme",
-            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(-3),
-            dangerSeverity = 3
-        )
-    }
-
-    private fun buildWyrmSanctumFloor(): WorldFloor {
-        val s = 48
-        val g = createBlank(s, s, TileType.CAVE_WALL)
-
-        // Volcanic lava caldera background
-        fillRect(g, 4, 4, 43, 43, TileType.LAVA)
-
-        // Southern entry bastion & western rope cliff
-        fillRect(g, 16, 34, 32, 42, TileType.OBSIDIAN_FLOOR)
-        fillRect(g, 8, 28, 18, 37, TileType.OBSIDIAN_FLOOR)
-        // Twin volcanic bridges
-        fillRect(g, 12, 20, 17, 30, TileType.OBSIDIAN_FLOOR)
-        fillRect(g, 31, 20, 36, 35, TileType.OBSIDIAN_FLOOR)
-        fillRect(g, 22, 24, 26, 34, TileType.OBSIDIAN_FLOOR)
-        // Grand Ancient Dragon Sanctum
-        fillRect(g, 11, 9, 37, 23, TileType.OBSIDIAN_FLOOR)
-
-        // Obsidian cover pillars for dodging Dragon fire breath
-        listOf(17 to 13, 31 to 13, 17 to 19, 31 to 19).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
-
-        // Rich Glacier-Quartz, Frost-Iron & Cinderite Veins guarded by Wyrms & the Ancient Dragon
-        listOf(9 to 30, 14 to 36).forEach { (x, y) -> g[y][x] = TileType.ORE_GLACIER_QUARTZ }
-        listOf(10 to 36, 33 to 31).forEach { (x, y) -> g[y][x] = TileType.ORE_FROST_IRON }
-        listOf(13 to 10, 35 to 10, 12 to 22, 36 to 22, 24 to 9).forEach { (x, y) -> g[y][x] = TileType.ORE_CINDERITE }
-
-        // Subterranean Safe Vanguard Camp (PZ) at Southern Entry Bastion (x=19..29, y=35..41)
-        val camp = undergroundCampForFloor(-4)!!
-        g[35][19] = TileType.OBSIDIAN_WALL
-        g[35][29] = TileType.OBSIDIAN_WALL
-        g[36][20] = TileType.CAMPFIRE_BRAZIER
-        g[36][28] = TileType.CAMPFIRE_BRAZIER
-        g[40][20] = TileType.WAR_BANNER
-        g[40][28] = TileType.WAR_BANNER
-        g[39][21] = TileType.COBBLESTONE
-        g[39][27] = TileType.COBBLESTONE
-
-        // Portals
-        g[40][24] = TileType.STAIRS_UP
-        g[34][10] = TileType.ROPE_SPOT_UP
-
-        return WorldFloor(
-            floorId = -4,
-            name = "Obsidian Wyrm Sanctum",
-            subtitle = "Dungeon Floor -4 • Vanguard Camp PZ",
-            width = s,
-            height = s,
-            chunkedGrid = ChunkedTileGrid.fromArray(g),
-            isProtectionZone = { x, y -> camp.contains(x, y) },
-            dangerLevel = "Deadly",
-            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(-4),
-            dangerSeverity = 4
+            dangerLevel = dangerLevel,
+            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(floorId),
+            dangerSeverity = dangerSeverity
         )
     }
 

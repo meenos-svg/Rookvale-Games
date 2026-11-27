@@ -413,7 +413,7 @@ fun TitleAndCreationScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
-                                val isCachedAdmin = com.example.game.cloud.AdminAccountPolicy.isAdminName(cached.characterName)
+                                val isCachedAdmin = cached.isAdmin
                                 if (isCachedAdmin) {
                                     AdminGoldenCrownIcon(sizeDp = 14.dp)
                                 }

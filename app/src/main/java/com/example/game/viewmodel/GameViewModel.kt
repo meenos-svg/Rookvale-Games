@@ -69,6 +69,10 @@ enum class AppScreen {
     PLAYING
 }
 
+
+/** How often the walk loop checks for new work while idle (and the longest it sleeps at once). */
+private const val WALK_LOOP_IDLE_POLL_MS = 30L
+
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = GameSaveRepository(RookvaleDatabase.getInstance(application).saveSlotDao())
     private val cloudRepository = SupabaseCloudSaveRepository(application)
@@ -369,15 +373,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val result = cloudRepository.loginAndRecover(
                 rawName = name,
-                pin = pin,
-                adminSaveBuilder = { adminName ->
-                    val freshAdmin = GameEngine.createNewWorld(
-                        name = adminName,
-                        vocation = Vocation.ADVENTURER,
-                        isAdmin = true
-                    )
-                    GameEngine.toSaveData(freshAdmin)
-                }
+                pin = pin
             )
             when (result) {
                 is CloudAuthResult.Success -> enterGameWithCloudResult(result)
@@ -829,10 +825,23 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Smooth 210ms auto-walk & melee Target Auto-Follow stepping loop
+        // Auto-walk & melee Target Auto-Follow stepping loop. Steps are scheduled from the previous
+        // step's timestamp (level-based interval) so they never drift, double up, or pause mid-walk.
         walkLoopJob = viewModelScope.launch {
             while (true) {
-                delay(210L)
+                val snapshot = _world.value
+                val hasWalkWork = snapshot.walkPath.isNotEmpty() || snapshot.longRangeWaypoints.isNotEmpty() ||
+                    snapshot.longRangeGoal != null || snapshot.autoFollowTarget
+                if (!hasWalkWork) {
+                    delay(WALK_LOOP_IDLE_POLL_MS)
+                    continue
+                }
+                val waitMs = snapshot.lastPlayerMoveMs + GameEngine.stepIntervalMs(snapshot.level) - SystemClock.uptimeMillis()
+                if (waitMs > 0L) {
+                    // Sleep exactly until the next step is due (taps in between only change the route)
+                    delay(waitMs.coerceAtMost(GameEngine.BASE_STEP_INTERVAL_MS))
+                    continue
+                }
                 val now = SystemClock.uptimeMillis()
                 val remotes = multiplayerManager.uiState.value.remotePlayers
                 var changedFloor = false
@@ -856,12 +865,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     persistCurrentState(silent = true)
                 } else if (movedTile || changedRegion) {
                     lastLocalMoveUptimeMs = now
-                    lastMoveSpeedTilesPerSec = RemotePlayerInterpolator.WALK_SPEED_TILES_PER_SEC
+                    lastMoveSpeedTilesPerSec = GameEngine.walkSpeedTilesPerSec(_world.value.level)
                     broadcastMovement(PlayerActionState.WALKING, now)
                     if (changedRegion) persistCurrentState(silent = true)
                 } else if (facingChanged) {
                     broadcastMovement(PlayerActionState.IDLE, now)
                 }
+                // Nothing moved (e.g. already adjacent to a followed target): don't spin
+                if (!movedTile && !changedFloor) delay(WALK_LOOP_IDLE_POLL_MS)
             }
         }
 
@@ -1259,7 +1270,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             if (moved || pathStarted) {
                 lastLocalMoveUptimeMs = now
-                lastMoveSpeedTilesPerSec = RemotePlayerInterpolator.WALK_SPEED_TILES_PER_SEC
+                lastMoveSpeedTilesPerSec = GameEngine.walkSpeedTilesPerSec(_world.value.level)
                 broadcastMovement(PlayerActionState.WALKING, now)
             } else if (healed) {
                 broadcastCurrentState(PlayerActionState.HEALING)
@@ -1273,7 +1284,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onDirectionStep(dir: Direction) {
         val now = SystemClock.uptimeMillis()
-        if (now - lastStepMs < 155L) return
+        // Manual steps follow the same level-based pace as walking, and never cut a glide short
+        if (now - lastStepMs < GameEngine.stepIntervalMs(_world.value.level)) return
+        if (!GameEngine.isStepReady(_world.value, now)) return
         lastStepMs = now
         val remotes = multiplayerManager.uiState.value.remotePlayers
         var floorChanged = false
@@ -1292,7 +1305,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             persistCurrentState(silent = true)
         } else if (moved) {
             lastLocalMoveUptimeMs = now
-            lastMoveSpeedTilesPerSec = RemotePlayerInterpolator.MANUAL_STEP_SPEED_TILES_PER_SEC
+            lastMoveSpeedTilesPerSec = GameEngine.walkSpeedTilesPerSec(_world.value.level)
             broadcastMovement(PlayerActionState.WALKING, now)
         } else if (facingChanged) {
             broadcastMovement(PlayerActionState.IDLE, now)
@@ -1513,7 +1526,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (startedPath) {
             lastLocalMoveUptimeMs = now
-            lastMoveSpeedTilesPerSec = RemotePlayerInterpolator.WALK_SPEED_TILES_PER_SEC
+            lastMoveSpeedTilesPerSec = GameEngine.walkSpeedTilesPerSec(_world.value.level)
             broadcastMovement(PlayerActionState.WALKING, now)
         }
     }

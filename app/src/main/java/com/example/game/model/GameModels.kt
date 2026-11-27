@@ -6,7 +6,10 @@ import com.example.game.multiplayer.LocalPlayerActionFxEvent
 import com.example.game.world.WeatherType
 import com.squareup.moshi.JsonClass
 
-const val CURRENT_MAP_VERSION = 4
+const val CURRENT_MAP_VERSION = 5
+
+/** Map version that rebuilt Deep Delve floors -1..-4 as 96x96 layouts (saves inside them move to the entrance). */
+const val DEEP_DELVE_REBUILD_MAP_VERSION = 5
 const val V1_SURFACE_OFFSET = 32
 const val V2_TO_V3_OFFSET_X = 149
 const val V2_TO_V3_OFFSET_Y = 146
@@ -1502,7 +1505,7 @@ enum class GraphicsQuality(
         particleLevel = ParticleDetailLevel.MINIMAL,
         treeDetailLayers = 1,
         cullMargin = 2,
-        spriteScaleMultiplier = 0.90f,
+        spriteScaleMultiplier = 1.0f,
         strokeScale = 0.85f,
         useProceduralTileTextures = false,
         useDirectionalLighting = false,
@@ -1575,8 +1578,8 @@ enum class GraphicsQuality(
     HD(
         displayName = "HD",
         shortBadge = "HD",
-        summaryNote = "Crisp 0.8x scaled world, cached bloom & native HUD",
-        capabilityTags = listOf("0.8x world / 1x HUD", "Closest-14 lights", "Cached HD polish"),
+        summaryNote = "Full-resolution world, enhanced water, bloom & stone polish",
+        capabilityTags = listOf("Full resolution", "Closest-14 lights", "Cached HD polish"),
         drawGroundClutter = true,
         drawWildflowers = true,
         drawShorelineDetails = true,
@@ -1589,7 +1592,7 @@ enum class GraphicsQuality(
         particleLevel = ParticleDetailLevel.HD_ENHANCED,
         treeDetailLayers = 3,
         cullMargin = 3,
-        spriteScaleMultiplier = 1.06f,
+        spriteScaleMultiplier = 1.0f,
         strokeScale = 1.15f,
         useProceduralTileTextures = true,
         useDirectionalLighting = true,
@@ -1598,7 +1601,7 @@ enum class GraphicsQuality(
         drawTwilightAtmosphere = true,
         drawPointLightPools = true,
         useHdPostProcessShader = false,
-        renderScaleFactor = 0.8f,
+        renderScaleFactor = 1.0f,
         maxDynamicPointLights = 14
     );
 
@@ -1607,6 +1610,7 @@ enum class GraphicsQuality(
 
     companion object {
         val DEFAULT: GraphicsQuality = MEDIUM
+        /** Optional reduced world render scale (performance mode); HD itself renders at full resolution. */
         const val HD_RENDER_SCALE: Float = 0.8f
         const val MIN_RENDER_SCALE: Float = 0.5f
         const val MAX_RENDER_SCALE: Float = 1.0f

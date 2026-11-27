@@ -2,6 +2,7 @@ package com.example
 
 import com.example.game.cloud.CloudSavePayloadCodec
 import com.example.game.engine.CraftingAndMiningEngine
+import com.example.game.model.RecipeCatalog
 import com.example.game.engine.GameEngine
 import com.example.game.model.ActivePanel
 import com.example.game.model.EquipmentSlot
@@ -15,6 +16,7 @@ import com.example.game.model.TREE_CHOP_COOLDOWN_MS
 import com.example.game.model.TREE_REGROW_TICKS
 import com.example.game.model.TileType
 import com.example.game.model.Vocation
+import com.example.game.world.WorldFloor
 import com.example.game.world.WorldMaps
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,6 +25,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GameplayUpgradesTest {
+
+    /** Nearest walkable, non-protection-zone strip (start + 6 tiles east) around the Rookvale temple. */
+    private fun findOpenStrip(map: WorldFloor): Pair<Int, Int> {
+        for (r in 5..200) for (dy in -r..r) for (dx in listOf(-r, r)) {
+            val x = WorldMaps.TEMPLE_SPAWN_X + dx
+            val y = WorldMaps.TEMPLE_SPAWN_Y + dy
+            if ((0..6).all { map.tileAt(x + it, y).walkable && !map.isProtectionZone(x + it, y) }) return x to y
+        }
+        error("No open ground found near Rookvale")
+    }
 
     @Test
     fun levelScalingCap_andLevel20OracleJobAdvanceSurge() {
@@ -40,9 +52,9 @@ class GameplayUpgradesTest {
         val capBeforeUnequip = lvl2.remainingCapOz()
         val unequipped = GameEngine.unequipSlot(lvl2, EquipmentSlot.ARMOR)
         assertEquals(capBeforeUnequip, unequipped.remainingCapOz(), 0.01) // moved to backpack -> same total weight
-        val droppedArmor = GameEngine.dropItem(unequipped, "leather_jerkin")
+        val droppedArmor = GameEngine.dropItem(unequipped, "leather_armor")
         assertTrue(
-            "Dropping leather jerkin should free carrying Cap",
+            "Dropping leather armor should free carrying Cap",
             droppedArmor.remainingCapOz() > capBeforeUnequip + 10.0
         )
 
@@ -85,9 +97,9 @@ class GameplayUpgradesTest {
     @Test
     fun tapToTrackAutoFollow_meleeTracksAndCancels_rangedDoesNotForceMelee() {
         val base = GameEngine.createNewWorld(name = "Bram")
-        // Place player on open overland grass outside PZ
-        val px = 26
-        val py = 44
+        // Place player on open overland ground outside the protection zone
+        val overland = WorldMaps.getFloor(0)
+        val (px, py) = findOpenStrip(overland)
         val monster = MonsterEntity(
             id = 9001,
             type = MonsterType.CAVE_RAT,
@@ -115,7 +127,8 @@ class GameplayUpgradesTest {
         val targeted = GameEngine.handleTileTap(world, monster.x, monster.y, nowMs = 1_000L)
         assertEquals(monster.id, targeted.targetMonsterId)
         assertTrue("Melee tap must engage auto-follow", targeted.autoFollowTarget)
-        assertTrue("Melee tap should queue approach path", targeted.walkPath.isNotEmpty())
+        // The tap takes the first approach step immediately (or queues a path) so movement feels instant
+        assertTrue("Melee tap should start approaching", targeted.playerX > px || targeted.walkPath.isNotEmpty())
 
         // Stepping via stepAutoFollowOrPath moves player closer to the monster
         val stepped = GameEngine.stepAutoFollowOrPath(targeted, nowMs = 1_300L)
@@ -227,19 +240,25 @@ class GameplayUpgradesTest {
             playerY = bsy,
             prevPlayerX = bsx,
             prevPlayerY = bsy,
-            backpack = boughtHatchet.backpack + ItemStack("wood_log", 6) + ItemStack("wild_feather", 4)
+            backpack = boughtHatchet.backpack + ItemStack("wood_log", 6) + ItemStack("wild_feather", 4) +
+                ItemStack("spider_silk", 2) + ItemStack("brindle_hide", 2)
         )
+        val arrowRecipe = RecipeCatalog.fletchingRecipes.first { it.id == "fletch_wooden_arrows" }
+        val bowRecipe = RecipeCatalog.fletchingRecipes.first { it.id == "fletch_hunting_bow" }
+        fun logs(r: com.example.game.model.CraftingRecipe) = r.ingredients.filter { it.itemId == "wood_log" }.sumOf { it.count }
+        val logsAfterArrows = 6 - logs(arrowRecipe)
+        val logsAfterBow = logsAfterArrows - logs(bowRecipe)
         val openedBench = GameEngine.handleTileTap(atBench, bx, by, nowMs = 9_000L)
         assertEquals(ActivePanel.FLETCHING_BENCH, openedBench.activePanel)
 
-        // Fletch Wooden Arrows (1 Wood Log -> 15 Wooden Arrows) and Hunting Bow (4 Wood Logs + 2 Wild Feathers -> 1 Hunting Bow)
+        // Fletch Wooden Arrows and a Hunting Bow using the current recipes
         val fletchedArrows = CraftingAndMiningEngine.executeRecipe(openedBench, "fletch_wooden_arrows", nowMs = 9_500L)
-        assertEquals(15, fletchedArrows.itemCount("wooden_arrows"))
-        assertEquals(5, fletchedArrows.itemCount("wood_log"))
+        assertEquals(arrowRecipe.outputCount, fletchedArrows.itemCount("wooden_arrows"))
+        assertEquals(logsAfterArrows, fletchedArrows.itemCount("wood_log"))
 
         val fletchedBow = CraftingAndMiningEngine.executeRecipe(fletchedArrows, "fletch_hunting_bow", nowMs = 10_000L)
         assertEquals(1, fletchedBow.itemCount("hunting_bow"))
-        assertEquals(1, fletchedBow.itemCount("wood_log"))
+        assertEquals(logsAfterBow, fletchedBow.itemCount("wood_log"))
 
         // Equip Hunting Bow & load Wooden Arrows, then verify full Supabase cloud save round-trip
         val equippedBow = GameEngine.useOrEquipBackpackItem(fletchedBow, "hunting_bow", nowMs = 10_500L)
@@ -252,9 +271,9 @@ class GameplayUpgradesTest {
         val decoded = CloudSavePayloadCodec.decode(json, saveData.slotId, saveData.name)
         val hydrated = GameEngine.fromSaveData(decoded)
         assertTrue(hydrated.hasHatchet())
-        assertEquals(1, hydrated.itemCount("wood_log"))
+        assertEquals(logsAfterBow, hydrated.itemCount("wood_log"))
         assertEquals("hunting_bow", hydrated.equipment.weaponId)
         assertEquals("wooden_arrows", hydrated.equipment.ammoId)
-        assertEquals(15, hydrated.itemCount("wooden_arrows"))
+        assertEquals(arrowRecipe.outputCount, hydrated.itemCount("wooden_arrows"))
     }
 }

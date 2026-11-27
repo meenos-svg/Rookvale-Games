@@ -11,6 +11,7 @@ import com.example.game.model.ItemCatalog
 import com.example.game.model.ItemCategory
 import com.example.game.model.ItemStack
 import com.example.game.model.MonsterEntity
+import com.example.game.model.MonsterLootTable
 import com.example.game.model.MonsterType
 import com.example.game.model.ORACLE_MIN_LEVEL
 import com.example.game.model.OreVeinKind
@@ -20,7 +21,10 @@ import com.example.game.model.SkillProgress
 import com.example.game.model.TOOL_BAG_WEIGHT_MULTIPLIER
 import com.example.game.model.TileType
 import com.example.game.model.Vocation
+import com.example.game.model.WORLD_OVERLAND_HEIGHT
+import com.example.game.model.WORLD_OVERLAND_WIDTH
 import com.example.game.world.NpcRole
+import com.example.game.world.DeepDelveFloors
 import com.example.game.world.WorldMaps
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -49,11 +53,12 @@ class ExampleUnitTest {
         assertEquals(heroA.maxMp, heroB.maxMp)
         assertEquals(heroA.maxCapOz, heroB.maxCapOz, 0.01)
 
-        // All 6 skills start at 10
+        // Weapon/utility skills start at 10; Magic uses the magic-XP track and starts at 1
         assertEquals(10, heroA.skills.melee.level)
+        assertEquals(10, heroA.skills.sword.level)
         assertEquals(10, heroA.skills.distance.level)
         assertEquals(10, heroA.skills.shielding.level)
-        assertEquals(10, heroA.skills.magic.level)
+        assertEquals(1, heroA.skills.magic.level)
         assertEquals(10, heroA.skills.fishing.level)
         assertEquals(10, heroA.skills.mining.level)
 
@@ -89,7 +94,7 @@ class ExampleUnitTest {
         assertFalse(afterForge.backpack.any { it.itemId == "sunbrass_pick" })
         assertEquals("sunbrass_pick", afterForge.bestPickaxe()?.id)
 
-        // On death, Main Bag drops into recoverable corpse while Tool Bag stays strapped safely
+        // On death, Main Bag goes to the Reaper's Vault (buy-back at the Temple) while Tool Bag stays strapped
         val doomed = afterForge.copy(
             xp = 1000L,
             level = 4,
@@ -103,11 +108,9 @@ class ExampleUnitTest {
         val afterDeath = GameEngine.processCombatTick(doomed, 3000L)
         assertTrue("Tool Bag must remain strapped after death", afterDeath.toolBag.any { it.itemId == "sunbrass_pick" })
         assertTrue("Rope must remain in Tool Bag after death", afterDeath.toolBag.any { it.itemId == "rope" })
-        assertTrue("Main Bag should be empty after dropping into corpse", afterDeath.backpack.isEmpty())
-        val corpse = afterDeath.corpses.firstOrNull { it.isPlayerCorpse }
-        assertNotNull(corpse)
-        assertTrue(corpse!!.items.any { it.itemId == "spider_silk" && it.count == 3 })
-        assertFalse("Corpse must not contain Tool Bag items", corpse.items.any { it.itemId == "sunbrass_pick" })
+        assertTrue("Main Bag should be empty after death", afterDeath.backpack.isEmpty())
+        assertTrue(afterDeath.reaperVault.any { it.itemId == "spider_silk" && it.count == 3 })
+        assertFalse("Reaper's Vault must not contain Tool Bag items", afterDeath.reaperVault.any { it.itemId == "sunbrass_pick" })
     }
 
     @Test
@@ -206,13 +209,14 @@ class ExampleUnitTest {
             monsters = listOf(target),
             targetMonsterId = 777,
             equipment = EquippedGear(weaponId = "sunbrass_dirk"),
-            skills = PlayerSkills(melee = SkillProgress(10, 0.0))
+            skills = PlayerSkills(melee = SkillProgress(10, 0.0), sword = SkillProgress(10, 0.0))
         )
-        val highSkill = lowSkill.copy(skills = PlayerSkills(melee = SkillProgress(35, 0.0)))
+        // Sunbrass Dirk is a sword: damage scales with Sword skill
+        val highSkill = lowSkill.copy(skills = PlayerSkills(melee = SkillProgress(35, 0.0), sword = SkillProgress(35, 0.0)))
 
         var lowTotal = 0
         var highTotal = 0
-        repeat(20) { i ->
+        repeat(200) { i ->
             val rLow = GameEngine.processPlayerAttackSubTick(lowSkill.copy(lastPlayerAttackMs = 0L), 1000L + i)
             val rHigh = GameEngine.processPlayerAttackSubTick(highSkill.copy(lastPlayerAttackMs = 0L), 1000L + i)
             lowTotal += 5000 - rLow.monsters.first().hp
@@ -304,12 +308,12 @@ class ExampleUnitTest {
         assertTrue(migrated.toolBag.any { it.itemId == "rope" })
         assertTrue(migrated.toolBag.any { it.itemId == "fishing_rod" })
         assertFalse(migrated.backpack.any { it.itemId == "rope" })
-        // Legacy V1 save receives starter Quarry Mattock in Depot
-        assertTrue("Legacy V1 save must receive starter Quarry Mattock in Depot", migrated.depot.any { it.itemId == "quarry_mattock" })
+        // Legacy V1 save receives a starter Bronze Pickaxe in Depot
+        assertTrue("Legacy V1 save must receive starter Bronze Pickaxe in Depot", migrated.depot.any { it.itemId == "bronze_pickaxe" })
 
-        val migratedCorpse = migrated.corpses.first { it.id == "legacy_corpse" }
-        assertEquals(50, migratedCorpse.x) // 18 + 32
-        assertEquals(48, migratedCorpse.y) // 16 + 32
+        // Items from legacy player corpses are rescued into the Reaper's Vault (no world corpse anymore)
+        assertTrue(migrated.reaperVault.any { it.itemId == "spider_silk" && it.count == 2 })
+        assertTrue(migrated.corpses.none { it.id == "legacy_corpse" })
 
         val resaved = GameEngine.toSaveData(migrated)
         assertEquals(CURRENT_MAP_VERSION, resaved.mapVersion)
@@ -319,13 +323,14 @@ class ExampleUnitTest {
     @Test
     fun expandedSurfaceAndFourFloorDungeonPortalsAreValid() {
         val surface = WorldMaps.getFloor(0)
-        assertEquals(96, surface.width)
-        assertEquals(96, surface.height)
+        assertEquals(WORLD_OVERLAND_WIDTH, surface.width)
+        assertEquals(WORLD_OVERLAND_HEIGHT, surface.height)
 
+        // The four Deep Delve floors under Rookvale are large 96x96 hand-shaped layouts
         for (floorId in listOf(-1, -2, -3, -4)) {
             val f = WorldMaps.getFloor(floorId)
-            assertEquals(48, f.width)
-            assertEquals(48, f.height)
+            assertEquals(DeepDelveFloors.SIZE, f.width)
+            assertEquals(DeepDelveFloors.SIZE, f.height)
         }
 
         for (portal in WorldMaps.portals) {
@@ -338,14 +343,16 @@ class ExampleUnitTest {
         }
 
         val f3 = WorldMaps.getFloor(-3)
-        assertFalse(f3.isProtectionZone(24, 21))
         var hasFurnace = false
         var hasAnvil = false
         var hasMiniDepot = false
         for (y in 0 until f3.height) {
             for (x in 0 until f3.width) {
                 when (f3.tileAt(x, y)) {
-                    TileType.SMELTING_FURNACE -> hasFurnace = true
+                    TileType.SMELTING_FURNACE -> {
+                        hasFurnace = true
+                        assertFalse("Deep Forge Outpost is deliberately outside the PZ", f3.isProtectionZone(x, y))
+                    }
                     TileType.BLACKSMITH_ANVIL -> hasAnvil = true
                     TileType.MINI_DEPOT -> hasMiniDepot = true
                     else -> Unit
@@ -358,17 +365,22 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun ropeRequiredToClimbFromFloorMinusTwoAndMinusFour() {
+    fun ropeRequiredToClimbAtEveryRopeSpot() {
         val hero = GameEngine.createNewWorld("Lyra")
-        val noRopeF2 = hero.copy(floor = -2, playerX = 24, playerY = 38, backpack = emptyList(), toolBag = emptyList())
-        assertEquals(-2, GameEngine.useRope(noRopeF2, 1000L).floor)
+        val ropeSpots = WorldMaps.portals.filter { it.requiresRope }
+        assertTrue("World must contain rope-spots", ropeSpots.isNotEmpty())
+        assertTrue("Floors -3 and -4 keep their rope-spots", ropeSpots.any { it.fromFloor == -3 } && ropeSpots.any { it.fromFloor == -4 })
 
-        // Rope works directly from Tool Bag
-        val withRopeF2 = noRopeF2.copy(toolBag = listOf(ItemStack("rope", 1)))
-        assertEquals(-1, GameEngine.useRope(withRopeF2, 2000L).floor)
+        for (spot in ropeSpots) {
+            val standing = hero.copy(floor = spot.fromFloor, playerX = spot.fromX, playerY = spot.fromY, backpack = emptyList(), toolBag = emptyList())
+            assertEquals("No rope: must stay on floor ${spot.fromFloor}", spot.fromFloor, GameEngine.useRope(standing, 1000L).floor)
 
-        val withRopeF4 = hero.copy(floor = -4, playerX = 10, playerY = 34, toolBag = listOf(ItemStack("rope", 1)))
-        assertEquals(-3, GameEngine.useRope(withRopeF4, 3000L).floor)
+            // Rope works directly from Tool Bag
+            val climbed = GameEngine.useRope(standing.copy(toolBag = listOf(ItemStack("rope", 1))), 2000L)
+            assertEquals(spot.toFloor, climbed.floor)
+            assertEquals(spot.toX, climbed.playerX)
+            assertEquals(spot.toY, climbed.playerY)
+        }
     }
 
     @Test
@@ -449,18 +461,18 @@ class ExampleUnitTest {
             assertFalse("Alaric's Shop must not sell finished weapon: ${def.name}", def.category in weaponCategories)
         }
 
-        for (type in MonsterType.entries.filter { !it.isBoss && it.tier <= 4 }) {
-            repeat(10) { i ->
-                val dummy = MonsterEntity(i, type, -1, 10, 10, 10, 10, type.maxHp, type.maxHp)
-                val corpse = GameEngine.generateMonsterCorpse(dummy)
-                for (stack in corpse.items) {
-                    val def = ItemCatalog.get(stack.itemId)
-                    if (def.id == "wooden_club") continue
-                    assertFalse(
-                        "Classic regular monster ${type.displayName} dropped forged weapon ${def.name}",
-                        def.category in weaponCategories
-                    )
-                }
+        // Regular monsters can drop weapons (classic loot), but never above their own tier;
+        // higher-tier weapons come from bosses and the forge.
+        for (type in MonsterType.entries.filter { !it.isBoss }) {
+            val entry = MonsterLootTable.entryFor(type)
+            val dropIds = entry.weightedDrops.map { it.itemId } + entry.guaranteedDrops.map { it.itemId }
+            for (id in dropIds) {
+                val def = ItemCatalog.get(id)
+                if (def.category !in weaponCategories) continue
+                assertTrue(
+                    "Regular monster ${type.displayName} (tier ${type.tier}) drops ${def.name} (tier ${def.equipmentTier})",
+                    def.equipmentTier <= type.tier
+                )
             }
         }
     }
