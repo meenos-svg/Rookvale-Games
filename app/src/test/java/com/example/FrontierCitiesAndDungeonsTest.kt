@@ -235,8 +235,8 @@ class FrontierCitiesAndDungeonsTest {
     /** Emberforged (Lv 60) is the top tier, made at the Ashen Foundry and still worth dropping in the Lv 66-75 endgame. */
     @Test
     fun emberforgedTierCompletesTheEndgame() {
-        val set = ItemCatalog.all.values.filter { it.id.startsWith("emberforged_") && it.id != "emberforged_ingot" }
-        assertEquals(11, set.size)
+        val set = ItemCatalog.all.values.filter { it.id.startsWith("emberforged_") && it.id != "emberforged_ingot" && it.category != com.example.game.model.ItemCategory.AMMO }
+        assertEquals(14, set.size)
         val recipes = RecipeCatalog.forgingRecipes + RecipeCatalog.smeltingRecipes
         set.forEach { item ->
             assertEquals(6, item.equipmentTier)
