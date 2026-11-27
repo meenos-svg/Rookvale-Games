@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -298,6 +301,97 @@ fun TargetFrame(state: GameWorldState, modifier: Modifier = Modifier) {
                 Spacer(Modifier.weight(1f))
                 Text(if (dist <= 1) "In reach" else "$dist tiles", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = Color(0xFF9FC3FF))
             }
+        }
+    }
+}
+
+/**
+ * Split health/mana orb: red health fills the left half, blue mana the right, and a yellow XP bar
+ * runs up the divider with your level on top. Tap the left half to drink a health potion (or eat
+ * hotbar food when you're out), the right half for a mana potion.
+ */
+@Composable
+fun VitalsOrb(
+    state: GameWorldState,
+    onUseHealth: () -> Unit,
+    onUseMana: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val hpFrac = if (state.isInvulnerable) 1f else (state.hp.toFloat() / state.effectiveMaxHp().coerceAtLeast(1)).coerceIn(0f, 1f)
+    val mpFrac = (state.mp.toFloat() / state.maxMp.coerceAtLeast(1)).coerceIn(0f, 1f)
+    val xpFrac = state.levelProgressFraction().coerceIn(0f, 1f)
+    val healthTop = if (state.isInvulnerable) Color(0xFFFFE08A) else Color(0xFFF05A46)
+    val healthBottom = if (state.isInvulnerable) Color(0xFFB8861E) else Color(0xFF8C0A0E)
+    Column(modifier = modifier.width(116.dp).testTag("vitals_orb"), horizontalAlignment = Alignment.CenterHorizontally) {
+      Box(modifier = Modifier.size(116.dp)) {
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier
+                .size(116.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures { tap -> if (tap.x < size.width / 2f) onUseHealth() else onUseMana() }
+                }
+        ) {
+            val cx = size.width / 2f
+            val cy = size.height / 2f + 4.dp.toPx()
+            val r = size.minDimension * 0.40f
+            val ring = 5.dp.toPx()
+            // Stone ring with gold trim
+            drawCircle(Color(0xFF3A3430), radius = r + ring, center = androidx.compose.ui.geometry.Offset(cx, cy))
+            drawCircle(TorchGold, radius = r + ring, center = androidx.compose.ui.geometry.Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(1.6.dp.toPx()))
+            drawCircle(Color(0xFF100E14), radius = r, center = androidx.compose.ui.geometry.Offset(cx, cy))
+            val globe = androidx.compose.ui.graphics.Path().apply {
+                addOval(androidx.compose.ui.geometry.Rect(cx - r, cy - r, cx + r, cy + r))
+            }
+            clipPath(globe) {
+                val hpTop = cy + r - 2 * r * hpFrac
+                drawRect(
+                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(listOf(healthTop, healthBottom), startY = cy - r, endY = cy + r),
+                    topLeft = androidx.compose.ui.geometry.Offset(cx - r, hpTop),
+                    size = androidx.compose.ui.geometry.Size(r, cy + r - hpTop)
+                )
+                val mpTop = cy + r - 2 * r * mpFrac
+                drawRect(
+                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF5AAAFF), Color(0xFF12288C)), startY = cy - r, endY = cy + r),
+                    topLeft = androidx.compose.ui.geometry.Offset(cx, mpTop),
+                    size = androidx.compose.ui.geometry.Size(r, cy + r - mpTop)
+                )
+                // Liquid surfaces
+                drawLine(Color.White.copy(alpha = 0.45f), androidx.compose.ui.geometry.Offset(cx - r, hpTop), androidx.compose.ui.geometry.Offset(cx, hpTop), strokeWidth = 1.5.dp.toPx())
+                drawLine(Color.White.copy(alpha = 0.45f), androidx.compose.ui.geometry.Offset(cx, mpTop), androidx.compose.ui.geometry.Offset(cx + r, mpTop), strokeWidth = 1.5.dp.toPx())
+                // Glass shine
+                drawOval(
+                    color = Color.White.copy(alpha = 0.16f),
+                    topLeft = androidx.compose.ui.geometry.Offset(cx - r * 0.75f, cy - r * 0.85f),
+                    size = androidx.compose.ui.geometry.Size(r * 0.95f, r * 0.55f)
+                )
+            }
+            // XP divider: dark channel filling up in yellow
+            val bw = 6.dp.toPx()
+            drawRect(Color(0xFF281F12), topLeft = androidx.compose.ui.geometry.Offset(cx - bw / 2, cy - r), size = androidx.compose.ui.geometry.Size(bw, 2 * r))
+            val xpH = 2 * r * xpFrac
+            drawRect(Color(0xFFFACD3C), topLeft = androidx.compose.ui.geometry.Offset(cx - bw / 2 + 1.dp.toPx(), cy + r - xpH), size = androidx.compose.ui.geometry.Size(bw - 2.dp.toPx(), xpH))
+            // Level badge
+            val badgeR = 11.dp.toPx()
+            val badgeC = androidx.compose.ui.geometry.Offset(cx, cy - r - 1.dp.toPx())
+            drawCircle(Color(0xFF281F12), radius = badgeR, center = badgeC)
+            drawCircle(TorchGold, radius = badgeR, center = badgeC, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
+        }
+        // Level number over the badge
+        Text(
+            "${state.level}",
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold, fontSize = 12.sp),
+            color = Color(0xFFFAD75A),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 6.dp)
+        )
+      }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                if (state.isInvulnerable) "∞" else "${state.hp}",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.ExtraBold),
+                color = Color(0xFFFF8A7A)
+            )
+            Text("${(xpFrac * 100).toInt()}%", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold), color = Color(0xFFFAD75A))
+            Text("${state.mp}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.ExtraBold), color = Color(0xFF8FC2FF))
         }
     }
 }

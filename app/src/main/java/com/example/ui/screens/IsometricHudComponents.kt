@@ -287,9 +287,12 @@ fun TopLeftHudCluster(
     onExpandWorldMap: () -> Unit,
     onMultiplayerStatusTapped: () -> Unit,
     onOpenAdminScroll: () -> Unit = {},
+    onOrbHealth: () -> Unit = {},
+    onOrbMana: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val zoomRadii = remember { listOf(14, 22, 34) }
+    var minimapCollapsed by rememberSaveable { mutableStateOf(false) }
     var zoomIndex by rememberSaveable { mutableIntStateOf(1) }
     val currentRadius = zoomRadii[zoomIndex.coerceIn(0, zoomRadii.lastIndex)]
     val resolvedYawProvider: () -> Float = cameraYawProvider ?: { cameraYawDeg }
@@ -299,7 +302,19 @@ fun TopLeftHudCluster(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top
     ) {
-        if (state.showMinimap) {
+        // Split health/mana orb with the XP bar down the middle
+        VitalsOrb(state = state, onUseHealth = onOrbHealth, onUseMana = onOrbMana)
+
+        if (state.showMinimap && minimapCollapsed) {
+            MinimapTinyButton(
+                icon = Icons.Default.Map,
+                contentDesc = "Show minimap",
+                enabled = true,
+                onClick = { minimapCollapsed = false },
+                testTag = "minimap_expand_button",
+                sizeDp = 44
+            )
+        } else if (state.showMinimap) {
             IsometricMinimapCard(
                 state = state,
                 remotePlayers = multiplayerState.remotePlayers,
@@ -313,7 +328,8 @@ fun TopLeftHudCluster(
                 onResetNorth = onResetNorth,
                 onToggleRotateDragMode = onToggleRotateDragMode,
                 onTapWalk = onWalkToTile,
-                onExpandWorldMap = onExpandWorldMap
+                onExpandWorldMap = onExpandWorldMap,
+                onCollapse = { minimapCollapsed = true }
             )
         }
 
@@ -341,7 +357,8 @@ private fun IsometricMinimapCard(
     onResetNorth: () -> Unit,
     onToggleRotateDragMode: () -> Unit,
     onTapWalk: (Int, Int) -> Unit,
-    onExpandWorldMap: () -> Unit
+    onExpandWorldMap: () -> Unit,
+    onCollapse: () -> Unit = {}
 ) {
     val floorMap = remember(state.floor) { WorldMaps.getFloor(state.floor) }
     val isRotatedAwayFromNorth by remember(cameraYawProvider) {
@@ -507,7 +524,7 @@ private fun IsometricMinimapCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(ObsidianVoid.copy(alpha = 0.92f))
-                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                    .padding(start = 6.dp, end = 2.dp, top = 1.dp, bottom = 1.dp)
                     .testTag("minimap_coordinates"),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -552,6 +569,14 @@ private fun IsometricMinimapCard(
                         maxLines = 1
                     )
                 }
+                MinimapTinyButton(
+                    icon = Icons.Default.ExpandLess,
+                    contentDesc = "Hide minimap",
+                    enabled = true,
+                    onClick = onCollapse,
+                    testTag = "minimap_collapse_button",
+                    sizeDp = 24
+                )
             }
         }
     }
@@ -563,11 +588,12 @@ private fun MinimapTinyButton(
     contentDesc: String,
     enabled: Boolean,
     onClick: () -> Unit,
-    testTag: String
+    testTag: String,
+    sizeDp: Int = 28
 ) {
     Box(
         modifier = Modifier
-            .size(28.dp)
+            .size(sizeDp.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(ObsidianVoid.copy(alpha = 0.84f))
             .border(1.dp, if (enabled) StoneBorderLight else StoneBorderDark, RoundedCornerShape(4.dp))
@@ -672,7 +698,7 @@ private fun CharacterVitalsHudCardContent(
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.2.dp, StoneBorderLight),
         modifier = Modifier
-            .widthIn(min = 216.dp, max = 304.dp)
+            .widthIn(min = 150.dp, max = 230.dp)
             .testTag("character_vitals_hud")
     ) {
         Row(
@@ -680,8 +706,8 @@ private fun CharacterVitalsHudCardContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Live Articulated Character Portrait Frame
-            Box(
+            // Portrait hidden: the vitals orb now shows level, HP, MP and XP
+            if (false) Box(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(6.dp))
@@ -737,8 +763,8 @@ private fun CharacterVitalsHudCardContent(
                     )
                 }
 
-                // EXP Progress Bar
-                CompactMeterBar(
+                // EXP / HP / MP bars moved into the vitals orb
+                if (false) CompactMeterBar(
                     label = "EXP",
                     valueText = "${(snapshot.expFraction * 100).toInt()}%",
                     fraction = snapshot.expFraction,
@@ -747,8 +773,7 @@ private fun CharacterVitalsHudCardContent(
                     heightDp = 7
                 )
 
-                // Red HP Bar (with ∞ Immortal indicator for Admin)
-                CompactMeterBar(
+                if (false) CompactMeterBar(
                     label = "HP",
                     valueText = if (snapshot.isInvulnerable) "∞ / ${snapshot.effMaxHp}" else "${snapshot.hp}/${snapshot.effMaxHp}",
                     fraction = if (snapshot.isInvulnerable) 1f else (snapshot.hp.toFloat() / snapshot.effMaxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
@@ -757,8 +782,7 @@ private fun CharacterVitalsHudCardContent(
                     heightDp = 11
                 )
 
-                // Blue MP Bar
-                CompactMeterBar(
+                if (false) CompactMeterBar(
                     label = "MP",
                     valueText = "${snapshot.mp}/${snapshot.maxMp}",
                     fraction = (snapshot.mp.toFloat() / snapshot.maxMp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),

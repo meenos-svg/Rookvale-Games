@@ -3278,6 +3278,23 @@ object GameEngine {
             .addLogInternal("Bound $itemName to Custom Slot ${slotIndex + 1}.")
     }
 
+    /**
+     * Health/mana orb taps. Health: a health potion, or hotbar food (e.g. fish) when out of potions.
+     * Mana: a mana potion.
+     */
+    fun useOrbSide(state: GameWorldState, health: Boolean, nowMs: Long): GameWorldState {
+        if (!health) {
+            return if (state.hasItem("mana_potion")) useManaPotion(state, nowMs)
+            else state.addLogInternal("Out of Mana Potions! Old Finn, Alaric and Zephyr sell them.")
+        }
+        if (state.hasItem("health_potion")) return useHealthPotion(state, nowMs)
+        val food = state.customHotbarSlots.filterNotNull().firstOrNull { id ->
+            state.hasItem(id) && ItemCatalog.all[id]?.category == ItemCategory.FOOD
+        }
+        return if (food != null) useOrEquipBackpackItem(state, food, nowMs)
+        else state.addLogInternal("Out of Health Potions and no food on your hotbar. Bind fish to a + slot!")
+    }
+
     fun useCustomHotbarSlot(state: GameWorldState, slotIndex: Int, nowMs: Long): GameWorldState {
         val itemId = state.customHotbarSlots.getOrNull(slotIndex) ?: return state
         if (!state.hasItem(itemId)) {

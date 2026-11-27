@@ -126,6 +126,7 @@ fun GameScreen(
     onBindRune: (String) -> Unit = {},
     onNpcAction: (String) -> Unit = {},
     onCancelWalk: () -> Unit = {},
+    onOrbTap: (Boolean) -> Unit = {},
     onChooseVocationAtOracle: (Vocation) -> Unit,
     onMultiplayerStatusTapped: () -> Unit = {},
     onToggleChat: () -> Unit = {},
@@ -212,6 +213,8 @@ fun GameScreen(
                 onExpandWorldMap = { onOpenPanel(ActivePanel.WORLD_MAP) },
                 onMultiplayerStatusTapped = onMultiplayerStatusTapped,
                 onOpenAdminScroll = { if (state.isAdmin) adminControlExpanded = true },
+                onOrbHealth = { onOrbTap(true) },
+                onOrbMana = { onOrbTap(false) },
                 modifier = Modifier.align(Alignment.TopStart)
             )
 

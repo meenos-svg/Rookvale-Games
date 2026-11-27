@@ -1325,6 +1325,22 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (used) broadcastCurrentState(PlayerActionState.HEALING)
     }
 
+    /** Tap on the health (left) or mana (right) half of the vitals orb. */
+    fun onOrbTap(health: Boolean) {
+        val now = SystemClock.uptimeMillis()
+        var used = false
+        _world.update { prev ->
+            val next = GameEngine.useOrbSide(prev, health, now)
+            if (next.hp != prev.hp || next.mp != prev.mp || next.outboundPlayerEffects.size > prev.outboundPlayerEffects.size) used = true
+            next
+        }
+        flushOutboundPlayerEffects()
+        if (used) {
+            broadcastCurrentState(PlayerActionState.HEALING)
+            persistCurrentState(silent = true)
+        }
+    }
+
     fun onHotkeyManaPotion() {
         val now = SystemClock.uptimeMillis()
         var used = false

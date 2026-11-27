@@ -131,6 +131,7 @@ class MainActivity : ComponentActivity() {
                             onBindRune = gameViewModel::bindRuneToHotbar,
                             onNpcAction = gameViewModel::onNpcAction,
                             onCancelWalk = gameViewModel::cancelWalk,
+                            onOrbTap = gameViewModel::onOrbTap,
                             onChooseVocationAtOracle = gameViewModel::chooseVocationAtOracle,
                             onMultiplayerStatusTapped = gameViewModel::onMultiplayerStatusTapped,
                             onToggleChat = gameViewModel::toggleChat,
