@@ -433,6 +433,7 @@ data class PaperDollAppearance(
         private fun resolveOffhand(offhandId: String): Pair<OffhandVisualKind, MaterialPalette> {
             val id = offhandId.lowercase().trim()
             return when {
+                id.contains("emberforged") -> OffhandVisualKind.DRAGON_SHIELD to MaterialPalettes.EMBERFORGED
                 id.contains("cinderite") || id.contains("bastion") -> OffhandVisualKind.DRAGON_SHIELD to MaterialPalettes.CINDERITE
                 id.contains("rime_plate") || id.contains("frostpeak") -> OffhandVisualKind.KITE_SHIELD to MaterialPalettes.RIME_PLATE
                 id.contains("vesperite") || id.contains("bulwark") -> OffhandVisualKind.KITE_SHIELD to MaterialPalettes.VESPERITE
@@ -453,6 +454,7 @@ data class PaperDollAppearance(
         ): Pair<ArmorVisualKind, MaterialPalette> {
             val id = armorId?.lowercase()?.trim().orEmpty()
             return when {
+                id.contains("emberforged") -> ArmorVisualKind.WYRMSCALE to MaterialPalettes.EMBERFORGED
                 id.contains("cinderite") || id.contains("warplate") -> ArmorVisualKind.WYRMSCALE to MaterialPalettes.CINDERITE
                 id.contains("rime_plate") || id.contains("frostpeak") -> ArmorVisualKind.PLATE to MaterialPalettes.RIME_PLATE
                 id.contains("vesperite") || id.contains("aegis") -> ArmorVisualKind.PLATE to MaterialPalettes.VESPERITE
@@ -469,6 +471,7 @@ data class PaperDollAppearance(
 
         /** Biome set pieces (helmets, legs, boots) wear their set's material colours. */
         private fun biomeArmorPalette(id: String): MaterialPalette? = when {
+            id.startsWith("emberforged_") -> MaterialPalettes.EMBERFORGED
             id.startsWith("cinderite_") -> MaterialPalettes.CINDERITE
             id.startsWith("rime_plate_") -> MaterialPalettes.RIME_PLATE
             id.startsWith("vesperite_") -> MaterialPalettes.VESPERITE
@@ -519,6 +522,7 @@ data class PaperDollAppearance(
         }
 
         private fun materialPaletteForId(id: String, category: ItemCategory?): MaterialPalette = when {
+            id.contains("emberforged") -> MaterialPalettes.EMBERFORGED
             id.contains("cinderite") -> MaterialPalettes.CINDERITE
             id.contains("rime_plate") || id.contains("frostpeak") || id.contains("glacier") -> MaterialPalettes.RIME_PLATE
             id.contains("vesperite") -> MaterialPalettes.VESPERITE
@@ -639,6 +643,14 @@ object MaterialPalettes {
         glow = Color(0xFF5AD8FF)
     )
     /** Tier 5 Cinderite: obsidian-forged metal inlaid with glowing volcanic-gold fissures. */
+    /** Tier 6: pale molten gold over dark bronze, with a white-hot glow. */
+    val EMBERFORGED = MaterialPalette(
+        primary = Color(0xFF5A3E22),
+        highlight = Color(0xFFFFE08A),
+        shadow = Color(0xFF24170C),
+        accent = Color(0xFFFFC14D),
+        glow = Color(0xFFFFD66B)
+    )
     val CINDERITE = MaterialPalette(
         primary = Color(0xFF3E2D36),
         highlight = Color(0xFFFFC95C),
