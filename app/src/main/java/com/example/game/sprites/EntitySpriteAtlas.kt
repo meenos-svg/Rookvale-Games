@@ -841,6 +841,21 @@ object EntitySpriteAtlas {
                 rect(buf, S, 10, 3, 12, 8, 0xFF140D20.toInt())
                 px(buf, S, 13, 7, 0xFFD6B8FF.toInt()); px(buf, S, 18, 7, 0xFFD6B8FF.toInt())
             }
+            NpcRole.FISHERMAN, NpcRole.BLACKSMITH, NpcRole.FLETCHER, NpcRole.WANDERING_MERCHANT,
+            NpcRole.HUNT_MASTER, NpcRole.BESTIARY_SAGE, NpcRole.TOWN_CRIER, NpcRole.DUNGEON_GUIDE -> {
+                val (body, trim, hat) = when (role) {
+                    NpcRole.FISHERMAN -> Triple(0xFF3E6E8C.toInt(), 0xFFC9A646.toInt(), 0xFFC9A646.toInt())
+                    NpcRole.BLACKSMITH -> Triple(0xFF5A3B2A.toInt(), 0xFF7D4B28.toInt(), 0xFF2B1D14.toInt())
+                    NpcRole.FLETCHER -> Triple(0xFF4F7A3A.toInt(), 0xFF7D4B28.toInt(), 0xFFB5652B.toInt())
+                    NpcRole.WANDERING_MERCHANT -> Triple(0xFF7A2E5C.toInt(), 0xFFF0C451.toInt(), 0xFF2F2A55.toInt())
+                    NpcRole.HUNT_MASTER -> Triple(0xFF8A8F99.toInt(), 0xFF6B1F1F.toInt(), 0xFF5C4630.toInt())
+                    NpcRole.BESTIARY_SAGE -> Triple(0xFF2E5E57.toInt(), 0xFF6EE0C8.toInt(), 0xFF2E5E57.toInt())
+                    NpcRole.TOWN_CRIER -> Triple(0xFF2D3F8C.toInt(), 0xFFF0C451.toInt(), 0xFF8C1F2A.toInt())
+                    else -> Triple(0xFF5C5A3A.toInt(), 0xFF7D4B28.toInt(), 0xFF7D4B28.toInt())
+                }
+                rect(buf, S, 9, 11, 14, 15, body); rect(buf, S, 14, 12, 4, 13, trim)
+                rect(buf, S, 11, 4, 10, 8, skin); rect(buf, S, 10, 2, 12, 3, hat)
+            }
         }
         return toBmp(buf, S)
     }

@@ -38,7 +38,15 @@ enum class NpcRole {
     TEMPLE_PRIEST,
     ORACLE,
     HARBOR_CAPTAIN,
-    REAPER_KEEPER
+    REAPER_KEEPER,
+    FISHERMAN,
+    BLACKSMITH,
+    FLETCHER,
+    WANDERING_MERCHANT,
+    HUNT_MASTER,
+    BESTIARY_SAGE,
+    TOWN_CRIER,
+    DUNGEON_GUIDE
 }
 
 data class MonsterSpawn(
@@ -145,6 +153,21 @@ object WorldMaps {
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 193, ROOKVALE_ORIGIN_Y + 179, "Brother Alden", NpcRole.TEMPLE_PRIEST))
             add(NpcSpot(0, ORACLE_X, ORACLE_Y, "The Oracle", NpcRole.ORACLE))
             add(NpcSpot(0, REAPER_X, REAPER_Y, "Mortis, Keeper of Reapers", NpcRole.REAPER_KEEPER))
+            // Rookvale townsfolk
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 186, ROOKVALE_ORIGIN_Y + 229, "Old Finn", NpcRole.FISHERMAN))
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 220, ROOKVALE_ORIGIN_Y + 204, "Borin", NpcRole.BLACKSMITH))
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 230, ROOKVALE_ORIGIN_Y + 204, "Wren", NpcRole.FLETCHER))
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 178, ROOKVALE_ORIGIN_Y + 204, "Zephyr the Wanderer", NpcRole.WANDERING_MERCHANT))
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 186, ROOKVALE_ORIGIN_Y + 199, "Captain Hale", NpcRole.HUNT_MASTER))
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 242, ROOKVALE_ORIGIN_Y + 179, "Sage Ilsa", NpcRole.BESTIARY_SAGE))
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 200, ROOKVALE_ORIGIN_Y + 199, "Crier Tobias", NpcRole.TOWN_CRIER))
+            // Dungeon guides beside each Rookvale dungeon entrance
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 86, ROOKVALE_ORIGIN_Y + 318, "Scout Bryn", NpcRole.DUNGEON_GUIDE))
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 314, ROOKVALE_ORIGIN_Y + 318, "Ranger Tamsin", NpcRole.DUNGEON_GUIDE))
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 95, ROOKVALE_ORIGIN_Y + 99, "Miner Dell", NpcRole.DUNGEON_GUIDE))
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 267, ROOKVALE_ORIGIN_Y + 87, "Climber Asha", NpcRole.DUNGEON_GUIDE))
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 315, ROOKVALE_ORIGIN_Y + 209, "Woodsman Garth", NpcRole.DUNGEON_GUIDE))
+            add(NpcSpot(0, ROOKVALE_ORIGIN_X + 311, ROOKVALE_ORIGIN_Y + 69, "Warden Kael", NpcRole.DUNGEON_GUIDE))
 
             // 6 Strictly Coastline-Validated Ocean Harbor Ferry Captains
             WorldBiomeBlueprint.harborPorts.forEach { port ->
