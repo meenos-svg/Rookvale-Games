@@ -124,6 +124,7 @@ fun SlideUpGamePanel(
     onWithdrawItem: (String, Int) -> Unit,
     onDepositGold: (Int) -> Unit = {},
     onDepositAllGold: () -> Unit = {},
+    onDepositAllMaterials: () -> Unit = {},
     onWithdrawGold: (Long) -> Unit = {},
     onWithdrawAllGold: () -> Unit = {},
     onBuyItem: (String, Int) -> Unit,
@@ -259,6 +260,7 @@ fun SlideUpGamePanel(
                         onWithdrawItem = onWithdrawItem,
                         onDepositGold = onDepositGold,
                         onDepositAllGold = onDepositAllGold,
+                        onDepositAllMaterials = onDepositAllMaterials,
                         onWithdrawGold = onWithdrawGold,
                         onWithdrawAllGold = onWithdrawAllGold
                     )

@@ -53,6 +53,7 @@ import com.example.R
 import com.example.game.model.GOLD_COIN_WEIGHT_OZ
 import com.example.game.model.GameWorldState
 import com.example.game.model.ItemCatalog
+import com.example.game.engine.GameEngine
 import com.example.ui.theme.ExpEmerald
 import com.example.ui.theme.ObsidianVoid
 import com.example.ui.theme.ParchmentLight
@@ -85,7 +86,8 @@ internal fun DepotPanelContent(
     onDepositGold: (Int) -> Unit,
     onDepositAllGold: () -> Unit,
     onWithdrawGold: (Long) -> Unit,
-    onWithdrawAllGold: () -> Unit
+    onWithdrawAllGold: () -> Unit,
+    onDepositAllMaterials: () -> Unit = {}
 ) {
     var tab by remember { mutableIntStateOf(0) }
     var transferQty by remember { mutableStateOf(DepotTransferQty.ONE) }
@@ -136,6 +138,19 @@ internal fun DepotPanelContent(
                 onSelect = { transferQty = it }
             )
             val activeEntries = if (tab == 0) depotEntries else carriedEntries
+            if (tab == 1) {
+                val materialStacks = state.backpack.count { it.count > 0 && GameEngine.isDepositMaterial(ItemCatalog.get(it.itemId)) }
+                BankQuickActionButton(
+                    label = if (materialStacks > 0) "Deposit all materials ($materialStacks)" else "No materials to deposit",
+                    enabled = materialStacks > 0,
+                    isDeposit = true,
+                    onClick = onDepositAllMaterials,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .testTag("depot_deposit_all_materials")
+                )
+            }
             if (activeEntries.isEmpty()) {
                 Box(
                     Modifier
