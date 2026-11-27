@@ -3,6 +3,7 @@ package com.example.game.cloud
 import android.content.Context
 import com.example.game.multiplayer.MultiplayerConfig
 import com.example.game.world.BiomeProgressionRules
+import com.example.game.world.DeepDelveFloors
 import com.example.game.world.OverlandBiomeTier
 import com.example.game.world.WorldBiomeBlueprint
 import com.example.game.world.WorldMaps
@@ -297,10 +298,10 @@ object AdminTeleportCatalog {
     )
 
     val dungeonCamps: List<AdminTeleportPreset> = listOf(
-        dungeonCampPreset("floor_m1", "F-1 Briar Catacombs", -1, 28, 11),
-        dungeonCampPreset("floor_m2", "F-2 Watchwood Caverns", -2, 24, 37),
-        dungeonCampPreset("floor_m3", "F-3 Crypt Camp", -3, 24, 9),
-        dungeonCampPreset("floor_m4", "F-4 Wyrm Camp", -4, 24, 39),
+        dungeonCampPreset("floor_m1", "F-1 Briar Catacombs", -1, DeepDelveFloors.F1_LANDING_X, DeepDelveFloors.F1_LANDING_Y),
+        dungeonCampPreset("floor_m2", "F-2 Watchwood Caverns", -2, DeepDelveFloors.F2_LANDING_X, DeepDelveFloors.F2_LANDING_Y),
+        dungeonCampPreset("floor_m3", "F-3 Crypt Camp", -3, DeepDelveFloors.F3_LANDING_X, DeepDelveFloors.F3_LANDING_Y),
+        dungeonCampPreset("floor_m4", "F-4 Wyrm Camp", -4, DeepDelveFloors.F4_LANDING_X, DeepDelveFloors.F4_LANDING_Y),
         dungeonCampPreset("floor_m5", "F-5 Grimmaw Camp", -5, 24, 40),
         dungeonCampPreset("floor_m6", "F-6 Labyrinth Camp", -6, 24, 40, openEndedTop = true),
         dungeonCampPreset("floor_m7", "F-7 Mire Vaults Camp", -7, 24, 40),

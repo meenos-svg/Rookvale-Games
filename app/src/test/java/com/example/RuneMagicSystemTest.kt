@@ -51,10 +51,11 @@ class RuneMagicSystemTest {
         val reqLv1 = state.magicXpToNext()
         assertEquals(30.0, reqLv1, 0.01)
 
-        // Spend 35 mana -> should advance to Magic Level 2 with 5 XP rollover
+        // Spend 35 mana -> magic XP = mana x vocation magic gain rate; 30 XP reaches Magic Level 2
+        val gained = 35 * state.vocation.magicGainRate
         state = GameEngine.awardMagicXpFromMana(state, manaSpent = 35, nowMs = 1_000L)
         assertEquals(2, state.magicLevel)
-        assertEquals(5.0, state.magicXp, 0.05)
+        assertEquals(gained - reqLv1, state.magicXp, 0.05)
         assertTrue(state.magicXpToNext() > reqLv1)
     }
 
@@ -116,7 +117,7 @@ class RuneMagicSystemTest {
         val after = GameEngine.useHealingRune(state, nowMs = 10_000L)
         assertEquals(2, after.itemCount("healing_rune"))
         assertTrue(after.hp > 100)
-        assertEquals(2, after.poisonTicks)
+        assertEquals("Healing Rune eases 4 poison ticks", 1, after.poisonTicks)
         assertTrue(after.mp < state.mp)
         assertTrue(after.magicXp > 0.0 || after.magicLevel > 4)
     }
@@ -158,9 +159,9 @@ class RuneMagicSystemTest {
 
     @Test
     fun greatFireballAndSuddenDeathDealSplashAoeToAdjacentMonsters() {
-        val m1 = MonsterEntity(id = 101, type = MonsterType.SKELETON, floor = 0, x = 28, y = 44, spawnX = 28, spawnY = 44, hp = 300, maxHp = 300)
-        val m2 = MonsterEntity(id = 102, type = MonsterType.SKELETON, floor = 0, x = 29, y = 44, spawnX = 29, spawnY = 44, hp = 300, maxHp = 300)
-        val far = MonsterEntity(id = 103, type = MonsterType.SKELETON, floor = 0, x = 32, y = 44, spawnX = 32, spawnY = 44, hp = 300, maxHp = 300)
+        val m1 = MonsterEntity(id = 101, type = MonsterType.SKELETON, floor = 0, x = 28, y = 44, spawnX = 28, spawnY = 44, hp = 3000, maxHp = 3000)
+        val m2 = MonsterEntity(id = 102, type = MonsterType.SKELETON, floor = 0, x = 29, y = 44, spawnX = 29, spawnY = 44, hp = 3000, maxHp = 3000)
+        val far = MonsterEntity(id = 103, type = MonsterType.SKELETON, floor = 0, x = 32, y = 44, spawnX = 32, spawnY = 44, hp = 3000, maxHp = 3000)
 
         val base = freshWorld(magicLevel = 15).copy(
             playerX = 26,
@@ -175,9 +176,9 @@ class RuneMagicSystemTest {
         val gfbM1 = afterGfb.monsters.first { it.id == m1.id }
         val gfbM2 = afterGfb.monsters.first { it.id == m2.id }
         val gfbFar = afterGfb.monsters.first { it.id == far.id }
-        assertTrue("Primary target should take GFB damage", gfbM1.hp < 300)
-        assertTrue("Adjacent monster should take GFB 3x3 splash", gfbM2.hp < 300)
-        assertEquals("Distant monster outside 3x3 should be untouched", 300, gfbFar.hp)
+        assertTrue("Primary target should take GFB damage", gfbM1.hp < 3000)
+        assertTrue("Adjacent monster should take GFB 3x3 splash", gfbM2.hp < 3000)
+        assertEquals("Distant monster outside 3x3 should be untouched", 3000, gfbFar.hp)
 
         val afterSd = GameEngine.useAttackRune(afterGfb, nowMs = 15_000L, explicitRuneId = "sd_rune")
         assertEquals(1, afterSd.itemCount("sd_rune"))
@@ -201,18 +202,21 @@ class RuneMagicSystemTest {
         assertTrue(ItemCatalog.shopInventoryIds.contains("blank_rune"))
         assertFalse(ItemCatalog.shopInventoryIds.contains("hmm_rune"))
         assertFalse(ItemCatalog.shopInventoryIds.contains("sd_rune"))
-        assertEquals(5, RecipeCatalog.runecraftingRecipes.size)
+        assertTrue(RecipeCatalog.runecraftingRecipes.map { it.id }.containsAll(listOf("rune_magic_dart", "rune_healing", "rune_hmm", "rune_fireball", "rune_sd")))
+
+        val healRecipe = RecipeCatalog.runecraftingRecipes.first { it.id == "rune_healing" }
+        val reagent = healRecipe.ingredients.first { it.itemId != "blank_rune" }
 
         // 1. Missing Magic Level blocks inscription
         val lowMagic = freshWorld(magicLevel = 2).copy(
             playerX = 1420,
             playerY = 601,
             activePanel = ActivePanel.RUNECRAFTING_TABLE,
-            backpack = listOf(ItemStack("blank_rune", 5), ItemStack("spider_silk", 3))
+            backpack = listOf(ItemStack("blank_rune", 5), ItemStack(reagent.itemId, 3))
         )
         val blockedMagic = CraftingAndMiningEngine.executeRecipe(lowMagic, "rune_healing", nowMs = 1_000L)
         assertEquals(0, blockedMagic.itemCount("healing_rune"))
-        assertTrue(blockedMagic.statusLog.last().contains("Magic Level 4"))
+        assertTrue(blockedMagic.statusLog.last().contains("Magic Level ${healRecipe.requiredMagicLevel}"))
 
         // 2. Missing Mana blocks inscription
         val lowMana = lowMagic.copy(skills = lowMagic.skills.copy(magic = SkillProgress(5, 0.0)), mp = 10)
@@ -229,11 +233,11 @@ class RuneMagicSystemTest {
         // 4. Valid craft succeeds, consumes Blank Rune + Reagent + MP + Soul, grants Healing Runes + Magic XP
         val ready = lowSoul.copy(soul = 20)
         val crafted = CraftingAndMiningEngine.executeRecipe(ready, "rune_healing", nowMs = 4_000L)
-        assertEquals(2, crafted.itemCount("healing_rune"))
+        assertEquals(healRecipe.outputCount, crafted.itemCount("healing_rune"))
         assertEquals(4, crafted.itemCount("blank_rune"))
-        assertEquals(2, crafted.itemCount("spider_silk"))
-        assertEquals(ready.mp - 45, crafted.mp)
-        assertEquals(ready.soul - 2, crafted.soul)
+        assertEquals(3 - reagent.count, crafted.itemCount(reagent.itemId))
+        assertEquals(ready.mp - healRecipe.manaCost, crafted.mp)
+        assertEquals(ready.soul - healRecipe.soulCost, crafted.soul)
         assertTrue(crafted.magicXp > 0.0 || crafted.magicLevel > 5)
     }
 

@@ -392,21 +392,21 @@ class BiomeSpawningAndContinentalDungeonsTest {
             )
         }
 
-        // 4. Both Rookvale-linked underground floors (Floor -1: Lv 6-12, Floor -2: Lv 13-20) strictly match Rookvale Lv 1..20!
+        // 4. Both Rookvale-linked underground floors (Floor -1: Lv 5-9, Floor -2: Lv 9-13) strictly match Rookvale Lv 1..20!
         val floor1Monsters = allMonsters.filter { it.floor == -1 }
         val floor2Monsters = allMonsters.filter { it.floor == -2 }
         assertTrue("Floor -1 must have monsters", floor1Monsters.isNotEmpty())
         assertTrue("Floor -2 must have monsters", floor2Monsters.isNotEmpty())
         floor1Monsters.forEach { m ->
             assertTrue(
-                "Floor -1 ${m.type} level ${m.level} must lie strictly within Lv 6..12",
-                m.level in 6..12
+                "Floor -1 ${m.type} level ${m.level} must lie strictly within Lv 5..9",
+                m.level in 5..9
             )
         }
         floor2Monsters.forEach { m ->
             assertTrue(
-                "Floor -2 ${m.type} level ${m.level} must lie strictly within Lv 13..20",
-                m.level in 13..20
+                "Floor -2 ${m.type} level ${m.level} must lie strictly within Lv 9..13",
+                m.level in 9..13
             )
         }
     }
@@ -446,9 +446,9 @@ class BiomeSpawningAndContinentalDungeonsTest {
             )
         }
 
-        // 3. All 6 separate Rookvale Heartland dungeons (-1, -2, -11, -12, -13, -14) stay strictly in Lv 1..20
+        // 3. Every Rookvale dungeon (incl. the Deep Delve floors -3/-4) stays strictly in Lv 1..20
         val allMonsters = WorldMaps.initialMonsters()
-        val rookvaleDungeonFloors = listOf(-1, -2, -11, -12, -13, -14)
+        val rookvaleDungeonFloors = listOf(-1, -2, -3, -4, -11, -12, -13, -14)
         for (fId in rookvaleDungeonFloors) {
             val monsters = allMonsters.filter { it.floor == fId }
             assertTrue("Rookvale dungeon Floor $fId must spawn monsters", monsters.isNotEmpty())

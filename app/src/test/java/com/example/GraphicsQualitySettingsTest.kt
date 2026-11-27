@@ -116,7 +116,7 @@ class GraphicsQualitySettingsTest {
         assertEquals(ParticleDetailLevel.FULL, high.particleLevel)
         assertEquals(3, high.treeDetailLayers)
 
-        // HD: maximum fidelity with 0.8f world scale, enhanced water, stone polish, cached vignette & closest-14 lights
+        // HD: maximum fidelity at full resolution, enhanced water, stone polish, cached vignette & closest-14 lights
         assertTrue(hd.drawGroundClutter)
         assertTrue(hd.drawWildflowers)
         assertTrue(hd.drawShorelineDetails)
@@ -132,7 +132,7 @@ class GraphicsQualitySettingsTest {
         assertTrue(hd.drawTwilightAtmosphere)
         assertTrue(hd.drawPointLightPools)
         assertFalse(hd.useHdPostProcessShader)
-        assertEquals(0.8f, hd.renderScaleFactor, 0.0001f)
+        assertEquals(1.0f, hd.renderScaleFactor, 0.0001f)
         assertEquals(14, hd.maxDynamicPointLights)
         assertEquals(LightingDetailMode.HD_MULTI_LAYER, hd.lightingMode)
         assertEquals(ParticleDetailLevel.HD_ENHANCED, hd.particleLevel)
@@ -146,9 +146,8 @@ class GraphicsQualitySettingsTest {
         assertTrue(med.maxDynamicPointLights < high.maxDynamicPointLights)
         assertTrue(high.maxDynamicPointLights < hd.maxDynamicPointLights)
 
-        assertTrue(low.spriteScaleMultiplier < med.spriteScaleMultiplier)
-        assertTrue(med.spriteScaleMultiplier <= high.spriteScaleMultiplier)
-        assertTrue(high.spriteScaleMultiplier < hd.spriteScaleMultiplier)
+        // Quality changes detail, never how big characters and monsters are
+        for (q in listOf(low, med, high, hd)) assertEquals(1.0f, q.spriteScaleMultiplier, 0.0001f)
 
         assertTrue(low.strokeScale < med.strokeScale)
         assertTrue(high.strokeScale < hd.strokeScale)

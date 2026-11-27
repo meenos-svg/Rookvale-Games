@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import com.example.game.engine.GameEngine
+import com.example.game.engine.MonsterTapTargeting
+
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -43,6 +46,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import com.example.game.model.BossSpecialKind
 import com.example.game.model.CorpseEntity
 import com.example.game.model.DEFAULT_TIME_OF_DAY_HOURS
@@ -413,9 +417,18 @@ fun GameCanvasView(
                             if (!wasMultiTouch && !movedTooFar) {
                                 val st = readState()
                                 val floorMap = WorldMaps.getFloor(st.floor)
-                                val (tx, ty) = nativeCamera.screenToWorldTile(lastPos.x, lastPos.y)
-                                if (tx in 0 until floorMap.width && ty in 0 until floorMap.height) {
-                                    latestOnTileTapped(tx, ty)
+                                // 1. Generous hit boxes around each monster's whole drawn body (feet to head),
+                                //    at its current gliding position. Tapping the highlighted monster again
+                                //    un-highlights it (the engine toggles the target).
+                                val tappedMonster = pickTappedMonster(st, nativeCamera, lastPos.x, lastPos.y, frameUptimeMsState.longValue, readGraphicsQuality(), 26.dp.toPx())
+                                if (tappedMonster != null) {
+                                    latestOnTileTapped(tappedMonster.x, tappedMonster.y)
+                                } else {
+                                    // 2. Otherwise the tile under the finger (walk, interact, NPCs...)
+                                    val (tx, ty) = nativeCamera.screenToWorldTile(lastPos.x, lastPos.y)
+                                    if (tx in 0 until floorMap.width && ty in 0 until floorMap.height) {
+                                        latestOnTileTapped(tx, ty)
+                                    }
                                 }
                             }
                             break
@@ -503,7 +516,7 @@ fun GameCanvasView(
                         val animFrame = ((now / 420L) % 2L).toInt()
                         val floorMap = WorldMaps.getFloor(st.floor)
 
-                        val moveFrac = ((now - st.lastPlayerMoveMs).toFloat() / 180f).coerceIn(0f, 1f)
+                        val moveFrac = GameEngine.stepGlideFraction(st, now)
                         val camPlayerX = st.prevPlayerX + (st.playerX - st.prevPlayerX) * moveFrac
                         val camPlayerY = st.prevPlayerY + (st.playerY - st.prevPlayerY) * moveFrac
 
@@ -754,9 +767,8 @@ fun GameCanvasView(
                         st.monsters.forEach { m ->
                             if (m.floor == st.floor && m.x in (bounds.minTx - 1)..(bounds.maxTx + 1) && m.y in (bounds.minTy - 1)..(bounds.maxTy + 1)) {
                                 activeMonsterIds.add(m.id)
-                                val mFrac = ((now - m.lastMoveTimeMs).toFloat() / 220f).coerceIn(0f, 1f)
-                                val mxF = m.lastMoveFromX + (m.x - m.lastMoveFromX) * mFrac
-                                val myF = m.lastMoveFromY + (m.y - m.lastMoveFromY) * mFrac
+                                val mFrac = ((now - m.lastMoveTimeMs).toFloat() / MonsterTapTargeting.MONSTER_GLIDE_MS).coerceIn(0f, 1f)
+                                val (mxF, myF) = MonsterTapTargeting.visualTile(m, now)
                                 if (m.type.isBoss && collectLights && visibleLights.size < 46) {
                                     worldCamera.tileCenterToScreenOut(mxF, myF, reusableScreenXY)
                                     val bossCore: Color
@@ -1079,7 +1091,7 @@ fun GameCanvasView(
                         val dispSettings = readDisplaySettings()
                         val curSmoothZoom = smoothZoomState.floatValue
                         val curSmoothYaw = smoothYawState.floatValue
-                        val moveFrac = ((now - st.lastPlayerMoveMs).toFloat() / 180f).coerceIn(0f, 1f)
+                        val moveFrac = GameEngine.stepGlideFraction(st, now)
                         val camPlayerX = st.prevPlayerX + (st.playerX - st.prevPlayerX) * moveFrac
                         val camPlayerY = st.prevPlayerY + (st.playerY - st.prevPlayerY) * moveFrac
 
@@ -1642,6 +1654,36 @@ private fun DrawScope.drawIsometricRemotePlayer(
     rec.textColorArgb = if (rp.isAdmin) android.graphics.Color.parseColor("#FFE27A") else android.graphics.Color.parseColor("#8CF0FF")
 }
 
+/**
+ * Finds the monster whose drawn body contains the tap, using the same on-screen size and gliding
+ * position the renderer uses (see [MonsterTapTargeting]).
+ */
+private fun pickTappedMonster(
+    st: GameWorldState,
+    camera: IsometricCamera,
+    tapX: Float,
+    tapY: Float,
+    nowMs: Long,
+    quality: GraphicsQuality,
+    minHalfWidthPx: Float
+): MonsterEntity? {
+    val spritePx = (camera.tileW * 0.78f * quality.spriteScaleMultiplier).coerceIn(36f, 320f)
+    val candidates = ArrayList<MonsterTapTargeting.Candidate>()
+    val byId = HashMap<Int, MonsterEntity>()
+    for (m in st.monsters) {
+        if (m.floor != st.floor || m.hp <= 0) continue
+        if (abs(m.x - st.playerX) > 24 || abs(m.y - st.playerY) > 24) continue
+        val (fx, fy) = MonsterTapTargeting.visualTile(m, nowMs)
+        val c = camera.tileCenterToScreen(fx, fy)
+        val feetY = c.y + camera.halfH * 0.14f
+        val bodyHeight = spritePx * VolumetricShading.HEROIC_MONSTER_SCALE * OrganicMonsterRenderer.heightScaleFor(m.type)
+        candidates += MonsterTapTargeting.Candidate(m.id, c.x, feetY, bodyHeight)
+        byId[m.id] = m
+    }
+    val id = MonsterTapTargeting.pick(candidates, tapX, tapY, camera.tileW, camera.tileH, minHalfWidthPx) ?: return null
+    return byId[id]
+}
+
 private fun DrawScope.drawIsometricLocalPlayer(
     state: GameWorldState,
     fx: Float,
@@ -1663,7 +1705,15 @@ private fun DrawScope.drawIsometricLocalPlayer(
     val heightPx = spritePx * VolumetricShading.HEROIC_HUMANOID_SCALE
     val u = heightPx / 46f
 
-    val walkPhase = if (moveFrac < 0.99f) (now / 62f) else 0f
+    // Stride cadence matches remote players (2.6 cycles/s at base pace) and speeds up with the
+    // hero's level-based walking speed. The walking pose holds between consecutive steps of a walk
+    // instead of snapping to idle on the last frame of every tile.
+    val stepMs = GameEngine.stepIntervalMs(state.level)
+    val sinceStep = now - state.lastPlayerMoveMs
+    val continuingWalk = (state.walkPath.isNotEmpty() || state.longRangeGoal != null || state.autoFollowTarget) && sinceStep < stepMs * 2
+    val walking = moveFrac < 0.999f || continuingWalk
+    val cyclesPerSec = RemotePlayerInterpolator.WALK_CYCLES_PER_SEC * (GameEngine.BASE_STEP_INTERVAL_MS.toFloat() / stepMs)
+    val walkPhase = if (walking) (((now % 600_000L) / 1000f * cyclesPerSec) % 1f).coerceAtLeast(0.02f) else 0f
     val attackAge = now - state.lastPlayerAttackMs
     val attackProgress = if (attackAge in 0L..340L) (attackAge.toFloat() / 340f) else 0f
     val atkEase = if (attackProgress in 0.001f..0.999f) sin(attackProgress * PI.toFloat()) else 0f

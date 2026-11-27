@@ -821,6 +821,9 @@ object MonsterLootTable {
      */
     const val COMMON_GOLD_ONLY_CHANCE: Float = 0.48f
 
+    /** Upper bound on a boss dropping any gear piece in one kill (shared across its gear entries). */
+    const val BOSS_GEAR_CHANCE_PER_KILL: Double = 0.35
+
     /**
      * Universal rare Health Potion drop chance for any monster species whose table
      * does not already explicitly include `health_potion` in its guaranteed or weighted drops.
@@ -843,8 +846,11 @@ object MonsterLootTable {
      * universal rare Health Potion roll for monsters without an explicit potion entry.
      * Merges duplicate stackable items into clean [ItemStack] entries.
      */
-    fun rollLoot(type: MonsterType, rng: Random = Random.Default): RolledLoot {
+    fun rollLoot(type: MonsterType, rng: Random = Random.Default, monsterLevel: Int = type.threatLevel): RolledLoot {
         val table = entryFor(type)
+        val level = monsterLevel.coerceAtLeast(1)
+        fun allowed(itemId: String) = LootLevels.canDrop(itemId, level)
+        fun rarityMult(itemId: String): Float = LootLevels.rarityOf(itemId).let { if (type.isBoss) it.bossMultiplier else it.regularMultiplier }
         val lo = minOf(table.minGp, table.maxGp).coerceAtLeast(0)
         val hi = maxOf(table.minGp, table.maxGp).coerceAtLeast(lo)
         val gold = if (lo == hi) lo else rng.nextInt(lo, hi + 1)
@@ -853,12 +859,21 @@ object MonsterLootTable {
         val isCommonGoldOnly = !type.isBoss && rng.nextFloat() < COMMON_GOLD_ONLY_CHANCE
 
         if (!isCommonGoldOnly) {
-            rolled.addAll(table.guaranteedDrops)
+            rolled.addAll(table.guaranteedDrops.filter { allowed(it.itemId) })
 
             // Independent chance evaluation per weighted entry
             val pickedIds = mutableSetOf<String>()
-            for (drop in table.weightedDrops) {
-                if (rng.nextFloat() <= drop.dropChance.coerceIn(0f, 1f)) {
+            val eligible = table.weightedDrops.filter { allowed(it.itemId) }
+            fun isGearDrop(drop: WeightedLootDrop) = ItemCatalog.all[drop.itemId]?.let { LootLevels.isGear(it) } == true
+            // Bosses share one gear budget across all their gear entries, so a boss with many gear
+            // pieces doesn't hand one out almost every kill.
+            val gearScale = if (type.isBoss) {
+                val total = eligible.filter { isGearDrop(it) }.sumOf { (it.dropChance * rarityMult(it.itemId)).toDouble() }
+                if (total > BOSS_GEAR_CHANCE_PER_KILL) (BOSS_GEAR_CHANCE_PER_KILL / total).toFloat() else 1f
+            } else 1f
+            for (drop in eligible) {
+                val chance = drop.dropChance * rarityMult(drop.itemId) * (if (isGearDrop(drop)) gearScale else 1f)
+                if (rng.nextFloat() <= chance.coerceIn(0f, 1f)) {
                     val qty = rollQty(drop.minQty, drop.maxQty, rng)
                     if (qty > 0) {
                         rolled.add(ItemStack(drop.itemId, qty))
@@ -868,13 +883,17 @@ object MonsterLootTable {
             }
 
             // Weighted bonus roll(s) reserved for bosses so regular monsters are never forced to drop items
-            if (type.isBoss && table.weightedDrops.isNotEmpty() && table.bonusWeightRolls > 0) {
-                val totalWeight = table.weightedDrops.sumOf { it.weight.coerceAtLeast(1) }
+            // Boss bonus picks come from supplies and materials only (gear is governed by the budget above);
+            // uncommon materials get proportionally less weight.
+            val bonusPool = eligible.filter { !isGearDrop(it) }
+            fun bonusWeight(drop: WeightedLootDrop): Int = (drop.weight.coerceAtLeast(1) * 20 * rarityMult(drop.itemId)).toInt().coerceAtLeast(1)
+            if (type.isBoss && bonusPool.isNotEmpty() && table.bonusWeightRolls > 0) {
+                val totalWeight = bonusPool.sumOf { bonusWeight(it) }
                 repeat(table.bonusWeightRolls) {
                     var cursor = rng.nextInt(totalWeight)
-                    var chosen = table.weightedDrops.first()
-                    for (drop in table.weightedDrops) {
-                        val w = drop.weight.coerceAtLeast(1)
+                    var chosen = bonusPool.first()
+                    for (drop in bonusPool) {
+                        val w = bonusWeight(drop)
                         if (cursor < w) {
                             chosen = drop
                             break
@@ -929,4 +948,111 @@ object MonsterLootTable {
         }
         return out
     }
+}
+
+/**
+ * How likely an item is to drop, relative to the chance written in a monster's loot table.
+ * Everyday supplies keep their odds; runes and valuable materials are uncommon; gear gets rarer
+ * the higher its tier, so the best pieces take real grinding (and bosses stay the best source).
+ */
+enum class LootRarity(val regularMultiplier: Float, val bossMultiplier: Float) {
+    /** Ores, basic materials, potions, ammo, food. */
+    COMMON(1.0f, 1.0f),
+    /** Attack/heal runes, ingots and valuable materials (sell 100+ gp). */
+    UNCOMMON(0.5f, 0.75f),
+    /** Tier 1-2 gear: roughly 1 in 40-80 kills from regular monsters. */
+    RARE(0.2f, 0.3f),
+    /** Tier 3 gear: roughly 1 in 150-300 kills from regular monsters. */
+    VERY_RARE(0.08f, 0.2f),
+    /** Tier 4+ gear: boss-hunting rewards. */
+    LEGENDARY(0.04f, 0.1f)
+}
+
+/**
+ * Level gating for loot: every item gets an "item level" (gear: its required level; runes: the
+ * level of their tier; ores, ingots and crafting materials: the level of the lowest gear they are
+ * crafted into), and a monster only drops items up to [LOOT_LEVEL_SLACK] levels above its own.
+ * Low-level monsters therefore never hand out materials for high-level equipment.
+ */
+object LootLevels {
+    const val LOOT_LEVEL_SLACK = 3
+
+    private val gearCategories = setOf(
+        ItemCategory.WEAPON_MELEE, ItemCategory.WEAPON_DISTANCE, ItemCategory.WEAPON_WAND,
+        ItemCategory.SHIELD, ItemCategory.ARMOR, ItemCategory.HELMET, ItemCategory.LEGS,
+        ItemCategory.BOOTS, ItemCategory.AMULET, ItemCategory.RING,
+        ItemCategory.TOOL_PICKAXE, ItemCategory.TOOL_HATCHET, ItemCategory.TOOL_FISHING_ROD
+    )
+
+    fun isGear(def: ItemDefinition): Boolean = def.category in gearCategories
+
+    /** Lowest required level of gear at each equipment tier (T1 -> 1, T2 -> 8, T3 -> 18, ...). */
+    private val levelForTier: Map<Int, Int> by lazy {
+        ItemCatalog.all.values
+            .filter { isGear(it) && it.equipmentTier > 0 }
+            .groupBy { it.equipmentTier }
+            .mapValues { (_, defs) -> defs.minOf { it.requiredLevel } }
+    }
+
+    fun tierLevel(tier: Int): Int {
+        if (tier <= 1) return 1
+        return levelForTier[tier] ?: levelForTier.filterKeys { it < tier }.maxByOrNull { it.key }?.value ?: 1
+    }
+
+    private val allRecipes: List<CraftingRecipe> by lazy {
+        RecipeCatalog.smeltingRecipes + RecipeCatalog.forgingRecipes + RecipeCatalog.fletchingRecipes + RecipeCatalog.runecraftingRecipes
+    }
+
+    private val usedIn: Map<String, List<CraftingRecipe>> by lazy {
+        val map = HashMap<String, MutableList<CraftingRecipe>>()
+        for (r in allRecipes) for (ing in r.ingredients) map.getOrPut(ing.itemId) { mutableListOf() }.add(r)
+        map
+    }
+
+    private val cache = HashMap<String, Int>()
+
+    /** Item level used for drop gating (see class docs). */
+    fun itemLevel(itemId: String): Int = cache[itemId] ?: computeLevel(itemId, HashSet()).also { cache[itemId] = it }
+
+    private fun ownLevel(def: ItemDefinition): Int = when {
+        def.pickaxeTier > 0 -> maxOf(def.requiredLevel, tierLevel(def.pickaxeTier))
+        def.fishingTier > 0 -> maxOf(def.requiredLevel, tierLevel(def.fishingTier))
+        isGear(def) -> maxOf(def.requiredLevel, tierLevel(def.equipmentTier))
+        def.runeTier > 0 -> tierLevel(def.runeTier)
+        else -> def.requiredLevel.coerceAtLeast(1)
+    }
+
+    private fun computeLevel(itemId: String, visiting: MutableSet<String>): Int {
+        val def = ItemCatalog.all[itemId] ?: return 1
+        val own = ownLevel(def)
+        if (isGear(def) || def.runeTier > 0 || def.category == ItemCategory.RUNE_BLANK) return own
+        if (!visiting.add(itemId)) return own
+        // Crafting inputs (ores, ingots, hides, scales...) inherit the level of the cheapest gear they lead to.
+        // Ammo is a by-product of most materials, not what they exist for, so it never lowers a material's level.
+        val downstream = usedIn[itemId].orEmpty()
+            .filter { it.outputItemId != itemId && ItemCatalog.all[it.outputItemId]?.category != ItemCategory.AMMO }
+            .map { computeLevel(it.outputItemId, visiting) }
+        visiting.remove(itemId)
+        return if (downstream.isEmpty()) own else maxOf(own, downstream.min())
+    }
+
+    fun rarityOf(itemId: String): LootRarity {
+        val def = ItemCatalog.all[itemId] ?: return LootRarity.COMMON
+        if (isGear(def)) {
+            val tier = if (def.equipmentTier > 0) def.equipmentTier else 2
+            return when {
+                tier >= 4 -> LootRarity.LEGENDARY
+                tier == 3 -> LootRarity.VERY_RARE
+                else -> LootRarity.RARE
+            }
+        }
+        return when {
+            def.category == ItemCategory.RUNE_ATTACK || def.category == ItemCategory.RUNE_HEAL -> LootRarity.UNCOMMON
+            def.category == ItemCategory.METAL_INGOT -> LootRarity.UNCOMMON
+            (def.category == ItemCategory.CRAFT_MATERIAL || def.category == ItemCategory.LOOT_VALUABLE) && def.sellPrice >= 100 -> LootRarity.UNCOMMON
+            else -> LootRarity.COMMON
+        }
+    }
+
+    fun canDrop(itemId: String, monsterLevel: Int): Boolean = itemLevel(itemId) <= monsterLevel + LOOT_LEVEL_SLACK
 }

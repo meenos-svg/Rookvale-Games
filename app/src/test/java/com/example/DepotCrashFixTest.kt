@@ -146,10 +146,13 @@ class DepotCrashFixTest {
 
         // Blank / unknown item IDs must not crash
         val afterBlank = GameEngine.depositItem(stateWithMalformed, "")
-        assertTrue(afterBlank.statusLog.last().contains("Warning"))
+        assertEquals("Blank item ID is ignored", stateWithMalformed.backpack, afterBlank.backpack)
+        assertEquals(stateWithMalformed.depot, afterBlank.depot)
 
+        // Unknown legacy items are handled without crashing and stay safely in the Depot when Cap is short
         val afterUnknown = GameEngine.withdrawItem(stateWithMalformed, "unknown_legacy_item")
-        assertTrue(afterUnknown.statusLog.last().contains("Warning"))
+        assertEquals(1, afterUnknown.depot.count { it.itemId == "unknown_legacy_item" })
+        assertFalse(afterUnknown.backpack.any { it.itemId == "unknown_legacy_item" })
 
         // Withdrawing an item heavier than available Cap must block cleanly without crashing
         val afterTooHeavy = GameEngine.withdrawItem(stateWithMalformed, "short_sword")
@@ -180,11 +183,11 @@ class DepotCrashFixTest {
 
         // Case 3: depotItems contains mix of valid, zero-count, blank-id, and corrupt entries
         val dirtyArray = JSONArray().apply {
-            put(JSONObject().put("id", "blank_rune").put("count", 5))
-            put(JSONObject().put("id", "health_potion").put("count", 0))
-            put(JSONObject().put("id", "").put("count", 3))
+            put(JSONObject().put("itemId", "blank_rune").put("count", 5))
+            put(JSONObject().put("itemId", "health_potion").put("count", 0))
+            put(JSONObject().put("itemId", "").put("count", 3))
             put("not_an_object")
-            put(JSONObject().put("id", "short_sword").put("count", 1))
+            put(JSONObject().put("itemId", "short_sword").put("count", 1))
         }
         encoded.put("depotItems", dirtyArray)
         val decodedCleaned = CloudSavePayloadCodec.decode(encoded, "slot_1", "Idemon")
@@ -226,7 +229,7 @@ class DepotCrashFixTest {
         val uploadedSaveData = interceptor.postedPayloads.first().getJSONObject("p_save_data")
         val uploadedDepot = uploadedSaveData.getJSONArray("depotItems")
         assertEquals(1, uploadedDepot.length())
-        assertEquals("blank_rune", uploadedDepot.getJSONObject(0).getString("id"))
+        assertEquals("blank_rune", uploadedDepot.getJSONObject(0).getString("itemId"))
         assertEquals(1, uploadedDepot.getJSONObject(0).getInt("count"))
     }
 }
