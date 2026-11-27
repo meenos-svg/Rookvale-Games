@@ -7,3 +7,5 @@
 - Every push to `main` builds and publishes `Rookvale-latest.apk` on the `latest` release.
 - Changes under `supabase/` must also be run by the owner in the Supabase SQL Editor; tell them when that's needed.
 - Never commit secrets (.env, keystores, passwords).
+- `main` is protected by the "Protect main" ruleset: changes must go through a pull request and the
+  `unit-tests` check must pass before merging. No direct pushes or force pushes to `main`.
