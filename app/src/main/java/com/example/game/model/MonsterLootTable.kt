@@ -298,6 +298,7 @@ object MonsterLootTable {
         MonsterType.GRIMMAW_QUARRYMAN to MonsterLootEntry(
             minGp = 120, maxGp = 240,
             weightedDrops = listOf(
+                WeightedLootDrop("frost_iron_ore", 1, 2, dropChance = 0.30f, weight = 18),
                 WeightedLootDrop("vesperite_ore", 1, 2, dropChance = 0.56f, weight = 32),
                 WeightedLootDrop("colossus_tendon", 1, 2, dropChance = 0.44f, weight = 26),
                 WeightedLootDrop("grimmaw_stone_core", 1, 1, dropChance = 0.26f, weight = 18),
@@ -309,6 +310,7 @@ object MonsterLootTable {
         MonsterType.GRIMMAW_ROCK_HURLER to MonsterLootEntry(
             minGp = 135, maxGp = 265,
             weightedDrops = listOf(
+                WeightedLootDrop("frost_iron_ore", 1, 2, dropChance = 0.30f, weight = 18),
                 WeightedLootDrop("vesperite_ore", 1, 3, dropChance = 0.58f, weight = 30),
                 WeightedLootDrop("starlight_quarrels", 8, 16, dropChance = 0.42f, weight = 24),
                 WeightedLootDrop("grimmaw_stone_core", 1, 1, dropChance = 0.30f, weight = 20),
@@ -320,6 +322,7 @@ object MonsterLootTable {
         MonsterType.GRIMMAW_CRUSHER to MonsterLootEntry(
             minGp = 165, maxGp = 320,
             weightedDrops = listOf(
+                WeightedLootDrop("frost_iron_ore", 1, 2, dropChance = 0.30f, weight = 18),
                 WeightedLootDrop("vesperite_ore", 2, 3, dropChance = 0.62f, weight = 28),
                 WeightedLootDrop("grimmaw_stone_core", 1, 2, dropChance = 0.38f, weight = 24),
                 WeightedLootDrop("vesperite_bar", 1, 1, dropChance = 0.24f, weight = 18),
@@ -337,6 +340,10 @@ object MonsterLootTable {
                 ItemStack("health_potion", 3)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("frost_iron_ore", 2, 4, dropChance = 0.70f, weight = 18),
+                WeightedLootDrop("rime_plate_longsword", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("rime_plate_cuirass", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("rime_plate_helm", 1, 1, dropChance = 0.12f, weight = 7),
                 WeightedLootDrop("vesperite_ore", 3, 5, dropChance = 0.78f, weight = 22),
                 WeightedLootDrop("sd_rune", 2, 4, dropChance = 0.65f, weight = 18),
                 WeightedLootDrop("mana_potion", 2, 3, dropChance = 0.60f, weight = 16),

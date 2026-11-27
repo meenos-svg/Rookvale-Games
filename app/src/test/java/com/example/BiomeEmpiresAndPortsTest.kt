@@ -57,8 +57,8 @@ class BiomeEmpiresAndPortsTest {
         }
 
         // Outer-continent dungeons scale strictly from surfaceMinLevel + depth * 6
-        // (Grimmaw -5 at depth 5; Gorek -6 was rebalanced to depth 1 in its badlands home: Lv 36-41)
-        for ((floorId, depth) in listOf(-5 to 5, -6 to 1)) {
+        // (Grimmaw -5 rebalanced to its Frostpeak home at depth 0: Lv 42-47; Gorek -6 was rebalanced to depth 1 in its badlands home: Lv 36-41)
+        for ((floorId, depth) in listOf(-5 to 0, -6 to 1)) {
             val surfaceMin = BiomeProgressionRules.surfaceBiomeForDungeonFloor(floorId).minLevel
             val expectedBase = surfaceMin + depth * 6
             val floorMonsters = monsters.filter { it.floor == floorId }
