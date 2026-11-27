@@ -168,6 +168,10 @@ object WorldMaps {
             add(NpcSpot(0, 1407, 204, "Huntmaster Sigrun", NpcRole.HUNT_MASTER))
             add(NpcSpot(0, 1395, 186, "Crier Halvard", NpcRole.TOWN_CRIER))
             add(NpcSpot(0, 1393, 228, "Ulfa", NpcRole.BLACKSMITH))
+            // Ashen Bastion (obsidian forge city) townsfolk
+            add(NpcSpot(0, 381, 260, "Warmaster Dravek", NpcRole.HUNT_MASTER))
+            add(NpcSpot(0, 386, 246, "Crier Ignatius", NpcRole.TOWN_CRIER))
+            add(NpcSpot(0, 394, 283, "Sorrel", NpcRole.BLACKSMITH))
             // Dungeon guides beside each Rookvale dungeon entrance
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 86, ROOKVALE_ORIGIN_Y + 318, "Scout Bryn", NpcRole.DUNGEON_GUIDE))
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 314, ROOKVALE_ORIGIN_Y + 318, "Ranger Tamsin", NpcRole.DUNGEON_GUIDE))
@@ -281,6 +285,7 @@ object WorldMaps {
             add(LandmarkLabel(0, 580, 549, "WHARF FISHING (BLOODWORMS)"))
             add(LandmarkLabel(0, 375, 765, "OASIS FISHING (SANDWORMS)"))
             add(LandmarkLabel(0, 1364, 183, "ICE FISHING (GLOWWORMS)"))
+            add(LandmarkLabel(0, 362, 259, "QUENCH POOL FISHING (EMBERWORMS)"))
             ContinentalDungeonGenerator.generatedDungeons.forEach { d ->
                 add(d.descentLandmark)
                 addAll(d.areaLandmarks)

@@ -25,6 +25,7 @@ object NpcInteractions {
         "Odra" -> VendorCatalog.MIRE_OUTFITTER
         "Tahir" -> VendorCatalog.SUN_CARAVANEER
         "Ulfa" -> VendorCatalog.FROST_FURRIER
+        "Sorrel" -> VendorCatalog.ASH_SLAGWRIGHT
         else -> vendorIdFor(npc.role)
     }
 
@@ -49,6 +50,7 @@ object NpcInteractions {
                 VendorCatalog.MIRE_OUTFITTER -> s = s.addLogInternal("Odra: 'Bloodworms bite best right here in the marsh. Try the wharf piers.'")
                 VendorCatalog.SUN_CARAVANEER -> s = s.addLogInternal("Tahir: 'Sandworms are made for the oasis. Cast from the jetty by the plaza.'")
                 VendorCatalog.FROST_FURRIER -> s = s.addLogInternal("Ulfa: 'Glowworms and frozen water, the salmon can't resist. Use the ice-fishing piers.'")
+                VendorCatalog.ASH_SLAGWRIGHT -> s = s.addLogInternal("Sorrel: 'Emberfin love the warm quench pool west of the plaza. Bring emberworms.'")
             }
             return s
         }
@@ -76,6 +78,7 @@ object NpcInteractions {
                 "Crier Pell" -> mirewatchCrier(closedMovement(state), wallClockMs)
                 "Crier Nadim" -> sunspireCrier(closedMovement(state), wallClockMs)
                 "Crier Halvard" -> frostpeakCrier(closedMovement(state), wallClockMs)
+                "Crier Ignatius" -> ashenCrier(closedMovement(state), wallClockMs)
                 else -> crierNews(closedMovement(state), wallClockMs)
             }
             NpcRole.DUNGEON_GUIDE -> closedMovement(state).addLogInternal(DungeonGuides.messageFor(npc.name))
@@ -134,6 +137,15 @@ object NpcInteractions {
             .addLogInternal("Crier Halvard: 'Hear ye! Frost hunt of the day: every ${featured.displayName} slain gives +$pct% XP, for the next ${TownCrier.hoursUntilTomorrow(wallClockMs)}h!'")
             .addLogInternal("Crier Halvard: 'Huntmaster Sigrun posts bounties by the Eternal Hearth, and Ulfa trades furs and picks by the south gate.'")
             .addLogInternal("Crier Halvard: 'Warm yourself in the hot springs, and try the ice-fishing piers on the frozen lake!'")
+    }
+
+    fun ashenCrier(state: GameWorldState, wallClockMs: Long = System.currentTimeMillis()): GameWorldState {
+        val featured = TownCrier.featuredAshCreature(wallClockMs)
+        val pct = (TownCrier.FEATURED_XP_BONUS * 100).toInt()
+        return state
+            .addLogInternal("Crier Ignatius: 'Hear ye! Ember hunt of the day: every ${featured.displayName} slain gives +$pct% XP, for the next ${TownCrier.hoursUntilTomorrow(wallClockMs)}h!'")
+            .addLogInternal("Crier Ignatius: 'Warmaster Dravek posts bounties in the Crucible Plaza, and Sorrel trades slag and picks in the ash market.'")
+            .addLogInternal("Crier Ignatius: 'The Foundry shaft lies just outside the West Gate. Cast for emberfin in the quench pool!'")
     }
 
     // ---------------------------------------------------------------- Hunt contracts

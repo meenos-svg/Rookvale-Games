@@ -59,7 +59,7 @@ class CityServicesTest {
         assertEquals(HuntBoards.ROOKVALE, HuntBoards.fromPanelId(talk("Captain Hale").activeShopId).id)
 
         val monsters = WorldMaps.initialMonsters()
-        val bands = mapOf(HuntBoards.MIREWATCH to 20..37, HuntBoards.SUNSPIRE to 30..46, HuntBoards.FROSTPEAK to 42..59)
+        val bands = mapOf(HuntBoards.MIREWATCH to 20..37, HuntBoards.SUNSPIRE to 30..46, HuntBoards.FROSTPEAK to 42..59, HuntBoards.ASHEN to 55..75)
         for ((board, band) in bands) {
             val contracts = HuntContracts.forBoard(board)
             assertTrue(contracts.size >= 7)
@@ -92,6 +92,7 @@ class CityServicesTest {
         assertTrue(featured.size >= 3)
         assertTrue(TownCrier.featuredMarshCreature(5 * day) in featured)
         assertTrue(TownCrier.featuredBadlandsCreature(5 * day) in featured)
+        assertTrue(TownCrier.featuredAshCreature(5 * day) in featured)
         val pell = talk("Crier Pell")
         assertTrue(pell.statusLog.any { it.startsWith("Crier Pell") })
         val nadim = talk("Crier Nadim")
@@ -129,6 +130,47 @@ class CityServicesTest {
         assertEquals(VendorCatalog.FROST_FURRIER, talk("Ulfa").activeShopId)
         assertEquals(HuntBoards.FROSTPEAK, HuntBoards.fromPanelId(talk("Huntmaster Sigrun").activeShopId).id)
         assertTrue(talk("Crier Halvard").statusLog.any { it.startsWith("Crier Halvard") })
+    }
+
+    @Test
+    fun ashenBastionIsAnObsidianForgeCityWithItsOwnTownsfolk() {
+        val f0 = WorldMaps.getFloor(0)
+        val city = BiomeCities.ashen
+        val tiles = buildSet { for (y in city.minY..city.maxY) for (x in city.minX..city.maxX) add(f0.tileAt(x, y)) }
+        assertTrue(TileType.OBSIDIAN_WALL in tiles && TileType.LAVA in tiles && TileType.STONE_BRIDGE in tiles && TileType.WATER in tiles && TileType.MINI_DEPOT in tiles)
+        assertTrue(TileType.BIOME_STALL_ASHEN in tiles && TileType.SMELTING_FURNACE in tiles)
+        assertTrue(TileType.SNOW !in tiles && TileType.SAND !in tiles && TileType.MARSH !in tiles)
+        val folk = listOf("Warmaster Dravek", "Crier Ignatius", "Sorrel", "Ash Cleric Malakor", "War Alchemist Nyx")
+        for (n in folk) {
+            val spot = npc(n)
+            assertTrue("$n must be in Ashen Bastion", city.contains(spot.x, spot.y))
+            assertTrue("$n must stand on open ground", f0.tileAt(spot.x, spot.y).walkable)
+            assertTrue("$n must be in the PZ", f0.isProtectionZone(spot.x, spot.y))
+        }
+        // Reachable from outside the West Gate, where the Foundry shaft sits
+        val seen = HashSet<Pair<Int, Int>>(); val q = ArrayDeque<Pair<Int, Int>>()
+        val start = city.minX - 2 to 254
+        assertTrue(f0.tileAt(start.first, start.second).walkable)
+        seen += start; q.add(start)
+        while (q.isNotEmpty()) {
+            val (x, y) = q.removeFirst()
+            for ((dx, dy) in listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)) {
+                val n = x + dx to y + dy
+                if (n.first in city.minX - 6..city.maxX + 6 && n.second in city.minY - 6..city.maxY + 6 && n !in seen && f0.tileAt(n.first, n.second).walkable) { seen += n; q.add(n) }
+            }
+        }
+        for (n in folk) {
+            val spot = npc(n)
+            assertTrue("$n must be reachable", listOf(0 to 0, 1 to 0, -1 to 0, 0 to 1, 0 to -1).any { (dx, dy) -> (spot.x + dx to spot.y + dy) in seen })
+        }
+        // all three gates lead in: south gate and north-east gate too
+        assertTrue((386 to city.maxY) in seen)
+        assertTrue((BiomeCities.ASH_CX + 40 to BiomeCities.ASH_CY - 34) in seen)
+        assertEquals(VendorCatalog.ASH_SLAGWRIGHT, talk("Sorrel").activeShopId)
+        VendorCatalog.stockFor(VendorCatalog.ASH_SLAGWRIGHT).forEach { assertTrue(ItemCatalog.all.containsKey(it.itemId)) }
+        assertTrue(VendorCatalog.sellPrice(VendorCatalog.ASH_SLAGWRIGHT, "molten_core") > VendorCatalog.sellPrice(null, "molten_core"))
+        assertEquals(HuntBoards.ASHEN, HuntBoards.fromPanelId(talk("Warmaster Dravek").activeShopId).id)
+        assertTrue(talk("Crier Ignatius").statusLog.any { it.startsWith("Crier Ignatius") })
     }
 
     @Test

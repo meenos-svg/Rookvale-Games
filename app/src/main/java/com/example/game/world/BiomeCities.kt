@@ -17,6 +17,8 @@ import kotlin.math.sqrt
  *   towers and four gates, a palm-ringed oasis lake, the Sun Plaza with its fountain and obelisks,
  *   a covered grand bazaar, the Temple of the Noon Sun, a caravanserai with camel pens and an
  *   artisans' row of flat-roofed workshops.
+ * - **Frostpeak** (Frostpeak Highlands, 1396,204): a snow-bowl city inside a ring of crags.
+ * - **Ashen Bastion** (Ashen Caldera, 386,260): an obsidian forge city behind a lava moat.
  *
  * Each city is a fixed tile grid covering its whole settlement box. `null` cells fall back to
  * the natural terrain (roads, sand, grass).
@@ -51,9 +53,15 @@ object BiomeCities {
     const val FROST_MAX_X = 1456
     const val FROST_MAX_Y = 252
 
+    const val ASH_MIN_X = 330
+    const val ASH_MIN_Y = 206
+    const val ASH_MAX_X = 442
+    const val ASH_MAX_Y = 314
+
     val mirewatch: City by lazy { buildMirewatch() }
     val frostpeak: City by lazy { buildFrostpeak() }
     val sunspire: City by lazy { buildSunspire() }
+    val ashen: City by lazy { buildAshen() }
 
     /**
      * Sunspire sits just north of the coarse 400x400 desert region border (y = 800), so its sandy
@@ -71,6 +79,7 @@ object BiomeCities {
         x in MIRE_MIN_X..MIRE_MAX_X && y in MIRE_MIN_Y..MIRE_MAX_Y -> mirewatch
         x in SUN_MIN_X..SUN_MAX_X && y in SUN_MIN_Y..SUN_MAX_Y -> sunspire
         x in FROST_MIN_X..FROST_MAX_X && y in FROST_MIN_Y..FROST_MAX_Y -> frostpeak
+        x in ASH_MIN_X..ASH_MAX_X && y in ASH_MIN_Y..ASH_MAX_Y -> ashen
         else -> null
     }
 
@@ -513,5 +522,123 @@ object BiomeCities {
         c[1386, 242] = TileType.BIOME_STALL_FROSTPEAK
 
         return c.build("frostpeak")
+    }
+
+    // =====================================================================================
+    // ASHEN BASTION — obsidian forge city on a volcanic plateau
+    // =====================================================================================
+    const val ASH_CX = 386
+    const val ASH_CY = 260
+
+    /**
+     * A walled obsidian city ringed by a lava moat, crossed by three gate bridges. Lava canals cut
+     * the districts apart: the Crucible Plaza and its great forge-fire in the middle, the Great
+     * Foundry to the north, the Cinder Temple east, the Ember Arena west, basalt-column gardens
+     * around a lava pool to the north-west, and an ash market with obsidian houses to the south.
+     */
+    private fun buildAshen(): City {
+        val c = Canvas(ASH_MIN_X, ASH_MIN_Y, ASH_MAX_X, ASH_MAX_Y)
+        val cx = ASH_CX; val cy = ASH_CY
+        val ash = TileType.VOLCANIC_ASH
+        val wall = TileType.OBSIDIAN_WALL
+        val floor = TileType.OBSIDIAN_FLOOR
+        val street = TileType.COBBLESTONE
+        val lava = TileType.LAVA
+        val bridge = TileType.STONE_BRIDGE
+
+        // 1. Plateau: lava moat outside an octagonal obsidian wall, ash ground inside
+        fun octDist(x: Int, y: Int): Float {
+            val dx = abs(x - cx).toFloat(); val dy = abs(y - cy).toFloat()
+            return max(max(dx, dy * 1.04f), (dx + dy) * 0.74f)
+        }
+        for (y in c.minY..c.maxY) for (x in c.minX..c.maxX) {
+            val d = octDist(x, y)
+            c[x, y] = when {
+                d <= 44f -> ash
+                d <= 46f -> wall
+                d <= 50f -> lava
+                d <= 52f -> TileType.VOLCANIC_ASH
+                else -> null
+            }
+        }
+        // towers on the eight corners of the wall
+        for (k in 0 until 8) {
+            val ang = k * Math.PI / 4 + Math.PI / 8
+            val tx = cx + (46 * Math.cos(ang)).toInt(); val ty = cy + (46 * Math.sin(ang)).toInt()
+            c.rect(tx - 2, ty - 2, tx + 2, ty + 2, wall)
+        }
+
+        // 2. Gates & bridges over the moat (west, south, north-east), then the main streets
+        c.rect(c.minX, 252, cx - 42, 256, bridge)                 // West Gate
+        c.rect(383, cy + 42, 388, c.maxY, bridge)                 // South Gate
+        c.line(cx + 24, cy - 34, cx + 42, cy - 34, 5, bridge)     // North-East Gate (meets the caldera road)
+        c.rect(cx - 42, 252, cx + 6, 256, street)
+        c.rect(383, cy - 6, 388, cy + 42, street)
+        c.line(cx + 4, cy - 4, cx + 28, cy - 36, 5, street)
+        c.rect(383, cy - 40, 388, cy - 6, street)                 // north street to the foundry
+        for (x in listOf(cx - 40, cx - 28, cx - 16)) { c[x, 251] = TileType.LANTERN_POST; c[x, 257] = TileType.LANTERN_POST }
+        for (y in listOf(cy + 16, cy + 28, cy + 40)) { c[382, y] = TileType.LANTERN_POST; c[389, y] = TileType.LANTERN_POST }
+
+        // 3. Lava canals between the districts, bridged where streets cross
+        c.rect(cx - 44, cy + 12, cx - 6, cy + 13, lava)
+        c.rect(cx + 8, cy + 12, cx + 44, cy + 13, lava)
+        c.rect(cx + 12, cy - 30, cx + 13, cy + 11, lava)
+        c.rect(383, cy + 12, 388, cy + 13, bridge)
+        c.rect(cx + 10, cy - 18, cx + 15, cy - 11, bridge)              // NE street over the canal
+
+        // Quench pool (west): warm water where the smiths cool their blades, stocked with emberfin
+        c.ellipse(cx - 24, cy + 4, 6f, 3f, TileType.WATER)
+
+        // 4. Crucible Plaza with the great forge-fire
+        c.ellipse(cx, cy, 9f, 7f, floor)
+        c[cx, cy] = TileType.CAMPFIRE_BRAZIER
+        c[391, 256] = TileType.BIOME_STALL_ASHEN                  // Ashen Obsidian Foundry (crafting)
+        c[392, 256] = TileType.BLACKSMITH_ANVIL
+        c[379, 256] = TileType.MINI_DEPOT
+        for ((x, y) in listOf(377 to 251, 395 to 251, 377 to 269, 395 to 269)) c[x, y] = TileType.CRYSTAL_PILLAR
+        c.rect(cx + 6, 258, cx + 12, 262, floor)                 // plaza -> temple walk
+
+        // 5. The Great Foundry (north): forges around an inner lava pool
+        c.rect(cx - 22, cy - 42, cx + 10, cy - 22, floor)
+        c.outline(cx - 22, cy - 42, cx + 10, cy - 22, wall)
+        for (x in 383..388) c[x, cy - 22] = floor
+        c.ellipse(cx - 6, cy - 32, 5f, 3f, lava)
+        for (x in (cx - 19)..(cx + 7) step 4) { c[x, cy - 40] = TileType.SMELTING_FURNACE; c[x, cy - 24] = TileType.BLACKSMITH_ANVIL }
+        c[cx + 8, cy - 36] = TileType.WEAPON_RACK; c[cx + 8, cy - 28] = TileType.WEAPON_RACK
+        c[cx - 20, cy - 36] = TileType.FLETCHING_BENCH; c[cx - 20, cy - 28] = TileType.RUNECRAFTING_TABLE
+
+        // 6. Cinder Temple (east)
+        c.rect(cx + 18, cy - 8, cx + 38, cy + 8, TileType.TEMPLE_FLOOR)
+        c.outline(cx + 18, cy - 8, cx + 38, cy + 8, wall)
+        for (y in (cy - 2)..(cy + 2)) c[cx + 18, y] = TileType.TEMPLE_FLOOR
+        c[cx + 35, cy] = TileType.TEMPLE_ALTAR
+        for ((x, y) in listOf(cx + 22 to cy - 5, cx + 34 to cy - 5, cx + 22 to cy + 5, cx + 34 to cy + 5)) c[x, y] = TileType.CAMPFIRE_BRAZIER
+        for (py in listOf(cy - 3, cy + 3)) for (px in (cx + 24)..(cx + 31)) c[px, py] = TileType.TEMPLE_PEW
+        c.rect(cx + 13, cy - 1, cx + 17, cy + 1, floor)
+
+        // 7. Ember Arena (west): a sunken fighting ring with stands
+        c.ellipse(cx - 26, cy - 14, 11f, 8f, street)
+        c.ellipse(cx - 26, cy - 14, 8f, 5f, TileType.DIRT_FLOOR)
+        for (k in 0 until 12) {
+            val ang = k * Math.PI * 2 / 12
+            val bx = cx - 26 + (10 * Math.cos(ang)).toInt(); val by = cy - 14 + (7 * Math.sin(ang)).toInt()
+            if (by < 250) c[bx, by] = TileType.WAR_BANNER
+        }
+
+        // 8. Basalt gardens (north-west): cooled basalt columns around a lava pool
+        c.ellipse(cx - 26, cy - 28, 3f, 2f, lava)
+        for ((x, y) in listOf(cx - 30 to cy - 28, cx - 28 to cy - 24, cx - 24 to cy - 24, cx - 27 to cy - 31, cx - 31 to cy - 25)) c[x, y] = TileType.GRANITE_WALL
+
+        // 9. Ash market & obsidian houses (south)
+        for ((sx, sy) in listOf(372 to 278, 378 to 278, 393 to 278, 399 to 278)) {
+            c[sx, sy] = TileType.MARKET_AWNING; c[sx + 1, sy] = TileType.MARKET_AWNING; c[sx, sy + 1] = TileType.CRATE_BARREL
+        }
+        c[396, 283] = TileType.BIOME_STALL_ASHEN
+        listOf(
+            Triple(356, 276, 'E'), Triple(356, 284, 'E'), Triple(366, 286, 'E'), Triple(366, 294, 'E'),
+            Triple(400, 286, 'W'), Triple(400, 294, 'W'), Triple(410, 276, 'W'), Triple(410, 284, 'W')
+        ).forEach { (hx, hy, door) -> c.hut(hx, hy, hx + 5, hy + 4, wall, floor, door, bed = true) }
+
+        return c.build("ashen")
     }
 }
