@@ -288,7 +288,7 @@ data class WorldRegionMeta(
             displayName = "Frostbay Straits & Boreal Coast",
             gridCol = 1,
             gridRow = 0,
-            biomeSummary = "Frozen northern straits & the Frostbay Sea-Bridge",
+            biomeSummary = "Frozen northern straits & the Boreal Coast",
             dangerLevel = "Very High",
             recommendedLevel = "Lvl 42-58",
             dangerSeverity = 3

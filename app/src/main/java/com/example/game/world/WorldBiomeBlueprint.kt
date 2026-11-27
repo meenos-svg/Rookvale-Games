@@ -642,16 +642,8 @@ object WorldBiomeBlueprint {
         }
     }
 
-    // --- 5 Inter-Continental Walkable Stone Sea-Bridges ---
-    private data class BridgeRect(val x1: Int, val y1: Int, val x2: Int, val y2: Int)
-
-    private val seaBridges: List<BridgeRect> = listOf(
-        BridgeRect(440, 210, 868, 213),   // 1. Frostbay Sea-Bridge (NW <-> Duskport)
-        BridgeRect(595, 590, 946, 593),   // 2. Central Alder Causeway (Mirewatch <-> Spirewood/Rookvale)
-        BridgeRect(450, 978, 652, 981),   // 3. Sunspire–Jungle Strait Bridge (Desert <-> West Jungle)
-        BridgeRect(1040, 755, 1043, 992), // 4. Spirewood–Sunleaf Causeway (East Continent <-> Jungle)
-        BridgeRect(1394, 950, 1446, 953)  // 5. Rookvale–Ember Isles Causeway (SE Mainland <-> Ember Isles)
-    )
+    // The old inter-continental sea-bridges were removed: harbor ferry captains carry players
+    // between continents instead.
 
     // --- Regional Dungeon Entrances outside Rookvale Valley ---
     private val outerPortals: Map<Long, TileType> = mapOf(
@@ -678,28 +670,19 @@ object WorldBiomeBlueprint {
         WaypointNode("frostcrest_grimmaw", 1320, 260),
         WaypointNode("boreal_watch_camp", 1268, 258),
         WaypointNode("spirewood_cross", 1042, 592),
-        WaypointNode("alder_bridge_east", 942, 592),
-        WaypointNode("alder_bridge_west", 595, 592),
         WaypointNode("mirewatch", 545, 592),
         WaypointNode("mirewatch_west", 375, 592),
         WaypointNode("boghollow_camp", 358, 560),
         WaypointNode("writhing_marsh", 295, 515),
         WaypointNode("ashen_caldera", 318, 252),
         WaypointNode("ashen_bastion", 386, 260),
-        WaypointNode("frostbay_west", 442, 212),
-        WaypointNode("frostbay_east", 866, 212),
         WaypointNode("duskport", 904, 250),
         WaypointNode("blightwood_jct", 1020, 250),
         WaypointNode("sunspire_oasis", 375, 790),
         WaypointNode("scorchwind_camp", 315, 912),
         WaypointNode("sunspire_badlands", 242, 1020),
-        WaypointNode("sw_bridge_west", 452, 980),
-        WaypointNode("sw_bridge_east", 650, 980),
         WaypointNode("west_jungle", 720, 1020),
         WaypointNode("sunleaf_village", 960, 995),
-        WaypointNode("sunleaf_bridge_south", 1042, 988),
-        WaypointNode("sunleaf_bridge_north", 1042, 756),
-        WaypointNode("ember_causeway_west", 1396, 952),
         WaypointNode("ember_watch", 1462, 952)
     )
 
@@ -717,31 +700,17 @@ object WorldBiomeBlueprint {
         link("frostcrest_hub", "frostcrest_grimmaw")
         link("frostcrest_grimmaw", "boreal_watch_camp")
         link("rookvale_west_gate", "spirewood_cross")
-        link("spirewood_cross", "alder_bridge_east")
-        link("alder_bridge_east", "alder_bridge_west")
-        link("alder_bridge_west", "mirewatch")
         link("mirewatch", "mirewatch_west")
         link("mirewatch_west", "boghollow_camp")
         link("boghollow_camp", "writhing_marsh")
         link("writhing_marsh", "ashen_caldera")
         link("ashen_caldera", "ashen_bastion")
-        link("ashen_bastion", "frostbay_west")
-        link("frostbay_west", "frostbay_east")
-        link("frostbay_east", "duskport")
         link("duskport", "blightwood_jct")
         link("blightwood_jct", "spirewood_cross")
         link("mirewatch_west", "sunspire_oasis")
         link("sunspire_oasis", "scorchwind_camp")
         link("scorchwind_camp", "sunspire_badlands")
-        link("sunspire_oasis", "sw_bridge_west")
-        link("sw_bridge_west", "sw_bridge_east")
-        link("sw_bridge_east", "west_jungle")
         link("west_jungle", "sunleaf_village")
-        link("sunleaf_village", "sunleaf_bridge_south")
-        link("sunleaf_bridge_south", "sunleaf_bridge_north")
-        link("sunleaf_bridge_north", "spirewood_cross")
-        link("rookvale_south_gate", "ember_causeway_west")
-        link("ember_causeway_west", "ember_watch")
     }
 
     /**
@@ -912,13 +881,6 @@ object WorldBiomeBlueprint {
 
         // 4. Biome-Ideology Empires, Towns & Forward Camps
         resolveSettlementTile(x, y)?.let { return it }
-
-        // 5. Walkable Stone Sea-Bridges (highest priority over water!)
-        for (b in seaBridges) {
-            if (x in b.x1..b.x2 && y in b.y1..b.y2) {
-                return TileType.STONE_BRIDGE
-            }
-        }
 
         // 6. Inter-regional Highways, Camp Roads & Auto-Linked Harbor Spurs
         resolveRoadTile(x, y)?.let { return it }
@@ -1093,15 +1055,9 @@ object WorldBiomeBlueprint {
      * without allocating or querying tile chunks. Returns positive coverage for roads/bridges and
      * encodes type via sign or separate bridge check.
      */
-    fun isOnSeaBridge(fx: Float, fy: Float): Boolean {
-        for (i in 0 until seaBridges.size) {
-            val b = seaBridges[i]
-            if (fx >= b.x1 - 0.8f && fx <= b.x2 + 0.8f && fy >= b.y1 - 0.8f && fy <= b.y2 + 0.8f) {
-                return true
-            }
-        }
-        return false
-    }
+    /** Sea-bridges were removed (ferries cross the seas now); kept for map-rendering callers. */
+    @Suppress("UNUSED_PARAMETER")
+    fun isOnSeaBridge(fx: Float, fy: Float): Boolean = false
 
     fun continuousRoadCoverage(fx: Float, fy: Float): Float {
         val wobble = sin(fx * 0.095f + fy * 0.085f) * 0.55f + cos(fx * 0.065f - fy * 0.115f) * 0.35f

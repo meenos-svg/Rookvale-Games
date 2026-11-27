@@ -20,6 +20,7 @@ import com.example.game.data.RookvaleDatabase
 import com.example.game.data.SaveSlotEntity
 import com.example.game.engine.CraftingAndMiningEngine
 import com.example.game.engine.GameEngine
+import com.example.game.engine.addLogInternal
 import com.example.game.model.ActivePanel
 import com.example.game.model.AdminEquipmentClassification
 import com.example.game.model.DEFAULT_TIME_OF_DAY_HOURS
@@ -1516,18 +1517,47 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var routePlanJob: Job? = null
+
+    /**
+     * Map "walk here": long routes are planned off the main thread so the screen never freezes,
+     * then applied if the hero is still where the plan started.
+     */
     fun onWalkToTile(x: Int, y: Int) {
-        val now = SystemClock.uptimeMillis()
-        var startedPath = false
-        _world.update { prev ->
-            val next = GameEngine.walkToCoordinate(prev, x, y)
-            if (next.walkPath.isNotEmpty() || next.longRangeGoal != null) startedPath = true
-            next
-        }
-        if (startedPath) {
-            lastLocalMoveUptimeMs = now
-            lastMoveSpeedTilesPerSec = GameEngine.walkSpeedTilesPerSec(_world.value.level)
-            broadcastMovement(PlayerActionState.WALKING, now)
+        routePlanJob?.cancel()
+        // Stop any current walk and close the map right away so the tap feels instant
+        _world.update { it.copy(walkPath = emptyList(), longRangeGoal = null, longRangeWaypoints = emptyList(), activePanel = ActivePanel.NONE).addLogInternal("Charting a route...") }
+        routePlanJob = viewModelScope.launch {
+            repeat(2) {
+                val snapshot = _world.value
+                val planned = withContext(Dispatchers.Default) { GameEngine.walkToCoordinate(snapshot, x, y) }
+                var applied = false
+                _world.update { cur ->
+                    if (cur.floor != snapshot.floor || cur.playerX != snapshot.playerX || cur.playerY != snapshot.playerY) {
+                        cur
+                    } else {
+                        applied = true
+                        val routed = cur.copy(
+                            walkPath = planned.walkPath,
+                            longRangeGoal = planned.longRangeGoal,
+                            longRangeWaypoints = emptyList(),
+                            autoFollowTarget = false
+                        )
+                        val note = if (planned.statusLog != snapshot.statusLog) planned.statusLog.lastOrNull() else null
+                        if (note != null) routed.addLogInternal(note) else routed
+                    }
+                }
+                if (applied) {
+                    val st = _world.value
+                    if (st.walkPath.isNotEmpty() || st.longRangeGoal != null) {
+                        val now = SystemClock.uptimeMillis()
+                        lastLocalMoveUptimeMs = now
+                        lastMoveSpeedTilesPerSec = GameEngine.walkSpeedTilesPerSec(st.level)
+                        broadcastMovement(PlayerActionState.WALKING, now)
+                    }
+                    return@launch
+                }
+            }
         }
     }
 

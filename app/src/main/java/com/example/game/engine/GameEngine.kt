@@ -692,27 +692,33 @@ object GameEngine {
             return state.copy(longRangeGoal = null, longRangeWaypoints = emptyList())
                 .addLogInternal("Arrived at (${finalGoal.first}, ${finalGoal.second}).")
         }
-        var queue = state.longRangeWaypoints
-        while (queue.isNotEmpty() &&
-            abs(queue.first().first - state.playerX) + abs(queue.first().second - state.playerY) <= 4
-        ) {
-            queue = queue.drop(1)
+        val floorMap = WorldMaps.getFloor(state.floor)
+        val blockedNearby = blockedTilesNear(state, remotePlayersOnFloor)
+        val replanned = RoutePlanner.plan(floorMap, state.playerX, state.playerY, finalGoal.first, finalGoal.second) { x, y ->
+            (x to y) in blockedNearby
         }
-        val nextTarget = queue.firstOrNull() ?: finalGoal
-        val remainingQueue = if (queue.isNotEmpty()) queue.drop(1) else emptyList()
-        val resolvedTarget = WorldMaps.findNearestWalkableTile(state.floor, nextTarget.first, nextTarget.second, maxRadius = 8)
-            ?: nextTarget
-        val segPath = findPath(state, resolvedTarget.first, resolvedTarget.second, remotePlayersOnFloor)
-        if (segPath.isEmpty()) {
+        if (replanned.isNullOrEmpty()) {
             return state.copy(longRangeGoal = null, longRangeWaypoints = emptyList())
-                .addLogInternal("Auto-walk halted near (${state.playerX}, ${state.playerY}).")
+                .addLogInternal("Auto-walk stopped: the way is blocked.")
         }
-        val queued = state.copy(
-            walkPath = segPath,
-            longRangeWaypoints = remainingQueue,
-            longRangeGoal = if (nextTarget == finalGoal && remainingQueue.isEmpty()) finalGoal else state.longRangeGoal
-        )
-        return stepAlongPath(queued, nowMs, remotePlayersOnFloor)
+        return stepAlongPath(state.copy(walkPath = replanned, longRangeWaypoints = emptyList()), nowMs, remotePlayersOnFloor)
+    }
+
+    /** NPCs anywhere on the floor plus monsters and players close to the hero (they move, so only nearby ones matter). */
+    private fun blockedTilesNear(state: GameWorldState, remotePlayersOnFloor: List<RemotePlayerState>): Set<Pair<Int, Int>> {
+        val near = 6
+        return buildSet {
+            WorldMaps.npcs.forEach { if (it.floor == state.floor) add(it.x to it.y) }
+            state.monsters.forEach {
+                if (it.floor == state.floor && abs(it.x - state.playerX) <= near && abs(it.y - state.playerY) <= near) add(it.x to it.y)
+            }
+            val floorMap = WorldMaps.getFloor(state.floor)
+            remotePlayersOnFloor.forEach {
+                if (it.floor == state.floor && abs(it.x - state.playerX) <= near && abs(it.y - state.playerY) <= near &&
+                    isBlockedByRemotePlayer(floorMap, it.x, it.y, remotePlayersOnFloor)
+                ) add(it.x to it.y)
+            }
+        }
     }
 
     fun stepAlongPath(
@@ -733,6 +739,19 @@ object GameEngine {
         }
         val moved = attemptMoveTo(state.copy(walkPath = remaining), nx, ny, dir, nowMs, remotePlayersOnFloor)
         if (moved.playerX == state.playerX && moved.playerY == state.playerY && moved.floor == state.floor) {
+            val goal = state.longRangeGoal
+            val isAdjacentStep = abs(nx - state.playerX) + abs(ny - state.playerY) == 1
+            if (goal != null && isAdjacentStep && WorldMaps.getFloor(state.floor).tileAt(nx, ny).walkable) {
+                // Something (a monster, player or NPC) is in the way: step around it and rejoin the route
+                val rejoinIdx = minOf(DETOUR_REJOIN_STEPS, remaining.lastIndex)
+                if (rejoinIdx >= 0) {
+                    val rejoin = remaining[rejoinIdx]
+                    val detour = findPath(state, rejoin.first, rejoin.second, remotePlayersOnFloor)
+                    if (detour.isNotEmpty() && detour.last() == rejoin && detour.first() != (nx to ny)) {
+                        return moved.copy(walkPath = detour + remaining.drop(rejoinIdx + 1))
+                    }
+                }
+            }
             return moved.copy(walkPath = emptyList(), longRangeGoal = null, longRangeWaypoints = emptyList())
         }
         val finalGoal = moved.longRangeGoal
@@ -3171,10 +3190,8 @@ object GameEngine {
     }
 
     /**
-     * Hierarchical A* auto-walk triggered from the clickable isometric minimap or Full World Map.
-     * - Short/mid range (<= 120 tiles): runs direct A*.
-     * - Cross-region/cross-continent (> 120 tiles on Floor 0): chains coarse highway/bridge waypoints
-     *   through WorldBiomeBlueprint so players can auto-walk smoothly across the 1600x1200 realm.
+     * Auto-walk triggered from the minimap or World Map. Plans the full route tile by tile with
+     * [RoutePlanner]; if the destination is across the sea, walks to the nearest ferry captain instead.
      */
     fun walkToCoordinate(state: GameWorldState, tx: Int, ty: Int): GameWorldState {
         if (state.deathReport != null) return state
@@ -3199,35 +3216,39 @@ object GameEngine {
                 ?: (clampedX to clampedY)
         }
 
-        val manhattan = abs(goalX - state.playerX) + abs(goalY - state.playerY)
-        if (state.floor == 0 && manhattan > 120) {
-            val waypoints = WorldBiomeBlueprint.findCoarseWaypoints(state.playerX, state.playerY, goalX, goalY)
-            val firstHop = waypoints.firstOrNull() ?: (goalX to goalY)
-            val resolvedHop = WorldMaps.findNearestWalkableTile(0, firstHop.first, firstHop.second, maxRadius = 8)
-                ?: firstHop
-            val firstPath = findPath(dismissed, resolvedHop.first, resolvedHop.second)
-            if (firstPath.isNotEmpty()) {
-                val destRegion = WorldMaps.regionForGlobal(goalX, goalY)
-                return dismissed.copy(
-                    walkPath = firstPath,
-                    longRangeGoal = goalX to goalY,
-                    longRangeWaypoints = waypoints.drop(1)
-                ).addLogInternal("Charted route toward ${destRegion.displayName} ($goalX, $goalY)...")
-            }
+        val npcSet = WorldMaps.npcs.filter { it.floor == state.floor }.map { it.x to it.y }.toSet()
+        val route = RoutePlanner.plan(floorMap, state.playerX, state.playerY, goalX, goalY) { x, y -> (x to y) in npcSet }
+        if (route != null && route.isNotEmpty()) {
+            val far = route.size > LONG_ROUTE_STEPS
+            val label = if (state.floor == 0 && far) WorldMaps.regionForGlobal(goalX, goalY).displayName else "($goalX, $goalY)"
+            return dismissed.copy(
+                walkPath = route,
+                longRangeGoal = goalX to goalY,
+                longRangeWaypoints = emptyList()
+            ).addLogInternal(if (far) "Charted a route to $label (${route.size} steps)." else "Auto-walking to $label...")
         }
 
-        val path = if (floorMap.tileAt(goalX, goalY).walkable) {
-            findPath(dismissed, goalX, goalY)
-        } else {
-            findPathToAdjacentOfTarget(dismissed, goalX, goalY)
+        // No land route (another continent or island): walk to the nearest reachable ferry captain
+        if (state.floor == 0) {
+            val ports = WorldMaps.harborPorts.sortedBy { abs(it.dockX - state.playerX) + abs(it.dockY - state.playerY) }.take(3)
+            for (port in ports) {
+                val dock = WorldMaps.findNearestWalkableTile(0, port.dockX, port.dockY + 1, maxRadius = 3) ?: continue
+                val toPort = RoutePlanner.plan(floorMap, state.playerX, state.playerY, dock.first, dock.second) { x, y -> (x to y) in npcSet }
+                if (toPort != null && toPort.isNotEmpty()) {
+                    val dest = WorldMaps.regionForGlobal(goalX, goalY).displayName
+                    return dismissed.copy(walkPath = toPort, longRangeGoal = dock, longRangeWaypoints = emptyList())
+                        .addLogInternal("No land route to $dest. Heading to ${port.name}: ask ${port.captainName} for a ferry.")
+                }
+            }
         }
-        return if (path.isNotEmpty()) {
-            dismissed.copy(walkPath = path)
-                .addLogInternal("Auto-walking to ($goalX, $goalY)...")
-        } else {
-            dismissed.addLogInternal("No clear route to ($goalX, $goalY) — try a Harbor Ferry for overseas islands!")
-        }
+        return dismissed.addLogInternal("No route to ($goalX, $goalY) from here.")
     }
+
+    /** How far along the route a detour around a blocker tries to rejoin it. */
+    private const val DETOUR_REJOIN_STEPS = 8
+
+    /** Routes longer than this are announced as charted journeys. */
+    private const val LONG_ROUTE_STEPS = 60
 
     fun isCustomHotbarBindable(itemId: String): Boolean {
         val def = ItemCatalog.all[itemId] ?: return false

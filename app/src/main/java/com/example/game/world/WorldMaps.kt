@@ -243,10 +243,8 @@ object WorldMaps {
                 add(LandmarkLabel(0, port.dockX, port.dockY, port.name.uppercase()))
             }
 
-            // Sea-Bridges, Shrines & Outer-Continent Dedicated Biome Dungeon Entrances
+            // Shrines & Outer-Continent Dedicated Biome Dungeon Entrances
             add(LandmarkLabel(0, 760, 790, "MAELSTROM SEA-DRAGON SHRINE"))
-            add(LandmarkLabel(0, 650, 211, "FROSTBAY SEA-BRIDGE"))
-            add(LandmarkLabel(0, 770, 591, "CENTRAL ALDER CAUSEWAY"))
             add(LandmarkLabel(0, 318, 252, "ASHEN CALDERA FOUNDRY (FLOOR -10)"))
             add(LandmarkLabel(0, 295, 515, "SUNKEN MIRE VAULTS (FLOOR -7)"))
             add(LandmarkLabel(0, 1020, 175, "BLIGHTWOOD BARROW (FLOOR -9)"))
