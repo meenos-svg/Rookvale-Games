@@ -891,6 +891,38 @@ object EntitySpriteAtlas {
                 px(buf, S, 13, 5 + bob, 0xFFFFFFFF.toInt()); px(buf, S, 18, 5 + bob, 0xFFFFFFFF.toInt())
                 rect(buf, S, 4, 10 + bob, 5, 3, sky); rect(buf, S, 23, 10 + bob, 5, 3, sky)
             }
+            MonsterType.YETI_RAVAGER, MonsterType.HRIMGAR_THE_GLACIER_KING -> {
+                val king = type == MonsterType.HRIMGAR_THE_GLACIER_KING
+                drawShadow(buf, 4, 25, 24, 5)
+                val fur = if (king) 0xFFB8D4EC.toInt() else 0xFFE8EEF4.toInt()
+                rect(buf, S, 8, 19 + bob, 6, 8, fur); rect(buf, S, 18, 19 + bob, 6, 8, fur)
+                rect(buf, S, 5, 8 + bob, 22, 13, fur)
+                rect(buf, S, 3, 10 + bob, 4, 9, fur); rect(buf, S, 25, 10 + bob, 4, 9, fur)
+                rect(buf, S, 10, 2 + bob, 12, 8, fur)
+                rect(buf, S, 12, 6 + bob, 8, 3, 0xFF7FA6C2.toInt())
+                px(buf, S, 13, 4 + bob, 0xFF4DB8FF.toInt()); px(buf, S, 18, 4 + bob, 0xFF4DB8FF.toInt())
+                if (king) { rect(buf, S, 9, 0 + bob, 14, 2, 0xFF8FE3FF.toInt()); px(buf, S, 11, -1 + bob + 1, 0xFFFFFFFF.toInt()) }
+            }
+            MonsterType.RIMEFANG_STALKER -> {
+                drawShadow(buf, 3, 25, 26, 5)
+                val fur = 0xFF8FA8BD.toInt()
+                rect(buf, S, 5, 15 + bob, 20, 7, fur)
+                rect(buf, S, 6, 22 + bob, 3, 5, fur); rect(buf, S, 21, 22 + bob, 3, 5, fur)
+                rect(buf, S, 22, 10 + bob, 8, 7, fur)
+                rect(buf, S, 1, 14 + bob, 5, 3, fur)
+                px(buf, S, 27, 12 + bob, 0xFF7BE8FF.toInt())
+            }
+            MonsterType.GLACIER_SHAMAN -> {
+                drawShadow(buf, 6, 25, 20, 5)
+                val robe = 0xFF2E4A73.toInt()
+                rect(buf, S, 9, 20 + bob, 4, 7, robe); rect(buf, S, 18, 20 + bob, 4, 7, robe)
+                rect(buf, S, 8, 10 + bob, 15, 12, robe)
+                rect(buf, S, 10, 3 + bob, 11, 8, 0xFF6E8CA8.toInt())
+                rect(buf, S, 9, 1 + bob, 3, 3, 0xFFB8D4EC.toInt()); rect(buf, S, 19, 1 + bob, 3, 3, 0xFFB8D4EC.toInt())
+                px(buf, S, 13, 6 + bob, 0xFFFFFFFF.toInt()); px(buf, S, 18, 6 + bob, 0xFFFFFFFF.toInt())
+                rect(buf, S, 24, 3 + bob, 2, 20, 0xFF9AA8B6.toInt())
+                rect(buf, S, 23, 1 + bob, 4, 3, 0xFF8FE3FF.toInt())
+            }
             MonsterType.AKHET_THE_SAND_PHARAOH -> {
                 drawShadow(buf, 5, 25, 22, 5)
                 val wrap = 0xFFD9CBA8.toInt()

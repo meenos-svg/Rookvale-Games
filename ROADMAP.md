@@ -5,7 +5,7 @@ If a session is cut off, pick up at the first unchecked item.
 
 ## In progress / next
 - [x] 1. Frostpeak city — rebuild Frostpeak Granite Citadel (1396,204) as a hand-built ice-carved city, unique to the biome, with hunt master, crier and shop
-- [ ] 2. Frostpeak dungeons & monsters — rebuild -9 Blightwood Barrow big, new Frostpeak monsters, fill the Lv 42-58 band (Grimmaw -5 is 42-47, Barrow 48-53, gap 54-58)
+- [x] 2. Frostpeak dungeons & monsters — rebuild -9 Blightwood Barrow big, new Frostpeak monsters, fill the Lv 42-58 band (Grimmaw -5 is 42-47, Barrow 48-53, gap 54-58)
 - [ ] 3. Fishing spots in Mirewatch (lagoon) and Sunspire (oasis) with marsh/desert fish
 - [ ] 4. Ashen Caldera city — rebuild Ashen Bastion (386,260) as an obsidian forge city
 - [ ] 5. Ashen dungeons & monsters — fill the Lv 55-75 band

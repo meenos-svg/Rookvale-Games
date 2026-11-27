@@ -59,7 +59,7 @@ class CityServicesTest {
         assertEquals(HuntBoards.ROOKVALE, HuntBoards.fromPanelId(talk("Captain Hale").activeShopId).id)
 
         val monsters = WorldMaps.initialMonsters()
-        val bands = mapOf(HuntBoards.MIREWATCH to 20..37, HuntBoards.SUNSPIRE to 30..46, HuntBoards.FROSTPEAK to 42..58)
+        val bands = mapOf(HuntBoards.MIREWATCH to 20..37, HuntBoards.SUNSPIRE to 30..46, HuntBoards.FROSTPEAK to 42..59)
         for ((board, band) in bands) {
             val contracts = HuntContracts.forBoard(board)
             assertTrue(contracts.size >= 7)

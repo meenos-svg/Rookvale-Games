@@ -98,6 +98,10 @@ object OrganicMonsterRenderer {
         MonsterType.DUST_DEVIL -> 1.0f
         MonsterType.SALTGLASS_GOLEM -> 1.26f
         MonsterType.SIROCCO_THE_STORM_DJINN -> 1.34f
+        MonsterType.YETI_RAVAGER -> 1.28f
+        MonsterType.RIMEFANG_STALKER -> 1.04f
+        MonsterType.GLACIER_SHAMAN -> 1.02f
+        MonsterType.HRIMGAR_THE_GLACIER_KING -> 1.40f
         else -> 1.0f
     }
 
@@ -310,6 +314,10 @@ object OrganicMonsterRenderer {
             MonsterType.DUST_DEVIL,
             MonsterType.SALTGLASS_GOLEM,
             MonsterType.SIROCCO_THE_STORM_DJINN,
+            MonsterType.YETI_RAVAGER,
+            MonsterType.RIMEFANG_STALKER,
+            MonsterType.GLACIER_SHAMAN,
+            MonsterType.HRIMGAR_THE_GLACIER_KING,
             MonsterType.VULKARIS_THE_FORGE_TITAN -> drawCustomDungeonBiped(
                 ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
                 type = type, useSpec = useSpec, useRim = useRim, quality = quality, path = path
@@ -2528,6 +2536,27 @@ object OrganicMonsterRenderer {
             Color(0xFF3FA8C9), Color(0xFF8FE3FF), Color(0xFF1C5A73),
             Color(0xFFC9A86A), Color(0xFFFFD86B), Color(0xFFFFFFFF), Color(0xFFFFD86B),
             torsoWidth = 12.6f, weapon = CustomWeaponKind.STAFF, hasCape = true, hasCrown = true,
+            bossAuraColor = Color(0xFF8FE3FF)
+        )
+        MonsterType.YETI_RAVAGER -> CustomDungeonVisual(
+            Color(0xFFE8EEF4), Color(0xFFFFFFFF), Color(0xFF9AA8B6),
+            Color(0xFFC9D4DE), Color(0xFF7FA6C2), Color(0xFF4DB8FF), Color(0xFFB8E4FF),
+            torsoWidth = 13.0f, weapon = CustomWeaponKind.CLAWS, hasHorns = true
+        )
+        MonsterType.RIMEFANG_STALKER -> CustomDungeonVisual(
+            Color(0xFF8FA8BD), Color(0xFFD6E6F2), Color(0xFF4A5E70),
+            Color(0xFF5C7286), Color(0xFFB8E4FF), Color(0xFF7BE8FF), Color(0xFFCCF4FF),
+            torsoWidth = 9.6f, weapon = CustomWeaponKind.CLAWS
+        )
+        MonsterType.GLACIER_SHAMAN -> CustomDungeonVisual(
+            Color(0xFF6E8CA8), Color(0xFFB8D4EC), Color(0xFF334A60),
+            Color(0xFF2E4A73), Color(0xFF8FE3FF), Color(0xFFFFFFFF), Color(0xFF8FE3FF),
+            torsoWidth = 8.8f, weapon = CustomWeaponKind.STAFF, hasCape = true, hasHorns = true
+        )
+        MonsterType.HRIMGAR_THE_GLACIER_KING -> CustomDungeonVisual(
+            Color(0xFFB8D4EC), Color(0xFFFFFFFF), Color(0xFF5E7A96),
+            Color(0xFF2E4A73), Color(0xFF8FE3FF), Color(0xFF4DD2FF), Color(0xFFB8F0FF),
+            torsoWidth = 13.6f, weapon = CustomWeaponKind.STAFF, hasCape = true, hasCrown = true, hasHorns = true,
             bossAuraColor = Color(0xFF8FE3FF)
         )
         else -> CustomDungeonVisual( // VULKARIS_THE_FORGE_TITAN

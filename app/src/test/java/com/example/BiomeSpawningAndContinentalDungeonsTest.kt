@@ -415,7 +415,7 @@ class BiomeSpawningAndContinentalDungeonsTest {
     fun allThirteenOverlandDungeonEntrancesMapOneToOneWithUniqueLayoutsAndExclusiveDeepDelve() {
         // 1. Every single overland dungeon entrance (6 Rookvale + 7 Outer Continent = 13) maps to its OWN unique floor ID
         val overlandEntries = WorldMaps.portals.filter { it.fromFloor == 0 && it.toFloor < 0 }
-        assertEquals("Must have exactly 16 separate overland dungeon entrances (13 + Murkfen Hollow, Tomb of Akhet & Scorchglass Rift)", 16, overlandEntries.size)
+        assertEquals("Must have exactly 17 separate overland dungeon entrances (13 + Murkfen Hollow, Tomb of Akhet, Scorchglass Rift & Rimeheart Caverns)", 17, overlandEntries.size)
         val targetFloorIds = overlandEntries.map { it.toFloor }
         assertEquals(
             "Every overland dungeon entrance must target a unique dedicated dungeon floor ID",
@@ -495,11 +495,11 @@ class BiomeSpawningAndContinentalDungeonsTest {
                 }
             }
         }
-        val allThirteenUpperFloors = listOf(-1, -2, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -29, -30, -31)
+        val allThirteenUpperFloors = listOf(-1, -2, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -29, -30, -31, -32)
         val upperFloorSignatures = allThirteenUpperFloors.map { walkabilitySignature(it) }
         assertEquals(
-            "Every single one of the 16 continental dungeons must have its own unique walkable floorplan",
-            16,
+            "Every single one of the 17 continental dungeons must have its own unique walkable floorplan",
+            17,
             upperFloorSignatures.toSet().size
         )
 
@@ -508,7 +508,7 @@ class BiomeSpawningAndContinentalDungeonsTest {
         val calderaEntry = overlandEntries.first { it.fromX == 318 && it.fromY == 252 }
         assertEquals(-15, emberEntry.toFloor)
         assertEquals(-10, calderaEntry.toFloor)
-        assertTrue("World Map must expose all 16 separate dungeon pins", WorldBiomeBlueprint.worldMapPins.count { it.category == WorldPinCategory.DUNGEON } == 16)
+        assertTrue("World Map must expose all 17 separate dungeon pins", WorldBiomeBlueprint.worldMapPins.count { it.category == WorldPinCategory.DUNGEON } == 17)
     }
 
     @Test

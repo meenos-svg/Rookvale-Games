@@ -178,6 +178,7 @@ object WorldMaps {
             add(NpcSpot(0, FrontierSiteFloors.MURKFEN_ENTRY_X + 3, FrontierSiteFloors.MURKFEN_ENTRY_Y + 1, "Fen Guide Oswin", NpcRole.DUNGEON_GUIDE))
             add(NpcSpot(0, FrontierSiteFloors.TOMB_ENTRY_X + 3, FrontierSiteFloors.TOMB_ENTRY_Y + 1, "Tomb Robber Sefa", NpcRole.DUNGEON_GUIDE))
             add(NpcSpot(0, FrontierSiteFloors.RIFT_ENTRY_X + 3, FrontierSiteFloors.RIFT_ENTRY_Y + 1, "Rift Scout Imran", NpcRole.DUNGEON_GUIDE))
+            add(NpcSpot(0, FrontierSiteFloors.RIMEHEART_ENTRY_X + 3, FrontierSiteFloors.RIMEHEART_ENTRY_Y + 1, "Icewarden Kjell", NpcRole.DUNGEON_GUIDE))
 
             // 6 Strictly Coastline-Validated Ocean Harbor Ferry Captains
             WorldBiomeBlueprint.harborPorts.forEach { port ->
@@ -275,6 +276,7 @@ object WorldMaps {
             add(LandmarkLabel(0, FrontierSiteFloors.MURKFEN_ENTRY_X, FrontierSiteFloors.MURKFEN_ENTRY_Y, "MURKFEN HOLLOW (FLOOR -29)"))
             add(LandmarkLabel(0, FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y, "TOMB OF AKHET (FLOOR -30)"))
             add(LandmarkLabel(0, FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y, "SCORCHGLASS RIFT (FLOOR -31)"))
+            add(LandmarkLabel(0, FrontierSiteFloors.RIMEHEART_ENTRY_X, FrontierSiteFloors.RIMEHEART_ENTRY_Y, "RIMEHEART CAVERNS (FLOOR -32)"))
             ContinentalDungeonGenerator.generatedDungeons.forEach { d ->
                 add(d.descentLandmark)
                 addAll(d.areaLandmarks)
@@ -329,8 +331,11 @@ object WorldMaps {
         FloorPortal(0, FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y, -31, FrontierSiteFloors.RIFT.landingX, FrontierSiteFloors.RIFT.landingY, requiresRope = false),
         FloorPortal(-31, FrontierSiteFloors.RIFT.stairsUpX, FrontierSiteFloors.RIFT.stairsUpY, 0, FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y + 1, requiresRope = false),
         // Blightwood Barrow (Northern Frontier) <-> Floor -9 The Blightwood Barrow Catacombs
-        FloorPortal(0, 1020, 175, -9, 24, 40, requiresRope = false),
-        FloorPortal(-9, 24, 41, 0, 1020, 176, requiresRope = false),
+        FloorPortal(0, 1020, 175, -9, FrontierSiteFloors.BARROW.landingX, FrontierSiteFloors.BARROW.landingY, requiresRope = false),
+        FloorPortal(-9, FrontierSiteFloors.BARROW.stairsUpX, FrontierSiteFloors.BARROW.stairsUpY, 0, 1020, 176, requiresRope = false),
+        // Rimeheart Crevasse (Frostpeak, north of the citadel) <-> Floor -32 Rimeheart Caverns
+        FloorPortal(0, FrontierSiteFloors.RIMEHEART_ENTRY_X, FrontierSiteFloors.RIMEHEART_ENTRY_Y, -32, FrontierSiteFloors.RIMEHEART.landingX, FrontierSiteFloors.RIMEHEART.landingY, requiresRope = false),
+        FloorPortal(-32, FrontierSiteFloors.RIMEHEART.stairsUpX, FrontierSiteFloors.RIMEHEART.stairsUpY, 0, FrontierSiteFloors.RIMEHEART_ENTRY_X, FrontierSiteFloors.RIMEHEART_ENTRY_Y + 1, requiresRope = false),
         // Ashen Caldera Shaft <-> Floor -10 The Ashen Caldera Foundry
         FloorPortal(0, 318, 252, -10, 24, 40, requiresRope = false),
         FloorPortal(-10, 24, 41, 0, 318, 253, requiresRope = false),
@@ -438,6 +443,7 @@ object WorldMaps {
                 put(lair.spec.floorId, lair.floor)
             }
             put(-29, frontierFloor(FrontierSiteFloors.murkfenHollow, "Murkfen Hollow", "Whispering Marsh Dungeon • Floor -29 • Hagmother's Bower • Camp PZ", "Moderate", 2))
+            put(-32, frontierFloor(FrontierSiteFloors.rimeheartCaverns, "Rimeheart Caverns", "Frostpeak Highlands Dungeon • Floor -32 • Throne of Rime • Camp PZ", "Very High", 4))
             put(-31, frontierFloor(FrontierSiteFloors.scorchglassRift, "Scorchglass Rift", "Sunscorch Badlands Dungeon • Floor -31 • The Djinn's Eye • Camp PZ", "High", 3))
             put(-30, frontierFloor(FrontierSiteFloors.tombOfAkhet, "Tomb of Akhet", "Sunscorch Badlands Dungeon • Floor -30 • Sanctum of Akhet • Camp PZ", "High", 3))
         }
@@ -463,6 +469,7 @@ object WorldMaps {
         -29 -> FrontierSiteFloors.MURKFEN.landingX to FrontierSiteFloors.MURKFEN.landingY
         -30 -> FrontierSiteFloors.TOMB.landingX to FrontierSiteFloors.TOMB.landingY
         -31 -> FrontierSiteFloors.RIFT.landingX to FrontierSiteFloors.RIFT.landingY
+        -32 -> FrontierSiteFloors.RIMEHEART.landingX to FrontierSiteFloors.RIMEHEART.landingY
         in -15..-7 -> ContinentalDungeonGenerator.landingFor(floorId)
         in -28..-16 -> ContinentalDungeonGenerator.LOWER_LANDING_X to ContinentalDungeonGenerator.LOWER_LANDING_Y
         else -> TEMPLE_SPAWN_X to TEMPLE_SPAWN_Y

@@ -6,7 +6,7 @@ import com.example.game.multiplayer.LocalPlayerActionFxEvent
 import com.example.game.world.WeatherType
 import com.squareup.moshi.JsonClass
 
-const val CURRENT_MAP_VERSION = 7
+const val CURRENT_MAP_VERSION = 8
 
 /** Map version that rebuilt Deep Delve floors -1..-4 as 96x96 layouts (saves inside them move to the entrance). */
 const val DEEP_DELVE_REBUILD_MAP_VERSION = 5
@@ -15,6 +15,8 @@ const val DEEP_DELVE_REBUILD_MAP_VERSION = 5
 const val HEARTLAND_SITE_REBUILD_MAP_VERSION = 6
 /** Map v7 rebuilt Gorek Labyrinth (-6), Sunken Mire Vaults (-7) and the Overgrown Ziggurat (-8). */
 const val FRONTIER_SITE_REBUILD_MAP_VERSION = 7
+/** Map v8 rebuilt the Blightwood Barrow Catacombs (-9). */
+const val BARROW_REBUILD_MAP_VERSION = 8
 const val V1_SURFACE_OFFSET = 32
 const val V2_TO_V3_OFFSET_X = 149
 const val V2_TO_V3_OFFSET_Y = 146
@@ -1229,6 +1231,28 @@ enum class MonsterType(
         aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.ARCANE_DART,
         isBoss = true, summonTypeName = "DUST_DEVIL", maxSummons = 2,
         specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Sandstorm Lord of the Scorchglass Rift"
+    ),
+
+    // --- Rimeheart Caverns (Floor -32, Frostpeak Highlands Lv 54-58) ---
+    YETI_RAVAGER(
+        displayName = "Yeti Ravager", tier = 5, threatLevel = 18, maxHp = 620, armor = 21,
+        xpReward = 760, minDmg = 40, maxDmg = 72, goldMin = 110, goldMax = 220, moveIntervalTicks = 2
+    ),
+    RIMEFANG_STALKER(
+        displayName = "Rimefang Stalker", tier = 5, threatLevel = 17, maxHp = 520, armor = 17,
+        xpReward = 700, minDmg = 37, maxDmg = 67, goldMin = 100, goldMax = 205, moveIntervalTicks = 1
+    ),
+    GLACIER_SHAMAN(
+        displayName = "Glacier Shaman", tier = 5, threatLevel = 18, maxHp = 540, armor = 16,
+        xpReward = 740, minDmg = 38, maxDmg = 70, goldMin = 108, goldMax = 215, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.ENERGY_BOLT
+    ),
+    HRIMGAR_THE_GLACIER_KING(
+        displayName = "Hrimgar, the Glacier King", tier = 5, threatLevel = 22, maxHp = 1380, armor = 23,
+        xpReward = 1900, minDmg = 50, maxDmg = 90, goldMin = 380, goldMax = 680, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 3, rangedProjectile = ProjectileKind.ENERGY_BOLT,
+        isBoss = true, summonTypeName = "GLACIER_SHAMAN", maxSummons = 2,
+        specialKind = BossSpecialKind.QUARRY_QUAKE, bossTitle = "Frozen Tyrant of the Rimeheart Deep"
     );
 
     fun threatBandFor(playerLevel: Int): ThreatBand = when {

@@ -621,6 +621,7 @@ object WorldBiomeBlueprint {
             add(WorldMapPin("dng_murkfen", "Murkfen Hollow (-29)", FrontierSiteFloors.MURKFEN_ENTRY_X, FrontierSiteFloors.MURKFEN_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -29 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-29)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-29), 1.0f))
             add(WorldMapPin("dng_tomb", "Tomb of Akhet (-30)", FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -30 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-30)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-30), 1.0f))
             add(WorldMapPin("dng_rift", "Scorchglass Rift (-31)", FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -31 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-31)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-31), 1.0f))
+            add(WorldMapPin("dng_rimeheart", "Rimeheart Caverns (-32)", FrontierSiteFloors.RIMEHEART_ENTRY_X, FrontierSiteFloors.RIMEHEART_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -32 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-32)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-32), 1.0f))
             add(WorldMapPin("dng_ember", "The Ember Sanctum (-15)", 1510, 975, WorldPinCategory.DUNGEON, "Floor -15 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-15)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-15), 1.0f))
         }
     }
@@ -697,7 +698,8 @@ object WorldBiomeBlueprint {
         packCoord(1510, 975) to TileType.STAIRS_DOWN,  // Ember Sanctum -> Floor -2
         packCoord(FrontierSiteFloors.MURKFEN_ENTRY_X, FrontierSiteFloors.MURKFEN_ENTRY_Y) to TileType.STAIRS_DOWN, // Murkfen Hollow -> Floor -29
         packCoord(FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y) to TileType.STAIRS_DOWN,       // Tomb of Akhet -> Floor -30
-        packCoord(FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y) to TileType.STAIRS_DOWN        // Scorchglass Rift -> Floor -31
+        packCoord(FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y) to TileType.STAIRS_DOWN,       // Scorchglass Rift -> Floor -31
+        packCoord(FrontierSiteFloors.RIMEHEART_ENTRY_X, FrontierSiteFloors.RIMEHEART_ENTRY_Y) to TileType.STAIRS_DOWN // Rimeheart Caverns -> Floor -32
     )
 
     // --- Coarse Regional Waypoint Graph for Instant Cross-World Hierarchical Auto-Walk ---

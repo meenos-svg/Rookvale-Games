@@ -198,7 +198,9 @@ object GameEngine {
             targetY = ly
         }
         // Map v7 rebuilt Gorek Labyrinth (-6), Sunken Mire Vaults (-7) and the Overgrown Ziggurat (-8).
-        if (save.mapVersion < FRONTIER_SITE_REBUILD_MAP_VERSION && save.floor in setOf(-6, -7, -8)) {
+        if ((save.mapVersion < FRONTIER_SITE_REBUILD_MAP_VERSION && save.floor in setOf(-6, -7, -8)) ||
+            (save.mapVersion < BARROW_REBUILD_MAP_VERSION && save.floor == -9)
+        ) {
             val (lx, ly) = WorldMaps.fallbackLandingForFloor(save.floor)
             targetX = lx
             targetY = ly
