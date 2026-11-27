@@ -45,6 +45,11 @@ object NpcInteractions {
                 s = s.addLogInternal("Zephyr: 'I'll pack up and change my wares in about ${VendorCatalog.minutesUntilNextRotation(wallClockMs)} minutes.'")
             }
             if (vid == VendorCatalog.FISHERMAN) s = s.addLogInternal(fishingTip(state))
+            when (vid) {
+                VendorCatalog.MIRE_OUTFITTER -> s = s.addLogInternal("Odra: 'Bloodworms bite best right here in the marsh. Try the wharf piers.'")
+                VendorCatalog.SUN_CARAVANEER -> s = s.addLogInternal("Tahir: 'Sandworms are made for the oasis. Cast from the jetty by the plaza.'")
+                VendorCatalog.FROST_FURRIER -> s = s.addLogInternal("Ulfa: 'Glowworms and frozen water, the salmon can't resist. Use the ice-fishing piers.'")
+            }
             return s
         }
         return when (npc.role) {

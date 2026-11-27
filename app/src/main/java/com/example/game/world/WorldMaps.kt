@@ -277,6 +277,10 @@ object WorldMaps {
             add(LandmarkLabel(0, FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y, "TOMB OF AKHET (FLOOR -30)"))
             add(LandmarkLabel(0, FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y, "SCORCHGLASS RIFT (FLOOR -31)"))
             add(LandmarkLabel(0, FrontierSiteFloors.RIMEHEART_ENTRY_X, FrontierSiteFloors.RIMEHEART_ENTRY_Y, "RIMEHEART CAVERNS (FLOOR -32)"))
+            // City fishing spots (each worm bites best in its own biome's waters)
+            add(LandmarkLabel(0, 580, 549, "WHARF FISHING (BLOODWORMS)"))
+            add(LandmarkLabel(0, 375, 765, "OASIS FISHING (SANDWORMS)"))
+            add(LandmarkLabel(0, 1364, 183, "ICE FISHING (GLOWWORMS)"))
             ContinentalDungeonGenerator.generatedDungeons.forEach { d ->
                 add(d.descentLandmark)
                 addAll(d.areaLandmarks)

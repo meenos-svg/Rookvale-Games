@@ -958,6 +958,23 @@ object FishingCatalog {
     val allFishIds: List<String> = tiers.map { it.fishId }
 
     fun tierForBait(baitId: String?): FishingTierSpec? = baitId?.let { byBaitId[it] }
+
+    /** Extra catch chance when fishing with a bait in the waters of its own biome. */
+    const val HOME_WATERS_CATCH_BONUS = 0.10
+    /** Extra fishing XP for a home-waters catch. */
+    const val HOME_WATERS_XP_MULTIPLIER = 1.3
+
+    /** The biome whose waters each bait tier belongs to (Rookvale worms -> Heartland, bloodworms -> Marsh...). */
+    fun homeBiomeFor(tier: FishingTierSpec): com.example.game.world.OverlandBiomeTier = when (tier.tier) {
+        1, 2 -> com.example.game.world.OverlandBiomeTier.ROOKVALE_HEARTLAND
+        3 -> com.example.game.world.OverlandBiomeTier.WHISPERING_MARSH
+        4 -> com.example.game.world.OverlandBiomeTier.SUNSCORCH_BADLANDS
+        5 -> com.example.game.world.OverlandBiomeTier.FROSTPEAK_HIGHLANDS
+        else -> com.example.game.world.OverlandBiomeTier.ASHEN_CALDERA
+    }
+
+    fun isHomeWaters(tier: FishingTierSpec, floor: Int, waterX: Int, waterY: Int): Boolean =
+        floor == 0 && com.example.game.world.BiomeProgressionRules.biomeForGlobalTile(waterX, waterY) == homeBiomeFor(tier)
     fun tierForFish(fishId: String?): FishingTierSpec? = fishId?.let { byFishId[it] }
 
     /**
