@@ -92,7 +92,7 @@ enum class OverlandBiomeTier(
  * floors off their surface biome (`surfaceMinLevel + abs(floor) * 6`).
  */
 object BiomeProgressionRules {
-    const val MIN_DUNGEON_FLOOR: Int = -28
+    const val MIN_DUNGEON_FLOOR: Int = -30
     const val DUNGEON_DEPTH_STEP_LEVELS: Int = 6
 
     /** Highest monster level anywhere in Rookvale (surface and every dungeon beneath it). */
@@ -155,6 +155,8 @@ object BiomeProgressionRules {
         -13 -> OverlandBiomeTier.ROOKVALE_HEARTLAND  // Dark Forest Sinkhole & Heart-Root Abyss (Lvl 9-14)
         -14 -> OverlandBiomeTier.ROOKVALE_HEARTLAND  // Crag Deep Hollow & Sealed Vault (Lvl 13-18)
         -15 -> OverlandBiomeTier.ASHEN_CALDERA       // Ember Sanctum & Caldera Dragon Throne (Lvl 67-72+)
+        -29 -> OverlandBiomeTier.WHISPERING_MARSH    // Murkfen Hollow & Hagmother's Bower (Lvl 20-25)
+        -30 -> OverlandBiomeTier.SUNSCORCH_BADLANDS  // Tomb of Akhet & Sanctum (Lvl 30-35)
         else -> OverlandBiomeTier.ROOKVALE_HEARTLAND
     }
 
@@ -167,6 +169,7 @@ object BiomeProgressionRules {
     fun effectiveDungeonDepth(floorId: Int): Int = when (parentUpperFloorFor(floorId)) {
         -7, -9, -11, -12, -13 -> 1
         -8, -10, -14, -15 -> 2
+        -29, -30 -> 0   // entry dungeons of their biomes: monsters start at the biome's own minimum level
         else -> abs(parentUpperFloorFor(floorId)).coerceAtLeast(1)
     }
 

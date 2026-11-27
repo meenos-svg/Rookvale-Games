@@ -197,6 +197,12 @@ object GameEngine {
             targetX = lx
             targetY = ly
         }
+        // Map v7 rebuilt Gorek Labyrinth (-6), Sunken Mire Vaults (-7) and the Overgrown Ziggurat (-8).
+        if (save.mapVersion < FRONTIER_SITE_REBUILD_MAP_VERSION && save.floor in setOf(-6, -7, -8)) {
+            val (lx, ly) = WorldMaps.fallbackLandingForFloor(save.floor)
+            targetX = lx
+            targetY = ly
+        }
         val npcCoordsOnFloor = WorldMaps.npcs.filter { it.floor == save.floor }.map { it.x to it.y }.toSet()
         val isBlockedOrOut = targetX !in 0 until floorMap.width ||
             targetY !in 0 until floorMap.height ||
@@ -349,7 +355,7 @@ object GameEngine {
             maxCapOz = state.maxCapOz,
             gold = state.gold,
             bankGold = state.bankGold.coerceAtLeast(0L),
-            floor = state.floor.coerceIn(-28, 0),
+            floor = state.floor.coerceIn(com.example.game.world.BiomeProgressionRules.MIN_DUNGEON_FLOOR, 0),
             x = state.playerX,
             y = state.playerY,
             poisonTicks = 0,

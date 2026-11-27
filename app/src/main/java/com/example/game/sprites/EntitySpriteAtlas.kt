@@ -795,6 +795,77 @@ object EntitySpriteAtlas {
                 rect(buf, S, 10, 2 + bob, 12, 8, scale)
                 rect(buf, S, 12, 5 + bob, 2, 2, 0xFFFFEE88.toInt()); rect(buf, S, 18, 5 + bob, 2, 2, 0xFFFFEE88.toInt())
             }
+            MonsterType.BOG_HAG, MonsterType.HAGMOTHER_VESSA -> {
+                val isBoss = type == MonsterType.HAGMOTHER_VESSA
+                drawShadow(buf, 6, 25, 20, 5)
+                val skin = 0xFF6F8A4E.toInt()
+                val rag = if (isBoss) 0xFF3B2A4A.toInt() else 0xFF4A3A2A.toInt()
+                rect(buf, S, 9, 20 + bob, 4, 7, rag); rect(buf, S, 18, 20 + bob, 4, 7, rag)
+                rect(buf, S, 8, 10 + bob, 15, 12, rag)
+                rect(buf, S, 10, 3 + bob, 11, 8, skin)
+                rect(buf, S, 9, 1 + bob, 13, 3, 0xFF2E3B22.toInt()) // moss hair
+                px(buf, S, 13, 6 + bob, 0xFFB8FF4D.toInt()); px(buf, S, 18, 6 + bob, 0xFFB8FF4D.toInt())
+                rect(buf, S, 24, 3 + bob, 2, 20, 0xFF5C4630.toInt())
+                rect(buf, S, 23, 2 + bob, 4, 3, 0xFF7BFF70.toInt())
+                if (isBoss) rect(buf, S, 9, 0 + bob, 13, 1, 0xFFB8FF4D.toInt())
+            }
+            MonsterType.GATOR_BRUTE -> {
+                drawShadow(buf, 4, 25, 24, 5)
+                val hide = 0xFF3F5F34.toInt()
+                rect(buf, S, 8, 19 + bob, 6, 8, hide); rect(buf, S, 18, 19 + bob, 6, 8, hide)
+                rect(buf, S, 6, 9 + bob, 20, 12, hide)
+                rect(buf, S, 9, 12 + bob, 14, 7, 0xFFC9B27A.toInt())
+                rect(buf, S, 9, 1 + bob, 14, 8, hide)
+                rect(buf, S, 7, 6 + bob, 18, 3, 0xFF2F4A27.toInt()) // long snout
+                px(buf, S, 12, 3 + bob, 0xFFFFD84D.toInt()); px(buf, S, 19, 3 + bob, 0xFFFFD84D.toInt())
+            }
+            MonsterType.FEN_WISP -> {
+                drawShadow(buf, 10, 26, 12, 3)
+                val glow = if (frame == 0) 0xFFB8FF8A.toInt() else 0xFFE8FFB0.toInt()
+                rect(buf, S, 10, 6 + bob, 12, 12, 0xFF5EE89E.toInt())
+                rect(buf, S, 12, 8 + bob, 8, 8, glow)
+                rect(buf, S, 14, 18 + bob, 4, 5, 0xFF3FBF7F.toInt())
+                px(buf, S, 14, 11 + bob, 0xFF1F3B2A.toInt()); px(buf, S, 18, 11 + bob, 0xFF1F3B2A.toInt())
+            }
+            MonsterType.DUNE_SCORPION -> {
+                drawShadow(buf, 3, 25, 26, 5)
+                val shell = 0xFFC48A3A.toInt()
+                rect(buf, S, 6, 15 + bob, 20, 8, shell)
+                rect(buf, S, 2, 13 + bob, 5, 4, shell); rect(buf, S, 25, 13 + bob, 5, 4, shell) // pincers
+                rect(buf, S, 14, 4 + bob, 4, 11, shell)
+                rect(buf, S, 13, 1 + bob, 6, 4, 0xFF7A3A12.toInt()) // stinger
+                px(buf, S, 12, 16 + bob, 0xFF1A0F05.toInt()); px(buf, S, 19, 16 + bob, 0xFF1A0F05.toInt())
+            }
+            MonsterType.SAND_WRAITH -> {
+                drawShadow(buf, 8, 26, 16, 3)
+                val sand = if (frame == 0) 0xFFE0C38A.toInt() else 0xFFD4B27A.toInt()
+                rect(buf, S, 9, 8 + bob, 14, 14, sand)
+                rect(buf, S, 11, 22 + bob, 10, 4, 0x99D4B27A.toInt())
+                rect(buf, S, 10, 2 + bob, 12, 8, 0xFF8C6E45.toInt())
+                px(buf, S, 13, 5 + bob, 0xFF7BE8FF.toInt()); px(buf, S, 18, 5 + bob, 0xFF7BE8FF.toInt())
+            }
+            MonsterType.SUNSCALE_BASILISK -> {
+                drawShadow(buf, 3, 25, 26, 5)
+                val scale = 0xFFB86B1E.toInt()
+                rect(buf, S, 4, 14 + bob, 22, 9, scale)
+                rect(buf, S, 7, 16 + bob, 16, 4, 0xFFFFD452.toInt())
+                rect(buf, S, 22, 8 + bob, 8, 8, scale)
+                rect(buf, S, 1, 17 + bob, 4, 3, scale) // tail
+                px(buf, S, 26, 10 + bob, 0xFFFF3B1F.toInt())
+            }
+            MonsterType.AKHET_THE_SAND_PHARAOH -> {
+                drawShadow(buf, 5, 25, 22, 5)
+                val wrap = 0xFFD9CBA8.toInt()
+                val gold = 0xFFFFC947.toInt()
+                rect(buf, S, 9, 19 + bob, 5, 8, wrap); rect(buf, S, 18, 19 + bob, 5, 8, wrap)
+                rect(buf, S, 8, 10 + bob, 16, 11, wrap)
+                rect(buf, S, 10, 11 + bob, 12, 3, gold)
+                rect(buf, S, 10, 3 + bob, 12, 7, wrap)
+                rect(buf, S, 8, 1 + bob, 16, 3, 0xFF1F4FA8.toInt()) // nemes headdress
+                rect(buf, S, 15, 0 + bob, 2, 2, gold)
+                px(buf, S, 13, 6 + bob, 0xFF7BE8FF.toInt()); px(buf, S, 18, 6 + bob, 0xFF7BE8FF.toInt())
+                rect(buf, S, 24, 4 + bob, 3, 18, gold)
+            }
         }
         return toBmp(buf, S)
     }

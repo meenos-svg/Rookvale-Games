@@ -222,7 +222,7 @@ object CloudSavePayloadCodec {
             put("gold", data.gold)
             put("bankGold", data.bankGold.coerceAtLeast(0L))
             put("regionId", normalizeRegionId(data.regionId))
-            put("floor", data.floor.coerceIn(-28, 0))
+            put("floor", data.floor.coerceIn(com.example.game.world.BiomeProgressionRules.MIN_DUNGEON_FLOOR, 0))
             put("x", data.x)
             put("y", data.y)
             put("mapVersion", data.mapVersion)
@@ -394,7 +394,7 @@ object CloudSavePayloadCodec {
             maxCapOz = hydratedMaxCap,
             gold = json.optInt("gold", 0).coerceAtLeast(0),
             bankGold = json.optLong("bankGold", 0L).coerceAtLeast(0L),
-            floor = json.optInt("floor", 0).coerceIn(-28, 0),
+            floor = json.optInt("floor", 0).coerceIn(com.example.game.world.BiomeProgressionRules.MIN_DUNGEON_FLOOR, 0),
             x = json.optInt("x", WorldMaps.TEMPLE_SPAWN_X),
             y = json.optInt("y", WorldMaps.TEMPLE_SPAWN_Y),
             poisonTicks = 0,

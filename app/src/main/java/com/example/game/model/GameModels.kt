@@ -6,13 +6,15 @@ import com.example.game.multiplayer.LocalPlayerActionFxEvent
 import com.example.game.world.WeatherType
 import com.squareup.moshi.JsonClass
 
-const val CURRENT_MAP_VERSION = 6
+const val CURRENT_MAP_VERSION = 7
 
 /** Map version that rebuilt Deep Delve floors -1..-4 as 96x96 layouts (saves inside them move to the entrance). */
 const val DEEP_DELVE_REBUILD_MAP_VERSION = 5
 
 /** Map v6 rebuilt Quarry Mines (-11), North Mountain Cavern (-12) and Crag Deep Hollow (-14) at 96x96. */
 const val HEARTLAND_SITE_REBUILD_MAP_VERSION = 6
+/** Map v7 rebuilt Gorek Labyrinth (-6), Sunken Mire Vaults (-7) and the Overgrown Ziggurat (-8). */
+const val FRONTIER_SITE_REBUILD_MAP_VERSION = 7
 const val V1_SURFACE_OFFSET = 32
 const val V2_TO_V3_OFFSET_X = 149
 const val V2_TO_V3_OFFSET_Y = 146
@@ -1155,6 +1157,55 @@ enum class MonsterType(
         aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
         inflictsFire = true, isBoss = true, summonTypeName = "GOREK_RAIDER", maxSummons = 2,
         specialKind = BossSpecialKind.LABYRINTH_PYRE, bossTitle = "Warden of Vaelgor's Inner Sanctum"
+    ),
+
+    // --- Murkfen Hollow (Floor -29, Whispering Marsh Lv 20-24) ---
+    BOG_HAG(
+        displayName = "Bog Hag", tier = 3, threatLevel = 10, maxHp = 236, armor = 8,
+        xpReward = 252, minDmg = 20, maxDmg = 37, goldMin = 48, goldMax = 108, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.VENOM_GLOB,
+        inflictsPoison = true
+    ),
+    GATOR_BRUTE(
+        displayName = "Gator Brute", tier = 3, threatLevel = 10, maxHp = 292, armor = 12,
+        xpReward = 258, minDmg = 22, maxDmg = 39, goldMin = 46, goldMax = 104, moveIntervalTicks = 1
+    ),
+    FEN_WISP(
+        displayName = "Fen Wisp", tier = 3, threatLevel = 9, maxHp = 198, armor = 6,
+        xpReward = 236, minDmg = 19, maxDmg = 35, goldMin = 42, goldMax = 98, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.FIREBALL,
+        inflictsFire = true
+    ),
+    HAGMOTHER_VESSA(
+        displayName = "Hagmother Vessa", tier = 3, threatLevel = 11, maxHp = 660, armor = 13,
+        xpReward = 760, minDmg = 26, maxDmg = 49, goldMin = 170, goldMax = 320, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.VENOM_GLOB,
+        inflictsPoison = true, isBoss = true, summonTypeName = "BOG_HAG", maxSummons = 2,
+        specialKind = BossSpecialKind.VENOM_NOVA, bossTitle = "Witch-Queen of the Drowned Fen"
+    ),
+
+    // --- Tomb of Akhet (Floor -30, Sunscorch Badlands Lv 30-34) ---
+    DUNE_SCORPION(
+        displayName = "Dune Scorpion", tier = 4, threatLevel = 13, maxHp = 420, armor = 15,
+        xpReward = 470, minDmg = 30, maxDmg = 54, goldMin = 70, goldMax = 150, moveIntervalTicks = 1,
+        inflictsPoison = true
+    ),
+    SAND_WRAITH(
+        displayName = "Sand Wraith", tier = 4, threatLevel = 13, maxHp = 380, armor = 10,
+        xpReward = 455, minDmg = 29, maxDmg = 52, goldMin = 68, goldMax = 146, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.ARCANE_DART
+    ),
+    SUNSCALE_BASILISK(
+        displayName = "Sunscale Basilisk", tier = 4, threatLevel = 14, maxHp = 452, armor = 16,
+        xpReward = 495, minDmg = 31, maxDmg = 56, goldMin = 74, goldMax = 158, moveIntervalTicks = 2,
+        inflictsFire = true
+    ),
+    AKHET_THE_SAND_PHARAOH(
+        displayName = "Akhet, the Sand Pharaoh", tier = 4, threatLevel = 15, maxHp = 940, armor = 17,
+        xpReward = 1180, minDmg = 39, maxDmg = 70, goldMin = 250, goldMax = 450, moveIntervalTicks = 2,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.ARCANE_DART,
+        isBoss = true, summonTypeName = "SAND_WRAITH", maxSummons = 2,
+        specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Undying King of the Sunken Tomb"
     );
 
     fun threatBandFor(playerLevel: Int): ThreatBand = when {

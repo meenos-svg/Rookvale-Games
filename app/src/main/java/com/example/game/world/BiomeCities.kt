@@ -154,6 +154,7 @@ object BiomeCities {
         deck(531, 582, 559, 608)
         c.ellipse(cx, cy, 6.5f, 5.5f, TileType.COBBLESTONE)          // fire-stone ring
         c[cx, cy] = TileType.CAMPFIRE_BRAZIER                        // the great peat fire
+        c[550, 591] = TileType.BIOME_STALL_MARSH                     // Stilt-Town Mire Bench (crafting)
         for ((x, y) in listOf(533 to 584, 557 to 584, 533 to 606, 557 to 606)) c[x, y] = TileType.LANTERN_POST
         c[537, 586] = TileType.MINI_DEPOT                            // stilt depot
         c[538, 586] = TileType.CRATE_BARREL
@@ -310,6 +311,8 @@ object BiomeCities {
         for ((x, y) in listOf(367 to 785, 383 to 785, 367 to 795, 383 to 795)) c[x, y] = TileType.CRYSTAL_PILLAR  // sun obelisks
         c[369, 788] = TileType.MINI_DEPOT
         c[378, 793] = TileType.BIOME_STALL_BADLANDS
+        c[380, 786] = TileType.BIOME_STALL_BADLANDS                  // Sunscorch Oasis Smeltery (crafting)
+        c[381, 786] = TileType.SMELTING_FURNACE
         c[379, 793] = TileType.MARKET_AWNING
         c.rect(373, 778, 377, 781, paving)                       // plaza -> jetty
 

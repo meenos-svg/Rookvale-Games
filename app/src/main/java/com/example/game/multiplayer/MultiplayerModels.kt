@@ -314,7 +314,7 @@ fun electFloorHost(
 }
 
 object MultiplayerSanitizer {
-    private val validFloors = (-28..0).toSet()
+    private val validFloors = (com.example.game.world.BiomeProgressionRules.MIN_DUNGEON_FLOOR..0).toSet()
     private val controlRegex = Regex("[\\p{Cntrl}&&[^\t]]")
 
     fun isValidFloor(floor: Int): Boolean = floor in validFloors

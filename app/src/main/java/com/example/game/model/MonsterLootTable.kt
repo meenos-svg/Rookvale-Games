@@ -674,6 +674,101 @@ object MonsterLootTable {
             ),
             bonusWeightRolls = 2
         ),
+        // --- Murkfen Hollow (-29) ---
+        MonsterType.BOG_HAG to MonsterLootEntry(
+            minGp = 48, maxGp = 108,
+            weightedDrops = listOf(
+                WeightedLootDrop("bile_gland", 1, 2, dropChance = 0.48f, weight = 28),
+                WeightedLootDrop("hmm_rune", 1, 2, dropChance = 0.36f, weight = 24),
+                WeightedLootDrop("mana_potion", 1, 2, dropChance = 0.34f, weight = 18),
+                WeightedLootDrop("peat_coal_ore", 1, 2, dropChance = 0.40f, weight = 18),
+                WeightedLootDrop("bog_iron_ward_pendant", 1, 1, dropChance = 0.10f, weight = 8)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.GATOR_BRUTE to MonsterLootEntry(
+            minGp = 46, maxGp = 104,
+            weightedDrops = listOf(
+                WeightedLootDrop("jagged_ivory", 1, 2, dropChance = 0.50f, weight = 30),
+                WeightedLootDrop("mire_silver_ore", 1, 2, dropChance = 0.42f, weight = 26),
+                WeightedLootDrop("health_potion", 1, 2, dropChance = 0.36f, weight = 20),
+                WeightedLootDrop("venom_shafts", 6, 10, dropChance = 0.30f, weight = 14)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.FEN_WISP to MonsterLootEntry(
+            minGp = 42, maxGp = 98,
+            weightedDrops = listOf(
+                WeightedLootDrop("ember_heart", 1, 1, dropChance = 0.30f, weight = 24),
+                WeightedLootDrop("peat_coal_ore", 1, 2, dropChance = 0.46f, weight = 26),
+                WeightedLootDrop("mana_potion", 1, 2, dropChance = 0.40f, weight = 22),
+                WeightedLootDrop("fireball_rune", 1, 2, dropChance = 0.20f, weight = 12)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.HAGMOTHER_VESSA to MonsterLootEntry(
+            minGp = 170, maxGp = 320,
+            guaranteedDrops = listOf(
+                ItemStack("bile_gland", 3),
+                ItemStack("mire_silver_ore", 3),
+                ItemStack("mana_potion", 2)
+            ),
+            weightedDrops = listOf(
+                WeightedLootDrop("hmm_rune", 3, 6, dropChance = 0.66f, weight = 22),
+                WeightedLootDrop("healing_rune", 2, 4, dropChance = 0.58f, weight = 20),
+                WeightedLootDrop("tallowbone_crosier", 1, 1, dropChance = 0.26f, weight = 16),
+                WeightedLootDrop("bog_iron_ward_pendant", 1, 1, dropChance = 0.30f, weight = 16),
+                WeightedLootDrop("stormglass_pendant", 1, 1, dropChance = 0.16f, weight = 10)
+            ),
+            bonusWeightRolls = 2
+        ),
+        // --- Tomb of Akhet (-30) ---
+        MonsterType.DUNE_SCORPION to MonsterLootEntry(
+            minGp = 70, maxGp = 150,
+            weightedDrops = listOf(
+                WeightedLootDrop("bile_gland", 1, 2, dropChance = 0.48f, weight = 28),
+                WeightedLootDrop("jagged_ivory", 1, 2, dropChance = 0.44f, weight = 26),
+                WeightedLootDrop("venom_shafts", 8, 14, dropChance = 0.36f, weight = 20),
+                WeightedLootDrop("health_potion", 1, 2, dropChance = 0.36f, weight = 14)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.SAND_WRAITH to MonsterLootEntry(
+            minGp = 68, maxGp = 146,
+            weightedDrops = listOf(
+                WeightedLootDrop("ancient_bone", 2, 3, dropChance = 0.52f, weight = 28),
+                WeightedLootDrop("runic_slate", 1, 2, dropChance = 0.40f, weight = 24),
+                WeightedLootDrop("sd_rune", 1, 2, dropChance = 0.32f, weight = 20),
+                WeightedLootDrop("mana_potion", 1, 2, dropChance = 0.40f, weight = 16)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.SUNSCALE_BASILISK to MonsterLootEntry(
+            minGp = 74, maxGp = 158,
+            weightedDrops = listOf(
+                WeightedLootDrop("ember_heart", 1, 2, dropChance = 0.44f, weight = 28),
+                WeightedLootDrop("jagged_ivory", 1, 2, dropChance = 0.42f, weight = 24),
+                WeightedLootDrop("fireball_rune", 1, 2, dropChance = 0.26f, weight = 18),
+                WeightedLootDrop("health_potion", 1, 2, dropChance = 0.36f, weight = 16)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.AKHET_THE_SAND_PHARAOH to MonsterLootEntry(
+            minGp = 250, maxGp = 450,
+            guaranteedDrops = listOf(
+                ItemStack("ancient_bone", 4),
+                ItemStack("ember_heart", 2),
+                ItemStack("sd_rune", 2)
+            ),
+            weightedDrops = listOf(
+                WeightedLootDrop("fireball_rune", 2, 4, dropChance = 0.68f, weight = 22),
+                WeightedLootDrop("starlight_quarrels", 10, 18, dropChance = 0.54f, weight = 20),
+                WeightedLootDrop("dragon_mail", 1, 1, dropChance = 0.26f, weight = 16),
+                WeightedLootDrop("vesperite_longblade", 1, 1, dropChance = 0.18f, weight = 14),
+                WeightedLootDrop("stormglass_pendant", 1, 1, dropChance = 0.24f, weight = 12)
+            ),
+            bonusWeightRolls = 2
+        ),
         MonsterType.BARROW_WIGHT to MonsterLootEntry(
             minGp = 100, maxGp = 205,
             weightedDrops = listOf(
