@@ -244,10 +244,10 @@ object WorldBiomeBlueprint {
             regionId = "alder_sea_plains",
             centerX = 545,
             centerY = 595,
-            minX = 528,
-            minY = 578,
-            maxX = 562,
-            maxY = 612,
+            minX = BiomeCities.MIRE_MIN_X,
+            minY = BiomeCities.MIRE_MIN_Y,
+            maxX = BiomeCities.MIRE_MAX_X,
+            maxY = BiomeCities.MIRE_MAX_Y,
             ideology = BiomeIdeology.MARSHLAND,
             tier = SettlementTier.EMPIRE,
             levelRangeLabel = OverlandBiomeTier.WHISPERING_MARSH.levelRangeLabel
@@ -287,10 +287,10 @@ object WorldBiomeBlueprint {
             regionId = "sunspire_desert",
             centerX = 375,
             centerY = 790,
-            minX = 358,
-            minY = 774,
-            maxX = 392,
-            maxY = 806,
+            minX = BiomeCities.SUN_MIN_X,
+            minY = BiomeCities.SUN_MIN_Y,
+            maxX = BiomeCities.SUN_MAX_X,
+            maxY = BiomeCities.SUN_MAX_Y,
             ideology = BiomeIdeology.BADLANDS,
             tier = SettlementTier.EMPIRE,
             levelRangeLabel = OverlandBiomeTier.SUNSCORCH_BADLANDS.levelRangeLabel
@@ -879,6 +879,9 @@ object WorldBiomeBlueprint {
         // 3. Strictly coastline-validated Ocean Harbor Piers, Boats & Maelstrom Shrine
         resolveOuterHarborTile(x, y)?.let { return it }
 
+        // 3b. Hand-built biome cities (Mirewatch stilt city, Sunspire walled oasis)
+        BiomeCities.cityAt(x, y)?.let { city -> return cityTile(city, x, y) }
+
         // 4. Biome-Ideology Empires, Towns & Forward Camps
         resolveSettlementTile(x, y)?.let { return it }
 
@@ -891,6 +894,25 @@ object WorldBiomeBlueprint {
             return if (landVal > -0.14f) TileType.WATER else TileType.DEEP_WATER
         }
 
+        return resolveBiomeTile(x, y, landVal)
+    }
+
+    /**
+     * A city cell, falling back to the natural terrain where the city leaves a gap. Highways that
+     * cross a city's water or trees become bridges/boardwalks so roads never dead-end.
+     */
+    private fun cityTile(city: BiomeCities.City, x: Int, y: Int): TileType {
+        val road = resolveRoadTile(x, y)
+        val t = city.tileAt(x, y) ?: return road ?: naturalTile(x, y)
+        if (road != null && (t == TileType.WATER || t == TileType.DEEP_WATER || t == TileType.TREE)) {
+            return if (t == TileType.TREE) TileType.WOOD_PIER else TileType.WOOD_BRIDGE
+        }
+        return t
+    }
+
+    private fun naturalTile(x: Int, y: Int): TileType {
+        val landVal = landmassField(x, y)
+        if (landVal < 0.0f) return if (landVal > -0.14f) TileType.WATER else TileType.DEEP_WATER
         return resolveBiomeTile(x, y, landVal)
     }
 
