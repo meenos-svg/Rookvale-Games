@@ -335,6 +335,14 @@ object HuntContracts {
         regular("f_shamans", "Break the Shamans", MonsterType.GLACIER_SHAMAN, 15, 55, 7400, "Glacier shamans chant in the Shaman Grotto.", F),
         boss("f_b_hrimgar", MonsterType.HRIMGAR_THE_GLACIER_KING, 56, 15000, "On the Throne of Rime, west of the frozen falls.", F),
         // --- Ashen Bastion: Warmaster Dravek's ember bounties (Lv 55-75) ---
+        regular("a_miners", "Ashborn Miners", MonsterType.ASHBORN_MINER, 20, 55, 6800, "Ashborn miners haunt the Cinderfall Mines, north of the Bastion.", A),
+        regular("a_crawlers", "Magma Crawlers", MonsterType.MAGMA_CRAWLER, 20, 55, 6800, "Crawlers swarm the Mines' magma vents.", A),
+        regular("a_slingers", "Cinder Slingers", MonsterType.CINDER_SLINGER, 15, 56, 7000, "Slingers nest on the glassy ledges of the Slinger Roost.", A),
+        boss("a_b_ordrak", MonsterType.ORDRAK_THE_MOLTEN_FOREMAN, 58, 15500, "In the Foreman's Forge, north-east of the Great Shaft.", A),
+        regular("a_revenants", "Lay the Revenants", MonsterType.ASHEN_REVENANT, 20, 61, 8200, "Revenants walk the buried streets of Emberhold, south-west of the Bastion.", A),
+        regular("a_hounds", "Smolder Hounds", MonsterType.SMOLDER_HOUND, 20, 61, 8000, "Hounds run loose from Emberhold's kennels.", A),
+        regular("a_witches", "Cinder Coven", MonsterType.CINDER_WITCH, 15, 62, 8400, "Cinder witches chant in the Witches' Coven.", A),
+        boss("a_b_sevra", MonsterType.SEVRA_THE_ASH_CROWNED, 64, 18000, "On the ash throne in the Palace of Sevra.", A),
         regular("a_ghouls", "Ash-Field Ghouls", MonsterType.GHOUL, 25, 56, 6400, "Ghouls dig through the ash fields around the Bastion.", A),
         regular("a_necromancers", "Burn the Necromancers", MonsterType.NECROMANCER, 20, 60, 7800, "Necromancers raise the dead across the caldera wastes.", A),
         regular("a_devils", "Fire Devils", MonsterType.FIRE_DEVIL, 20, 63, 8400, "Fire devils dance on the lava fields outside the moat.", A),
@@ -427,6 +435,8 @@ object TownCrier {
         frostPool[VendorCatalog.positiveHash(wallClockMs / DAY_MS, 263L) % frostPool.size]
 
     private val ashPool = listOf(
+        MonsterType.ASHBORN_MINER, MonsterType.MAGMA_CRAWLER, MonsterType.CINDER_SLINGER,
+        MonsterType.ASHEN_REVENANT, MonsterType.SMOLDER_HOUND, MonsterType.CINDER_WITCH,
         MonsterType.GHOUL, MonsterType.NECROMANCER, MonsterType.FIRE_DEVIL, MonsterType.DRAGON_HATCHLING,
         MonsterType.SLAG_AUTOMATON, MonsterType.ASH_PYROMANCER, MonsterType.EMBER_DRAKE, MonsterType.OBSIDIAN_CULTIST
     )
@@ -470,7 +480,11 @@ object DungeonGuides {
         "Rift Scout Imran" to DungeonGuideInfo(-31, "Scorchglass Rift", "Lv 41-45", MonsterType.SIROCCO_THE_STORM_DJINN.displayName,
             "Golems guard the salt flats. The Djinn's Eye sits behind a lava ring at the top of the rift."),
         "Icewarden Kjell" to DungeonGuideInfo(-32, "Rimeheart Caverns", "Lv 54-58", MonsterType.HRIMGAR_THE_GLACIER_KING.displayName,
-            "Yetis den in the south caves. The Throne of Rime lies west across the frozen falls.")
+            "Yetis den in the south caves. The Throne of Rime lies west across the frozen falls."),
+        "Pitwarden Brask" to DungeonGuideInfo(-33, "Cinderfall Mines", "Lv 55-60", MonsterType.ORDRAK_THE_MOLTEN_FOREMAN.displayName,
+            "Crawlers swarm the magma vents. The Foreman's Forge is gated off north-east of the Great Shaft."),
+        "Digmaster Yeva" to DungeonGuideInfo(-34, "Emberhold, the Buried City", "Lv 61-66", MonsterType.SEVRA_THE_ASH_CROWNED.displayName,
+            "Hounds run the kennels. Sevra's palace lies at the east end of the buried streets, past a lava moat.")
     )
 
     fun messageFor(guideName: String): String {

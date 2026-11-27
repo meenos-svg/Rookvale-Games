@@ -903,6 +903,40 @@ object EntitySpriteAtlas {
                 px(buf, S, 13, 4 + bob, 0xFF4DB8FF.toInt()); px(buf, S, 18, 4 + bob, 0xFF4DB8FF.toInt())
                 if (king) { rect(buf, S, 9, 0 + bob, 14, 2, 0xFF8FE3FF.toInt()); px(buf, S, 11, -1 + bob + 1, 0xFFFFFFFF.toInt()) }
             }
+            MonsterType.ASHBORN_MINER, MonsterType.ORDRAK_THE_MOLTEN_FOREMAN, MonsterType.ASHEN_REVENANT -> {
+                val boss = type == MonsterType.ORDRAK_THE_MOLTEN_FOREMAN
+                drawShadow(buf, 5, 25, 22, 5)
+                val hide = when (type) { MonsterType.ASHEN_REVENANT -> 0xFF8A8480.toInt(); else -> 0xFF5A4A44.toInt() }
+                val plate = 0xFF2B2226.toInt()
+                rect(buf, S, 9, 19 + bob, 5, 8, plate); rect(buf, S, 18, 19 + bob, 5, 8, plate)
+                rect(buf, S, 7, 9 + bob, 18, 12, hide)
+                rect(buf, S, 9, 13 + bob, 14, 2, 0xFFFF7A1F.toInt())
+                rect(buf, S, 10, 2 + bob, 12, 8, hide)
+                px(buf, S, 13, 5 + bob, 0xFFFFB04D.toInt()); px(buf, S, 18, 5 + bob, 0xFFFFB04D.toInt())
+                rect(buf, S, 25, 6 + bob, 3, 14, 0xFF3A2E2A.toInt())
+                if (boss) rect(buf, S, 9, 0 + bob, 14, 2, 0xFFFF7A1F.toInt())
+            }
+            MonsterType.MAGMA_CRAWLER, MonsterType.SMOLDER_HOUND -> {
+                drawShadow(buf, 3, 25, 26, 5)
+                val shell = if (type == MonsterType.MAGMA_CRAWLER) 0xFF3A2420.toInt() else 0xFF2B1E1A.toInt()
+                rect(buf, S, 5, 14 + bob, 20, 8, shell)
+                rect(buf, S, 8, 16 + bob, 14, 2, 0xFFFF6A2B.toInt())
+                rect(buf, S, 6, 22 + bob, 3, 5, shell); rect(buf, S, 21, 22 + bob, 3, 5, shell)
+                rect(buf, S, 22, 10 + bob, 8, 7, shell)
+                px(buf, S, 27, 12 + bob, 0xFFFFEE88.toInt())
+            }
+            MonsterType.CINDER_SLINGER, MonsterType.CINDER_WITCH, MonsterType.SEVRA_THE_ASH_CROWNED -> {
+                val queen = type == MonsterType.SEVRA_THE_ASH_CROWNED
+                drawShadow(buf, 6, 25, 20, 5)
+                val robe = if (type == MonsterType.CINDER_SLINGER) 0xFF3A2A26.toInt() else 0xFF3A1A1E.toInt()
+                rect(buf, S, 9, 20 + bob, 4, 7, robe); rect(buf, S, 18, 20 + bob, 4, 7, robe)
+                rect(buf, S, 8, 10 + bob, 15, 12, robe)
+                rect(buf, S, 10, 3 + bob, 11, 8, 0xFF9A8C88.toInt())
+                px(buf, S, 13, 6 + bob, 0xFFFF6A2B.toInt()); px(buf, S, 18, 6 + bob, 0xFFFF6A2B.toInt())
+                rect(buf, S, 24, 3 + bob, 2, 20, 0xFF4A3A36.toInt())
+                rect(buf, S, 23, 1 + bob, 4, 3, 0xFFFF8A3A.toInt())
+                if (queen) rect(buf, S, 9, 0 + bob, 13, 2, 0xFFFFC947.toInt())
+            }
             MonsterType.RIMEFANG_STALKER -> {
                 drawShadow(buf, 3, 25, 26, 5)
                 val fur = 0xFF8FA8BD.toInt()

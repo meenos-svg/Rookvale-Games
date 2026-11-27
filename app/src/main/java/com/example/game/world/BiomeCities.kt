@@ -75,6 +75,13 @@ object BiomeCities {
         return dx * dx + dy * dy <= 1.0
     }
 
+    /**
+     * Ashen Bastion straddles the coarse region border at x = 400, so its east half would otherwise
+     * count as Frostpeak. The city and a small margin around it are Ashen Caldera.
+     */
+    fun isAshenBastionRim(x: Int, y: Int): Boolean =
+        x in 400..ASH_MAX_X + 8 && y in ASH_MIN_Y - 8..ASH_MAX_Y + 8
+
     fun cityAt(x: Int, y: Int): City? = when {
         x in MIRE_MIN_X..MIRE_MAX_X && y in MIRE_MIN_Y..MIRE_MAX_Y -> mirewatch
         x in SUN_MIN_X..SUN_MAX_X && y in SUN_MIN_Y..SUN_MAX_Y -> sunspire
