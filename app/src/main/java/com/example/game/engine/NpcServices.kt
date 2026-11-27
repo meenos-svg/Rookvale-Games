@@ -40,9 +40,11 @@ object VendorCatalog {
     const val MIRE_OUTFITTER = "odra"
     const val SUN_CARAVANEER = "tahir"
     const val FROST_FURRIER = "ulfa"
+    const val ASH_SLAGWRIGHT = "sorrel"
 
     private val marshGoods = setOf("bile_gland", "spider_silk", "mire_silver_ore", "peat_coal_ore", "bog_iron_ore", "ghoul_gem", "jagged_ivory", "marsh_pike")
     private val frostGoods = setOf("frost_iron_ore", "glacier_quartz_ore", "grimmaw_stone_core", "colossus_tendon", "ancient_bone", "runic_slate", "glacier_salmon")
+    private val ashGoods = setOf("cinderite_ore", "cinderite_bar", "molten_core", "ember_heart", "runic_slate", "wyrmscale_plate", "gorek_obsidian_horn", "emberfin_sturgeon")
     private val badlandsGoods = setOf("vesperite_ore", "gorek_obsidian_horn", "colossus_tendon", "ancient_bone", "runic_slate", "ember_heart", "sunfin_snapper")
 
     /** Specialists pay 25% more than Alaric for goods in their trade. */
@@ -143,6 +145,19 @@ object VendorCatalog {
             preferredSellMultiplier = SPECIALIST_SELL_BONUS
         ),
         Vendor(
+            id = ASH_SLAGWRIGHT,
+            npcName = "Sorrel",
+            title = "Sorrel's Slag & Picks",
+            greeting = "Sorrel: 'Emberworms for the quench pool, a cinderite pick for the hot veins. I pay best for cinderite, molten cores and wyrmscale.'",
+            stock = listOf(
+                offer("fishing_rod"), offer("cinder_emberworm"),
+                offer("health_potion"), offer("mana_potion"), offer("rope"),
+                offer("starlight_quarrels", 18), offer("cinderite_core_pickaxe", 2600)
+            ),
+            prefers = { it.id in ashGoods },
+            preferredSellMultiplier = SPECIALIST_SELL_BONUS
+        ),
+        Vendor(
             id = WANDERER,
             npcName = "Zephyr the Wanderer",
             title = "Zephyr's Caravan",
@@ -232,12 +247,14 @@ object HuntBoards {
     const val MIREWATCH = "mirewatch"
     const val SUNSPIRE = "sunspire"
     const val FROSTPEAK = "frostpeak"
+    const val ASHEN = "ashen"
 
     val all: List<HuntBoard> = listOf(
         HuntBoard(ROOKVALE, "Captain Hale", "Captain Hale's Hunt Board", "Rookvale's plaza"),
         HuntBoard(MIREWATCH, "Warden Brisk", "Warden Brisk's Marsh Bounties", "Mirewatch's moot platform"),
         HuntBoard(SUNSPIRE, "Sergeant Kasim", "Sergeant Kasim's Desert Bounties", "Sunspire's Sun Plaza"),
-        HuntBoard(FROSTPEAK, "Huntmaster Sigrun", "Huntmaster Sigrun's Frost Bounties", "Frostpeak's Hearthstone Plaza")
+        HuntBoard(FROSTPEAK, "Huntmaster Sigrun", "Huntmaster Sigrun's Frost Bounties", "Frostpeak's Hearthstone Plaza"),
+        HuntBoard(ASHEN, "Warmaster Dravek", "Warmaster Dravek's Ember Bounties", "Ashen Bastion's Crucible Plaza")
     )
 
     fun byId(id: String?): HuntBoard = all.firstOrNull { it.id == id } ?: all.first()
@@ -258,6 +275,7 @@ object HuntContracts {
     private const val M = HuntBoards.MIREWATCH
     private const val S = HuntBoards.SUNSPIRE
     private const val F = HuntBoards.FROSTPEAK
+    private const val A = HuntBoards.ASHEN
 
     val all: List<HuntContract> = listOf(
         regular("rats", "Rat Catcher", MonsterType.CAVE_RAT, 15, 1, 60, "Cave rats scurry in the meadows around town."),
@@ -315,7 +333,18 @@ object HuntContracts {
         regular("f_yetis", "Yeti Cull", MonsterType.YETI_RAVAGER, 20, 54, 7200, "Yetis den in the south caves of the Rimeheart Caverns, north of the citadel.", F),
         regular("f_rimefangs", "Rimefang Pack", MonsterType.RIMEFANG_STALKER, 20, 54, 7000, "Rimefangs prowl the Rimeheart's snowdrift tunnels.", F),
         regular("f_shamans", "Break the Shamans", MonsterType.GLACIER_SHAMAN, 15, 55, 7400, "Glacier shamans chant in the Shaman Grotto.", F),
-        boss("f_b_hrimgar", MonsterType.HRIMGAR_THE_GLACIER_KING, 56, 15000, "On the Throne of Rime, west of the frozen falls.", F)
+        boss("f_b_hrimgar", MonsterType.HRIMGAR_THE_GLACIER_KING, 56, 15000, "On the Throne of Rime, west of the frozen falls.", F),
+        // --- Ashen Bastion: Warmaster Dravek's ember bounties (Lv 55-75) ---
+        regular("a_ghouls", "Ash-Field Ghouls", MonsterType.GHOUL, 25, 56, 6400, "Ghouls dig through the ash fields around the Bastion.", A),
+        regular("a_necromancers", "Burn the Necromancers", MonsterType.NECROMANCER, 20, 60, 7800, "Necromancers raise the dead across the caldera wastes.", A),
+        regular("a_devils", "Fire Devils", MonsterType.FIRE_DEVIL, 20, 63, 8400, "Fire devils dance on the lava fields outside the moat.", A),
+        regular("a_hatchlings", "Hatchling Cull", MonsterType.DRAGON_HATCHLING, 20, 64, 8800, "Hatchlings nest on the caldera slopes and in the Ember Sanctum.", A),
+        regular("a_automatons", "Scrap the Automatons", MonsterType.SLAG_AUTOMATON, 15, 66, 9600, "Slag automatons work the Ashen Caldera Foundry, down the shaft west of the West Gate.", A),
+        regular("a_pyromancers", "Douse the Pyromancers", MonsterType.ASH_PYROMANCER, 15, 66, 9600, "Ash pyromancers tend the Foundry's crucibles.", A),
+        regular("a_drakes", "Ember Drakes", MonsterType.EMBER_DRAKE, 15, 67, 10000, "Ember drakes roost in the Ember Sanctum on the Ember Isles.", A),
+        regular("a_cultists", "Break the Cult", MonsterType.OBSIDIAN_CULTIST, 20, 67, 10000, "Obsidian cultists chant in the Ember Sanctum.", A),
+        boss("a_b_vulkaris", MonsterType.VULKARIS_THE_FORGE_TITAN, 70, 20000, "In the Heart of the Crucible, below the Caldera Foundry.", A),
+        boss("a_b_ignivar", MonsterType.IGNIVAR_ASH_WING_WYRM, 70, 22000, "On the Caldera Dragon Throne, below the Ember Sanctum.", A)
     )
 
     fun byId(id: String?): HuntContract? = all.firstOrNull { it.id == id }
@@ -397,9 +426,18 @@ object TownCrier {
     fun featuredFrostCreature(wallClockMs: Long = System.currentTimeMillis()): MonsterType =
         frostPool[VendorCatalog.positiveHash(wallClockMs / DAY_MS, 263L) % frostPool.size]
 
+    private val ashPool = listOf(
+        MonsterType.GHOUL, MonsterType.NECROMANCER, MonsterType.FIRE_DEVIL, MonsterType.DRAGON_HATCHLING,
+        MonsterType.SLAG_AUTOMATON, MonsterType.ASH_PYROMANCER, MonsterType.EMBER_DRAKE, MonsterType.OBSIDIAN_CULTIST
+    )
+
+    /** Ashen Bastion's crier announces a caldera creature each day. */
+    fun featuredAshCreature(wallClockMs: Long = System.currentTimeMillis()): MonsterType =
+        ashPool[VendorCatalog.positiveHash(wallClockMs / DAY_MS, 331L) % ashPool.size]
+
     /** Every creature that earns today's bonus XP (one per town). */
     fun featuredCreatures(wallClockMs: Long = System.currentTimeMillis()): Set<MonsterType> =
-        setOf(featuredCreature(wallClockMs), featuredMarshCreature(wallClockMs), featuredBadlandsCreature(wallClockMs), featuredFrostCreature(wallClockMs))
+        setOf(featuredCreature(wallClockMs), featuredMarshCreature(wallClockMs), featuredBadlandsCreature(wallClockMs), featuredFrostCreature(wallClockMs), featuredAshCreature(wallClockMs))
 
     fun hoursUntilTomorrow(wallClockMs: Long = System.currentTimeMillis()): Long =
         ((DAY_MS - (wallClockMs % DAY_MS)) + 3_599_999L) / 3_600_000L
