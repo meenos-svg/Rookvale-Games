@@ -85,7 +85,7 @@ class FrontierCitiesAndDungeonsTest {
     @Test
     fun rebuiltAndNewFrontierDungeonsAreLargeConnectedAndPopulated() {
         val monsters = WorldMaps.initialMonsters()
-        for (floorId in listOf(-6, -7, -8, -29, -30, -31)) {
+        for (floorId in listOf(-6, -7, -8, -9, -29, -30, -31, -32)) {
             val fl = WorldMaps.getFloor(floorId)
             assertEquals(FrontierSiteFloors.SIZE, fl.width)
             val entry = WorldMaps.portals.single { it.fromFloor == 0 && it.toFloor == floorId }
@@ -127,13 +127,17 @@ class FrontierCitiesAndDungeonsTest {
         val rift = monsters.filter { it.floor == FrontierSiteFloors.RIFT_FLOOR }
         assertEquals(listOf(MonsterType.SIROCCO_THE_STORM_DJINN), rift.filter { it.type.isBoss }.map { it.type })
         rift.forEach { assertTrue("Rift ${it.type} Lv ${it.level}", it.level in 41..46) }
-        assertEquals(-31, BiomeProgressionRules.MIN_DUNGEON_FLOOR)
+        // Rimeheart Caverns tops off Frostpeak above the Barrow
+        val rime = monsters.filter { it.floor == FrontierSiteFloors.RIMEHEART_FLOOR }
+        assertEquals(listOf(MonsterType.HRIMGAR_THE_GLACIER_KING), rime.filter { it.type.isBoss }.map { it.type })
+        rime.forEach { assertTrue("Rimeheart ${it.type} Lv ${it.level}", it.level in 54..59) }
+        assertEquals(-32, BiomeProgressionRules.MIN_DUNGEON_FLOOR)
         assertFalse(BiomeProgressionRules.isLowerBossFloor(-29))
     }
 
     @Test
     fun oldSavesInsideRebuiltFrontierFloorsResumeAtTheCampLanding() {
-        for (floorId in listOf(-6, -7, -8)) {
+        for (floorId in listOf(-6, -7, -8, -9)) {
             val hero = GameEngine.createNewWorld("Delver").copy(floor = floorId, playerX = 24, playerY = 40)
             val oldSave = GameEngine.toSaveData(hero).copy(mapVersion = FRONTIER_SITE_REBUILD_MAP_VERSION - 1)
             val loaded = GameEngine.fromSaveData(oldSave)
@@ -153,6 +157,12 @@ class FrontierCitiesAndDungeonsTest {
         fun band(floors: List<Int>) = floors.flatMap { f -> monsters.filter { it.floor == f }.map { it.level } }.toSet()
         val marsh = band(listOf(-29, -7, -24, -8, -25))
         val badlands = band(listOf(-30, -6, -23, -31))
+        // Grimmaw's quarry has only a handful of spawns, so check Frostpeak by each floor's level range (base..base+5)
+        val frost = listOf(-5, -9, -32).flatMap { f ->
+            val base = BiomeProgressionRules.dungeonBaseLevel(BiomeProgressionRules.surfaceBiomeForDungeonFloor(f).minLevel, f)
+            (base..base + 5).toList()
+        }.toSet()
+        assertTrue("Frostpeak dungeons must cover Lv 42-58: $frost", (42..58).all { it in frost })
         assertTrue("Marsh dungeons must cover Lv 20-32: $marsh", (20..32).all { it in marsh })
         assertTrue("Badlands dungeons must cover Lv 30-45: $badlands", (30..45).all { it in badlands })
     }
@@ -191,7 +201,7 @@ class FrontierCitiesAndDungeonsTest {
             }
         }
         // Loot sanity in the marsh & badlands dungeons and their lairs
-        for (floorId in listOf(-6, -7, -8, -23, -24, -25, -29, -30, -31)) {
+        for (floorId in listOf(-5, -6, -7, -8, -9, -22, -23, -24, -25, -26, -29, -30, -31, -32)) {
             monsters.filter { it.floor == floorId }.map { it.type to it.level }.distinct().forEach { (type, level) ->
                 MonsterLootTable.entryFor(type).weightedDrops.forEach { d ->
                     val req = ItemCatalog.all[d.itemId]?.requiredLevel ?: 1

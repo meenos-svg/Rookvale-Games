@@ -311,7 +311,11 @@ object HuntContracts {
         regular("f_wights", "Barrow Wights", MonsterType.BARROW_WIGHT, 20, 48, 6000, "Wights stalk the Blightwood Barrow Catacombs.", F),
         regular("f_banshees", "Silence the Banshees", MonsterType.FROST_BANSHEE, 20, 48, 6000, "Frost banshees wail in the Barrow's frozen halls.", F),
         boss("f_b_kragor", MonsterType.KRAGOR_THE_STONE_EYED, 44, 9000, "In Kragor's Deep Quarry Pit, below the Grimmaw Quarry.", F),
-        boss("f_b_malgrath", MonsterType.LORD_MALGRATH_THE_UNDYING, 50, 12000, "In the Barrow Sovereign's Tomb, below the Blightwood Barrow.", F)
+        boss("f_b_malgrath", MonsterType.LORD_MALGRATH_THE_UNDYING, 50, 12000, "In the Barrow Sovereign's Tomb, below the Blightwood Barrow.", F),
+        regular("f_yetis", "Yeti Cull", MonsterType.YETI_RAVAGER, 20, 54, 7200, "Yetis den in the south caves of the Rimeheart Caverns, north of the citadel.", F),
+        regular("f_rimefangs", "Rimefang Pack", MonsterType.RIMEFANG_STALKER, 20, 54, 7000, "Rimefangs prowl the Rimeheart's snowdrift tunnels.", F),
+        regular("f_shamans", "Break the Shamans", MonsterType.GLACIER_SHAMAN, 15, 55, 7400, "Glacier shamans chant in the Shaman Grotto.", F),
+        boss("f_b_hrimgar", MonsterType.HRIMGAR_THE_GLACIER_KING, 56, 15000, "On the Throne of Rime, west of the frozen falls.", F)
     )
 
     fun byId(id: String?): HuntContract? = all.firstOrNull { it.id == id }
@@ -385,7 +389,8 @@ object TownCrier {
 
     private val frostPool = listOf(
         MonsterType.GRIMMAW_QUARRYMAN, MonsterType.GRIMMAW_ROCK_HURLER, MonsterType.GRIMMAW_CRUSHER,
-        MonsterType.BARROW_WIGHT, MonsterType.FROST_BANSHEE
+        MonsterType.BARROW_WIGHT, MonsterType.FROST_BANSHEE,
+        MonsterType.YETI_RAVAGER, MonsterType.RIMEFANG_STALKER, MonsterType.GLACIER_SHAMAN
     )
 
     /** Frostpeak's crier announces a highland creature each day. */
@@ -425,7 +430,9 @@ object DungeonGuides {
         "Tomb Robber Sefa" to DungeonGuideInfo(-30, "Tomb of Akhet", "Lv 30-34", MonsterType.AKHET_THE_SAND_PHARAOH.displayName,
             "Scorpions nest in the east dens. The sanctum gates lie north of the Hall of Kings."),
         "Rift Scout Imran" to DungeonGuideInfo(-31, "Scorchglass Rift", "Lv 41-45", MonsterType.SIROCCO_THE_STORM_DJINN.displayName,
-            "Golems guard the salt flats. The Djinn's Eye sits behind a lava ring at the top of the rift.")
+            "Golems guard the salt flats. The Djinn's Eye sits behind a lava ring at the top of the rift."),
+        "Icewarden Kjell" to DungeonGuideInfo(-32, "Rimeheart Caverns", "Lv 54-58", MonsterType.HRIMGAR_THE_GLACIER_KING.displayName,
+            "Yetis den in the south caves. The Throne of Rime lies west across the frozen falls.")
     )
 
     fun messageFor(guideName: String): String {

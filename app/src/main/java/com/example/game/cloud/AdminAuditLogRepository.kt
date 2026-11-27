@@ -325,7 +325,7 @@ object AdminTeleportCatalog {
         dungeonCampPreset("floor_m6", "F-6 Labyrinth Camp", -6, FrontierSiteFloors.GOREK.landingX, FrontierSiteFloors.GOREK.landingY),
         dungeonCampPreset("floor_m7", "F-7 Mire Vaults Camp", -7, FrontierSiteFloors.MIRE.landingX, FrontierSiteFloors.MIRE.landingY),
         dungeonCampPreset("floor_m8", "F-8 Ziggurat Camp", -8, FrontierSiteFloors.ZIGGURAT.landingX, FrontierSiteFloors.ZIGGURAT.landingY),
-        dungeonCampPreset("floor_m9", "F-9 Barrow Camp", -9, 24, 40),
+        dungeonCampPreset("floor_m9", "F-9 Barrow Camp", -9, FrontierSiteFloors.BARROW.landingX, FrontierSiteFloors.BARROW.landingY),
         dungeonCampPreset("floor_m10", "F-10 Caldera Camp", -10, 24, 40, openEndedTop = true),
         dungeonCampPreset("floor_m11", "F-11 Copper Quarry Mines", -11, HeartlandSiteFloors.QUARRY.landingX, HeartlandSiteFloors.QUARRY.landingY),
         dungeonCampPreset("floor_m12", "F-12 North Mountain Cavern", -12, HeartlandSiteFloors.MOUNTAIN.landingX, HeartlandSiteFloors.MOUNTAIN.landingY),
@@ -334,7 +334,8 @@ object AdminTeleportCatalog {
         dungeonCampPreset("floor_m15", "F-15 Ember Sanctum", -15, 24, 40, openEndedTop = true),
         dungeonCampPreset("floor_m29", "F-29 Murkfen Hollow", -29, FrontierSiteFloors.MURKFEN.landingX, FrontierSiteFloors.MURKFEN.landingY),
         dungeonCampPreset("floor_m30", "F-30 Tomb of Akhet", -30, FrontierSiteFloors.TOMB.landingX, FrontierSiteFloors.TOMB.landingY),
-        dungeonCampPreset("floor_m31", "F-31 Scorchglass Rift", -31, FrontierSiteFloors.RIFT.landingX, FrontierSiteFloors.RIFT.landingY)
+        dungeonCampPreset("floor_m31", "F-31 Scorchglass Rift", -31, FrontierSiteFloors.RIFT.landingX, FrontierSiteFloors.RIFT.landingY),
+        dungeonCampPreset("floor_m32", "F-32 Rimeheart Caverns", -32, FrontierSiteFloors.RIMEHEART.landingX, FrontierSiteFloors.RIMEHEART.landingY)
     )
 
     val overlandLandmarks: List<AdminTeleportPreset> = townsAndEmpires + overlandCamps

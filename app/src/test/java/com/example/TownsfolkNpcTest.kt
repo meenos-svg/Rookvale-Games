@@ -37,7 +37,7 @@ class TownsfolkNpcTest {
     fun everyNewTownsfolkStandsOnOpenGroundAwayFromPortals() {
         val floor0 = WorldMaps.getFloor(0)
         val spots = WorldMaps.npcs.filter { it.role in newRoles }
-        assertEquals(25, spots.size)
+        assertEquals(26, spots.size)
         spots.forEach { n ->
             assertTrue("${n.name} must stand on walkable ground", floor0.tileAt(n.x, n.y).walkable)
             assertTrue("${n.name} must be approachable", listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1).any { (dx, dy) -> floor0.tileAt(n.x + dx, n.y + dy).walkable })

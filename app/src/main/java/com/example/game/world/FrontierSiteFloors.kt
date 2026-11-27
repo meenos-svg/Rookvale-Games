@@ -31,10 +31,13 @@ object FrontierSiteFloors {
     val MURKFEN = Anchors(5, 48, 6, 48, 6, 48, 6, 48)
     val TOMB = Anchors(48, 90, 48, 89, 48, 89, 48, 89)
     val RIFT = Anchors(8, 88, 9, 87, 9, 87, 9, 87)
+    val BARROW = Anchors(48, 90, 48, 89, 48, 6, 48, 7)
+    val RIMEHEART = Anchors(90, 48, 89, 48, 89, 48, 89, 48)
 
     const val MURKFEN_FLOOR = -29
     const val TOMB_FLOOR = -30
     const val RIFT_FLOOR = -31
+    const val RIMEHEART_FLOOR = -32
 
     /** Overland entrances of the two new dungeons. */
     const val MURKFEN_ENTRY_X = 452
@@ -43,8 +46,10 @@ object FrontierSiteFloors {
     const val TOMB_ENTRY_Y = 850
     const val RIFT_ENTRY_X = 190
     const val RIFT_ENTRY_Y = 880
+    const val RIMEHEART_ENTRY_X = 1410
+    const val RIMEHEART_ENTRY_Y = 90
 
-    val newFloorIds: List<Int> = listOf(MURKFEN_FLOOR, TOMB_FLOOR, RIFT_FLOOR)
+    val newFloorIds: List<Int> = listOf(MURKFEN_FLOOR, TOMB_FLOOR, RIFT_FLOOR, RIMEHEART_FLOOR)
 
     fun anchorsFor(floorId: Int): Anchors? = when (floorId) {
         -6 -> GOREK
@@ -53,6 +58,8 @@ object FrontierSiteFloors {
         MURKFEN_FLOOR -> MURKFEN
         TOMB_FLOOR -> TOMB
         RIFT_FLOOR -> RIFT
+        -9 -> BARROW
+        RIMEHEART_FLOOR -> RIMEHEART
         else -> null
     }
 
@@ -63,6 +70,8 @@ object FrontierSiteFloors {
         MURKFEN_FLOOR -> murkfenHollow
         TOMB_FLOOR -> tombOfAkhet
         RIFT_FLOOR -> scorchglassRift
+        -9 -> barrowCatacombs
+        RIMEHEART_FLOOR -> rimeheartCaverns
         else -> null
     }
 
@@ -72,6 +81,8 @@ object FrontierSiteFloors {
     val murkfenHollow: Layout by lazy { buildMurkfen() }
     val tombOfAkhet: Layout by lazy { buildTomb() }
     val scorchglassRift: Layout by lazy { buildRift() }
+    val barrowCatacombs: Layout by lazy { buildBarrow() }
+    val rimeheartCaverns: Layout by lazy { buildRimeheart() }
 
     private fun layout(
         floorId: Int,
@@ -667,5 +678,187 @@ object FrontierSiteFloors {
             LandmarkLabel(RIFT_FLOOR, 78, 3, "THE DJINN'S EYE")
         )
         return layout(RIFT_FLOOR, c, camp, a, spawns, landmarks)
+    }
+
+    // =====================================================================================
+    // Floor -9: The Blightwood Barrow Catacombs (Frostpeak, Lv 48-53)
+    // =====================================================================================
+    private fun buildBarrow(): Layout {
+        val a = BARROW
+        val wall = TileType.GRANITE_WALL
+        val c = DeepDelveFloors.Canvas(SIZE, wall, seed = 909)
+        val crypt = TileType.CRYPT_FLOOR
+        val snow = TileType.SNOW
+        val camp = UndergroundCampZone(
+            floorId = -9, name = "BARROW CATACOMB CAMP (PZ)",
+            minX = 41, minY = 84, maxX = 55, maxY = 91,
+            healerX = 43, healerY = 87, healerName = "Frost Cleric Eirik",
+            merchantX = 53, merchantY = 87, merchantName = "Shadow Quartermaster Vex"
+        )
+        southCamp(c, a, crypt, TileType.BIOME_STALL_FROSTPEAK, camp)
+
+        // The Frostbitten Stair up from the camp
+        c.rect(46, 72, 50, 83, crypt)
+        c.scatterReplace(46, 72, 50, 83, crypt, snow, 3)
+        for (x in 46..50) c[x, 78] = TileType.IRON_BAR_GATE
+
+        // Hall of Cairns: a great cross-shaped hall lined with burial cairns
+        c.rect(30, 46, 66, 71, crypt)
+        c.rect(40, 34, 56, 46, crypt)
+        for (px in 33..61 step 7) for (py in listOf(50, 66)) c.rect(px, py, px + 1, py + 1, wall)
+        c.scatterReplace(30, 34, 66, 71, crypt, snow, 6)
+        c[48, 58] = TileType.CAMPFIRE_BRAZIER
+
+        // Ossuary Galleries (west): long galleries packed with burial niches
+        c.rect(6, 40, 26, 80, crypt)
+        for (y in 44..76 step 8) c.rect(8, y, 24, y + 1, wall)
+        for (y in 44..76 step 8) { c[10 + (y % 3) * 5, y] = crypt; c[11 + (y % 3) * 5, y] = crypt }
+        c.burialNiches(4, 38, 28, 82, crypt, density = 2)
+        c.rect(26, 58, 30, 60, crypt)
+
+        // Frozen Mere (east): a black lake crossed by stone causeways
+        c.ellipse(80, 60, 12, 14, crypt)
+        c.ellipse(80, 60, 9, 11, TileType.WATER)
+        c.rect(70, 59, 90, 61, TileType.STONE_BRIDGE)
+        c.rect(79, 48, 81, 72, TileType.STONE_BRIDGE)
+        c.rect(66, 59, 70, 61, crypt)
+
+        // Banshee Choir (north-west): a ring of ice-crystal pillars
+        c.ellipse(20, 20, 11, 10, crypt)
+        for (k in 0 until 10) {
+            val ang = k * Math.PI * 2 / 10
+            c[20 + (8 * Math.cos(ang)).toInt(), 20 + (7 * Math.sin(ang)).toInt()] = TileType.CRYSTAL_PILLAR
+        }
+        c.tunnel(listOf(26 to 28, 40 to 38), 3, crypt)
+        c.tunnel(listOf(16 to 30, 14 to 40), 3, crypt)
+
+        // Necromancer's Study (north-east): cells of bookshelves and braziers
+        c.rect(62, 10, 90, 32, crypt)
+        c.outline(62, 10, 76, 21, wall); c.outline(76, 10, 90, 21, wall)
+        for ((x, y) in listOf(69 to 21, 83 to 21, 76 to 15)) { c[x, y] = crypt; c[x + 1, y] = crypt }
+        for (x in listOf(64, 65, 66, 78, 79, 80, 86, 87)) c[x, 11] = TileType.BOOKSHELF
+        c[70, 16] = TileType.CAMPFIRE_BRAZIER; c[84, 16] = TileType.CAMPFIRE_BRAZIER
+        c.tunnel(listOf(62 to 26, 56 to 38), 3, crypt)
+        c.tunnel(listOf(80 to 32, 80 to 46), 3, crypt)
+
+        // The Sovereign's Gate (north): gated stair to the Barrow Sovereign's Tomb
+        c.rect(46, 6, 50, 33, crypt)
+        for (x in 46..50) { c[x, 14] = TileType.IRON_BAR_GATE; c[x, 24] = TileType.IRON_BAR_GATE }
+        c.rect(42, 10, 54, 12, crypt)
+        c[a.descentX, a.descentY] = TileType.STAIRS_DOWN
+        c[a.descentReturnX, a.descentReturnY] = crypt
+
+        c.sealPockets(a.landingX, a.landingY)
+        c.ores(TileType.ORE_FROST_IRON, count = 6, x1 = 4, y1 = 4, x2 = 92, y2 = 82)
+        c.ores(TileType.ORE_GLACIER_QUARTZ, count = 5, x1 = 4, y1 = 4, x2 = 92, y2 = 82)
+        c.torches(spacing = 8)
+
+        val wight = MonsterType.BARROW_WIGHT
+        val banshee = MonsterType.FROST_BANSHEE
+        val necro = MonsterType.NECROMANCER
+        val spawns = c.spawns(
+            -9, camp,
+            wight to (48 to 74),
+            wight to (34 to 54), banshee to (62 to 54), wight to (36 to 68), necro to (60 to 68), banshee to (48 to 40), wight to (48 to 50),
+            wight to (10 to 46), wight to (20 to 62), necro to (12 to 78), banshee to (22 to 54),
+            banshee to (72 to 50), wight to (88 to 60), wight to (80 to 70), banshee to (80 to 50),
+            banshee to (16 to 16), banshee to (24 to 24), wight to (20 to 32),
+            necro to (68 to 15), necro to (84 to 26), wight to (70 to 28),
+            wight to (48 to 20), banshee to (48 to 30)
+        )
+        val landmarks = listOf(
+            LandmarkLabel(-9, 48, 44, "HALL OF CAIRNS"),
+            LandmarkLabel(-9, 16, 37, "OSSUARY GALLERIES"),
+            LandmarkLabel(-9, 80, 44, "FROZEN MERE"),
+            LandmarkLabel(-9, 20, 8, "BANSHEE CHOIR"),
+            LandmarkLabel(-9, 76, 8, "NECROMANCER'S STUDY"),
+            LandmarkLabel(-9, 48, 4, "SOVEREIGN'S GATE")
+        )
+        return layout(-9, c, camp, a, spawns, landmarks)
+    }
+
+    // =====================================================================================
+    // Floor -32: Rimeheart Caverns (Frostpeak, Lv 54-58)
+    // =====================================================================================
+    private fun buildRimeheart(): Layout {
+        val a = RIMEHEART
+        val c = DeepDelveFloors.Canvas(SIZE, TileType.MOUNTAIN_ROCK, seed = 3201)
+        val snow = TileType.SNOW
+        val ice = TileType.CRYPT_FLOOR
+        val water = TileType.WATER
+        val camp = UndergroundCampZone(
+            floorId = RIMEHEART_FLOOR, name = "RIMEHEART CAVERNS CAMP (PZ)",
+            minX = 82, minY = 42, maxX = 93, maxY = 54,
+            healerX = 91, healerY = 44, healerName = "Ice Priestess Runa",
+            merchantX = 91, merchantY = 52, merchantName = "Glacier Guide Tor"
+        )
+        // Climbers' camp (east)
+        c.rect(82, 42, 93, 54, snow)
+        c[83, 43] = TileType.CAMPFIRE_BRAZIER; c[83, 53] = TileType.CAMPFIRE_BRAZIER
+        c[87, 43] = TileType.BIOME_STALL_FROSTPEAK; c[87, 53] = TileType.CRATE_BARREL
+        c[a.stairsUpX, a.stairsUpY] = TileType.STAIRS_UP
+        c[a.landingX, a.landingY] = TileType.COBBLESTONE
+
+        // Snowdrift tunnels winding west
+        c.tunnel(listOf(82 to 48, 72 to 44, 64 to 50, 56 to 46), 5, snow)
+
+        // Frozen Falls (centre): a frozen river spilling south, crossed by stone bridges
+        c.stream(listOf(50 to 4, 52 to 24, 48 to 46, 52 to 70, 50 to 92), 4, water)
+        c.ellipse(50, 48, 9, 8, ice)
+        c.rect(44, 46, 56, 50, TileType.STONE_BRIDGE)
+        c.scatterReplace(40, 38, 60, 58, ice, snow, 4)
+
+        // Yeti Dens (south): wide snowy caves littered with bones
+        c.blob(70, 76, 10, snow)
+        c.blob(34, 80, 9, snow)
+        c.tunnel(listOf(62 to 52, 68 to 66), 4, snow)
+        c.tunnel(listOf(60 to 78, 44 to 80), 4, snow, bridge = TileType.STONE_BRIDGE)
+        c.tunnel(listOf(48 to 56, 38 to 72), 3, snow, bridge = TileType.STONE_BRIDGE)
+
+        // Shaman Grotto (north): pools of meltwater among ice spires
+        c.blob(70, 18, 11, ice)
+        for ((px, py) in listOf(66 to 14, 76 to 20, 68 to 24)) c.ellipse(px, py, 2, 2, water)
+        c.scatter(60, 8, 82, 30, TileType.CRYSTAL_PILLAR, density = 5, onlyOn = setOf(ice), keepClear = 1)
+        c.tunnel(listOf(68 to 30, 64 to 44), 4, snow)
+        c.blob(30, 18, 8, snow)
+        c.tunnel(listOf(58 to 18, 38 to 18), 3, snow, bridge = TileType.STONE_BRIDGE)
+
+        // Throne of Rime (west): an ice palace where the Glacier King waits
+        c.rect(6, 34, 30, 62, TileType.TEMPLE_FLOOR)
+        c.outline(6, 34, 30, 62, TileType.GRANITE_WALL)
+        for (y in 46..50) c[30, y] = TileType.TEMPLE_FLOOR
+        for (y in 46..50) c[30, y] = TileType.IRON_BAR_GATE
+        for ((x, y) in listOf(10 to 38, 26 to 38, 10 to 58, 26 to 58, 18 to 40, 18 to 56)) c[x, y] = TileType.CRYSTAL_PILLAR
+        c.rect(8, 46, 12, 50, ice)
+        c[8, 48] = TileType.TEMPLE_ALTAR                                // the frozen throne
+        c.tunnel(listOf(40 to 48, 31 to 48), 5, snow, bridge = TileType.STONE_BRIDGE)
+        c.tunnel(listOf(30 to 26, 22 to 33), 3, snow)
+        for (x in 21..23) c[x, 34] = TileType.IRON_BAR_GATE
+
+        c.sealPockets(a.landingX, a.landingY)
+        c.ores(TileType.ORE_FROST_IRON, count = 8, x1 = 4, y1 = 4, x2 = 92, y2 = 92)
+        c.ores(TileType.ORE_GLACIER_QUARTZ, count = 7, x1 = 4, y1 = 4, x2 = 92, y2 = 92)
+        c.torches(spacing = 9)
+
+        val yeti = MonsterType.YETI_RAVAGER
+        val fang = MonsterType.RIMEFANG_STALKER
+        val shaman = MonsterType.GLACIER_SHAMAN
+        val spawns = c.spawns(
+            RIMEHEART_FLOOR, camp,
+            fang to (74 to 45), fang to (64 to 50), shaman to (56 to 46),
+            fang to (50 to 40), yeti to (46 to 54), shaman to (54 to 56),
+            yeti to (70 to 74), yeti to (76 to 80), fang to (64 to 70), yeti to (34 to 80), fang to (40 to 76), yeti to (28 to 84),
+            shaman to (66 to 16), shaman to (74 to 22), fang to (72 to 10), shaman to (30 to 16), fang to (34 to 22),
+            yeti to (22 to 40), shaman to (22 to 56), fang to (16 to 44),
+            MonsterType.HRIMGAR_THE_GLACIER_KING to (12 to 48)
+        )
+        val landmarks = listOf(
+            LandmarkLabel(RIMEHEART_FLOOR, 66, 40, "SNOWDRIFT TUNNELS"),
+            LandmarkLabel(RIMEHEART_FLOOR, 50, 36, "FROZEN FALLS"),
+            LandmarkLabel(RIMEHEART_FLOOR, 60, 88, "YETI DENS"),
+            LandmarkLabel(RIMEHEART_FLOOR, 70, 4, "SHAMAN GROTTO"),
+            LandmarkLabel(RIMEHEART_FLOOR, 18, 31, "THRONE OF RIME")
+        )
+        return layout(RIMEHEART_FLOOR, c, camp, a, spawns, landmarks)
     }
 }

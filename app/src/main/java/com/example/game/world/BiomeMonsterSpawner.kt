@@ -286,6 +286,11 @@ object BiomeMonsterSpawner {
         WeightedMonsterEntry(MonsterType.DUST_DEVIL, 34),
         WeightedMonsterEntry(MonsterType.SALTGLASS_GOLEM, 30)
     )
+    private val rimeheartPool = listOf(
+        WeightedMonsterEntry(MonsterType.YETI_RAVAGER, 34),
+        WeightedMonsterEntry(MonsterType.RIMEFANG_STALKER, 36),
+        WeightedMonsterEntry(MonsterType.GLACIER_SHAMAN, 30)
+    )
     private val cryptDungeonPool = listOf(
         WeightedMonsterEntry(MonsterType.NECROMANCER, 45),
         WeightedMonsterEntry(MonsterType.DRAGON_HATCHLING, 35),
@@ -320,6 +325,7 @@ object BiomeMonsterSpawner {
             -29 -> murkfenHollowPool
             -30 -> tombOfAkhetPool
             -31 -> scorchglassRiftPool
+            -32 -> rimeheartPool
             else -> biomeForDungeonFloor(floorId).monsterPool
         }
 
@@ -387,6 +393,7 @@ object BiomeMonsterSpawner {
         -29 -> BiomeType.WHISPERING_MARSH
         -30 -> BiomeType.SUNSCORCH_BADLANDS
         -31 -> BiomeType.SUNSCORCH_BADLANDS
+        -32 -> BiomeType.FROSTPEAK_HIGHLANDS
         else -> BiomeType.HEARTLAND_WILDS
     }
 

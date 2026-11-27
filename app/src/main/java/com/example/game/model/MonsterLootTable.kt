@@ -849,6 +849,56 @@ object MonsterLootTable {
             ),
             bonusWeightRolls = 2
         ),
+        // --- Rimeheart Caverns (-32) ---
+        MonsterType.YETI_RAVAGER to MonsterLootEntry(
+            minGp = 110, maxGp = 220,
+            weightedDrops = listOf(
+                WeightedLootDrop("frost_iron_ore", 1, 2, dropChance = 0.48f, weight = 26),
+                WeightedLootDrop("colossus_tendon", 1, 1, dropChance = 0.30f, weight = 20),
+                WeightedLootDrop("health_potion", 1, 2, dropChance = 0.40f, weight = 16),
+                WeightedLootDrop("rime_plate_legguards", 1, 1, dropChance = 0.03f, weight = 3)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.RIMEFANG_STALKER to MonsterLootEntry(
+            minGp = 100, maxGp = 205,
+            weightedDrops = listOf(
+                WeightedLootDrop("jagged_ivory", 1, 2, dropChance = 0.46f, weight = 24),
+                WeightedLootDrop("glacier_quartz_ore", 1, 2, dropChance = 0.40f, weight = 22),
+                WeightedLootDrop("health_potion", 1, 2, dropChance = 0.36f, weight = 16),
+                WeightedLootDrop("rime_plate_sabatons", 1, 1, dropChance = 0.03f, weight = 3)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.GLACIER_SHAMAN to MonsterLootEntry(
+            minGp = 108, maxGp = 215,
+            weightedDrops = listOf(
+                WeightedLootDrop("runic_slate", 1, 2, dropChance = 0.46f, weight = 24),
+                WeightedLootDrop("glacier_quartz_ore", 1, 2, dropChance = 0.42f, weight = 22),
+                WeightedLootDrop("mana_potion", 1, 2, dropChance = 0.42f, weight = 16),
+                WeightedLootDrop("glacier_quartz_staff", 1, 1, dropChance = 0.03f, weight = 3)
+            ),
+            bonusWeightRolls = 1
+        ),
+        MonsterType.HRIMGAR_THE_GLACIER_KING to MonsterLootEntry(
+            minGp = 380, maxGp = 680,
+            guaranteedDrops = listOf(
+                ItemStack("rime_plate_ingot", 2),
+                ItemStack("glacier_quartz_ore", 3),
+                ItemStack("grimmaw_stone_core", 1)
+            ),
+            weightedDrops = listOf(
+                WeightedLootDrop("sd_rune", 2, 4, dropChance = 0.66f, weight = 18),
+                WeightedLootDrop("frost_iron_ore", 2, 4, dropChance = 0.70f, weight = 18),
+                WeightedLootDrop("frostpeak_warhammer", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("frostpeak_frostbow", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("glacier_quartz_staff", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("rime_plate_aegis", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("rime_plate_cuirass", 1, 1, dropChance = 0.14f, weight = 8),
+                WeightedLootDrop("rime_plate_helm", 1, 1, dropChance = 0.14f, weight = 8)
+            ),
+            bonusWeightRolls = 2
+        ),
         MonsterType.BARROW_WIGHT to MonsterLootEntry(
             minGp = 100, maxGp = 205,
             weightedDrops = listOf(
