@@ -1705,7 +1705,7 @@ object GameEngine {
         ownerPlayerId: String? = null,
         ownerName: String? = null
     ): CorpseEntity {
-        val rolled = MonsterLootTable.rollLoot(m.type)
+        val rolled = MonsterLootTable.rollLoot(m.type, monsterLevel = m.level)
         val scaledGold = if (m.scaledGoldMax > m.type.goldMax) {
             Random.nextInt(m.scaledGoldMin, m.scaledGoldMax + 1)
         } else {
