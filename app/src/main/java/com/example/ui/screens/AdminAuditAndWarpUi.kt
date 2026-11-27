@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,6 +25,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudQueue
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Place
@@ -43,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,7 +65,7 @@ import com.example.game.cloud.AdminAuditSyncStatus
 import com.example.game.cloud.AdminAuditUiState
 import com.example.game.cloud.AdminTeleportCatalog
 import com.example.game.cloud.AdminTeleportPreset
-import com.example.game.cloud.AdminWarpCategory
+import com.example.game.cloud.AdminWarpZone
 import com.example.game.model.GameWorldState
 import com.example.game.world.OverlandBiomeTier
 import com.example.game.world.WorldMaps
@@ -83,17 +87,6 @@ import java.util.Locale
 
 private val AuditViolet = Color(0xFFA78BFA)
 private val AuditCyan = Color(0xFF38BDF8)
-
-private enum class AdminWarpFilter(
-    val label: String,
-    val testTagSuffix: String,
-    val category: AdminWarpCategory?
-) {
-    ALL("All", "all", null),
-    TOWNS_EMPIRES("Towns & Empires", "towns_empires", AdminWarpCategory.TOWNS_EMPIRES),
-    OVERLAND_CAMPS("Overland Camps", "overland_camps", AdminWarpCategory.OVERLAND_CAMPS),
-    DUNGEON_CAMPS("Dungeon Camps", "dungeon_camps", AdminWarpCategory.DUNGEON_CAMPS)
-}
 
 private fun biomeTierAccentColor(preset: AdminTeleportPreset): Color {
     if (preset.isDungeon) return AuditViolet
@@ -119,72 +112,17 @@ fun AdminWarpSection(
     var xInput by remember(state.playerX, state.floor) { mutableStateOf(state.playerX.toString()) }
     var yInput by remember(state.playerY, state.floor) { mutableStateOf(state.playerY.toString()) }
     var coordError by remember { mutableStateOf<String?>(null) }
-    var selectedFilter by remember { mutableStateOf(AdminWarpFilter.ALL) }
+    val currentZoneTier = remember(state.floor) { AdminTeleportCatalog.zoneTierForFloor(state.floor) }
 
     val selectedFloorMap = remember(selectedFloor) { WorldMaps.getFloor(selectedFloor) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Category Filter Chips Bar (All / Towns & Empires / Overland Camps / Dungeon Camps)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AdminWarpFilter.entries.forEach { filter ->
-                val count = AdminTeleportCatalog.presetsFor(filter.category).size
-                val accent = when (filter) {
-                    AdminWarpFilter.ALL -> TorchGold
-                    AdminWarpFilter.TOWNS_EMPIRES -> TorchGold
-                    AdminWarpFilter.OVERLAND_CAMPS -> ExpEmerald
-                    AdminWarpFilter.DUNGEON_CAMPS -> AuditViolet
-                }
-                AdminWarpFilterChip(
-                    label = "${filter.label} ($count)",
-                    selected = selectedFilter == filter,
-                    accentColor = accent,
-                    onClick = { selectedFilter = filter },
-                    testTag = "admin_warp_filter_${filter.testTagSuffix}"
-                )
-            }
-        }
-
-        // 1. Towns & Empires Card
-        if (selectedFilter == AdminWarpFilter.ALL || selectedFilter == AdminWarpFilter.TOWNS_EMPIRES) {
-            AdminWarpCategoryCard(
-                title = "TOWNS & EMPIRES (${AdminTeleportCatalog.townsAndEmpires.size})",
-                icon = Icons.Default.AccountBalance,
-                headerColor = TorchGold,
-                presets = AdminTeleportCatalog.townsAndEmpires,
-                onSelect = { preset ->
-                    coordError = null
-                    onTeleport(preset.floor, preset.x, preset.y, preset.label)
-                }
-            )
-        }
-
-        // 2. Overland Forward & Frontier Camps Card
-        if (selectedFilter == AdminWarpFilter.ALL || selectedFilter == AdminWarpFilter.OVERLAND_CAMPS) {
-            AdminWarpCategoryCard(
-                title = "OVERLAND CAMPS (${AdminTeleportCatalog.overlandCamps.size})",
-                icon = Icons.Default.Flag,
-                headerColor = ExpEmerald,
-                presets = AdminTeleportCatalog.overlandCamps,
-                onSelect = { preset ->
-                    coordError = null
-                    onTeleport(preset.floor, preset.x, preset.y, preset.label)
-                }
-            )
-        }
-
-        // 3. Subterranean Dungeon Forward Camps Card
-        if (selectedFilter == AdminWarpFilter.ALL || selectedFilter == AdminWarpFilter.DUNGEON_CAMPS) {
-            AdminWarpCategoryCard(
-                title = "DUNGEON CAMPS (${AdminTeleportCatalog.dungeonCamps.size})",
-                icon = Icons.Default.Place,
-                headerColor = AuditViolet,
-                presets = AdminTeleportCatalog.dungeonCamps,
+        // Zone sections in level order (Rookvale Lv 1-20 first). Each one collapses; the zone
+        // the admin is currently in starts open.
+        AdminTeleportCatalog.zones.forEach { zone ->
+            AdminWarpZoneCard(
+                zone = zone,
+                initiallyExpanded = zone.tier == currentZoneTier,
                 onSelect = { preset ->
                     coordError = null
                     onTeleport(preset.floor, preset.x, preset.y, preset.label)
@@ -363,79 +301,101 @@ fun AdminWarpSection(
     }
 }
 
+private fun zoneAccentColor(tier: OverlandBiomeTier): Color = when (tier) {
+    OverlandBiomeTier.ROOKVALE_HEARTLAND -> ExpEmerald
+    OverlandBiomeTier.WHISPERING_MARSH -> PoisonGreen
+    OverlandBiomeTier.SUNSCORCH_BADLANDS -> TorchAmber
+    OverlandBiomeTier.FROSTPEAK_HIGHLANDS -> AuditCyan
+    OverlandBiomeTier.ASHEN_CALDERA -> FireOrange
+}
+
 @Composable
-private fun AdminWarpFilterChip(
-    label: String,
-    selected: Boolean,
-    accentColor: Color,
-    onClick: () -> Unit,
-    testTag: String
+private fun AdminWarpZoneCard(
+    zone: AdminWarpZone,
+    initiallyExpanded: Boolean,
+    onSelect: (AdminTeleportPreset) -> Unit
 ) {
-    Box(
-        contentAlignment = Alignment.Center,
+    var expanded by rememberSaveable(zone.tier.id) { mutableStateOf(initiallyExpanded) }
+    val accent = zoneAccentColor(zone.tier)
+    Surface(
+        color = StoneSurface.copy(alpha = 0.92f),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, accent.copy(alpha = if (expanded) 0.8f else 0.45f)),
         modifier = Modifier
-            .heightIn(min = 48.dp)
-            .clickable(onClick = onClick)
-            .testTag(testTag)
+            .fillMaxWidth()
+            .testTag("admin_warp_zone_${zone.tier.id}")
     ) {
-        Surface(
-            color = if (selected) accentColor else ObsidianVoid,
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, if (selected) accentColor else StoneBorderLight)
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 9.5.sp
-                ),
-                color = if (selected) ObsidianVoid else ParchmentLight,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-            )
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clickable { expanded = !expanded }
+                    .testTag("admin_warp_zone_header_${zone.tier.id}"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = zone.title.uppercase(Locale.US),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = accent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${zone.levelLabel} • ${zone.allPresets.size} warps",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        color = ParchmentMuted
+                    )
+                }
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    tint = accent
+                )
+            }
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (zone.towns.isNotEmpty()) {
+                        AdminWarpSubsection("Towns", Icons.Default.AccountBalance, TorchGold, zone.towns, onSelect)
+                    }
+                    if (zone.camps.isNotEmpty()) {
+                        AdminWarpSubsection("Camps", Icons.Default.Flag, ExpEmerald, zone.camps, onSelect)
+                    }
+                    if (zone.dungeons.isNotEmpty()) {
+                        AdminWarpSubsection("Dungeons", Icons.Default.Place, AuditViolet, zone.dungeons, onSelect)
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun AdminWarpCategoryCard(
+private fun AdminWarpSubsection(
     title: String,
     icon: ImageVector,
-    headerColor: Color,
+    color: Color,
     presets: List<AdminTeleportPreset>,
     onSelect: (AdminTeleportPreset) -> Unit
 ) {
-    Surface(
-        color = StoneSurface.copy(alpha = 0.92f),
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, StoneBorderLight),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = headerColor,
-                    modifier = Modifier.size(14.dp)
-                )
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
-                    color = headerColor
-                )
-            }
-            AdminPresetGrid(
-                presets = presets,
-                onSelect = onSelect
+            Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(13.dp))
+            Text(
+                text = "$title (${presets.size})",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = color
             )
         }
+        AdminPresetGrid(presets = presets, onSelect = onSelect)
     }
 }
 
