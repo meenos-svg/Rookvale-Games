@@ -174,6 +174,15 @@ object OrganicMonsterRenderer {
             MonsterType.YOUNG_SNAKE -> drawYoungSnake(
                 ox, oy, u, ow, facing, timeSec + seedRad, lunge, useSpec, useRim, path
             )
+            MonsterType.DUNE_SCORPION -> drawScorpion(
+                ox, oy, u, ow, facing, walkPhase, timeSec + seedRad, lunge, useSpec, useRim, path
+            )
+            MonsterType.SUNSCALE_BASILISK -> drawLizard(
+                ox, oy, u, ow, facing, walkPhase, timeSec + seedRad, lunge, LizardStyle.BASILISK, useSpec, useRim, path
+            )
+            MonsterType.GATOR_BRUTE -> drawLizard(
+                ox, oy, u, ow, facing, walkPhase, timeSec + seedRad, lunge, LizardStyle.GATOR, useSpec, useRim, path
+            )
             MonsterType.POISON_SPIDER -> drawPoisonSpider(
                 ox, oy, u, ow, facing, walkPhase, timeSec + seedRad, lunge, useSpec, useRim, path
             )
@@ -311,12 +320,9 @@ object OrganicMonsterRenderer {
             MonsterType.XOLATL_THE_SUN_FANG,
             MonsterType.LORD_MALGRATH_THE_UNDYING,
             MonsterType.BOG_HAG,
-            MonsterType.GATOR_BRUTE,
             MonsterType.FEN_WISP,
             MonsterType.HAGMOTHER_VESSA,
-            MonsterType.DUNE_SCORPION,
             MonsterType.SAND_WRAITH,
-            MonsterType.SUNSCALE_BASILISK,
             MonsterType.AKHET_THE_SAND_PHARAOH,
             MonsterType.SCORCHGLASS_STALKER,
             MonsterType.DUST_DEVIL,
@@ -735,6 +741,322 @@ object OrganicMonsterRenderer {
     // -------------------------------------------------------------------------
     // 2. VOLUMETRIC 3D ARACHNID (Poison Spider — 8 depth-sorted 3D jointed legs)
     // -------------------------------------------------------------------------
+
+    // -------------------------------------------------------------------------
+    // DUNE SCORPION: low segmented carapace, 8 legs, two pincers, curled stinger tail
+    // -------------------------------------------------------------------------
+    private fun DrawScope.drawScorpion(
+        ox: Float,
+        oy: Float,
+        u: Float,
+        ow: Float,
+        facing: ResolvedScreenFacing,
+        walkPhase: Float,
+        t: Float,
+        lunge: Float,
+        useSpec: Boolean,
+        useRim: Boolean,
+        path: Path
+    ) {
+        val main = Color(0xFFC48A3A)
+        val hi = Color(0xFFF0B964)
+        val sh = Color(0xFF6E4518)
+        val dark = Color(0xFF8C5A22)
+        val glow = Color(0xFFFF9A2B)
+        val bodyUp = 6.2f + sin(t * 3.2f) * 0.35f + lunge * 1.2f
+        val moving = abs(walkPhase) > 0.01f
+
+        // 0..7 legs, 8 tail, 9 abdomen, 10 thorax, 11 left claw, 12 right claw, 13 head
+        val legF = floatArrayOf(-4.6f, -1.6f, 1.4f, 4.0f, -4.6f, -1.6f, 1.4f, 4.0f)
+        val legSide = floatArrayOf(-1f, -1f, -1f, -1f, 1f, 1f, 1f, 1f)
+        val order = IntArray(14) { it }
+        val depths = FloatArray(14) { idx ->
+            when (idx) {
+                in 0..7 -> facing.depthOf(legSide[idx] * 9f, legF[idx]) - 0.2f
+                8 -> facing.depthOf(0f, -8.5f)
+                9 -> facing.depthOf(0f, -3.2f)
+                10 -> facing.depthOf(0f, 1.8f)
+                11 -> facing.depthOf(-6f, 9.5f)
+                12 -> facing.depthOf(6f, 9.5f)
+                else -> facing.depthOf(0f, 5.2f) + 0.2f
+            }
+        }
+        sortIndices(order, depths)
+
+        for (i in 0 until 14) {
+            when (val id = order[i]) {
+                in 0..7 -> {
+                    val side = legSide[id]
+                    val f = legF[id]
+                    val phase = if (id % 2 == 0) 0f else PI.toFloat()
+                    val step = if (moving) sin(walkPhase * 1.6f + phase + f * 0.4f) else sin(t * 2.2f + id) * 0.12f
+                    val lift = (step * 1.8f).coerceAtLeast(0f)
+                    val coxa = facing.project(ox, oy, u, side * 3.0f, f * 0.7f, bodyUp - 0.6f)
+                    val knee = facing.project(ox, oy, u, side * 7.6f, f + step * 1.2f, bodyUp + 3.2f + lift * 0.5f)
+                    val foot = facing.project(ox, oy, u, side * 11.2f, f * 1.25f + step * 1.8f, 0.6f + lift)
+                    if (lift < 0.9f) VolumetricShading.drawFootContactDot(this, foot, u * 1.4f, u * 0.8f)
+                    VolumetricShading.drawVolumetricCylinder(this, coxa, knee, u * 1.25f, u * 1.0f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow * 0.75f, lightX = facing.lightScreenX, path = path)
+                    VolumetricShading.drawVolumetricCylinder(this, knee, foot, u * 1.0f, u * 0.45f,
+                        main = dark, highlight = hi, shadow = sh, outlineW = ow * 0.7f, lightX = facing.lightScreenX, path = path)
+                }
+                8 -> { // segmented tail curling up and over the back, stinger striking on attack
+                    val sway = sin(t * 1.9f) * 0.8f
+                    val strike = lunge * 5.0f
+                    val pts = listOf(
+                        Triple(0f, -6.0f, bodyUp + 1.0f),
+                        Triple(sway * 0.3f, -10.0f, bodyUp + 4.6f),
+                        Triple(sway * 0.6f, -11.6f, bodyUp + 10.4f),
+                        Triple(sway * 0.8f, -9.4f + strike * 0.3f, bodyUp + 15.6f),
+                        Triple(sway, -5.4f + strike * 0.7f, bodyUp + 18.4f - strike * 0.3f),
+                        Triple(sway, -2.0f + strike, bodyUp + 17.2f - strike * 0.8f)
+                    ).map { (r, f, up) -> facing.project(ox, oy, u, r, f, up) }
+                    for (k in 0 until pts.size - 1) {
+                        val r0 = u * (2.7f - k * 0.3f)
+                        VolumetricShading.drawVolumetricCylinder(this, pts[k], pts[k + 1], r0, r0 * 0.88f,
+                            main = main, highlight = hi, shadow = sh, outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path)
+                        VolumetricShading.drawVolumetricEllipsoid(this, pts[k + 1].x, pts[k + 1].y, r0 * 1.05f, r0 * 0.95f,
+                            main = main, highlight = hi, shadow = sh, outlineW = ow * 0.7f,
+                            lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec)
+                    }
+                    val bulb = pts.last()
+                    val tip = facing.project(ox, oy, u, sway, -0.4f + strike * 1.15f, bodyUp + 13.6f - strike)
+                    VolumetricShading.drawVolumetricEllipsoid(this, bulb.x, bulb.y, u * 2.3f, u * 2.0f,
+                        main = dark, highlight = glow, shadow = sh, outlineW = ow * 0.8f,
+                        lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec)
+                    VolumetricShading.drawVolumetricCylinder(this, bulb, tip, u * 1.3f, u * 0.25f,
+                        main = Color(0xFF2A1A0C), highlight = glow, shadow = INK, outlineW = ow * 0.7f, lightX = facing.lightScreenX, path = path)
+                    drawCircle(glow.copy(alpha = 0.55f + lunge * 0.4f), u * 0.8f, tip)
+                }
+                9 -> { // rear carapace plates
+                    for (k in 0..2) {
+                        val c = facing.project(ox, oy, u, 0f, -1.4f - k * 2.4f, bodyUp + 0.6f)
+                        VolumetricShading.drawVolumetricEllipsoid(this, c.x, c.y, u * (5.4f - k * 0.7f), u * (3.6f - k * 0.4f),
+                            main = main, highlight = hi, shadow = sh, outlineW = ow * 0.9f,
+                            lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec, useRim = useRim)
+                        val ridge = facing.project(ox, oy, u, 0f, -1.4f - k * 2.4f, bodyUp + 3.6f - k * 0.4f)
+                        drawCircle(dark, u * 0.7f, ridge)
+                    }
+                }
+                10 -> { // thorax shield
+                    val c = facing.project(ox, oy, u, 0f, 2.2f, bodyUp + 0.8f)
+                    VolumetricShading.drawVolumetricEllipsoid(this, c.x, c.y, u * 6.0f, u * 4.0f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow,
+                        lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec, useRim = useRim)
+                }
+                11, 12 -> { // pincer arm + claw that snaps shut on attack
+                    val side = if (id == 11) -1f else 1f
+                    val reach = lunge * 3.4f
+                    val open = 1.4f + sin(t * 3.8f + side) * 0.5f - lunge * 1.2f
+                    val shoulder = facing.project(ox, oy, u, side * 3.6f, 4.2f, bodyUp)
+                    val elbow = facing.project(ox, oy, u, side * 8.0f, 7.4f + reach * 0.5f, bodyUp + 1.6f)
+                    val claw = facing.project(ox, oy, u, side * 6.4f, 11.0f + reach, bodyUp + 1.8f)
+                    VolumetricShading.drawVolumetricCylinder(this, shoulder, elbow, u * 1.5f, u * 1.3f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path)
+                    VolumetricShading.drawVolumetricCylinder(this, elbow, claw, u * 1.4f, u * 1.9f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path)
+                    VolumetricShading.drawVolumetricEllipsoid(this, claw.x, claw.y, u * 3.2f, u * 2.4f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow * 0.9f,
+                        lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec)
+                    for (finger in -1..1 step 2) {
+                        val tipF = facing.project(ox, oy, u, side * 6.0f + finger * open, 15.0f + reach, bodyUp + 1.8f + finger * 0.6f)
+                        VolumetricShading.drawVolumetricCylinder(this, claw, tipF, u * 1.2f, u * 0.3f,
+                            main = dark, highlight = hi, shadow = sh, outlineW = ow * 0.7f, lightX = facing.lightScreenX, path = path)
+                    }
+                }
+                else -> { // head with small glowing eyes and mouthparts
+                    val head = facing.project(ox, oy, u, 0f, 5.6f, bodyUp + 0.4f)
+                    VolumetricShading.drawVolumetricEllipsoid(this, head.x, head.y, u * 3.4f, u * 2.4f,
+                        main = dark, highlight = hi, shadow = sh, outlineW = ow * 0.85f,
+                        lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec)
+                    if (!facing.isBackFacing) {
+                        for (side in -1..1 step 2) {
+                            val e = facing.project(ox, oy, u, side * 1.1f, 7.4f, bodyUp + 2.0f)
+                            drawCircle(INK, u * 0.85f, e)
+                            drawCircle(glow, u * 0.55f, e)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // LIZARDS: Sunscale Basilisk (crested, glowing gaze) and Gator Brute (flat, armoured, huge jaws)
+    // -------------------------------------------------------------------------
+    private enum class LizardStyle { BASILISK, GATOR }
+
+    private fun DrawScope.drawLizard(
+        ox: Float,
+        oy: Float,
+        u: Float,
+        ow: Float,
+        facing: ResolvedScreenFacing,
+        walkPhase: Float,
+        t: Float,
+        lunge: Float,
+        style: LizardStyle,
+        useSpec: Boolean,
+        useRim: Boolean,
+        path: Path
+    ) {
+        val gator = style == LizardStyle.GATOR
+        val main = if (gator) Color(0xFF4E6B3A) else Color(0xFFB86B1E)
+        val hi = if (gator) Color(0xFF86A563) else Color(0xFFFFB04D)
+        val sh = if (gator) Color(0xFF243318) else Color(0xFF5E330C)
+        val belly = if (gator) Color(0xFFC9C08A) else Color(0xFFFFD452)
+        val accent = if (gator) Color(0xFF2E3F22) else Color(0xFFFF7A1F)
+        val eye = if (gator) Color(0xFFFFD84D) else Color(0xFFFF3B1F)
+        val L = if (gator) 1.22f else 1.0f
+        val moving = abs(walkPhase) > 0.01f
+        val stride = if (moving) sin(walkPhase) else 0f
+        val bodyUp = (if (gator) 4.6f else 6.0f) + sin(t * 2.6f) * 0.3f + lunge * 0.8f
+        val bodyRx = if (gator) 7.4f else 6.2f
+        val bodyRy = if (gator) 3.6f else 4.2f
+        val sway = sin(t * 2.2f + walkPhase * 0.5f) * (if (moving) 2.6f else 1.2f)
+        val headF = 9.0f * L + lunge * 2.6f
+        val hipF = -4.4f * L
+        val chestF = 3.0f * L
+
+        // 0 tail, 1 BL, 2 BR, 3 FL, 4 FR, 5 hips, 6 chest, 7 head
+        val order = IntArray(8) { it }
+        val depths = floatArrayOf(
+            facing.depthOf(0f, hipF - 9f),
+            facing.depthOf(-5f, hipF) - 0.3f,
+            facing.depthOf(5f, hipF) - 0.3f,
+            facing.depthOf(-5f, chestF + 1f) - 0.2f,
+            facing.depthOf(5f, chestF + 1f) - 0.2f,
+            facing.depthOf(0f, hipF),
+            facing.depthOf(0f, chestF),
+            facing.depthOf(0f, headF) + 0.4f
+        )
+        sortIndices(order, depths)
+
+        fun backSpikes(f0: Float, f1: Float) {
+            var f = f0
+            while (f >= f1) {
+                val base = facing.project(ox, oy, u, 0f, f, bodyUp + bodyRy * 0.85f)
+                if (gator) {
+                    for (side in -1..1 step 2) {
+                        val sc = facing.project(ox, oy, u, side * 1.6f, f, bodyUp + bodyRy * 0.8f)
+                        drawCircle(accent, u * 0.9f, sc)
+                        drawCircle(hi.copy(alpha = 0.5f), u * 0.4f, sc)
+                    }
+                } else {
+                    val tip = facing.project(ox, oy, u, 0f, f - 0.9f, bodyUp + bodyRy * 0.85f + 3.2f + sin(f + t * 3f) * 0.3f)
+                    VolumetricShading.drawVolumetricCylinder(this, base, tip, u * 1.0f, u * 0.12f,
+                        main = accent, highlight = belly, shadow = sh, outlineW = ow * 0.55f, lightX = facing.lightScreenX, path = path)
+                }
+                f -= 2.2f
+            }
+        }
+
+        for (i in 0 until 8) {
+            when (val id = order[i]) {
+                0 -> { // long tapering tail swaying side to side
+                    val p0 = facing.project(ox, oy, u, 0f, hipF - 3.5f, bodyUp + 0.6f)
+                    val p1 = facing.project(ox, oy, u, sway * 0.5f, hipF - 9f * L, bodyUp - 0.6f)
+                    val p2 = facing.project(ox, oy, u, sway, hipF - 14.5f * L, 1.8f)
+                    val p3 = facing.project(ox, oy, u, sway * 1.6f, hipF - 19.5f * L, 1.0f)
+                    val tr = if (gator) 3.9f else 3.2f
+                    VolumetricShading.drawVolumetricCylinder(this, p0, p1, u * tr, u * tr * 0.72f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow * 0.85f, lightX = facing.lightScreenX, path = path)
+                    VolumetricShading.drawVolumetricCylinder(this, p1, p2, u * tr * 0.72f, u * tr * 0.42f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path)
+                    VolumetricShading.drawVolumetricCylinder(this, p2, p3, u * tr * 0.42f, u * 0.3f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow * 0.75f, lightX = facing.lightScreenX, path = path)
+                    if (gator) for (k in 1..4) {
+                        val sc = facing.project(ox, oy, u, sway * (0.3f + k * 0.3f), hipF - 3.5f - k * 3.6f * L, bodyUp + 2.4f - k * 0.9f)
+                        drawCircle(accent, u * (1.0f - k * 0.12f), sc)
+                    }
+                }
+                in 1..4 -> { // splayed sprawling legs
+                    val side = if (id == 1 || id == 3) -1f else 1f
+                    val front = id >= 3
+                    val f = if (front) chestF + 1.2f else hipF
+                    val phase = if ((id == 1) || (id == 4)) 0f else PI.toFloat()
+                    val step = if (moving) sin(walkPhase + phase) else 0f
+                    val lift = (step * 1.6f).coerceAtLeast(0f)
+                    val shoulder = facing.project(ox, oy, u, side * (bodyRx * 0.7f), f, bodyUp - 0.4f)
+                    val elbow = facing.project(ox, oy, u, side * (bodyRx + 2.6f), f + step * 1.4f, bodyUp - 0.2f + lift * 0.6f)
+                    val foot = facing.project(ox, oy, u, side * (bodyRx + 2.2f), f + 1.0f + step * 2.2f, 0.5f + lift)
+                    if (lift < 0.9f) VolumetricShading.drawFootContactDot(this, foot, u * 2.0f, u * 1.0f)
+                    VolumetricShading.drawVolumetricCylinder(this, shoulder, elbow, u * 2.2f, u * 1.7f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path)
+                    VolumetricShading.drawVolumetricCylinder(this, elbow, foot, u * 1.7f, u * 1.3f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path)
+                    for (toe in -1..1) {
+                        val tp = facing.project(ox, oy, u, side * (bodyRx + 2.2f) + toe * 0.9f, f + 2.4f + step * 2.2f, 0.3f + lift)
+                        drawCircle(INK, u * 0.45f, tp)
+                    }
+                }
+                5 -> { // hips and belly
+                    val c = facing.project(ox, oy, u, sway * 0.15f, hipF, bodyUp)
+                    VolumetricShading.drawVolumetricEllipsoid(this, c.x, c.y, u * bodyRx, u * bodyRy,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow,
+                        lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec, useRim = useRim)
+                    val mid = facing.project(ox, oy, u, 0f, (hipF + chestF) * 0.5f, bodyUp)
+                    VolumetricShading.drawVolumetricEllipsoid(this, mid.x, mid.y, u * bodyRx * 1.02f, u * bodyRy * 0.98f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow,
+                        lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec, useRim = useRim)
+                    val bellyPos = facing.project(ox, oy, u, 0f, (hipF + chestF) * 0.5f, bodyUp - bodyRy * 0.55f)
+                    drawOval(belly.copy(alpha = 0.55f), topLeft = Offset(bellyPos.x - u * bodyRx * 0.7f, bellyPos.y - u * 1.2f), size = Size(u * bodyRx * 1.4f, u * 2.4f))
+                    backSpikes(hipF + 2.6f, hipF - 3.0f)
+                }
+                6 -> { // chest and shoulders
+                    val c = facing.project(ox, oy, u, 0f, chestF, bodyUp + 0.4f)
+                    VolumetricShading.drawVolumetricEllipsoid(this, c.x, c.y, u * bodyRx * 0.95f, u * bodyRy * 1.02f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow,
+                        lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec, useRim = useRim)
+                    backSpikes(chestF + 2.6f, chestF - 3.4f)
+                }
+                else -> { // head, long snout, jaws that gape on attack, glowing eyes
+                    val gape = lunge * (if (gator) 4.6f else 3.0f) + sin(t * 1.3f) * 0.25f
+                    val snoutLen = if (gator) 8.0f else 5.2f
+                    val neck = facing.project(ox, oy, u, 0f, chestF + 3.0f, bodyUp + 0.8f)
+                    val head = facing.project(ox, oy, u, 0f, headF, bodyUp + 1.6f)
+                    VolumetricShading.drawVolumetricCylinder(this, neck, head, u * bodyRy * 0.95f, u * 3.0f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow * 0.9f, lightX = facing.lightScreenX, path = path)
+                    // lower jaw + mouth
+                    val jawBase = facing.project(ox, oy, u, 0f, headF + 0.6f, bodyUp + 0.2f)
+                    val jawTip = facing.project(ox, oy, u, 0f, headF + snoutLen, bodyUp + 0.4f - gape)
+                    VolumetricShading.drawVolumetricCylinder(this, jawBase, jawTip, u * 2.4f, u * 1.4f,
+                        main = belly, highlight = hi, shadow = sh, outlineW = ow * 0.8f, lightX = facing.lightScreenX, path = path)
+                    if (gape > 0.6f) {
+                        val mouth = facing.project(ox, oy, u, 0f, headF + snoutLen * 0.6f, bodyUp + 1.0f - gape * 0.5f)
+                        drawOval(Color(0xFF8A1E1E), topLeft = Offset(mouth.x - u * 2.2f, mouth.y - u * gape * 0.4f), size = Size(u * 4.4f, u * gape * 0.8f))
+                    }
+                    VolumetricShading.drawVolumetricEllipsoid(this, head.x, head.y, u * 4.0f, u * 3.0f,
+                        main = main, highlight = hi, shadow = sh, outlineW = ow,
+                        lightX = facing.lightScreenX, lightY = facing.lightScreenY, useSpecular = useSpec, useRim = useRim)
+                    val snoutTip = facing.project(ox, oy, u, 0f, headF + snoutLen + 0.4f, bodyUp + 1.8f)
+                    VolumetricShading.drawVolumetricCylinder(this, head, snoutTip, u * 2.9f, u * (if (gator) 1.9f else 1.5f),
+                        main = main, highlight = hi, shadow = sh, outlineW = ow * 0.9f, lightX = facing.lightScreenX, path = path)
+                    if (gator && !facing.isBackFacing) for (k in 0..4) for (side in -1..1 step 2) {
+                        val tooth = facing.project(ox, oy, u, side * 1.9f, headF + 2.0f + k * 1.4f, bodyUp + 0.9f)
+                        drawCircle(Color(0xFFF5F0DC), u * 0.42f, tooth)
+                    }
+                    if (!gator) { // basilisk crown frill
+                        for (k in -2..2) {
+                            val b = facing.project(ox, oy, u, k * 1.2f, headF - 1.4f, bodyUp + 3.8f)
+                            val tp = facing.project(ox, oy, u, k * 2.0f, headF - 3.0f, bodyUp + 7.2f - abs(k) * 0.8f)
+                            VolumetricShading.drawVolumetricCylinder(this, b, tp, u * 0.9f, u * 0.15f,
+                                main = accent, highlight = belly, shadow = sh, outlineW = ow * 0.55f, lightX = facing.lightScreenX, path = path)
+                        }
+                    }
+                    if (!facing.isBackFacing) {
+                        for (side in -1..1 step 2) {
+                            val e = facing.project(ox, oy, u, side * 2.2f, headF + 1.2f, bodyUp + (if (gator) 4.4f else 3.6f))
+                            if (!gator) drawCircle(eye.copy(alpha = 0.28f), u * 2.0f, e)
+                            drawCircle(INK, u * 1.0f, e)
+                            drawCircle(eye, u * 0.7f, e)
+                            drawCircle(INK, u * 0.28f, e)
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     private fun DrawScope.drawPoisonSpider(
         ox: Float,
