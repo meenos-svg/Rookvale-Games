@@ -5,7 +5,9 @@ enum class VitalsStyle(val label: String) { ORB("Orb"), BARS("Classic bars") }
 
 /** HUD pieces the player can move (and some can hide). */
 enum class HudElement(val label: String, val hideable: Boolean) {
-    VITALS("Health & minimap", false),
+    ORB("Health orb", false),
+    MINIMAP("Minimap", false),
+    INFO("Name & stats bar", false),
     BATTLE("Battle list", true),
     RAIL("Menu buttons", false),
     TRACKER("Tracker", true),

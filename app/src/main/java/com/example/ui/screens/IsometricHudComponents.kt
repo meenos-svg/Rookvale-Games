@@ -293,6 +293,9 @@ fun TopLeftHudCluster(
     onOrbHealth: () -> Unit = {},
     onOrbMana: () -> Unit = {},
     vitalsStyle: VitalsStyle = VitalsStyle.ORB,
+    showOrbPart: Boolean = true,
+    showMinimapPart: Boolean = true,
+    showInfoPart: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val zoomRadii = remember { listOf(14, 22, 34) }
@@ -307,11 +310,13 @@ fun TopLeftHudCluster(
         verticalAlignment = Alignment.Top
     ) {
         // Split health/mana orb with the XP bar down the middle (Orb style)
-        if (vitalsStyle == VitalsStyle.ORB) {
+        if (showOrbPart && vitalsStyle == VitalsStyle.ORB) {
             VitalsOrb(state = state, onUseHealth = onOrbHealth, onUseMana = onOrbMana)
         }
 
-        if (state.showMinimap && minimapCollapsed) {
+        if (!showMinimapPart) {
+            // minimap rendered elsewhere
+        } else if (state.showMinimap && minimapCollapsed) {
             MinimapTinyButton(
                 icon = Icons.Default.Map,
                 contentDesc = "Show minimap",
@@ -339,7 +344,7 @@ fun TopLeftHudCluster(
             )
         }
 
-        CharacterVitalsHudCard(
+        if (showInfoPart) CharacterVitalsHudCard(
             state = state,
             multiplayerState = multiplayerState,
             saveBanner = saveBanner,

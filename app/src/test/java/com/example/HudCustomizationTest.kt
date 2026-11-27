@@ -20,9 +20,9 @@ class HudCustomizationTest {
             .withOffset(HudElement.HOTBAR, 12.5f, -40f)
             .withOffset(HudElement.RAIL, -300f, 18f)
             .toggled(HudElement.TRACKER)
-            .toggled(HudElement.VITALS) // not hideable: ignored
+            .toggled(HudElement.ORB) // not hideable: ignored
         assertFalse(layout.isVisible(HudElement.TRACKER))
-        assertTrue(layout.isVisible(HudElement.VITALS))
+        assertTrue(layout.isVisible(HudElement.ORB))
         assertEquals(layout.offsets, HudLayout.decodeOffsets(layout.encodeOffsets()))
         assertEquals(layout.hidden, HudLayout.decodeHidden(layout.encodeHidden()))
         assertEquals(0f to 0f, layout.offsetOf(HudElement.CHAT))
