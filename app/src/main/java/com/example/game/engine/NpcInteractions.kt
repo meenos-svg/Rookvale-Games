@@ -237,6 +237,7 @@ object NpcInteractions {
     fun handleAction(state: GameWorldState, action: String, nowMs: Long): GameWorldState {
         val cmd = action.substringBefore(':')
         val arg = action.substringAfter(':', "")
+        LootCollection.handleAction(state, cmd, arg, nowMs)?.let { return it }
         return when (cmd) {
             "hunt_accept" -> acceptContract(state, arg)
             "hunt_abandon" -> abandonContract(state)

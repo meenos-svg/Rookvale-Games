@@ -72,6 +72,7 @@ object HotbarActions {
     const val OPEN_GEAR = "action:gear"
     const val OPEN_MAP = "action:map"
     const val OPEN_SKILLS = "action:skills"
+    const val LOOT_NEARBY = "action:loot_nearby"
 
     const val MAX_SLOTS = 9
 
@@ -88,7 +89,8 @@ object HotbarActions {
         OPEN_BAG to "Open Bag",
         OPEN_GEAR to "Open Gear",
         OPEN_MAP to "Open Map",
-        OPEN_SKILLS to "Open Skills"
+        OPEN_SKILLS to "Open Skills",
+        LOOT_NEARBY to "Loot nearby corpses"
     )
 
     fun isAction(id: String?): Boolean = id != null && id.startsWith(PREFIX)

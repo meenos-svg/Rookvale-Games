@@ -272,7 +272,9 @@ fun GameScreen(
                     activePanel = state.activePanel,
                     onOpenPanel = onOpenPanel,
                     onSaveManual = onSaveManual,
-                    onReturnTitle = onReturnTitle
+                    onReturnTitle = onReturnTitle,
+                    lootableNearby = com.example.game.engine.LootCollection.lootableNearby(state, android.os.SystemClock.uptimeMillis()).size,
+                    onLootNearby = { onNpcAction("loot_nearby") }
                 )
             }
 

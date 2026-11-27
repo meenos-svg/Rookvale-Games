@@ -460,7 +460,8 @@ object GameEngine {
         }
 
         // Any tap on a non-monster tile cancels melee auto-follow so the player can disengage freely
-        val baseState = if (dismissedState.autoFollowTarget) dismissedState.copy(autoFollowTarget = false) else dismissedState
+        val baseState = (if (dismissedState.autoFollowTarget) dismissedState.copy(autoFollowTarget = false) else dismissedState)
+            .let { if (it.pendingLootCorpseId != null) it.copy(pendingLootCorpseId = null) else it }
 
         // 1.5 Tap Remote Player -> Tibia-style Look / Inspect + Adventurer Action Card (Trade)
         val tappedPlayer = remotePlayersOnFloor.firstOrNull { it.floor == baseState.floor && it.x == tx && it.y == ty }
@@ -588,14 +589,19 @@ object GameEngine {
             } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
         }
 
-        // 7. Lootable Corpse
-        val corpse = baseState.corpses.firstOrNull { it.floor == baseState.floor && it.x == tx && it.y == ty }
-        if (corpse != null && dist <= 1) {
-            return baseState.copy(
-                activePanel = ActivePanel.LOOT_CORPSE,
-                inspectingCorpseId = corpse.id,
-                walkPath = emptyList()
-            )
+        // 7. Lootable Corpse: open it when adjacent, otherwise walk over and open it on arrival
+        val corpse = LootCollection.corpseToOpenAt(baseState, tx, ty, nowMs)
+        if (corpse != null) {
+            if (dist <= 1) {
+                return baseState.copy(
+                    activePanel = ActivePanel.LOOT_CORPSE,
+                    inspectingCorpseId = corpse.id,
+                    walkPath = emptyList(),
+                    pendingLootCorpseId = null
+                )
+            }
+            val walking = setWalkPathToAdjacent(baseState.copy(longRangeGoal = null, longRangeWaypoints = emptyList()), tx, ty, remotePlayersOnFloor)
+            if (walking.walkPath.isNotEmpty()) return walking.copy(pendingLootCorpseId = corpse.id)
         }
 
         // 8. Water -> Fishing
@@ -728,6 +734,15 @@ object GameEngine {
     }
 
     fun stepAlongPath(
+        state: GameWorldState,
+        nowMs: Long,
+        remotePlayersOnFloor: List<RemotePlayerState> = emptyList()
+    ): GameWorldState {
+        val stepped = stepAlongPathInner(state, nowMs, remotePlayersOnFloor)
+        return if (stepped.pendingLootCorpseId != null && stepped.walkPath.isEmpty()) LootCollection.onArrival(stepped, nowMs) else stepped
+    }
+
+    private fun stepAlongPathInner(
         state: GameWorldState,
         nowMs: Long,
         remotePlayersOnFloor: List<RemotePlayerState> = emptyList()
@@ -1422,7 +1437,8 @@ object GameEngine {
             outboundSystemAlerts = s.outboundSystemAlerts + bossAlert
         )
         s = NpcInteractions.onKillCredited(s, m, nowMs)
-        val expiryHint = if (m.type.isBoss) "3m" else "90s"
+        s = LootCollection.autoLootOnKill(s, corpse.id, nowMs)
+        val expiryHint = if (m.type.isBoss) "3m" else "2m"
         val potionQty = corpse.items.filter { it.itemId == "health_potion" }.sumOf { it.count }
         val isGuaranteedPotion = MonsterLootTable.entryFor(m.type).guaranteedDrops.any { it.itemId == "health_potion" }
         val rarePotionNote = if (potionQty > 0 && !isGuaranteedPotion) {
@@ -3335,6 +3351,7 @@ object GameEngine {
         HotbarActions.OPEN_GEAR -> state.copy(activePanel = ActivePanel.EQUIPMENT)
         HotbarActions.OPEN_MAP -> state.copy(activePanel = ActivePanel.WORLD_MAP)
         HotbarActions.OPEN_SKILLS -> state.copy(activePanel = ActivePanel.SKILLS)
+        HotbarActions.LOOT_NEARBY -> LootCollection.lootNearby(state, nowMs)
         else -> state
     }
 
@@ -3861,13 +3878,15 @@ object GameEngine {
             taken < stack.count -> "Looted $taken/${stack.count} ${def.name} — ran out of Cap (oz)!"
             else -> "Looted $qtyLabel."
         }
-        return s.copy(
+        val result = s.copy(
             corpses = updatedCorpses,
             activePanel = if (isEmptyNow) ActivePanel.NONE else s.activePanel,
             inspectingCorpseId = if (isEmptyNow) null else s.inspectingCorpseId
         )
             .addFloatingInternal(s.floor, corpse.x.toFloat(), corpse.y.toFloat(), "+$qtyLabel", FloatingTextKind.INFO, nowMs)
             .addLogInternal(msg)
+        val remembered = LootCollection.remember(result, stack.itemId)
+        return if (isEmptyNow) LootCollection.openNextCorpseOnTile(remembered, corpse, nowMs) else remembered
     }
 
     fun lootAllFromCorpse(state: GameWorldState, corpseId: String, nowMs: Long): GameWorldState {
@@ -3913,11 +3932,49 @@ object GameEngine {
             lootedCount > 0 || lootedGold > 0 -> "Looted $lootedCount item(s), but ran out of Cap (oz) for remaining items!"
             else -> "Too heavy! Smelt ores or store items in your Depot."
         }
-        return s.copy(
+        val result = s.copy(
             corpses = updatedCorpses,
             activePanel = if (closePanel) ActivePanel.NONE else s.activePanel,
             inspectingCorpseId = if (closePanel) null else s.inspectingCorpseId
         ).addLogInternal(msg)
+        return if (closePanel) LootCollection.openNextCorpseOnTile(result, corpse, nowMs) else result
+    }
+
+    /**
+     * Moves gold and/or items from a corpse into the bag without touching panels or the log.
+     * Takes as much as carrying capacity allows; returns the new state, gold taken and item units taken.
+     */
+    internal fun takeLootFromCorpse(
+        state: GameWorldState,
+        corpseId: String,
+        nowMs: Long,
+        takeGold: Boolean = true,
+        takeItem: (String) -> Boolean = { true }
+    ): Triple<GameWorldState, Int, Int> {
+        val corpse = state.corpses.firstOrNull { it.id == corpseId } ?: return Triple(state, 0, 0)
+        if (corpse.isOwnerLockedFor(state.saveId, nowMs)) return Triple(state, 0, 0)
+        var s = state
+        var gold = corpse.gold
+        var goldTaken = 0
+        if (takeGold && gold > 0) {
+            val intRoom = (Int.MAX_VALUE.toLong() - s.gold.toLong()).coerceAtLeast(0L)
+            val capRoom = ((s.remainingCapOz() + 1e-6) / GOLD_COIN_WEIGHT_OZ).toLong().coerceAtLeast(0L)
+            goldTaken = minOf(capRoom, gold.toLong(), intRoom).toInt()
+            if (goldTaken > 0) { s = s.copy(gold = s.gold + goldTaken); gold -= goldTaken }
+        }
+        val left = mutableListOf<ItemStack>()
+        var units = 0
+        for (stack in corpse.items) {
+            if (!takeItem(stack.itemId)) { left += stack; continue }
+            val w = ItemCatalog.get(stack.itemId).carriedWeightOz()
+            var taken = 0
+            while (taken < stack.count && s.remainingCapOz() + 1e-6 >= w) { s = addCarriedItem(s, stack.itemId, 1); taken++ }
+            units += taken
+            if (taken < stack.count) left += stack.copy(count = stack.count - taken)
+        }
+        val empty = gold == 0 && left.isEmpty()
+        val corpses = if (empty) s.corpses.filterNot { it.id == corpseId } else s.corpses.map { if (it.id == corpseId) it.copy(gold = gold, items = left) else it }
+        return Triple(s.copy(corpses = corpses), goldTaken, units)
     }
 
     /**
