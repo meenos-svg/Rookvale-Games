@@ -194,7 +194,9 @@ object WorldMaps {
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 225, ROOKVALE_ORIGIN_Y + 182, "RUNECRAFTING ACADEMY"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 224, ROOKVALE_ORIGIN_Y + 204, "CRAFT & FLETCHING WARD"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 245, ROOKVALE_ORIGIN_Y + 204, "LOGGING ORCHARD"))
-            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 183, ROOKVALE_ORIGIN_Y + 231, "WEST RIVER FISHING PIER"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + POND_CENTER_X, ROOKVALE_ORIGIN_Y + POND_CENTER_Y - 14, "ROOKVALE FISHING POND"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 228, ROOKVALE_ORIGIN_Y + 158, "HEROES' GARDEN"))
+            add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 156, ROOKVALE_ORIGIN_Y + 158, "WILLOW GREEN"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 242, ROOKVALE_ORIGIN_Y + 179, "SCHOLAR'S MARKET PLAZA"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 152, ROOKVALE_ORIGIN_Y + 172, "WEST GARDEN COURTYARD"))
             add(LandmarkLabel(0, ROOKVALE_ORIGIN_X + 196, ROOKVALE_ORIGIN_Y + 134, "NORTH STARTER MEADOWS"))
@@ -372,6 +374,9 @@ object WorldMaps {
     private fun isOverlandProtectionZone(x: Int, y: Int): Boolean {
         return (x in (ROOKVALE_ORIGIN_X + 147)..(ROOKVALE_ORIGIN_X + 255) &&
             y in (ROOKVALE_ORIGIN_Y + 149)..(ROOKVALE_ORIGIN_Y + 227)) ||
+            // Fishing pond park south of town: a safe place to level Fishing
+            (x in (ROOKVALE_ORIGIN_X + POND_PARK_MIN_X)..(ROOKVALE_ORIGIN_X + POND_PARK_MAX_X) &&
+                y in (ROOKVALE_ORIGIN_Y + 228)..(ROOKVALE_ORIGIN_Y + POND_PARK_MAX_Y)) ||
             WorldBiomeBlueprint.isSecondarySafeZone(x, y)
     }
 
@@ -537,14 +542,121 @@ object WorldMaps {
         return h xor (h ushr 16)
     }
 
-    private fun riverCenterY(x: Int): Int {
-        val wave = sin(x * 0.028) * 5.0 + cos(x * 0.013) * 3.0
-        // Gentle harbor bay dip directly south of Rookvale City
-        val harborDip = if (x in 165..235) {
-            val t = (x - 200) / 35.0
-            (1.0 - t * t) * 4.0
-        } else 0.0
-        return (235.0 + wave + harborDip).toInt()
+    // Rookvale Fishing Pond (local coords inside the 400x400 heartland grid)
+    private const val POND_CENTER_X = 196
+    private const val POND_CENTER_Y = 247
+    private const val POND_RADIUS_X = 26
+    private const val POND_RADIUS_Y = 11
+    private const val POND_PARK_MIN_X = 162
+    private const val POND_PARK_MAX_X = 230
+    private const val POND_PARK_MAX_Y = 264
+
+    /** Organic pond edge: an ellipse with a gentle wobble so the shoreline doesn't look stamped. */
+    private fun pondShape(x: Int, y: Int): Double {
+        val dx = (x - POND_CENTER_X).toDouble() / POND_RADIUS_X
+        val dy = (y - POND_CENTER_Y).toDouble() / POND_RADIUS_Y
+        val ang = kotlin.math.atan2(dy, dx)
+        val wobble = 1.0 + 0.08 * sin(ang * 3.0 + 0.6) + 0.05 * cos(ang * 5.0)
+        return kotlin.math.sqrt(dx * dx + dy * dy) / wobble
+    }
+
+    /**
+     * Gardens, parks and the fishing pond that replace Rookvale's old perimeter wall and the river
+     * that used to cut straight across the valley.
+     */
+    private fun buildTownGardensAndPond(grid: ChunkedTileGrid) {
+        // ---- Organic town edge: flower clumps and shade trees instead of a wall ----
+        fun edgeAccent(x: Int, y: Int, salt: Int) {
+            val h = deterministicHash(x, y, salt) and 63
+            when {
+                h < 6 -> grid.set(x, y, TileType.TREE)
+                h < 22 -> grid.fillEllipse(x, y, 1, 1, TileType.FLOWER_GRASS)
+            }
+        }
+        for (x in 140..262 step 3) {
+            if (x in 190..202) continue
+            edgeAccent(x, 145 - (deterministicHash(x, 1, 81) and 1), 83)
+        }
+        for (y in 150..226 step 3) {
+            if (y in 186..198) continue
+            edgeAccent(142 + (deterministicHash(1, y, 85) and 1), y, 87)
+            edgeAccent(260 - (deterministicHash(2, y, 89) and 1), y, 91)
+        }
+
+        // ---- Heroes' Garden (NE): hedged park with a fountain, flower beds and benches ----
+        grid.fillRect(207, 151, 249, 166, TileType.GRASS)
+        for (x in 207..249) {
+            if (x !in 226..230) { grid.set(x, 151, TileType.HEDGE); grid.set(x, 166, TileType.HEDGE) }
+        }
+        for (y in 151..166) {
+            if (y !in 157..160) { grid.set(207, y, TileType.HEDGE); grid.set(249, y, TileType.HEDGE) }
+        }
+        grid.fillRect(226, 151, 230, 166, TileType.COBBLESTONE)           // north-south path
+        grid.fillRect(207, 157, 249, 160, TileType.COBBLESTONE)           // east-west path
+        grid.fillRect(225, 156, 231, 161, TileType.COBBLESTONE)           // fountain court
+        grid.set(228, 158, TileType.FOUNTAIN)
+        for ((bx1, by1) in listOf(210 to 153, 233 to 153, 210 to 162, 233 to 162)) {
+            grid.fillRect(bx1, by1, bx1 + 13, by1 + 2, TileType.FLOWER_GRASS)
+            grid.set(bx1 + 3, by1 + 1, TileType.TREE)
+            grid.set(bx1 + 10, by1 + 1, TileType.TREE)
+        }
+        listOf(225 to 156, 231 to 156, 225 to 161, 231 to 161).forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
+        listOf(213 to 156, 220 to 156, 236 to 161, 243 to 161).forEach { (bx, by) -> grid.set(bx, by, TileType.TEMPLE_PEW) }
+
+        // ---- Willow Green (NW): a quiet orchard lawn west of the Temple of Reapers ----
+        grid.fillRect(149, 150, 165, 165, TileType.GRASS)
+        grid.fillEllipse(157, 158, 5, 4, TileType.FLOWER_GRASS)
+        listOf(150 to 151, 155 to 152, 160 to 151, 164 to 153, 151 to 157, 163 to 159, 150 to 164, 156 to 164, 162 to 165)
+            .forEach { (tx, ty) -> grid.set(tx, ty, TileType.TREE) }
+        grid.set(157, 158, TileType.LANTERN_POST)
+        listOf(154 to 158, 160 to 158).forEach { (bx, by) -> grid.set(bx, by, TileType.TEMPLE_PEW) }
+
+        // ---- Boulevard lanterns ----
+        for (y in 152..164 step 6) { grid.set(193, y, TileType.LANTERN_POST); grid.set(199, y, TileType.LANTERN_POST) }
+        for (y in 216..220 step 4) { grid.set(193, y, TileType.LANTERN_POST); grid.set(199, y, TileType.LANTERN_POST) }
+
+        // ---- Rookvale Fishing Pond (south of town, inside the town safe zone) ----
+        // Meadow park around the pond
+        for (y in 228..POND_PARK_MAX_Y) for (x in POND_PARK_MIN_X..POND_PARK_MAX_X) {
+            val h = deterministicHash(x, y, 95) and 31
+            grid.set(x, y, if (h < 6) TileType.FLOWER_GRASS else TileType.GRASS)
+        }
+        // Walking trail, sandy beach and open water
+        for (y in 228..POND_PARK_MAX_Y) for (x in POND_PARK_MIN_X..POND_PARK_MAX_X) {
+            val d = pondShape(x, y)
+            when {
+                d <= 1.0 -> grid.set(x, y, TileType.WATER)
+                d <= 1.12 -> grid.set(x, y, TileType.SAND)
+                d in 1.22..1.32 -> grid.set(x, y, TileType.DIRT_FLOOR)
+            }
+        }
+        // Central causeway carries the South Frontier Road across the pond via a flowered island
+        grid.fillRect(195, 228, 197, POND_PARK_MAX_Y, TileType.WOOD_BRIDGE)
+        grid.fillEllipse(POND_CENTER_X, POND_CENTER_Y, 6, 3, TileType.SAND)
+        grid.fillEllipse(POND_CENTER_X, POND_CENTER_Y, 5, 2, TileType.FLOWER_GRASS)
+        grid.fillRect(195, POND_CENTER_Y - 2, 197, POND_CENTER_Y + 2, TileType.COBBLESTONE)
+        listOf(192 to 246, 200 to 246, 192 to 248, 200 to 248).forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
+        grid.set(191, 247, TileType.TEMPLE_PEW); grid.set(201, 247, TileType.TEMPLE_PEW)
+        // Two long fishing piers from the promenade, each ending in a wide fishing deck
+        grid.fillRect(182, 228, 184, 243, TileType.WOOD_PIER)
+        grid.fillRect(179, 242, 187, 244, TileType.WOOD_PIER)
+        grid.fillRect(209, 228, 211, 243, TileType.WOOD_PIER)
+        grid.fillRect(206, 242, 214, 244, TileType.WOOD_PIER)
+        // Short jetties on the far west and east shores
+        grid.fillRect(170, 246, 176, 248, TileType.WOOD_PIER)
+        grid.fillRect(216, 246, 222, 248, TileType.WOOD_PIER)
+        // Rowboats moored at the decks and jetties
+        listOf(178 to 243, 188 to 244, 205 to 244, 215 to 243, 177 to 249, 215 to 249)
+            .forEach { (bx, by) -> if (grid.get(bx, by) == TileType.WATER) grid.set(bx, by, TileType.MOORED_BOAT) }
+        // Lanterns along the pier walks and shore, weeping trees and benches around the trail
+        listOf(181 to 230, 185 to 234, 208 to 230, 212 to 234, 179 to 242, 187 to 242, 206 to 242, 214 to 242)
+            .forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
+        listOf(166 to 236, 166 to 258, 226 to 236, 226 to 258, 176 to 262, 216 to 262, 172 to 231, 220 to 231)
+            .forEach { (tx, ty) -> grid.set(tx, ty, TileType.TREE) }
+        listOf(170 to 233, 222 to 233, 168 to 252, 224 to 252).forEach { (bx, by) -> grid.set(bx, by, TileType.TEMPLE_PEW) }
+        // Bait seller's crates beside the west pier
+        grid.set(179, 228, TileType.CRATE_BARREL)
+        grid.set(178, 228, TileType.MARKET_AWNING)
     }
 
     /**
@@ -802,63 +914,33 @@ object WorldMaps {
         // West farmstead wildflower clearing
         grid.fillEllipse(124, 174, 10, 8, TileType.FLOWER_GRASS)
 
-        // 9. WIDE WINDING ROOKVALE RIVER & SOUTHERN HARBOR BASIN (full x = 0..399)
-        for (x in 0 until s) {
-            val cy = riverCenterY(x)
-            val halfW = if (x in 172..224) 7 else 5
-            for (y in (cy - halfW)..(cy + halfW)) {
-                grid.set(x, y, TileType.WATER)
-            }
-        }
-
         // 10. FULL-SCALE ROOKVALE CITY CORE (x = 146..256, y = 148..228)
         // Lush green base lawn inside city with wildflowers
         for (y in 148..228) {
             for (x in 146..256) {
-                if (grid.get(x, y) != TileType.WATER) {
-                    val h = deterministicHash(x, y, 41) and 31
-                    grid.set(x, y, if (h < 5) TileType.FLOWER_GRASS else TileType.GRASS)
-                }
+                val h = deterministicHash(x, y, 41) and 31
+                grid.set(x, y, if (h < 5) TileType.FLOWER_GRASS else TileType.GRASS)
             }
         }
 
         // City Grand Boulevards & Connecting Cobblestone Lanes
         grid.fillRect(194, 148, 198, 228, TileType.COBBLESTONE) // Central North-South Boulevard
         grid.fillRect(146, 190, 256, 194, TileType.COBBLESTONE) // Central West-East Boulevard
-        grid.fillRect(150, 222, 248, 227, TileType.COBBLESTONE) // South Riverfront Promenade
+        grid.fillRect(150, 222, 248, 227, TileType.COBBLESTONE) // South Pondside Promenade
         grid.fillRect(159, 170, 162, 228, TileType.COBBLESTONE) // West Market & Depot Avenue
         grid.fillRect(234, 170, 237, 228, TileType.COBBLESTONE) // East Academy & Craft Avenue
         grid.fillRect(154, 168, 244, 170, TileType.COBBLESTONE) // North Garden Ring Lane
         grid.fillRect(154, 212, 240, 214, TileType.COBBLESTONE) // South Market Ring Lane
 
-        // Open City Perimeter: Trimmed Hedges, Wooden Fences & Stone Gateposts (no cramped curtain walls!)
-        for (x in 146..256) {
-            if (x !in 193..199) {
-                val borderTile = when {
-                    x % 14 == 0 -> TileType.LANTERN_POST
-                    (x / 5) % 2 == 0 -> TileType.HEDGE
-                    else -> TileType.WOOD_FENCE
-                }
-                grid.set(x, 148, borderTile)
-            }
-        }
-        for (y in 149..226) {
-            if (y !in 189..195) {
-                val borderTile = when {
-                    y % 12 == 0 -> TileType.LANTERN_POST
-                    (y / 5) % 2 == 0 -> TileType.HEDGE
-                    else -> TileType.WOOD_FENCE
-                }
-                if (grid.get(146, y) != TileType.WATER) grid.set(146, y, borderTile)
-                if (grid.get(256, y) != TileType.WATER) grid.set(256, y, borderTile)
-            }
-        }
-        // Grand Stone Gateposts framing North, West, and East Highways
+        // No town wall: Rookvale opens straight onto the meadows. Stone welcome posts with lanterns
+        // still mark where each highway enters town.
         listOf(
-            193 to 148, 199 to 148, // North Gate
-            146 to 189, 146 to 195, // West Gate
-            256 to 189, 256 to 195  // East Gate
+            193 to 148, 199 to 148, // North entrance
+            146 to 189, 146 to 195, // West entrance
+            256 to 189, 256 to 195  // East entrance
         ).forEach { (gx, gy) -> grid.set(gx, gy, TileType.GATE_PILLAR) }
+        listOf(193 to 146, 199 to 146, 144 to 189, 144 to 195, 258 to 189, 258 to 195)
+            .forEach { (lx, ly) -> grid.set(lx, ly, TileType.LANTERN_POST) }
 
         // --- DISTRICT 1: TEMPLE & SANCTUARY PLAZA (x = 182..210, y = 172..208) ---
         grid.fillRect(182, 188, 210, 208, TileType.COBBLESTONE)
@@ -1120,39 +1202,8 @@ object WorldMaps {
             241 to 215, 246 to 216, 251 to 215
         ).forEach { (tx, ty) -> grid.set(tx, ty, TileType.TREE) }
 
-        // --- DISTRICT 5: SOUTH RIVERFRONT, BRIDGES & HARBOR DOCKS ---
-        // Three Grand Bridges across the winding Rookvale River
-        fun buildBridge(xStart: Int, xEnd: Int) {
-            val midX = (xStart + xEnd) / 2
-            val cy = riverCenterY(midX)
-            for (y in (cy - 10)..(cy + 10)) {
-                for (x in xStart..xEnd) {
-                    if (grid.get(x, y) == TileType.WATER || y in (cy - 8)..(cy + 8)) {
-                        grid.set(x, y, TileType.WOOD_BRIDGE)
-                    }
-                }
-            }
-            grid.set(xStart - 1, cy - 8, TileType.LANTERN_POST)
-            grid.set(xEnd + 1, cy - 8, TileType.LANTERN_POST)
-        }
-        buildBridge(194, 198) // Grand Central River Bridge
-        buildBridge(159, 162) // West Market Bridge
-        buildBridge(234, 237) // East Craft Bridge
-
-        // Harbor Fishing Piers extending from the Riverfront Promenade into the Harbor Basin
-        grid.fillRect(180, 227, 185, 235, TileType.WOOD_PIER)
-        grid.fillRect(209, 227, 214, 235, TileType.WOOD_PIER)
-        // Moored Harbor Boats bobbing beside the piers
-        listOf(179 to 232, 186 to 234, 208 to 234, 215 to 232).forEach { (bx, by) ->
-            grid.set(bx, by, TileType.MOORED_BOAT)
-        }
-        // Waterfront lanterns & cargo crates along the Promenade
-        listOf(176 to 224, 188 to 224, 204 to 224, 218 to 224).forEach { (lx, ly) ->
-            grid.set(lx, ly, TileType.LANTERN_POST)
-        }
-        listOf(174 to 225, 220 to 225).forEach { (cx, cy) ->
-            grid.set(cx, cy, TileType.CRATE_BARREL)
-        }
+        // --- DISTRICT 5: TOWN GARDENS & ROOKVALE FISHING POND ---
+        buildTownGardensAndPond(grid)
 
         // --- DISTRICT 6: ROOKVALE EASTERN OCEAN BAY (true open sea for Rookvale Royal Harbor) ---
         for (ly in 0 until s) {
