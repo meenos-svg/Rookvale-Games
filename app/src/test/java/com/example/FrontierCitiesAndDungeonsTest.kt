@@ -115,6 +115,9 @@ class FrontierCitiesAndDungeonsTest {
         assertEquals(setOf(MonsterType.DUNE_SCORPION, MonsterType.SAND_WRAITH, MonsterType.SUNSCALE_BASILISK), tomb.filter { !it.type.isBoss }.map { it.type }.toSet())
         murk.forEach { assertTrue("Murkfen ${it.type} Lv ${it.level}", it.level in 20..25) }
         tomb.forEach { assertTrue("Tomb ${it.type} Lv ${it.level}", it.level in 30..35) }
+        // Gorek Labyrinth now matches its badlands home (Lv 36-41) instead of Lv 90+
+        monsters.filter { it.floor == -6 }.forEach { assertTrue("Gorek ${it.type} Lv ${it.level}", it.level in 36..41) }
+        assertEquals("Lvl 36-41", BiomeProgressionRules.dungeonRecommendedLevelLabel(-6))
         assertEquals(-30, BiomeProgressionRules.MIN_DUNGEON_FLOOR)
         assertFalse(BiomeProgressionRules.isLowerBossFloor(-29))
     }

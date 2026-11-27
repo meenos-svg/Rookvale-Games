@@ -322,7 +322,7 @@ object AdminTeleportCatalog {
         dungeonCampPreset("floor_m3", "F-3 Abyssal Crypt", -3, DeepDelveFloors.F3_LANDING_X, DeepDelveFloors.F3_LANDING_Y),
         dungeonCampPreset("floor_m4", "F-4 Obsidian Wyrm Sanctum", -4, DeepDelveFloors.F4_LANDING_X, DeepDelveFloors.F4_LANDING_Y),
         dungeonCampPreset("floor_m5", "F-5 Grimmaw Camp", -5, 24, 40),
-        dungeonCampPreset("floor_m6", "F-6 Labyrinth Camp", -6, FrontierSiteFloors.GOREK.landingX, FrontierSiteFloors.GOREK.landingY, openEndedTop = true),
+        dungeonCampPreset("floor_m6", "F-6 Labyrinth Camp", -6, FrontierSiteFloors.GOREK.landingX, FrontierSiteFloors.GOREK.landingY),
         dungeonCampPreset("floor_m7", "F-7 Mire Vaults Camp", -7, FrontierSiteFloors.MIRE.landingX, FrontierSiteFloors.MIRE.landingY),
         dungeonCampPreset("floor_m8", "F-8 Ziggurat Camp", -8, FrontierSiteFloors.ZIGGURAT.landingX, FrontierSiteFloors.ZIGGURAT.landingY),
         dungeonCampPreset("floor_m9", "F-9 Barrow Camp", -9, 24, 40),

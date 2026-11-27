@@ -145,7 +145,7 @@ object BiomeProgressionRules {
         -3 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Abyssal Crypt (Lvl 13-17) & Demon Lord (Lvl 18)
         -4 -> OverlandBiomeTier.ROOKVALE_HEARTLAND   // Obsidian Wyrm Sanctum (Lvl 16-20) & Elder Dragon (Lvl 20)
         -5 -> OverlandBiomeTier.SUNSCORCH_BADLANDS   // Grimmaw Quarry & Deep Quarry Pit (Lvl 60-65)
-        -6 -> OverlandBiomeTier.ASHEN_CALDERA        // Gorek Labyrinth & Inner Sanctum (Lvl 91-96+)
+        -6 -> OverlandBiomeTier.SUNSCORCH_BADLANDS   // Gorek Labyrinth & Inner Sanctum (Lvl 36-41), rebalanced to its badlands home
         -7 -> OverlandBiomeTier.WHISPERING_MARSH     // Sunken Mire Vaults & Sluice Depths (Lvl 26-31)
         -8 -> OverlandBiomeTier.WHISPERING_MARSH     // Overgrown Ziggurat & Sun-Altar (Lvl 32-37)
         -9 -> OverlandBiomeTier.FROSTPEAK_HIGHLANDS  // Blightwood Barrow & Sovereign's Tomb (Lvl 48-53)
@@ -167,7 +167,7 @@ object BiomeProgressionRules {
      * paired Lower Boss Floors (-16..-28) inherit their parent dungeon's depth.
      */
     fun effectiveDungeonDepth(floorId: Int): Int = when (parentUpperFloorFor(floorId)) {
-        -7, -9, -11, -12, -13 -> 1
+        -6, -7, -9, -11, -12, -13 -> 1
         -8, -10, -14, -15 -> 2
         -29, -30 -> 0   // entry dungeons of their biomes: monsters start at the biome's own minimum level
         else -> abs(parentUpperFloorFor(floorId)).coerceAtLeast(1)
@@ -211,7 +211,7 @@ object BiomeProgressionRules {
         val canonical = parentUpperFloorFor(floorId)
         val base = dungeonBaseLevel(surfaceMinLevel, canonical)
         val top = if (surfaceMinLevel == OverlandBiomeTier.ROOKVALE_HEARTLAND.minLevel) (base + 5).coerceAtMost(ROOKVALE_MAX_LEVEL) else base + 5
-        return if (canonical == -6 || canonical == -10 || canonical == -15) "Lvl $base-${top}+" else "Lvl $base-$top"
+        return if (canonical == -10 || canonical == -15) "Lvl $base-${top}+" else "Lvl $base-$top"
     }
 
     /**

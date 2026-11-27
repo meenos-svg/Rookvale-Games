@@ -1516,13 +1516,13 @@ object WorldMaps {
     }
 
     /**
-     * Dedicated Pinnacle Floor -6: THE GOREK LABYRINTH
+     * Badlands Floor -6 (Lv 36-41): THE GOREK LABYRINTH
      * Entered via the SE Frontier Gorek Badlands War-Camp. Features winding 2-3 tile
      * branching labyrinth corridors, guarded chambers, iron-barred gates, lava chasms
      * with stone bridges, glowing Cinderite veins, and Vaelgor the Labyrinth Warden's sanctum.
      */
     private fun buildGorekLabyrinthFloor(): WorldFloor =
-        frontierFloor(FrontierSiteFloors.gorekLabyrinth, "The Gorek Labyrinth", "Sunbaked Maze • Floor -6 • Vanguard Camp PZ", "Pinnacle", 4)
+        frontierFloor(FrontierSiteFloors.gorekLabyrinth, "The Gorek Labyrinth", "Sunbaked Maze • Floor -6 • Vanguard Camp PZ", "High", 3)
 
     /** Turns a hand-shaped [HeartlandSiteFloors.Layout] into a floor with its camp as the PZ. */
     private fun frontierFloor(layout: HeartlandSiteFloors.Layout, name: String, subtitle: String, danger: String, severity: Int): WorldFloor {
