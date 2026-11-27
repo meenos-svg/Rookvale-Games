@@ -9,7 +9,7 @@ If a session is cut off, pick up at the first unchecked item.
 - [x] 3. Fishing spots in Mirewatch (lagoon) and Sunspire (oasis) with marsh/desert fish
 - [x] 4. Ashen Caldera city — rebuild Ashen Bastion (386,260) as an obsidian forge city
 - [x] 5. Ashen dungeons & monsters — fill the Lv 55-75 band
-- [ ] 6. Proper creature shapes in HD for scorpion, basilisk, gator (four-legged / scorpion bodies)
+- [x] 6. Proper creature shapes in HD for scorpion, basilisk, gator (four-legged / scorpion bodies)
 - [ ] 7. Named city districts on the world map (tap to walk)
 - [ ] 8. Small cleanups: admin warp sorted by level; depot "deposit all materials"
 
