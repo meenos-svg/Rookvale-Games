@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -431,7 +432,7 @@ fun androidx.compose.foundation.layout.BoxScope.HudMovable(
                     .border(2.dp, TorchGold, RoundedCornerShape(8.dp))
                     .background(TorchGold.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
                     .pointerInput(element) {
-                        androidx.compose.foundation.gestures.detectDragGestures(
+                        detectDragGestures(
                             onDragEnd = { onMoved(hud.withOffset(element, dragX, dragY)) }
                         ) { change, drag ->
                             change.consume()
