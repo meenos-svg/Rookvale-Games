@@ -282,7 +282,9 @@ object DungeonGuides {
         "Fen Guide Oswin" to DungeonGuideInfo(-29, "Murkfen Hollow", "Lv 20-24", MonsterType.HAGMOTHER_VESSA.displayName,
             "Wisps lure you into deep water. The hag village guards the only bridge to her bower."),
         "Tomb Robber Sefa" to DungeonGuideInfo(-30, "Tomb of Akhet", "Lv 30-34", MonsterType.AKHET_THE_SAND_PHARAOH.displayName,
-            "Scorpions nest in the east dens. The sanctum gates lie north of the Hall of Kings.")
+            "Scorpions nest in the east dens. The sanctum gates lie north of the Hall of Kings."),
+        "Rift Scout Imran" to DungeonGuideInfo(-31, "Scorchglass Rift", "Lv 41-45", MonsterType.SIROCCO_THE_STORM_DJINN.displayName,
+            "Golems guard the salt flats. The Djinn's Eye sits behind a lava ring at the top of the rift.")
     )
 
     fun messageFor(guideName: String): String {

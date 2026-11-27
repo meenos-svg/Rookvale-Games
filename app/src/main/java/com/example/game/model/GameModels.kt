@@ -1206,6 +1206,29 @@ enum class MonsterType(
         aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.ARCANE_DART,
         isBoss = true, summonTypeName = "SAND_WRAITH", maxSummons = 2,
         specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Undying King of the Sunken Tomb"
+    ),
+
+    // --- Scorchglass Rift (Floor -31, Sunscorch Badlands Lv 41-45) ---
+    SCORCHGLASS_STALKER(
+        displayName = "Scorchglass Stalker", tier = 4, threatLevel = 15, maxHp = 462, armor = 17,
+        xpReward = 540, minDmg = 33, maxDmg = 60, goldMin = 80, goldMax = 168, moveIntervalTicks = 1,
+        inflictsPoison = true
+    ),
+    DUST_DEVIL(
+        displayName = "Dust Devil", tier = 4, threatLevel = 14, maxHp = 400, armor = 11,
+        xpReward = 515, minDmg = 31, maxDmg = 57, goldMin = 76, goldMax = 160, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.RANGED_KITE, preferredRange = 4, rangedProjectile = ProjectileKind.ARCANE_DART
+    ),
+    SALTGLASS_GOLEM(
+        displayName = "Saltglass Golem", tier = 4, threatLevel = 15, maxHp = 520, armor = 19,
+        xpReward = 560, minDmg = 34, maxDmg = 62, goldMin = 84, goldMax = 176, moveIntervalTicks = 2
+    ),
+    SIROCCO_THE_STORM_DJINN(
+        displayName = "Sirocco, the Storm Djinn", tier = 4, threatLevel = 16, maxHp = 1080, armor = 18,
+        xpReward = 1420, minDmg = 42, maxDmg = 76, goldMin = 300, goldMax = 520, moveIntervalTicks = 1,
+        aiStyle = MonsterAiStyle.BOSS_AOE_SUMMON, preferredRange = 4, rangedProjectile = ProjectileKind.ARCANE_DART,
+        isBoss = true, summonTypeName = "DUST_DEVIL", maxSummons = 2,
+        specialKind = BossSpecialKind.FLAME_BURST, bossTitle = "Sandstorm Lord of the Scorchglass Rift"
     );
 
     fun threatBandFor(playerLevel: Int): ThreatBand = when {

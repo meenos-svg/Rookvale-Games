@@ -30,17 +30,21 @@ object FrontierSiteFloors {
     /** New dungeons have their boss on the same floor: the "descent" fields mirror the landing. */
     val MURKFEN = Anchors(5, 48, 6, 48, 6, 48, 6, 48)
     val TOMB = Anchors(48, 90, 48, 89, 48, 89, 48, 89)
+    val RIFT = Anchors(8, 88, 9, 87, 9, 87, 9, 87)
 
     const val MURKFEN_FLOOR = -29
     const val TOMB_FLOOR = -30
+    const val RIFT_FLOOR = -31
 
     /** Overland entrances of the two new dungeons. */
     const val MURKFEN_ENTRY_X = 452
     const val MURKFEN_ENTRY_Y = 612
     const val TOMB_ENTRY_X = 300
     const val TOMB_ENTRY_Y = 850
+    const val RIFT_ENTRY_X = 190
+    const val RIFT_ENTRY_Y = 880
 
-    val newFloorIds: List<Int> = listOf(MURKFEN_FLOOR, TOMB_FLOOR)
+    val newFloorIds: List<Int> = listOf(MURKFEN_FLOOR, TOMB_FLOOR, RIFT_FLOOR)
 
     fun anchorsFor(floorId: Int): Anchors? = when (floorId) {
         -6 -> GOREK
@@ -48,6 +52,7 @@ object FrontierSiteFloors {
         -8 -> ZIGGURAT
         MURKFEN_FLOOR -> MURKFEN
         TOMB_FLOOR -> TOMB
+        RIFT_FLOOR -> RIFT
         else -> null
     }
 
@@ -57,6 +62,7 @@ object FrontierSiteFloors {
         -8 -> ziggurat
         MURKFEN_FLOOR -> murkfenHollow
         TOMB_FLOOR -> tombOfAkhet
+        RIFT_FLOOR -> scorchglassRift
         else -> null
     }
 
@@ -65,6 +71,7 @@ object FrontierSiteFloors {
     val gorekLabyrinth: Layout by lazy { buildGorek() }
     val murkfenHollow: Layout by lazy { buildMurkfen() }
     val tombOfAkhet: Layout by lazy { buildTomb() }
+    val scorchglassRift: Layout by lazy { buildRift() }
 
     private fun layout(
         floorId: Int,
@@ -371,8 +378,8 @@ object FrontierSiteFloors {
         c[a.descentReturnX, a.descentReturnY] = obs
 
         c.sealPockets(a.landingX, a.landingY)
-        c.ores(TileType.ORE_CINDERITE, count = 8, x1 = 4, y1 = 4, x2 = 92, y2 = 82)
-        c.ores(TileType.ORE_VESPERITE, count = 6, x1 = 4, y1 = 4, x2 = 92, y2 = 82)
+        c.ores(TileType.ORE_VESPERITE, count = 9, x1 = 4, y1 = 4, x2 = 92, y2 = 82)
+        c.ores(TileType.ORE_BOG_IRON, count = 5, x1 = 4, y1 = 4, x2 = 92, y2 = 82)
         c.torches(spacing = 9)
 
         val raider = MonsterType.GOREK_RAIDER
@@ -579,5 +586,86 @@ object FrontierSiteFloors {
             LandmarkLabel(TOMB_FLOOR, 48, 12, "SANCTUM OF AKHET")
         )
         return layout(TOMB_FLOOR, c, camp, a, spawns, landmarks)
+    }
+
+    // =====================================================================================
+    // Floor -31: Scorchglass Rift (Lv 41-45)
+    // =====================================================================================
+    private fun buildRift(): Layout {
+        val a = RIFT
+        val c = DeepDelveFloors.Canvas(SIZE, TileType.MOUNTAIN_ROCK, seed = 3101)
+        val sand = TileType.SAND
+        val glass = TileType.OBSIDIAN_FLOOR
+        val salt = TileType.TEMPLE_FLOOR
+        val brine = TileType.WATER
+        val camp = UndergroundCampZone(
+            floorId = RIFT_FLOOR, name = "SCORCHGLASS RIFT CAMP (PZ)",
+            minX = 3, minY = 82, maxX = 14, maxY = 92,
+            healerX = 5, healerY = 84, healerName = "Windcaller Nadira",
+            merchantX = 12, merchantY = 84, merchantName = "Glass-Hauler Tarek"
+        )
+        // Prospectors' camp (south-west)
+        c.rect(3, 82, 14, 92, sand)
+        c[4, 91] = TileType.CAMPFIRE_BRAZIER; c[13, 91] = TileType.CAMPFIRE_BRAZIER
+        c[8, 83] = TileType.BIOME_STALL_BADLANDS; c[13, 88] = TileType.CRATE_BARREL
+        c[a.stairsUpX, a.stairsUpY] = TileType.STAIRS_UP
+        c[a.landingX, a.landingY] = TileType.COBBLESTONE
+
+        // The Rift: a wide winding canyon from the camp up to the Djinn's Eye
+        c.tunnel(listOf(14 to 86, 26 to 78, 34 to 64, 46 to 56, 52 to 44, 62 to 34, 70 to 24), 6, sand)
+        c.scatterReplace(14, 20, 76, 90, sand, glass, 5)        // glassed streaks where lightning struck
+
+        // Glass Gardens (west): a field of glass spires on fused sand
+        c.blob(18, 52, 10, glass)
+        c.scatter(8, 42, 28, 62, TileType.CRYSTAL_PILLAR, density = 9, onlyOn = setOf(glass), keepClear = 1)
+        c.tunnel(listOf(26 to 56, 38 to 62), 3, glass)
+        c.blob(16, 28, 7, sand)
+        c.tunnel(listOf(18 to 42, 16 to 34), 3, sand)
+
+        // Salt Flats (east): pale salt crust broken by brine pools
+        c.blob(72, 70, 13, salt)
+        for ((px, py, rx, ry) in listOf(listOf(66, 66, 4, 3), listOf(78, 74, 5, 3), listOf(74, 62, 3, 2), listOf(64, 78, 3, 2))) c.ellipse(px, py, rx, ry, brine)
+        c.tunnel(listOf(46 to 60, 60 to 68), 4, salt, bridge = TileType.STONE_BRIDGE)
+        c.blob(86, 88, 5, salt)
+        c.tunnel(listOf(78 to 80, 84 to 86), 3, salt, bridge = TileType.STONE_BRIDGE)
+
+        // Dust Bowl (north-west): a round wind-scoured arena
+        c.ellipse(36, 18, 11, 9, sand)
+        c.ellipse(36, 18, 4, 3, glass)
+        c.tunnel(listOf(44 to 24, 54 to 40), 4, sand)
+
+        // The Djinn's Eye (north-east): a glass disc ringed by lava, one bridge in
+        c.ellipse(78, 16, 13, 11, TileType.LAVA)
+        c.ellipse(78, 16, 9, 7, glass)
+        c.rect(69, 22, 73, 27, TileType.STONE_BRIDGE)
+        for (y in 25..27) for (x in 69..73) if (y == 27) c[x, y] = TileType.IRON_BAR_GATE
+        for ((x, y) in listOf(72 to 12, 84 to 12, 72 to 20, 84 to 20)) c[x, y] = TileType.CRYSTAL_PILLAR
+        c[78, 11] = TileType.CAMPFIRE_BRAZIER                      // the storm-lamp
+
+        c.sealPockets(a.landingX, a.landingY)
+        c.ores(TileType.ORE_VESPERITE, count = 9, x1 = 4, y1 = 4, x2 = 92, y2 = 92)
+        c.ores(TileType.ORE_BOG_IRON, count = 5, x1 = 4, y1 = 4, x2 = 92, y2 = 92)
+        c.torches(spacing = 9)
+
+        val stalker = MonsterType.SCORCHGLASS_STALKER
+        val devil = MonsterType.DUST_DEVIL
+        val golem = MonsterType.SALTGLASS_GOLEM
+        val spawns = c.spawns(
+            RIFT_FLOOR, camp,
+            stalker to (24 to 78), stalker to (34 to 66), devil to (44 to 56), stalker to (52 to 46), devil to (60 to 36),
+            stalker to (14 to 50), stalker to (22 to 56), devil to (18 to 46), stalker to (16 to 28),
+            golem to (68 to 66), golem to (78 to 70), golem to (72 to 78), devil to (62 to 72), golem to (86 to 88), stalker to (80 to 64),
+            devil to (30 to 16), devil to (42 to 20), devil to (36 to 24), stalker to (50 to 32),
+            golem to (66 to 30), devil to (56 to 62),
+            MonsterType.SIROCCO_THE_STORM_DJINN to (78 to 15)
+        )
+        val landmarks = listOf(
+            LandmarkLabel(RIFT_FLOOR, 40, 58, "THE RIFT"),
+            LandmarkLabel(RIFT_FLOOR, 18, 40, "GLASS GARDENS"),
+            LandmarkLabel(RIFT_FLOOR, 72, 56, "SALT FLATS"),
+            LandmarkLabel(RIFT_FLOOR, 36, 8, "DUST BOWL"),
+            LandmarkLabel(RIFT_FLOOR, 78, 3, "THE DJINN'S EYE")
+        )
+        return layout(RIFT_FLOOR, c, camp, a, spawns, landmarks)
     }
 }

@@ -227,7 +227,8 @@ class EquipmentRequirementsAndProcsTest {
         assertTrue("vesperite_resonance_necklace" in kragorPool)
         assertTrue("vesperite_catalyst_ring" in kragorPool)
 
-        val vaelgorPool = MonsterLootTable.entryFor(MonsterType.VAELGOR_LABYRINTH_WARDEN).weightedDrops.map { it.itemId }.toSet()
+        val vaelgorPool = (MonsterLootTable.entryFor(MonsterType.VULKARIS_THE_FORGE_TITAN).weightedDrops +
+            MonsterLootTable.entryFor(MonsterType.IGNIVAR_ASH_WING_WYRM).weightedDrops).map { it.itemId }.toSet()
         assertTrue("cinderite_bastion" in vaelgorPool)
         assertTrue("cinderite_warplate" in vaelgorPool)
         assertTrue("cinderheart_sovereign_torc" in vaelgorPool)

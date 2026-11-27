@@ -87,7 +87,7 @@ class RookvaleLoreExpansionTest {
         assertTrue("Floor -1 must contain Vesperite veins", OreVeinKind.VESPERITE in f1Kinds)
         assertTrue("Floor -5 Grimmaw Quarry must contain Vesperite veins", OreVeinKind.VESPERITE in f5Kinds)
         assertTrue("Floor -2 must contain Cinderite veins", OreVeinKind.CINDERITE in f2Kinds)
-        assertTrue("Floor -6 Gorek Labyrinth must contain Cinderite veins", OreVeinKind.CINDERITE in f6Kinds)
+        assertTrue("Floor -6 Gorek Labyrinth (badlands) must contain Vesperite veins", OreVeinKind.VESPERITE in f6Kinds)
 
         // Verify Vesperite & Cinderite smelting recipes at their respective biome stalls
         val vesperiteStall = WorldBiomeBlueprint.biomeCraftingStalls.first { it.station.name == "SUNSCORCH_OASIS_SMELTERY" }
@@ -126,7 +126,9 @@ class RookvaleLoreExpansionTest {
 
         val allRecipes = RecipeCatalog.forgingRecipes + RecipeCatalog.fletchingRecipes + RecipeCatalog.runecraftingRecipes
         val kragorDrops = MonsterLootTable.entries.getValue(MonsterType.KRAGOR_THE_STONE_EYED).weightedDrops.map { it.itemId }.toSet()
-        val vaelgorDrops = MonsterLootTable.entries.getValue(MonsterType.VAELGOR_LABYRINTH_WARDEN).weightedDrops.map { it.itemId }.toSet()
+        // Cinderite (T5) gear drops from the Ashen Caldera bosses; Gorek/Vaelgor now sit in the Lv 36-41 badlands band
+        val vaelgorDrops = (MonsterLootTable.entries.getValue(MonsterType.VULKARIS_THE_FORGE_TITAN).weightedDrops +
+            MonsterLootTable.entries.getValue(MonsterType.IGNIVAR_ASH_WING_WYRM).weightedDrops).map { it.itemId }.toSet()
 
         for ((weaponId, expectedVisual) in tier4And5Expected) {
             val def = ItemCatalog.all[weaponId]
@@ -138,7 +140,7 @@ class RookvaleLoreExpansionTest {
             if (weaponId.startsWith("vesperite_")) {
                 assertTrue("Kragor must have $weaponId in weighted loot table", weaponId in kragorDrops)
             } else {
-                assertTrue("Vaelgor must have $weaponId in weighted loot table", weaponId in vaelgorDrops)
+                assertTrue("Ashen bosses must have $weaponId in weighted loot table", weaponId in vaelgorDrops)
             }
             val paperDoll = PaperDollAppearance.fromItemIds(
                 vocation = Vocation.KNIGHT,

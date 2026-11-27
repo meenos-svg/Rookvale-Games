@@ -853,6 +853,44 @@ object EntitySpriteAtlas {
                 rect(buf, S, 1, 17 + bob, 4, 3, scale) // tail
                 px(buf, S, 26, 10 + bob, 0xFFFF3B1F.toInt())
             }
+            MonsterType.SCORCHGLASS_STALKER -> {
+                drawShadow(buf, 4, 25, 24, 5)
+                val hide = 0xFF9C5A2A.toInt()
+                rect(buf, S, 8, 19 + bob, 5, 8, hide); rect(buf, S, 19, 19 + bob, 5, 8, hide)
+                rect(buf, S, 7, 10 + bob, 18, 11, hide)
+                rect(buf, S, 9, 12 + bob, 14, 3, 0xFF7BFFEA.toInt()) // glass spines
+                rect(buf, S, 10, 3 + bob, 12, 8, hide)
+                px(buf, S, 13, 6 + bob, 0xFF7BFFEA.toInt()); px(buf, S, 18, 6 + bob, 0xFF7BFFEA.toInt())
+            }
+            MonsterType.DUST_DEVIL -> {
+                drawShadow(buf, 9, 26, 14, 3)
+                val sand = if (frame == 0) 0xFFE8CF96.toInt() else 0xFFC9A86A.toInt()
+                rect(buf, S, 8, 4 + bob, 16, 6, sand)
+                rect(buf, S, 10, 10 + bob, 12, 6, sand)
+                rect(buf, S, 12, 16 + bob, 8, 5, sand)
+                rect(buf, S, 14, 21 + bob, 4, 4, sand)
+                px(buf, S, 13, 6 + bob, 0xFFFFF1C2.toInt()); px(buf, S, 18, 6 + bob, 0xFFFFF1C2.toInt())
+            }
+            MonsterType.SALTGLASS_GOLEM -> {
+                drawShadow(buf, 4, 25, 24, 5)
+                val salt = 0xFFE6E8EA.toInt()
+                rect(buf, S, 8, 19 + bob, 6, 8, salt); rect(buf, S, 18, 19 + bob, 6, 8, salt)
+                rect(buf, S, 5, 8 + bob, 22, 13, salt)
+                rect(buf, S, 10, 10 + bob, 12, 6, 0xFF8FE3FF.toInt())
+                rect(buf, S, 11, 2 + bob, 10, 7, salt)
+                px(buf, S, 13, 5 + bob, 0xFF4DD2FF.toInt()); px(buf, S, 18, 5 + bob, 0xFF4DD2FF.toInt())
+            }
+            MonsterType.SIROCCO_THE_STORM_DJINN -> {
+                drawShadow(buf, 6, 25, 20, 4)
+                val sky = 0xFF3FA8C9.toInt()
+                rect(buf, S, 9, 9 + bob, 14, 10, sky)
+                rect(buf, S, 11, 19 + bob, 10, 4, 0xFF8FE3FF.toInt())
+                rect(buf, S, 13, 23 + bob, 6, 3, 0x998FE3FF.toInt())
+                rect(buf, S, 10, 2 + bob, 12, 7, sky)
+                rect(buf, S, 9, 0 + bob, 14, 2, 0xFFFFD86B.toInt())
+                px(buf, S, 13, 5 + bob, 0xFFFFFFFF.toInt()); px(buf, S, 18, 5 + bob, 0xFFFFFFFF.toInt())
+                rect(buf, S, 4, 10 + bob, 5, 3, sky); rect(buf, S, 23, 10 + bob, 5, 3, sky)
+            }
             MonsterType.AKHET_THE_SAND_PHARAOH -> {
                 drawShadow(buf, 5, 25, 22, 5)
                 val wrap = 0xFFD9CBA8.toInt()
@@ -1039,6 +1077,7 @@ object EntitySpriteAtlas {
                             "wyrmscale_plate" -> 0xFF299C4F.toInt()
                             "grimmaw_stone_core" -> 0xFFA682FF.toInt()
                             "gorek_obsidian_horn" -> 0xFFFFA833.toInt()
+                            "molten_core" -> 0xFFFF3D1F.toInt()
                             else -> 0xFFD4C9B0.toInt()
                         }
                         rect(buf, ITEM_S, 4, 4, 8, 8, c)

@@ -165,6 +165,7 @@ object WorldMaps {
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 311, ROOKVALE_ORIGIN_Y + 69, "Warden Kael", NpcRole.DUNGEON_GUIDE))
             add(NpcSpot(0, FrontierSiteFloors.MURKFEN_ENTRY_X + 3, FrontierSiteFloors.MURKFEN_ENTRY_Y + 1, "Fen Guide Oswin", NpcRole.DUNGEON_GUIDE))
             add(NpcSpot(0, FrontierSiteFloors.TOMB_ENTRY_X + 3, FrontierSiteFloors.TOMB_ENTRY_Y + 1, "Tomb Robber Sefa", NpcRole.DUNGEON_GUIDE))
+            add(NpcSpot(0, FrontierSiteFloors.RIFT_ENTRY_X + 3, FrontierSiteFloors.RIFT_ENTRY_Y + 1, "Rift Scout Imran", NpcRole.DUNGEON_GUIDE))
 
             // 6 Strictly Coastline-Validated Ocean Harbor Ferry Captains
             WorldBiomeBlueprint.harborPorts.forEach { port ->
@@ -261,6 +262,7 @@ object WorldMaps {
             FrontierSiteFloors.newFloorIds.forEach { addAll(FrontierSiteFloors.layoutFor(it)!!.landmarks) }
             add(LandmarkLabel(0, FrontierSiteFloors.MURKFEN_ENTRY_X, FrontierSiteFloors.MURKFEN_ENTRY_Y, "MURKFEN HOLLOW (FLOOR -29)"))
             add(LandmarkLabel(0, FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y, "TOMB OF AKHET (FLOOR -30)"))
+            add(LandmarkLabel(0, FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y, "SCORCHGLASS RIFT (FLOOR -31)"))
             ContinentalDungeonGenerator.generatedDungeons.forEach { d ->
                 add(d.descentLandmark)
                 addAll(d.areaLandmarks)
@@ -311,6 +313,9 @@ object WorldMaps {
         // Sunken Pyramid (Sunscorch Badlands, SW of Sunspire) <-> Floor -30 Tomb of Akhet
         FloorPortal(0, FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y, -30, FrontierSiteFloors.TOMB.landingX, FrontierSiteFloors.TOMB.landingY, requiresRope = false),
         FloorPortal(-30, FrontierSiteFloors.TOMB.stairsUpX, FrontierSiteFloors.TOMB.stairsUpY, 0, FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y + 1, requiresRope = false),
+        // Glassed canyon (Sunscorch Badlands, west of the Tomb) <-> Floor -31 Scorchglass Rift
+        FloorPortal(0, FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y, -31, FrontierSiteFloors.RIFT.landingX, FrontierSiteFloors.RIFT.landingY, requiresRope = false),
+        FloorPortal(-31, FrontierSiteFloors.RIFT.stairsUpX, FrontierSiteFloors.RIFT.stairsUpY, 0, FrontierSiteFloors.RIFT_ENTRY_X, FrontierSiteFloors.RIFT_ENTRY_Y + 1, requiresRope = false),
         // Blightwood Barrow (Northern Frontier) <-> Floor -9 The Blightwood Barrow Catacombs
         FloorPortal(0, 1020, 175, -9, 24, 40, requiresRope = false),
         FloorPortal(-9, 24, 41, 0, 1020, 176, requiresRope = false),
@@ -421,6 +426,7 @@ object WorldMaps {
                 put(lair.spec.floorId, lair.floor)
             }
             put(-29, frontierFloor(FrontierSiteFloors.murkfenHollow, "Murkfen Hollow", "Whispering Marsh Dungeon • Floor -29 • Hagmother's Bower • Camp PZ", "Moderate", 2))
+            put(-31, frontierFloor(FrontierSiteFloors.scorchglassRift, "Scorchglass Rift", "Sunscorch Badlands Dungeon • Floor -31 • The Djinn's Eye • Camp PZ", "High", 3))
             put(-30, frontierFloor(FrontierSiteFloors.tombOfAkhet, "Tomb of Akhet", "Sunscorch Badlands Dungeon • Floor -30 • Sanctum of Akhet • Camp PZ", "High", 3))
         }
     }
@@ -444,6 +450,7 @@ object WorldMaps {
         -6 -> FrontierSiteFloors.GOREK.landingX to FrontierSiteFloors.GOREK.landingY
         -29 -> FrontierSiteFloors.MURKFEN.landingX to FrontierSiteFloors.MURKFEN.landingY
         -30 -> FrontierSiteFloors.TOMB.landingX to FrontierSiteFloors.TOMB.landingY
+        -31 -> FrontierSiteFloors.RIFT.landingX to FrontierSiteFloors.RIFT.landingY
         in -15..-7 -> ContinentalDungeonGenerator.landingFor(floorId)
         in -28..-16 -> ContinentalDungeonGenerator.LOWER_LANDING_X to ContinentalDungeonGenerator.LOWER_LANDING_Y
         else -> TEMPLE_SPAWN_X to TEMPLE_SPAWN_Y

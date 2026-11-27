@@ -135,10 +135,10 @@ class AdminAuditLogAndTeleportTest {
     fun expandedAdminWarpCatalogCoversAllSettlementsCampsAndDungeonSafeZonesWithValidLandings() {
         assertEquals(9, AdminTeleportCatalog.townsAndEmpires.size)
         assertEquals(6, AdminTeleportCatalog.overlandCamps.size)
-        assertEquals(17, AdminTeleportCatalog.dungeonCamps.size)
+        assertEquals(18, AdminTeleportCatalog.dungeonCamps.size)
         assertEquals(15, AdminTeleportCatalog.overlandLandmarks.size)
-        assertEquals(17, AdminTeleportCatalog.dungeonFloors.size)
-        assertEquals(32, AdminTeleportCatalog.allPresets.size)
+        assertEquals(18, AdminTeleportCatalog.dungeonFloors.size)
+        assertEquals(33, AdminTeleportCatalog.allPresets.size)
 
         // Category filter lookup matches catalog lists exactly
         assertEquals(AdminTeleportCatalog.allPresets, AdminTeleportCatalog.presetsFor(null))
