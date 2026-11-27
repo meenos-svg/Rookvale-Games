@@ -157,7 +157,8 @@ object WorldMapViewportCamera {
     ): List<com.example.game.world.WorldMapPin> {
         return pins.filter { pin ->
             val categoryEnabled = when (pin.category) {
-                WorldPinCategory.EMPIRE, WorldPinCategory.CITY, WorldPinCategory.CAMP, WorldPinCategory.FORGE -> showCities
+                WorldPinCategory.EMPIRE, WorldPinCategory.CITY, WorldPinCategory.CAMP, WorldPinCategory.FORGE,
+                WorldPinCategory.DISTRICT -> showCities
                 WorldPinCategory.FERRY -> showFerries
                 WorldPinCategory.DUNGEON -> showDungeons
             }
@@ -696,6 +697,7 @@ fun EnhancedRegionalWorldMapContent(
     val latestPins by rememberUpdatedState(visiblePins)
     val latestShowAllies by rememberUpdatedState(showAllies)
     val latestOnWalkToTile by rememberUpdatedState(onWalkToTile)
+    val latestLandmarks by rememberUpdatedState(floorLandmarks)
 
     Column(
         modifier = Modifier
@@ -930,6 +932,21 @@ fun EnhancedRegionalWorldMapContent(
                                             if (tappedPin != null) {
                                                 latestOnWalkToTile(tappedPin.x, tappedPin.y)
                                                 return@awaitEachGesture
+                                            }
+
+                                            // 2b. Snap to a visible landmark dot (Rookvale quarters, fishing spots, dungeon signs)
+                                            if (!cam.isOverland || cam.mapZoom >= WorldMapViewportCamera.VEINS_AND_LANDMARKS_MIN_ZOOM) {
+                                                val tappedLandmark = latestLandmarks.minByOrNull { lm ->
+                                                    val pos = WorldMapViewportCamera.worldToScreen(lm.x + 0.5f, lm.y + 0.5f, cam, w, h)
+                                                    hypot(downPos.x - pos.x, downPos.y - pos.y)
+                                                }?.takeIf { lm ->
+                                                    val pos = WorldMapViewportCamera.worldToScreen(lm.x + 0.5f, lm.y + 0.5f, cam, w, h)
+                                                    hypot(downPos.x - pos.x, downPos.y - pos.y) <= 20f
+                                                }
+                                                if (tappedLandmark != null) {
+                                                    latestOnWalkToTile(tappedLandmark.x, tappedLandmark.y)
+                                                    return@awaitEachGesture
+                                                }
                                             }
 
                                             // 3. Exact inverse projection from screen tap to world (tx, ty)
@@ -1168,6 +1185,7 @@ fun EnhancedRegionalWorldMapContent(
                                     WorldPinCategory.FORGE -> Color(0xFFFF7A33)
                                     WorldPinCategory.FERRY -> Color(0xFF47B8FF)
                                     WorldPinCategory.DUNGEON -> TargetRed
+                                    WorldPinCategory.DISTRICT -> Color(0xFFF2E3B6)
                                 }
                                 val baseRadius = when (pin.category) {
                                     WorldPinCategory.EMPIRE -> 5.8f
@@ -1176,6 +1194,7 @@ fun EnhancedRegionalWorldMapContent(
                                     WorldPinCategory.FORGE -> 5.2f
                                     WorldPinCategory.FERRY -> 4.2f
                                     WorldPinCategory.DUNGEON -> 4.0f
+                                    WorldPinCategory.DISTRICT -> 3.2f
                                 }
                                 val pinRadius = (baseRadius + zoomFactor * 2.2f).coerceIn(4.0f, 8.2f)
                                 if (pin.category == WorldPinCategory.FORGE) {
@@ -1187,6 +1206,17 @@ fun EnhancedRegionalWorldMapContent(
                                     drawLine(Color(0xFFFFD68A), Offset(pos.x - r, pos.y - r * 0.25f), Offset(pos.x + r, pos.y - r * 0.25f), strokeWidth = 2.4f)
                                     drawLine(Color(0xFFFFB24C), Offset(pos.x, pos.y - r * 0.25f), Offset(pos.x, pos.y + r * 0.65f), strokeWidth = 2.0f)
                                     drawLine(Color(0xFFFFB24C), Offset(pos.x - r * 0.65f, pos.y + r * 0.65f), Offset(pos.x + r * 0.65f, pos.y + r * 0.65f), strokeWidth = 2.0f)
+                                } else if (pin.category == WorldPinCategory.DISTRICT) {
+                                    // Small diamond marker for a city quarter
+                                    val r = pinRadius * 0.9f
+                                    val diamond = androidx.compose.ui.graphics.Path().apply {
+                                        moveTo(pos.x, pos.y - r - 1.6f); lineTo(pos.x + r + 1.6f, pos.y); lineTo(pos.x, pos.y + r + 1.6f); lineTo(pos.x - r - 1.6f, pos.y); close()
+                                    }
+                                    drawPath(diamond, Color.Black.copy(alpha = 0.86f))
+                                    val inner = androidx.compose.ui.graphics.Path().apply {
+                                        moveTo(pos.x, pos.y - r); lineTo(pos.x + r, pos.y); lineTo(pos.x, pos.y + r); lineTo(pos.x - r, pos.y); close()
+                                    }
+                                    drawPath(inner, pinColor)
                                 } else {
                                     drawCircle(Color.Black.copy(alpha = 0.86f), radius = pinRadius + 1.8f, center = pos)
                                     drawCircle(pinColor, radius = pinRadius, center = pos)
@@ -1556,6 +1586,7 @@ fun EnhancedRegionalWorldMapContent(
                                 WorldPinCategory.FERRY -> Color(0xFF47B8FF)
                                 WorldPinCategory.FORGE -> Color(0xFFFFB74D)
                                 WorldPinCategory.DUNGEON -> TargetRed
+                                WorldPinCategory.DISTRICT -> Color(0xFFF2E3B6)
                             }
                             Surface(
                                 color = StoneSurface,

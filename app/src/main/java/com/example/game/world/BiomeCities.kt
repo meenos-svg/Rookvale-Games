@@ -82,6 +82,49 @@ object BiomeCities {
     fun isAshenBastionRim(x: Int, y: Int): Boolean =
         x in 400..ASH_MAX_X + 8 && y in ASH_MIN_Y - 8..ASH_MAX_Y + 8
 
+    /** A named quarter of a city; tapping it on the world map walks the hero there. */
+    data class CityDistrict(val name: String, val x: Int, val y: Int)
+
+    /** Named districts of each hand-built city, keyed by city name. Every spot is open, reachable ground. */
+    val districts: Map<String, List<CityDistrict>> = linkedMapOf(
+        "Mirewatch" to listOf(
+            CityDistrict("Moot Platform", 545, 600),
+            CityDistrict("Lantern Market", 544, 566),
+            CityDistrict("Stilt-Hut Hamlet", 512, 567),
+            CityDistrict("Fishers' Wharf", 579, 570),
+            CityDistrict("Herb Fens", 512, 617),
+            CityDistrict("Crafters' Stilts", 578, 621),
+            CityDistrict("Drowned Saint Shrine", 545, 628)
+        ),
+        "Sunspire" to listOf(
+            CityDistrict("Sun Plaza", 375, 797),
+            CityDistrict("Oasis Jetty", 375, 779),
+            CityDistrict("Grand Bazaar", 405, 790),
+            CityDistrict("Caravanserai", 343, 770),
+            CityDistrict("Temple of the Noon Sun", 343, 812),
+            CityDistrict("Artisans' Row", 399, 819),
+            CityDistrict("North Gate", 375, 752)
+        ),
+        "Frostpeak" to listOf(
+            CityDistrict("Hearthstone Plaza", 1396, 208),
+            CityDistrict("Ice-Fishing Lake", 1364, 198),
+            CityDistrict("Hot Springs", 1424, 178),
+            CityDistrict("Jarl's Mead Hall", 1424, 204),
+            CityDistrict("Smithing Terrace", 1367, 168),
+            CityDistrict("Frost-Mother Temple", 1422, 234),
+            CityDistrict("Yak Market", 1390, 244)
+        ),
+        "Ashen Bastion" to listOf(
+            CityDistrict("Crucible Plaza", 386, 264),
+            CityDistrict("Great Foundry", 386, 234),
+            CityDistrict("Cinder Temple", 414, 260),
+            CityDistrict("Ember Arena", 360, 246),
+            CityDistrict("Basalt Gardens", 355, 232),
+            CityDistrict("Ash Market", 386, 282),
+            CityDistrict("West Gate", 331, 254)
+        )
+    )
+
     fun cityAt(x: Int, y: Int): City? = when {
         x in MIRE_MIN_X..MIRE_MAX_X && y in MIRE_MIN_Y..MIRE_MAX_Y -> mirewatch
         x in SUN_MIN_X..SUN_MAX_X && y in SUN_MIN_Y..SUN_MAX_Y -> sunspire
