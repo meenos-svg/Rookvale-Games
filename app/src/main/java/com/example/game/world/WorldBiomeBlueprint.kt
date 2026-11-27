@@ -244,10 +244,10 @@ object WorldBiomeBlueprint {
             regionId = "alder_sea_plains",
             centerX = 545,
             centerY = 595,
-            minX = 528,
-            minY = 578,
-            maxX = 562,
-            maxY = 612,
+            minX = BiomeCities.MIRE_MIN_X,
+            minY = BiomeCities.MIRE_MIN_Y,
+            maxX = BiomeCities.MIRE_MAX_X,
+            maxY = BiomeCities.MIRE_MAX_Y,
             ideology = BiomeIdeology.MARSHLAND,
             tier = SettlementTier.EMPIRE,
             levelRangeLabel = OverlandBiomeTier.WHISPERING_MARSH.levelRangeLabel
@@ -287,10 +287,10 @@ object WorldBiomeBlueprint {
             regionId = "sunspire_desert",
             centerX = 375,
             centerY = 790,
-            minX = 358,
-            minY = 774,
-            maxX = 392,
-            maxY = 806,
+            minX = BiomeCities.SUN_MIN_X,
+            minY = BiomeCities.SUN_MIN_Y,
+            maxX = BiomeCities.SUN_MAX_X,
+            maxY = BiomeCities.SUN_MAX_Y,
             ideology = BiomeIdeology.BADLANDS,
             tier = SettlementTier.EMPIRE,
             levelRangeLabel = OverlandBiomeTier.SUNSCORCH_BADLANDS.levelRangeLabel
@@ -443,8 +443,8 @@ object WorldBiomeBlueprint {
         OverworldOrePlacement(268, 522, OreVeinKind.PEAT_COAL),
         OverworldOrePlacement(332, 540, OreVeinKind.MIRE_SILVER),
         OverworldOrePlacement(220, 560, OreVeinKind.PEAT_COAL),
-        OverworldOrePlacement(498, 558, OreVeinKind.MIRE_SILVER),
-        OverworldOrePlacement(510, 548, OreVeinKind.PEAT_COAL),
+        OverworldOrePlacement(486, 568, OreVeinKind.MIRE_SILVER),
+        OverworldOrePlacement(503, 545, OreVeinKind.PEAT_COAL),
         OverworldOrePlacement(680, 995, OreVeinKind.PEAT_COAL),
         OverworldOrePlacement(748, 1012, OreVeinKind.MIRE_SILVER),
         OverworldOrePlacement(1018, 1022, OreVeinKind.BOG_IRON),
@@ -580,6 +580,8 @@ object WorldBiomeBlueprint {
             add(WorldMapPin("dng_frostcrest", "Grimmaw Quarry (-5)", 1320, 260, WorldPinCategory.DUNGEON, "Floor -5 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-5)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-5), 1.0f))
             add(WorldMapPin("dng_badlands", "Gorek Labyrinth (-6)", 242, 1020, WorldPinCategory.DUNGEON, "Floor -6 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-6)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-6), 1.0f))
             add(WorldMapPin("dng_caldera", "Ashen Caldera Foundry (-10)", 318, 252, WorldPinCategory.DUNGEON, "Floor -10 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-10)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-10), 1.0f))
+            add(WorldMapPin("dng_murkfen", "Murkfen Hollow (-29)", FrontierSiteFloors.MURKFEN_ENTRY_X, FrontierSiteFloors.MURKFEN_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -29 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-29)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-29), 1.0f))
+            add(WorldMapPin("dng_tomb", "Tomb of Akhet (-30)", FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y, WorldPinCategory.DUNGEON, "Floor -30 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-30)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-30), 1.0f))
             add(WorldMapPin("dng_ember", "The Ember Sanctum (-15)", 1510, 975, WorldPinCategory.DUNGEON, "Floor -15 • ${BiomeProgressionRules.dungeonRecommendedLevelLabel(-15)}", BiomeProgressionRules.dungeonRecommendedLevelLabel(-15), 1.0f))
         }
     }
@@ -653,7 +655,9 @@ object WorldBiomeBlueprint {
         packCoord(1320, 260) to TileType.STAIRS_DOWN,  // Frostpeak Grimmaw Ridge -> Floor -5
         packCoord(242, 1020) to TileType.STAIRS_DOWN,  // Badlands Gorek Gate -> Floor -6
         packCoord(720, 1020) to TileType.STAIRS_DOWN,  // Jungle Ruin Vault -> Floor -2
-        packCoord(1510, 975) to TileType.STAIRS_DOWN   // Ember Sanctum -> Floor -2
+        packCoord(1510, 975) to TileType.STAIRS_DOWN,  // Ember Sanctum -> Floor -2
+        packCoord(FrontierSiteFloors.MURKFEN_ENTRY_X, FrontierSiteFloors.MURKFEN_ENTRY_Y) to TileType.STAIRS_DOWN, // Murkfen Hollow -> Floor -29
+        packCoord(FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y) to TileType.STAIRS_DOWN        // Tomb of Akhet -> Floor -30
     )
 
     // --- Coarse Regional Waypoint Graph for Instant Cross-World Hierarchical Auto-Walk ---
@@ -879,6 +883,9 @@ object WorldBiomeBlueprint {
         // 3. Strictly coastline-validated Ocean Harbor Piers, Boats & Maelstrom Shrine
         resolveOuterHarborTile(x, y)?.let { return it }
 
+        // 3b. Hand-built biome cities (Mirewatch stilt city, Sunspire walled oasis)
+        BiomeCities.cityAt(x, y)?.let { city -> return cityTile(city, x, y) }
+
         // 4. Biome-Ideology Empires, Towns & Forward Camps
         resolveSettlementTile(x, y)?.let { return it }
 
@@ -891,6 +898,25 @@ object WorldBiomeBlueprint {
             return if (landVal > -0.14f) TileType.WATER else TileType.DEEP_WATER
         }
 
+        return resolveBiomeTile(x, y, landVal)
+    }
+
+    /**
+     * A city cell, falling back to the natural terrain where the city leaves a gap. Highways that
+     * cross a city's water or trees become bridges/boardwalks so roads never dead-end.
+     */
+    private fun cityTile(city: BiomeCities.City, x: Int, y: Int): TileType {
+        val road = resolveRoadTile(x, y)
+        val t = city.tileAt(x, y) ?: return road ?: naturalTile(x, y)
+        if (road != null && (t == TileType.WATER || t == TileType.DEEP_WATER || t == TileType.TREE)) {
+            return if (t == TileType.TREE) TileType.WOOD_PIER else TileType.WOOD_BRIDGE
+        }
+        return t
+    }
+
+    private fun naturalTile(x: Int, y: Int): TileType {
+        val landVal = landmassField(x, y)
+        if (landVal < 0.0f) return if (landVal > -0.14f) TileType.WATER else TileType.DEEP_WATER
         return resolveBiomeTile(x, y, landVal)
     }
 

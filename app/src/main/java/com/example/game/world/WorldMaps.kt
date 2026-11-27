@@ -133,14 +133,9 @@ object WorldMaps {
                 healerX = 21, healerY = 40, healerName = "Brother Halden",
                 merchantX = 27, merchantY = 40, merchantName = "Alchemist Talia"
             ),
-            UndergroundCampZone(
-                floorId = -6,
-                name = "GOREK LABYRINTH VANGUARD CAMP (PZ)",
-                minX = 20, minY = 38, maxX = 28, maxY = 42,
-                healerX = 21, healerY = 40, healerName = "High Cleric Vesper",
-                merchantX = 27, merchantY = 40, merchantName = "Quartermaster Ryn"
-            )
-        ) + ContinentalDungeonGenerator.generatedDungeons.map { it.camp }
+            FrontierSiteFloors.gorekLabyrinth.camp
+        ) + ContinentalDungeonGenerator.generatedDungeons.map { it.camp } +
+            FrontierSiteFloors.newFloorIds.map { FrontierSiteFloors.layoutFor(it)!!.camp }
     }
 
     fun undergroundCampForFloor(floorId: Int): UndergroundCampZone? =
@@ -168,6 +163,8 @@ object WorldMaps {
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 267, ROOKVALE_ORIGIN_Y + 87, "Climber Asha", NpcRole.DUNGEON_GUIDE))
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 315, ROOKVALE_ORIGIN_Y + 209, "Woodsman Garth", NpcRole.DUNGEON_GUIDE))
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 311, ROOKVALE_ORIGIN_Y + 69, "Warden Kael", NpcRole.DUNGEON_GUIDE))
+            add(NpcSpot(0, FrontierSiteFloors.MURKFEN_ENTRY_X + 3, FrontierSiteFloors.MURKFEN_ENTRY_Y + 1, "Fen Guide Oswin", NpcRole.DUNGEON_GUIDE))
+            add(NpcSpot(0, FrontierSiteFloors.TOMB_ENTRY_X + 3, FrontierSiteFloors.TOMB_ENTRY_Y + 1, "Tomb Robber Sefa", NpcRole.DUNGEON_GUIDE))
 
             // 6 Strictly Coastline-Validated Ocean Harbor Ferry Captains
             WorldBiomeBlueprint.harborPorts.forEach { port ->
@@ -259,7 +256,11 @@ object WorldMaps {
             }
             DeepDelveFloors.all.forEach { built -> addAll(built.landmarks) }
             add(LandmarkLabel(-5, 24, 12, "DESCENT TO KRAGOR'S DEEP QUARRY PIT"))
-            add(LandmarkLabel(-6, 24, 11, "DESCENT TO VAELGOR'S INNER SANCTUM"))
+            add(LandmarkLabel(-6, FrontierSiteFloors.GOREK.descentX, FrontierSiteFloors.GOREK.descentY - 2, "DESCENT TO VAELGOR'S INNER SANCTUM"))
+            addAll(FrontierSiteFloors.gorekLabyrinth.landmarks)
+            FrontierSiteFloors.newFloorIds.forEach { addAll(FrontierSiteFloors.layoutFor(it)!!.landmarks) }
+            add(LandmarkLabel(0, FrontierSiteFloors.MURKFEN_ENTRY_X, FrontierSiteFloors.MURKFEN_ENTRY_Y, "MURKFEN HOLLOW (FLOOR -29)"))
+            add(LandmarkLabel(0, FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y, "TOMB OF AKHET (FLOOR -30)"))
             ContinentalDungeonGenerator.generatedDungeons.forEach { d ->
                 add(d.descentLandmark)
                 addAll(d.areaLandmarks)
@@ -296,14 +297,20 @@ object WorldMaps {
         FloorPortal(0, 1320, 260, -5, 24, 40, requiresRope = false),
         FloorPortal(-5, 24, 41, 0, 1320, 261, requiresRope = false),
         // Badlands Gorek Gate <-> Floor -6 The Gorek Labyrinth
-        FloorPortal(0, 242, 1020, -6, 24, 40, requiresRope = false),
-        FloorPortal(-6, 24, 41, 0, 242, 1021, requiresRope = false),
+        FloorPortal(0, 242, 1020, -6, FrontierSiteFloors.GOREK.landingX, FrontierSiteFloors.GOREK.landingY, requiresRope = false),
+        FloorPortal(-6, FrontierSiteFloors.GOREK.stairsUpX, FrontierSiteFloors.GOREK.stairsUpY, 0, 242, 1021, requiresRope = false),
         // Writhing Sinkhole (Whispering Marsh) <-> Floor -7 The Sunken Mire Vaults
-        FloorPortal(0, 295, 515, -7, 24, 40, requiresRope = false),
-        FloorPortal(-7, 24, 41, 0, 295, 516, requiresRope = false),
+        FloorPortal(0, 295, 515, -7, FrontierSiteFloors.MIRE.landingX, FrontierSiteFloors.MIRE.landingY, requiresRope = false),
+        FloorPortal(-7, FrontierSiteFloors.MIRE.stairsUpX, FrontierSiteFloors.MIRE.stairsUpY, 0, 295, 516, requiresRope = false),
         // Jungle Ruin Vault (Emerald Jungle) <-> Floor -8 The Overgrown Ziggurat Vault
-        FloorPortal(0, 720, 1020, -8, 24, 40, requiresRope = false),
-        FloorPortal(-8, 24, 41, 0, 720, 1021, requiresRope = false),
+        FloorPortal(0, 720, 1020, -8, FrontierSiteFloors.ZIGGURAT.landingX, FrontierSiteFloors.ZIGGURAT.landingY, requiresRope = false),
+        FloorPortal(-8, FrontierSiteFloors.ZIGGURAT.stairsUpX, FrontierSiteFloors.ZIGGURAT.stairsUpY, 0, 720, 1021, requiresRope = false),
+        // Murkfen Sinkhole (Whispering Marsh, west of Mirewatch) <-> Floor -29 Murkfen Hollow
+        FloorPortal(0, FrontierSiteFloors.MURKFEN_ENTRY_X, FrontierSiteFloors.MURKFEN_ENTRY_Y, -29, FrontierSiteFloors.MURKFEN.landingX, FrontierSiteFloors.MURKFEN.landingY, requiresRope = false),
+        FloorPortal(-29, FrontierSiteFloors.MURKFEN.stairsUpX, FrontierSiteFloors.MURKFEN.stairsUpY, 0, FrontierSiteFloors.MURKFEN_ENTRY_X, FrontierSiteFloors.MURKFEN_ENTRY_Y + 1, requiresRope = false),
+        // Sunken Pyramid (Sunscorch Badlands, SW of Sunspire) <-> Floor -30 Tomb of Akhet
+        FloorPortal(0, FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y, -30, FrontierSiteFloors.TOMB.landingX, FrontierSiteFloors.TOMB.landingY, requiresRope = false),
+        FloorPortal(-30, FrontierSiteFloors.TOMB.stairsUpX, FrontierSiteFloors.TOMB.stairsUpY, 0, FrontierSiteFloors.TOMB_ENTRY_X, FrontierSiteFloors.TOMB_ENTRY_Y + 1, requiresRope = false),
         // Blightwood Barrow (Northern Frontier) <-> Floor -9 The Blightwood Barrow Catacombs
         FloorPortal(0, 1020, 175, -9, 24, 40, requiresRope = false),
         FloorPortal(-9, 24, 41, 0, 1020, 176, requiresRope = false),
@@ -364,14 +371,7 @@ object WorldMaps {
         MonsterSpawn(-5, 20, 26, MonsterType.GRIMMAW_CRUSHER),
         MonsterSpawn(-5, 28, 26, MonsterType.GRIMMAW_CRUSHER),
 
-        // --- Floor -6: The Gorek Labyrinth (Dedicated Gorek Roster — Vaelgor dwells below in Floor -23) ---
-        MonsterSpawn(-6, 13, 34, MonsterType.GOREK_RAIDER),
-        MonsterSpawn(-6, 35, 34, MonsterType.GOREK_RAIDER),
-        MonsterSpawn(-6, 13, 24, MonsterType.GOREK_PHALANX),
-        MonsterSpawn(-6, 35, 24, MonsterType.GOREK_PHALANX),
-        MonsterSpawn(-6, 24, 25, MonsterType.GOREK_HEX_CALLER),
-        MonsterSpawn(-6, 19, 14, MonsterType.GOREK_HEX_CALLER),
-        MonsterSpawn(-6, 29, 14, MonsterType.GOREK_PHALANX)
+        // Floor -6 (The Gorek Labyrinth) spawns come from FrontierSiteFloors.gorekLabyrinth
     )
 
     /**
@@ -388,6 +388,8 @@ object WorldMaps {
         )
         overlandSpawns +
             dungeonFixedSpawns +
+            FrontierSiteFloors.gorekLabyrinth.spawns +
+            FrontierSiteFloors.newFloorIds.flatMap { FrontierSiteFloors.layoutFor(it)!!.spawns } +
             ContinentalDungeonGenerator.generatedDungeons.flatMap { it.spawns } +
             ContinentalDungeonGenerator.generatedLowerBossLairs.flatMap { it.spawns }
     }
@@ -418,6 +420,8 @@ object WorldMaps {
             ContinentalDungeonGenerator.generatedLowerBossLairs.forEach { lair ->
                 put(lair.spec.floorId, lair.floor)
             }
+            put(-29, frontierFloor(FrontierSiteFloors.murkfenHollow, "Murkfen Hollow", "Whispering Marsh Dungeon • Floor -29 • Hagmother's Bower • Camp PZ", "Moderate", 2))
+            put(-30, frontierFloor(FrontierSiteFloors.tombOfAkhet, "Tomb of Akhet", "Sunscorch Badlands Dungeon • Floor -30 • Sanctum of Akhet • Camp PZ", "High", 3))
         }
     }
 
@@ -437,7 +441,9 @@ object WorldMaps {
         -3 -> DeepDelveFloors.F3_LANDING_X to DeepDelveFloors.F3_LANDING_Y
         -4 -> DeepDelveFloors.F4_LANDING_X to DeepDelveFloors.F4_LANDING_Y
         -5 -> 24 to 40
-        -6 -> 24 to 40
+        -6 -> FrontierSiteFloors.GOREK.landingX to FrontierSiteFloors.GOREK.landingY
+        -29 -> FrontierSiteFloors.MURKFEN.landingX to FrontierSiteFloors.MURKFEN.landingY
+        -30 -> FrontierSiteFloors.TOMB.landingX to FrontierSiteFloors.TOMB.landingY
         in -15..-7 -> ContinentalDungeonGenerator.landingFor(floorId)
         in -28..-16 -> ContinentalDungeonGenerator.LOWER_LANDING_X to ContinentalDungeonGenerator.LOWER_LANDING_Y
         else -> TEMPLE_SPAWN_X to TEMPLE_SPAWN_Y
@@ -1510,100 +1516,28 @@ object WorldMaps {
     }
 
     /**
-     * Dedicated Pinnacle Floor -6: THE GOREK LABYRINTH
+     * Badlands Floor -6 (Lv 36-41): THE GOREK LABYRINTH
      * Entered via the SE Frontier Gorek Badlands War-Camp. Features winding 2-3 tile
      * branching labyrinth corridors, guarded chambers, iron-barred gates, lava chasms
      * with stone bridges, glowing Cinderite veins, and Vaelgor the Labyrinth Warden's sanctum.
      */
-    private fun buildGorekLabyrinthFloor(): WorldFloor {
-        val s = 48
-        val g = createBlank(s, s, TileType.STONE_WALL)
+    private fun buildGorekLabyrinthFloor(): WorldFloor =
+        frontierFloor(FrontierSiteFloors.gorekLabyrinth, "The Gorek Labyrinth", "Sunbaked Maze • Floor -6 • Vanguard Camp PZ", "High", 3)
 
-        // 1. Southern Labyrinth Entry Gatehouse (Stairs Up at (24,41) -> Floor 0 Gorek War-Camp)
-        fillRect(g, 20, 37, 28, 42, TileType.OBSIDIAN_FLOOR)
-        fillRect(g, 23, 33, 25, 36, TileType.CRYPT_FLOOR)
-        g[36][23] = TileType.IRON_BAR_GATE
-        g[36][24] = TileType.IRON_BAR_GATE
-        g[36][25] = TileType.IRON_BAR_GATE
-
-        // 2. Branching South-West & South-East Maze Corridors + Guard Chambers
-        fillRect(g, 10, 33, 22, 35, TileType.CRYPT_FLOOR)
-        fillRect(g, 26, 33, 38, 35, TileType.CRYPT_FLOOR)
-        fillRect(g, 10, 30, 16, 36, TileType.OBSIDIAN_FLOOR) // SW Raider Barracks
-        fillRect(g, 32, 30, 38, 36, TileType.OBSIDIAN_FLOOR) // SE Raider Barracks
-
-        // Winding Vertical Labyrinth Arms (2-3 tiles wide with maze zigzags)
-        fillRect(g, 11, 22, 13, 29, TileType.CRYPT_FLOOR)
-        fillRect(g, 35, 22, 37, 29, TileType.CRYPT_FLOOR)
-        fillRect(g, 14, 24, 19, 26, TileType.CRYPT_FLOOR)
-        fillRect(g, 29, 24, 34, 26, TileType.CRYPT_FLOOR)
-        // Central Labyrinth Crossroads Chamber
-        fillRect(g, 20, 22, 28, 28, TileType.OBSIDIAN_FLOOR)
-        listOf(22 to 24, 26 to 24, 22 to 26, 26 to 26).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
-        // Narrow central north-south passage with iron gate
-        fillRect(g, 23, 29, 25, 32, TileType.CRYPT_FLOOR)
-        g[30][23] = TileType.IRON_BAR_GATE
-        g[30][24] = TileType.IRON_BAR_GATE
-        g[30][25] = TileType.IRON_BAR_GATE
-
-        // 3. Volcanic Labyrinth Chasm + Twin Narrow Stone Bridges
-        fillRect(g, 10, 18, 38, 21, TileType.LAVA)
-        fillRect(g, 23, 18, 25, 21, TileType.STONE_BRIDGE)
-        fillRect(g, 12, 18, 13, 21, TileType.STONE_BRIDGE)
-        fillRect(g, 35, 18, 36, 21, TileType.STONE_BRIDGE)
-        // Northern flanking corridors around Sanctum
-        fillRect(g, 11, 13, 14, 17, TileType.CRYPT_FLOOR)
-        fillRect(g, 34, 13, 37, 17, TileType.CRYPT_FLOOR)
-        fillRect(g, 15, 14, 16, 15, TileType.CRYPT_FLOOR)
-        fillRect(g, 32, 14, 33, 15, TileType.CRYPT_FLOOR)
-
-        // 4. Vaelgor the Labyrinth Warden — Inner Obsidian Sanctum (x=16..32, y=7..16)
-        fillRect(g, 16, 7, 32, 16, TileType.OBSIDIAN_FLOOR)
-        fillRect(g, 16, 7, 18, 9, TileType.LAVA)
-        fillRect(g, 30, 7, 32, 9, TileType.LAVA)
-        g[17][23] = TileType.IRON_BAR_GATE
-        g[17][24] = TileType.IRON_BAR_GATE
-        g[17][25] = TileType.IRON_BAR_GATE
-        listOf(20 to 10, 28 to 10, 20 to 14, 28 to 14).forEach { (px, py) -> g[py][px] = TileType.STONE_WALL }
-
-        // Deep Cinderite Ore Veins tucked in maze dead-ends & Sanctum alcoves
-        listOf(
-            10 to 31, 38 to 31, 11 to 22, 37 to 22,
-            11 to 13, 37 to 13, 19 to 8, 29 to 8
-        ).forEach { (vx, vy) -> g[vy][vx] = TileType.ORE_CINDERITE }
-
-        // Flickering Iron Wall Torches throughout the winding corridors
-        listOf(
-            24 to 43, 22 to 36, 26 to 36, 13 to 29, 35 to 29,
-            19 to 25, 29 to 25, 22 to 22, 26 to 22,
-            22 to 17, 26 to 17, 15 to 11, 33 to 11, 24 to 6
-        ).forEach { (tx, ty) -> g[ty][tx] = TileType.TORCH_WALL }
-
-        // Subterranean Safe Vanguard Camp (PZ) in Southern Gatehouse (x=20..28, y=37..42)
-        val camp = undergroundCampForFloor(-6)!!
-        g[38][21] = TileType.CAMPFIRE_BRAZIER
-        g[38][27] = TileType.CAMPFIRE_BRAZIER
-        g[41][21] = TileType.WAR_BANNER
-        g[41][27] = TileType.WAR_BANNER
-        g[40][21] = TileType.COBBLESTONE
-        g[40][27] = TileType.COBBLESTONE
-        g[38][24] = TileType.BIOME_STALL_ASHEN
-
-        // Return Stairway Up to Floor 0 Gorek Badlands War-Camp & Lower Boss Lair Descent to Floor -23
-        g[41][24] = TileType.STAIRS_UP
-        g[11][24] = TileType.STAIRS_DOWN
-
+    /** Turns a hand-shaped [HeartlandSiteFloors.Layout] into a floor with its camp as the PZ. */
+    private fun frontierFloor(layout: HeartlandSiteFloors.Layout, name: String, subtitle: String, danger: String, severity: Int): WorldFloor {
+        val camp = layout.camp
         return WorldFloor(
-            floorId = -6,
-            name = "The Gorek Labyrinth",
-            subtitle = "Pinnacle Maze • Floor -6 • Vanguard Camp PZ",
-            width = s,
-            height = s,
-            chunkedGrid = ChunkedTileGrid.fromArray(g),
+            floorId = layout.floorId,
+            name = name,
+            subtitle = subtitle,
+            width = layout.tiles.size,
+            height = layout.tiles.size,
+            chunkedGrid = ChunkedTileGrid.fromArray(layout.tiles),
             isProtectionZone = { x, y -> camp.contains(x, y) },
-            dangerLevel = "Pinnacle",
-            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(-6),
-            dangerSeverity = 4
+            dangerLevel = danger,
+            recommendedLevel = BiomeProgressionRules.dungeonRecommendedLevelLabel(layout.floorId),
+            dangerSeverity = severity
         )
     }
 }

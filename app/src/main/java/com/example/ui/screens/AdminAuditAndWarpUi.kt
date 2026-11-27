@@ -67,6 +67,7 @@ import com.example.game.cloud.AdminTeleportCatalog
 import com.example.game.cloud.AdminTeleportPreset
 import com.example.game.cloud.AdminWarpZone
 import com.example.game.model.GameWorldState
+import com.example.game.world.BiomeProgressionRules
 import com.example.game.world.OverlandBiomeTier
 import com.example.game.world.WorldMaps
 import com.example.ui.theme.ExpEmerald
@@ -108,7 +109,7 @@ fun AdminWarpSection(
     state: GameWorldState,
     onTeleport: (floor: Int, x: Int, y: Int, label: String?) -> Unit
 ) {
-    var selectedFloor by remember(state.floor) { mutableIntStateOf(state.floor.coerceIn(-28, 0)) }
+    var selectedFloor by remember(state.floor) { mutableIntStateOf(state.floor.coerceIn(BiomeProgressionRules.MIN_DUNGEON_FLOOR, 0)) }
     var xInput by remember(state.playerX, state.floor) { mutableStateOf(state.playerX.toString()) }
     var yInput by remember(state.playerY, state.floor) { mutableStateOf(state.playerY.toString()) }
     var coordError by remember { mutableStateOf<String?>(null) }
@@ -165,7 +166,7 @@ fun AdminWarpSection(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    (0 downTo -28).forEach { fl ->
+                    (0 downTo BiomeProgressionRules.MIN_DUNGEON_FLOOR).forEach { fl ->
                         val active = selectedFloor == fl
                         Surface(
                             color = if (active) TorchGold else ObsidianVoid,

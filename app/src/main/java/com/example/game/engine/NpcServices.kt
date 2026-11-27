@@ -278,7 +278,11 @@ object DungeonGuides {
         "Woodsman Garth" to DungeonGuideInfo(-13, "Dark Forest Sinkhole", "Lv 9-13", MonsterType.GNARLROOT_THE_BLIGHTED.displayName,
             "Bring a rope. Thorn stalkers hide in the root dens."),
         "Warden Kael" to DungeonGuideInfo(-14, "Crag Deep Hollow", "Lv 13-17", MonsterType.WARDEN_STONEHELM.displayName,
-            "Outlaws hold the fortress. Crossbowmen cover the bailey, so keep moving.")
+            "Outlaws hold the fortress. Crossbowmen cover the bailey, so keep moving."),
+        "Fen Guide Oswin" to DungeonGuideInfo(-29, "Murkfen Hollow", "Lv 20-24", MonsterType.HAGMOTHER_VESSA.displayName,
+            "Wisps lure you into deep water. The hag village guards the only bridge to her bower."),
+        "Tomb Robber Sefa" to DungeonGuideInfo(-30, "Tomb of Akhet", "Lv 30-34", MonsterType.AKHET_THE_SAND_PHARAOH.displayName,
+            "Scorpions nest in the east dens. The sanctum gates lie north of the Hall of Kings.")
     )
 
     fun messageFor(guideName: String): String {

@@ -483,10 +483,10 @@ object ContinentalDungeonGenerator {
             dangerSeverity = 4,
             bossType = MonsterType.VAELGOR_LABYRINTH_WARDEN,
             bossLandmarkName = "VAELGOR'S INNER SANCTUM",
-            parentStairsDownX = 24,
-            parentStairsDownY = 11,
-            parentReturnX = 24,
-            parentReturnY = 12,
+            parentStairsDownX = FrontierSiteFloors.GOREK.descentX,
+            parentStairsDownY = FrontierSiteFloors.GOREK.descentY,
+            parentReturnX = FrontierSiteFloors.GOREK.descentReturnX,
+            parentReturnY = FrontierSiteFloors.GOREK.descentReturnY,
             wallTile = TileType.OBSIDIAN_WALL,
             floorTile = TileType.OBSIDIAN_FLOOR,
             accentFloorTile = TileType.CRYPT_FLOOR,
@@ -507,10 +507,10 @@ object ContinentalDungeonGenerator {
             dangerSeverity = s.dangerSeverity.coerceAtLeast(2),
             bossType = s.bossType,
             bossLandmarkName = s.lowerLairName.uppercase(),
-            parentStairsDownX = HeartlandSiteFloors.anchorsFor(s.floorId)?.descentX ?: DESCENT_X,
-            parentStairsDownY = HeartlandSiteFloors.anchorsFor(s.floorId)?.descentY ?: DESCENT_Y,
-            parentReturnX = HeartlandSiteFloors.anchorsFor(s.floorId)?.descentReturnX ?: DESCENT_RETURN_X,
-            parentReturnY = HeartlandSiteFloors.anchorsFor(s.floorId)?.descentReturnY ?: DESCENT_RETURN_Y,
+            parentStairsDownX = siteAnchors(s.floorId)?.descentX ?: DESCENT_X,
+            parentStairsDownY = siteAnchors(s.floorId)?.descentY ?: DESCENT_Y,
+            parentReturnX = siteAnchors(s.floorId)?.descentReturnX ?: DESCENT_RETURN_X,
+            parentReturnY = siteAnchors(s.floorId)?.descentReturnY ?: DESCENT_RETURN_Y,
             wallTile = s.wallTile,
             floorTile = s.floorTile,
             accentFloorTile = s.accentFloorTile,
@@ -540,12 +540,15 @@ object ContinentalDungeonGenerator {
     }
 
     /** Entry landing for an upper dungeon floor (hand-shaped floors use their own coordinates). */
+    private fun siteAnchors(floorId: Int): HeartlandSiteFloors.Anchors? =
+        HeartlandSiteFloors.anchorsFor(floorId) ?: FrontierSiteFloors.anchorsFor(floorId)
+
     fun landingFor(floorId: Int): Pair<Int, Int> =
-        HeartlandSiteFloors.anchorsFor(floorId)?.let { it.landingX to it.landingY } ?: (LANDING_X to LANDING_Y)
+        siteAnchors(floorId)?.let { it.landingX to it.landingY } ?: (LANDING_X to LANDING_Y)
 
     /** Exit (stairs/rope up) tile for an upper dungeon floor. */
     fun exitFor(floorId: Int): Pair<Int, Int> =
-        HeartlandSiteFloors.anchorsFor(floorId)?.let { it.stairsUpX to it.stairsUpY } ?: (STAIRS_UP_X to STAIRS_UP_Y)
+        siteAnchors(floorId)?.let { it.stairsUpX to it.stairsUpY } ?: (STAIRS_UP_X to STAIRS_UP_Y)
 
     private fun generateFromLayout(spec: ContinentalDungeonSpec, layout: HeartlandSiteFloors.Layout): GeneratedContinentalDungeon {
         val camp = layout.camp
@@ -583,7 +586,7 @@ object ContinentalDungeonGenerator {
     }
 
     fun generate(spec: ContinentalDungeonSpec): GeneratedContinentalDungeon {
-        HeartlandSiteFloors.layoutFor(spec.floorId)?.let { return generateFromLayout(spec, it) }
+        (HeartlandSiteFloors.layoutFor(spec.floorId) ?: FrontierSiteFloors.layoutFor(spec.floorId))?.let { return generateFromLayout(spec, it) }
         val s = GRID_SIZE
         val g = Array(s) { Array(s) { spec.wallTile } }
 

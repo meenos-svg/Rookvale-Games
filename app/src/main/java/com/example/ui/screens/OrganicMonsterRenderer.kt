@@ -86,6 +86,14 @@ object OrganicMonsterRenderer {
         MonsterType.LORD_MALGRATH_THE_UNDYING -> 1.34f
         MonsterType.VULKARIS_THE_FORGE_TITAN -> 1.36f
         MonsterType.IGNIVAR_ASH_WING_WYRM -> 1.36f
+        MonsterType.BOG_HAG -> 0.98f
+        MonsterType.GATOR_BRUTE -> 1.18f
+        MonsterType.FEN_WISP -> 0.84f
+        MonsterType.HAGMOTHER_VESSA -> 1.28f
+        MonsterType.DUNE_SCORPION -> 1.04f
+        MonsterType.SAND_WRAITH -> 1.10f
+        MonsterType.SUNSCALE_BASILISK -> 1.12f
+        MonsterType.AKHET_THE_SAND_PHARAOH -> 1.32f
         else -> 1.0f
     }
 
@@ -286,6 +294,14 @@ object OrganicMonsterRenderer {
             MonsterType.MIREMAW_THE_DROWNED,
             MonsterType.XOLATL_THE_SUN_FANG,
             MonsterType.LORD_MALGRATH_THE_UNDYING,
+            MonsterType.BOG_HAG,
+            MonsterType.GATOR_BRUTE,
+            MonsterType.FEN_WISP,
+            MonsterType.HAGMOTHER_VESSA,
+            MonsterType.DUNE_SCORPION,
+            MonsterType.SAND_WRAITH,
+            MonsterType.SUNSCALE_BASILISK,
+            MonsterType.AKHET_THE_SAND_PHARAOH,
             MonsterType.VULKARIS_THE_FORGE_TITAN -> drawCustomDungeonBiped(
                 ox, oy, u, ow, facing, stride, bobUp, breath, lunge, timeSec + seedRad,
                 type = type, useSpec = useSpec, useRim = useRim, quality = quality, path = path
@@ -2442,6 +2458,48 @@ object OrganicMonsterRenderer {
             Color(0xFF1B243B), Color(0xFF7BE8FF), Color(0xFFA6F5FF), Color(0xFF72E4FF),
             torsoWidth = 12.8f, weapon = CustomWeaponKind.BLADE, hasCape = true, hasCrown = true, hasHorns = true,
             bossAuraColor = Color(0xFF66D9FF)
+        )
+        MonsterType.BOG_HAG -> CustomDungeonVisual(
+            Color(0xFF6F8A4E), Color(0xFFA3BF7A), Color(0xFF3A4A28),
+            Color(0xFF4A3A2A), Color(0xFF7A6448), Color(0xFFB8FF4D), Color(0xFF7BFF70),
+            torsoWidth = 8.4f, weapon = CustomWeaponKind.STAFF, hasCape = true
+        )
+        MonsterType.GATOR_BRUTE -> CustomDungeonVisual(
+            Color(0xFF3F5F34), Color(0xFF6E9458), Color(0xFF1F3019),
+            Color(0xFF5C4A30), Color(0xFFC9B27A), Color(0xFFFFD84D), Color(0xFFC9B27A),
+            torsoWidth = 12.0f, weapon = CustomWeaponKind.CLAWS
+        )
+        MonsterType.FEN_WISP -> CustomDungeonVisual(
+            Color(0xFF5EE89E), Color(0xFFE8FFB0), Color(0xFF2E7A55),
+            Color(0xFF3FBF7F), Color(0xFFB8FF8A), Color(0xFFFFFFFF), Color(0xFFB8FF8A),
+            torsoWidth = 7.4f, weapon = CustomWeaponKind.ORB
+        )
+        MonsterType.HAGMOTHER_VESSA -> CustomDungeonVisual(
+            Color(0xFF5E7A42), Color(0xFF9FBF6E), Color(0xFF2E3B20),
+            Color(0xFF3B2A4A), Color(0xFF8C66B3), Color(0xFFB8FF4D), Color(0xFF9EFF5C),
+            torsoWidth = 11.6f, weapon = CustomWeaponKind.STAFF, hasCape = true, hasCrown = true, hasHorns = true,
+            bossAuraColor = Color(0xFF7BFF70)
+        )
+        MonsterType.DUNE_SCORPION -> CustomDungeonVisual(
+            Color(0xFFC48A3A), Color(0xFFF0B964), Color(0xFF6E4518),
+            Color(0xFF8C5A22), Color(0xFFE0A050), Color(0xFF1A0F05), Color(0xFFFF9A2B),
+            torsoWidth = 11.0f, weapon = CustomWeaponKind.CLAWS, hasHorns = true
+        )
+        MonsterType.SAND_WRAITH -> CustomDungeonVisual(
+            Color(0xFFD4B27A), Color(0xFFF5E2B8), Color(0xFF8C6E45),
+            Color(0xFF8C6E45), Color(0xFFE0C38A), Color(0xFF7BE8FF), Color(0xFF99F3FF),
+            torsoWidth = 8.8f, weapon = CustomWeaponKind.ORB, hasCape = true
+        )
+        MonsterType.SUNSCALE_BASILISK -> CustomDungeonVisual(
+            Color(0xFFB86B1E), Color(0xFFFFB04D), Color(0xFF5E330C),
+            Color(0xFF8C4A14), Color(0xFFFFD452), Color(0xFFFF3B1F), Color(0xFFFF7A1F),
+            torsoWidth = 11.2f, weapon = CustomWeaponKind.CLAWS, hasHorns = true
+        )
+        MonsterType.AKHET_THE_SAND_PHARAOH -> CustomDungeonVisual(
+            Color(0xFFD9CBA8), Color(0xFFFFF5DC), Color(0xFF8C7E5E),
+            Color(0xFF1F4FA8), Color(0xFFFFC947), Color(0xFF7BE8FF), Color(0xFFFFC947),
+            torsoWidth = 12.4f, weapon = CustomWeaponKind.STAFF, hasCape = true, hasCrown = true,
+            bossAuraColor = Color(0xFFFFC947)
         )
         else -> CustomDungeonVisual( // VULKARIS_THE_FORGE_TITAN
             Color(0xFF2B2226), Color(0xFF6B535C), Color(0xFF140F12),

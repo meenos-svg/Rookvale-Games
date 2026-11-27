@@ -413,6 +413,13 @@ object WorldMapTerrainSampler {
             col = lerpArgb(col, COL_WOOD_PIER, 0.90f)
         }
 
+        // 6a. Hand-built biome cities: paint their real streets, decks, lagoons and walls
+        val city = com.example.game.world.BiomeCities.cityAt(ix, iy)
+        if (city != null) {
+            val t = city.tileAt(ix, iy) ?: return col
+            return cityOverviewColor(t, col)
+        }
+
         // 6. Secondary Empires, Towns & Forward Camps subtle plaza footprint
         val settlements = WorldBiomeBlueprint.secondarySettlements
         for (i in 0 until settlements.size) {
@@ -597,6 +604,24 @@ object WorldMapTerrainSampler {
         val n2 = cos(fx * 0.057f - fy * 0.049f) * 0.30f
         val n3 = sin(fx * 0.113f - fy * 0.097f) * 0.20f
         return (n1 + n2 + n3) * (0.28f + landVal.coerceIn(0f, 0.8f) * 0.72f)
+    }
+
+    private fun cityOverviewColor(t: TileType, base: Int): Int = when (t) {
+        TileType.WATER -> lerpArgb(base, 0xFF2F5F5A.toInt(), 0.85f)
+        TileType.DEEP_WATER -> lerpArgb(base, 0xFF1E4A6E.toInt(), 0.85f)
+        TileType.MARSH -> lerpArgb(base, 0xFF4E6B3A.toInt(), 0.70f)
+        TileType.DARK_GRASS, TileType.FLOWER_GRASS -> lerpArgb(base, 0xFF4F8A3C.toInt(), 0.70f)
+        TileType.TREE, TileType.HEDGE -> lerpArgb(base, COL_FOREST_CANOPY_BASE, 0.70f)
+        TileType.WOOD_PLANK_FLOOR, TileType.WOOD_PIER, TileType.WOOD_BRIDGE -> lerpArgb(base, COL_WOOD_PIER, 0.88f)
+        TileType.SAND -> lerpArgb(base, 0xFFE3C98E.toInt(), 0.55f)
+        TileType.COBBLESTONE -> lerpArgb(base, COL_ROAD_COBBLE, 0.80f)
+        TileType.TEMPLE_FLOOR -> lerpArgb(base, 0xFFEAD9B0.toInt(), 0.85f)
+        TileType.DIRT_FLOOR -> lerpArgb(base, COL_ROAD_DIRT, 0.70f)
+        TileType.SANDSTONE_WALL -> lerpArgb(base, 0xFFB08850.toInt(), 0.90f)
+        TileType.TIMBER_WALL, TileType.TIMBER_WINDOW_WALL -> lerpArgb(base, 0xFF6B4A2C.toInt(), 0.90f)
+        TileType.FOUNTAIN -> 0xFF56C9F7.toInt()
+        TileType.LANTERN_POST, TileType.CAMPFIRE_BRAZIER -> 0xFFFFD86B.toInt()
+        else -> if (t.walkable) base else lerpArgb(base, 0xFF7B766E.toInt(), 0.6f)
     }
 
     private fun groundTileSubtleTint(tile: TileType): Int = when (tile) {

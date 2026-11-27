@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.game.multiplayer.MultiplayerConfig
 import com.example.game.world.BiomeProgressionRules
 import com.example.game.world.DeepDelveFloors
+import com.example.game.world.FrontierSiteFloors
 import com.example.game.world.HeartlandSiteFloors
 import com.example.game.world.OverlandBiomeTier
 import com.example.game.world.WorldBiomeBlueprint
@@ -321,16 +322,18 @@ object AdminTeleportCatalog {
         dungeonCampPreset("floor_m3", "F-3 Abyssal Crypt", -3, DeepDelveFloors.F3_LANDING_X, DeepDelveFloors.F3_LANDING_Y),
         dungeonCampPreset("floor_m4", "F-4 Obsidian Wyrm Sanctum", -4, DeepDelveFloors.F4_LANDING_X, DeepDelveFloors.F4_LANDING_Y),
         dungeonCampPreset("floor_m5", "F-5 Grimmaw Camp", -5, 24, 40),
-        dungeonCampPreset("floor_m6", "F-6 Labyrinth Camp", -6, 24, 40, openEndedTop = true),
-        dungeonCampPreset("floor_m7", "F-7 Mire Vaults Camp", -7, 24, 40),
-        dungeonCampPreset("floor_m8", "F-8 Ziggurat Camp", -8, 24, 40),
+        dungeonCampPreset("floor_m6", "F-6 Labyrinth Camp", -6, FrontierSiteFloors.GOREK.landingX, FrontierSiteFloors.GOREK.landingY),
+        dungeonCampPreset("floor_m7", "F-7 Mire Vaults Camp", -7, FrontierSiteFloors.MIRE.landingX, FrontierSiteFloors.MIRE.landingY),
+        dungeonCampPreset("floor_m8", "F-8 Ziggurat Camp", -8, FrontierSiteFloors.ZIGGURAT.landingX, FrontierSiteFloors.ZIGGURAT.landingY),
         dungeonCampPreset("floor_m9", "F-9 Barrow Camp", -9, 24, 40),
         dungeonCampPreset("floor_m10", "F-10 Caldera Camp", -10, 24, 40, openEndedTop = true),
         dungeonCampPreset("floor_m11", "F-11 Copper Quarry Mines", -11, HeartlandSiteFloors.QUARRY.landingX, HeartlandSiteFloors.QUARRY.landingY),
         dungeonCampPreset("floor_m12", "F-12 North Mountain Cavern", -12, HeartlandSiteFloors.MOUNTAIN.landingX, HeartlandSiteFloors.MOUNTAIN.landingY),
         dungeonCampPreset("floor_m13", "F-13 Forest Sinkhole", -13, 24, 40),
         dungeonCampPreset("floor_m14", "F-14 Crag Deep Hollow", -14, HeartlandSiteFloors.CRAG.landingX, HeartlandSiteFloors.CRAG.landingY),
-        dungeonCampPreset("floor_m15", "F-15 Ember Sanctum", -15, 24, 40, openEndedTop = true)
+        dungeonCampPreset("floor_m15", "F-15 Ember Sanctum", -15, 24, 40, openEndedTop = true),
+        dungeonCampPreset("floor_m29", "F-29 Murkfen Hollow", -29, FrontierSiteFloors.MURKFEN.landingX, FrontierSiteFloors.MURKFEN.landingY),
+        dungeonCampPreset("floor_m30", "F-30 Tomb of Akhet", -30, FrontierSiteFloors.TOMB.landingX, FrontierSiteFloors.TOMB.landingY)
     )
 
     val overlandLandmarks: List<AdminTeleportPreset> = townsAndEmpires + overlandCamps

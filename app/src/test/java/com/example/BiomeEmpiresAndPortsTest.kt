@@ -56,10 +56,11 @@ class BiomeEmpiresAndPortsTest {
             assertTrue("Scaled maxDmg (${m.scaledMaxDmg}) must exceed base maxDmg (${m.type.maxDmg})", m.scaledMaxDmg > m.type.maxDmg)
         }
 
-        // Outer-continent dungeons scale strictly from surfaceMinLevel + abs(floor) * 6
-        for (floorId in listOf(-5, -6)) {
+        // Outer-continent dungeons scale strictly from surfaceMinLevel + depth * 6
+        // (Grimmaw -5 at depth 5; Gorek -6 was rebalanced to depth 1 in its badlands home: Lv 36-41)
+        for ((floorId, depth) in listOf(-5 to 5, -6 to 1)) {
             val surfaceMin = BiomeProgressionRules.surfaceBiomeForDungeonFloor(floorId).minLevel
-            val expectedBase = surfaceMin + abs(floorId) * 6
+            val expectedBase = surfaceMin + depth * 6
             val floorMonsters = monsters.filter { it.floor == floorId }
             assertTrue("Floor $floorId must have monsters", floorMonsters.isNotEmpty())
             for (m in floorMonsters) {
