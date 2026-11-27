@@ -1079,11 +1079,16 @@ fun EnhancedRegionalWorldMapContent(
 
                             // LAYER 5: Active Auto-Walk Route (dashed golden line + waypoint goal ring)
                             if (state.walkPath.isNotEmpty() || state.longRangeWaypoints.isNotEmpty() || state.longRangeGoal != null) {
+                                // Follow the real planned route (sampled) instead of straight lines
                                 val routePoints = buildList {
                                     add(state.playerX to state.playerY)
-                                    if (state.walkPath.isNotEmpty()) add(state.walkPath.last())
+                                    val path = state.walkPath
+                                    val stride = (path.size / 160).coerceAtLeast(3)
+                                    var i = stride - 1
+                                    while (i < path.size) { add(path[i]); i += stride }
+                                    if (path.isNotEmpty()) add(path.last())
                                     addAll(state.longRangeWaypoints)
-                                    state.longRangeGoal?.let { add(it) }
+                                    state.longRangeGoal?.let { if (path.isEmpty() || it != path.last()) add(it) }
                                 }
                                 val dashEffect = PathEffect.dashPathEffect(floatArrayOf(9f, 5f), 0f)
                                 val routeStroke = (2.2f + (camera.mapZoom - 1f) * 0.25f).coerceIn(2.2f, 3.6f)

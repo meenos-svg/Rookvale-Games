@@ -71,7 +71,7 @@ class MultiRegionWorldMapTest {
     }
 
     @Test
-    fun allSixHarborFerriesAndFiveSeaBridgesWorkCleanly() {
+    fun allSixHarborFerriesWorkAndSeaBridgesAreGone() {
         val floor0 = WorldMaps.getFloor(0)
         assertEquals(6, WorldBiomeBlueprint.harborPorts.size)
 
@@ -93,27 +93,9 @@ class MultiRegionWorldMapTest {
             assertEquals(ActivePanel.NONE, sailed.activePanel)
         }
 
-        // All 5 inter-continental sea-bridges are walkable end-to-end across water
-        val bridgeSpans = listOf(
-            Triple("Frostbay Sea-Bridge", 440 to 211, 868 to 211),
-            Triple("Central Alder Causeway", 595 to 591, 946 to 591),
-            Triple("Sunspire-Jungle Strait Bridge", 450 to 979, 652 to 979),
-            Triple("Spirewood-Sunleaf Causeway", 1041 to 755, 1041 to 992),
-            Triple("Rookvale-Ember Isles Causeway", 1394 to 951, 1446 to 951)
-        )
-        for ((name, startPt, endPt) in bridgeSpans) {
-            val (x1, y1) = startPt
-            val (x2, y2) = endPt
-            val steps = maxOf(kotlin.math.abs(x2 - x1), kotlin.math.abs(y2 - y1)).coerceAtLeast(1)
-            for (i in 0..steps) {
-                val t = i.toDouble() / steps.toDouble()
-                val bx = (x1 + (x2 - x1) * t).toInt()
-                val by = (y1 + (y2 - y1) * t).toInt()
-                assertTrue(
-                    "Bridge $name tile ($bx, $by) must be walkable",
-                    floor0.tileAt(bx, by).walkable
-                )
-            }
+        // The old sea-bridges are gone: their middles are open water now (ferries cross the seas)
+        for ((x, y) in listOf(650 to 211, 770 to 591, 550 to 979)) {
+            assertFalse("Old sea-bridge at ($x, $y) should be water", floor0.tileAt(x, y).walkable)
         }
     }
 
@@ -151,15 +133,14 @@ class MultiRegionWorldMapTest {
         assertEquals(WorldMaps.TEMPLE_SPAWN_X, start.playerX)
         assertEquals(WorldMaps.TEMPLE_SPAWN_Y, start.playerY)
 
-        // Coarse routing graph connects Rookvale City across the sea-bridge to Western Mirewatch
-        val coarseRoute = WorldBiomeBlueprint.findCoarseWaypoints(
-            startX = WorldMaps.TEMPLE_SPAWN_X,
-            startY = WorldMaps.TEMPLE_SPAWN_Y,
-            goalX = 545,
-            goalY = 592
+        // Across the sea there's no land route: auto-walk heads for a ferry captain instead
+        val overseas = GameEngine.walkToCoordinate(start, 545, 592)
+        assertTrue(overseas.walkPath.isNotEmpty())
+        val goal = overseas.longRangeGoal!!
+        assertTrue(
+            "Should head to a harbor captain",
+            WorldBiomeBlueprint.harborPorts.any { kotlin.math.abs(it.dockX - goal.first) + kotlin.math.abs(it.dockY - goal.second) <= 4 }
         )
-        assertTrue("Coarse route across continents should have multiple waypoints", coarseRoute.size >= 3)
-        assertEquals(545 to 592, coarseRoute.last())
 
         // Walk from Rookvale West Gate (1204, 592) across border into Spirewood West (1192, 592)
         var state = start.copy(playerX = 1204, playerY = 592, regionId = DEFAULT_REGION_ID)
@@ -169,7 +150,7 @@ class MultiRegionWorldMapTest {
 
         var stepTime = nowMs + 300L
         repeat(20) {
-            if (state.walkPath.isEmpty() && state.longRangeWaypoints.isEmpty()) return@repeat
+            if (state.walkPath.isEmpty() && state.longRangeGoal == null) return@repeat
             state = GameEngine.stepAutoFollowOrPath(state, stepTime)
             stepTime += 300L
         }
