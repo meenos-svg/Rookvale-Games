@@ -2204,7 +2204,10 @@ object GameEngine {
         )
 
         val levelAdvantage = (currentFishingLevel - tier.requiredFishingLevel).coerceAtLeast(0)
-        val catchChance = (tier.baseCatchChance + levelAdvantage * 0.025).coerceIn(0.28, 0.88)
+        // Each worm bites best in its own biome's waters (bloodworms in the marsh, sandworms at the oasis...)
+        val homeWaters = FishingCatalog.isHomeWaters(tier, state.floor, waterX, waterY)
+        val homeBonus = if (homeWaters) FishingCatalog.HOME_WATERS_CATCH_BONUS else 0.0
+        val catchChance = (tier.baseCatchChance + levelAdvantage * 0.025 + homeBonus).coerceIn(0.28, 0.92)
         val roll = catchRollOverride ?: Random.nextDouble()
 
         if (roll <= catchChance) {
@@ -2227,7 +2230,9 @@ object GameEngine {
                     .addLogInternal("A ${fishDef.name} bit, but you lack Cap (${fishDef.weightOz} oz needed)! No worm lost.")
             }
 
-            next = advanceSkillPublic(next, SkillType.FISHING, tier.catchXpPoints, nowMs)
+            val catchXp = if (homeWaters) tier.catchXpPoints * FishingCatalog.HOME_WATERS_XP_MULTIPLIER else tier.catchXpPoints
+            next = advanceSkillPublic(next, SkillType.FISHING, catchXp, nowMs)
+            if (homeWaters) next = next.addFloatingInternal(state.floor, waterX.toFloat(), waterY.toFloat() - 0.5f, "HOME WATERS!", FloatingTextKind.XP, nowMs)
             val afterBaitStep = if (consumedWorm) removeItemPublic(next.backpack, tier.baitId, 1) else next.backpack
             val updatedBackpack = addItemPublic(afterBaitStep, tier.fishId, 1)
             val remainingWorms = updatedBackpack.filter { it.itemId == tier.baitId }.sumOf { it.count }

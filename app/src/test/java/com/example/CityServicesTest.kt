@@ -140,4 +140,22 @@ class CityServicesTest {
         // Grimmaw stone cores feed Frostpeak's Rime-Plate recipes
         assertTrue(com.example.game.model.RecipeCatalog.forgingRecipes.any { r -> r.outputItemId.startsWith("rime_plate") && r.ingredients.any { it.itemId == "grimmaw_stone_core" } })
     }
+
+    @Test
+    fun eachWormBitesBestInItsOwnBiomesCityWaters() {
+        val f0 = WorldMaps.getFloor(0)
+        val tiers = com.example.game.model.FishingCatalog.tiers.associateBy { it.baitId }
+        fun waterIn(city: BiomeCities.City) = (city.minY..city.maxY).asSequence().flatMap { y -> (city.minX..city.maxX).asSequence().map { it to y } }
+            .first { (x, y) -> f0.tileAt(x, y) == TileType.WATER && listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1).any { (dx, dy) -> f0.tileAt(x + dx, y + dy).walkable } }
+        val cases = listOf(
+            Triple(BiomeCities.mirewatch, "mire_bloodworm", "dune_sandworm"),
+            Triple(BiomeCities.sunspire, "dune_sandworm", "frost_glowworm"),
+            Triple(BiomeCities.frostpeak, "frost_glowworm", "mire_bloodworm")
+        )
+        for ((city, home, away) in cases) {
+            val (wx, wy) = waterIn(city)
+            assertTrue("${city.id}: $home should be home waters", com.example.game.model.FishingCatalog.isHomeWaters(tiers.getValue(home), 0, wx, wy))
+            assertTrue("${city.id}: $away should not be", !com.example.game.model.FishingCatalog.isHomeWaters(tiers.getValue(away), 0, wx, wy))
+        }
+    }
 }
