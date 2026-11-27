@@ -76,7 +76,7 @@ const val ADVENTURER_CAP_PER_LEVEL_OZ = 125.0
 const val GOLD_COIN_WEIGHT_OZ = 0.01
 const val TREE_REGROW_TICKS = 60
 const val TREE_CHOP_COOLDOWN_MS = 900L
-const val REGULAR_CORPSE_LIFETIME_MS = 90_000L
+const val REGULAR_CORPSE_LIFETIME_MS = 120_000L
 const val BOSS_CORPSE_LIFETIME_MS = 180_000L
 const val CORPSE_EXPIRY_WARNING_MS = 15_000L
 const val LOOT_OWNER_PROTECTION_MS = 5_000L
@@ -1839,6 +1839,8 @@ data class GameWorldState(
     val outboundPlayerEffects: List<LocalPlayerActionFxEvent> = emptyList(),
     val outboundSystemAlerts: List<String> = emptyList(),
     val outboundLootSpawns: List<CorpseEntity> = emptyList(),
+    /** Corpse the player is walking over to; its loot window opens on arrival (not saved). */
+    val pendingLootCorpseId: String? = null,
     val questFlags: Map<String, Boolean> = emptyMap(),
     val boundAttackRuneId: String? = "magic_dart_rune",
     val boundHealRuneId: String? = "healing_rune",

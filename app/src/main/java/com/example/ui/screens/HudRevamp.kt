@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Backpack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
@@ -89,7 +90,9 @@ fun RightActionRail(
     onOpenPanel: (ActivePanel) -> Unit,
     onSaveManual: () -> Unit,
     onReturnTitle: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    lootableNearby: Int = 0,
+    onLootNearby: () -> Unit = {}
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var confirmExit by remember { mutableStateOf(false) }
@@ -105,6 +108,10 @@ fun RightActionRail(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (lootableNearby > 0) {
+                // Shows up only when there's loot within reach: one tap empties every corpse nearby
+                RailButton(Icons.Default.AutoAwesome, "Loot $lootableNearby", true, "rail_loot_nearby") { onLootNearby() }
+            }
             RailButton(Icons.Default.Backpack, "Bag", activePanel == ActivePanel.BACKPACK, "tab_backpack") { onOpenPanel(ActivePanel.BACKPACK) }
             RailButton(Icons.Default.Shield, "Gear", activePanel == ActivePanel.EQUIPMENT, "tab_equipment") { onOpenPanel(ActivePanel.EQUIPMENT) }
             RailButton(Icons.Default.MilitaryTech, "Skills", activePanel == ActivePanel.SKILLS, "tab_skills") { onOpenPanel(ActivePanel.SKILLS) }

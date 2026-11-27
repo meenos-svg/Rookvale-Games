@@ -1398,6 +1398,19 @@ private fun DrawScope.drawIsometricCorpse(
         filterQuality = FilterQuality.None
     )
 
+    // Loot sparkle: a small twinkling star over corpses that still hold gold or items
+    if (!corpse.isPlayerCorpse && (corpse.gold > 0 || corpse.items.isNotEmpty())) {
+        val phase = ((now + corpse.id.hashCode().toLong()) % 1400L) / 1400f
+        val twinkle = (sin(phase * 2.0 * Math.PI) * 0.5 + 0.5).toFloat()
+        val sx = c.x + size * 0.22f
+        val sy = c.y - size * 0.62f
+        val arm = size * (0.10f + twinkle * 0.06f)
+        val glint = Color(0xFFFFF2A8).copy(alpha = 0.45f + twinkle * 0.5f)
+        drawLine(glint, Offset(sx - arm, sy), Offset(sx + arm, sy), strokeWidth = 2.2f)
+        drawLine(glint, Offset(sx, sy - arm), Offset(sx, sy + arm), strokeWidth = 2.2f)
+        drawCircle(Color.White.copy(alpha = 0.55f + twinkle * 0.45f), radius = 2.4f + twinkle * 1.2f, center = Offset(sx, sy))
+    }
+
     if (ownerLockedForMe) {
         val remMs = corpse.ownerLockRemainingMs(localPlayerId, now)
         val secsLeft = ((remMs + 999L) / 1000L).coerceIn(1L, 5L)

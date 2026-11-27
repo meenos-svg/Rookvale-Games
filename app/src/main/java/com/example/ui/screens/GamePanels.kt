@@ -308,7 +308,8 @@ fun SlideUpGamePanel(
                         onLootItem = onLootCorpseItem,
                         onLootGold = onLootCorpseGold,
                         onLootAll = onLootAll,
-                        onInspectItem = { inspectedItem = it }
+                        onInspectItem = { inspectedItem = it },
+                        onLootNearby = { onNpcAction("loot_nearby") }
                     )
                     ActivePanel.WORLD_MAP -> RegionalWorldMapContent(
                         state = state,
@@ -348,6 +349,7 @@ fun SlideUpGamePanel(
                                 onStartMove = onStartHudEdit,
                                 onResetHotbar = onResetHotbar
                             )
+                            AutoLootSettingsSection(state = state, onAction = onNpcAction)
                         }
                     )
                     ActivePanel.ADMIN_SCROLL -> AdminScrollPanelContent(
@@ -1191,7 +1193,8 @@ private fun LootCorpseContent(
     onLootItem: (String, Int) -> Unit,
     onLootGold: (String) -> Unit,
     onLootAll: (String) -> Unit,
-    onInspectItem: (InspectedItemRequest) -> Unit
+    onInspectItem: (InspectedItemRequest) -> Unit,
+    onLootNearby: () -> Unit = {}
 ) {
     if (corpse == null || (corpse.gold <= 0 && corpse.items.isEmpty())) {
         Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -1538,6 +1541,18 @@ private fun LootCorpseContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            val moreHere = com.example.game.engine.LootCollection.othersOnTile(state, corpse).size
+            val nearbyCount = com.example.game.engine.LootCollection.lootableNearby(state, nowUptimeMs).size
+            if (nearbyCount > 1) {
+                OutlinedButton(
+                    onClick = onLootNearby,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.height(48.dp).testTag("loot_nearby_button")
+                ) { Text("Nearby ($nearbyCount)", color = TorchGold, maxLines = 1) }
+            }
+            if (moreHere > 0) {
+                Text("+$moreHere here", style = MaterialTheme.typography.labelSmall, color = ParchmentLight, maxLines = 1)
+            }
             Button(
                 onClick = { onLootAll(corpse.id) },
                 enabled = !ownerLockedForMe,
@@ -1549,7 +1564,7 @@ private fun LootCorpseContent(
                 ),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .weight(1f)
                     .height(48.dp)
                     .testTag("loot_all_button")
             ) {
@@ -2232,6 +2247,43 @@ private fun BestiaryContent(state: GameWorldState, onAction: (String) -> Unit) {
                         ) { Text("Record +${Bestiary.goldReward(type)}g") }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** Settings drawer: how much the game picks up for you after a kill. */
+@Composable
+private fun AutoLootSettingsSection(state: GameWorldState, onAction: (String) -> Unit) {
+    val mode = com.example.game.engine.LootCollection.mode(state)
+    val remembered = com.example.game.engine.LootCollection.rememberedNames(state)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().padding(top = 10.dp).testTag("autoloot_settings")) {
+        Text("AUTO-LOOT", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold), color = TorchGold)
+        Text(
+            "Picks up loot when you kill something within 2 tiles. \"Picked items\" means items you've taken by hand before.",
+            style = MaterialTheme.typography.labelSmall, color = ParchmentMuted
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            com.example.game.engine.AutoLootMode.entries.forEach { m ->
+                val selected = m == mode
+                OutlinedButton(
+                    onClick = { onAction("autoloot_mode:${m.name}") },
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (selected) TorchGold else androidx.compose.ui.graphics.Color.Transparent,
+                        contentColor = if (selected) ObsidianVoid else ParchmentLight
+                    ),
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    modifier = Modifier.weight(1f).height(44.dp).testTag("autoloot_${m.name.lowercase()}")
+                ) { Text(m.label, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center, style = MaterialTheme.typography.labelSmall) }
+            }
+        }
+        if (remembered.isNotEmpty()) {
+            Text(
+                "Remembered (${remembered.size}): ${remembered.take(8).joinToString(", ")}${if (remembered.size > 8) "…" else ""}",
+                style = MaterialTheme.typography.labelSmall, color = ParchmentLight, maxLines = 3, overflow = TextOverflow.Ellipsis
+            )
+            OutlinedButton(onClick = { onAction("autoloot_forget") }, modifier = Modifier.height(40.dp).testTag("autoloot_forget")) {
+                Text("Forget remembered items", color = ParchmentLight)
             }
         }
     }

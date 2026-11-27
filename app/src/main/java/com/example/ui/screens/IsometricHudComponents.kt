@@ -1971,6 +1971,10 @@ private fun resolveHotbarSlotView(state: GameWorldState, boundId: String?, atkLa
         HotbarActions.OPEN_GEAR -> HotbarSlotView("rope", "Gear", -1, ParchmentLight, Icons.Default.Shield)
         HotbarActions.OPEN_MAP -> HotbarSlotView("rope", "Map", -1, ParchmentLight, Icons.Default.Map)
         HotbarActions.OPEN_SKILLS -> HotbarSlotView("rope", "Skills", -1, ParchmentLight, Icons.Default.MilitaryTech)
+        HotbarActions.LOOT_NEARBY -> HotbarSlotView(
+            "rope", "Loot", com.example.game.engine.LootCollection.lootableNearby(state, android.os.SystemClock.uptimeMillis()).size,
+            TorchGold, Icons.Default.Backpack
+        )
         else -> {
             val def = ItemCatalog.all[boundId] ?: return null
             HotbarSlotView(boundId, def.name.take(6), state.itemCount(boundId), TorchAmber)

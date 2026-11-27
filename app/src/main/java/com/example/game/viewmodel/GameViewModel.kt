@@ -1621,6 +1621,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var floor = 0
         var name = ""
         var floorChanged = false
+        val corpsesBefore = _world.value.corpses
         _world.update { prev ->
             val next = GameEngine.useCustomHotbarSlot(prev, slotIndex, now)
             if (next.level > prev.level) {
@@ -1640,6 +1641,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (floorChanged) {
             val cur = _world.value
             multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
+            persistCurrentState(silent = true)
+        }
+        if (_world.value.corpses != corpsesBefore) {
+            broadcastChangedCorpses(corpsesBefore)
             persistCurrentState(silent = true)
         }
         flushOutboundMonsterHits()
@@ -1871,6 +1876,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun lootAllCorpse(corpseId: String) {
+        val before = _world.value.corpses
         val now = SystemClock.uptimeMillis()
         var looted = false
         var corpseFloor = _world.value.floor
@@ -1887,7 +1893,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             next
         }
         if (looted) {
-            broadcastLootClaimState(corpseId, corpseFloor, claimerId, claimerName)
+            broadcastChangedCorpses(before)
             persistCurrentState(silent = true)
         }
     }
@@ -1979,8 +1985,22 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     /** Actions from the townsfolk panels (hunt contracts, bestiary claims). */
     fun onNpcAction(action: String) {
         val now = SystemClock.uptimeMillis()
+        val before = _world.value.corpses
         _world.update { com.example.game.engine.NpcInteractions.handleAction(it, action, now) }
+        broadcastChangedCorpses(before)
         persistCurrentState(silent = true)
+    }
+
+    /** Tells other players about every corpse a multi-corpse loot action changed or emptied. */
+    private fun broadcastChangedCorpses(before: List<com.example.game.model.CorpseEntity>) {
+        val cur = _world.value
+        val nowById = cur.corpses.associateBy { it.id }
+        before.forEach { old ->
+            val now = nowById[old.id]
+            if (now == null || now.gold != old.gold || now.items != old.items) {
+                broadcastLootClaimState(old.id, old.floor, cur.saveId, cur.playerName)
+            }
+        }
     }
 
     fun onBuyBackReaperItem(itemId: String) {
