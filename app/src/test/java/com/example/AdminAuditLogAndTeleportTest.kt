@@ -414,4 +414,28 @@ class AdminAuditLogAndTeleportTest {
         // Verify sanitizer caps long input cleanly
         assertEquals(10, AdminAuditSanitizer.cleanText("12345678901234567890", 10).length)
     }
+
+    @Test
+    fun warpZonesAreInLevelOrderWithRookvaleFirstAndDungeonsInFloorOrder() {
+        val zones = AdminTeleportCatalog.zones
+        assertEquals(com.example.game.world.OverlandBiomeTier.ROOKVALE_HEARTLAND, zones.first().tier)
+        assertEquals(zones.map { it.tier.minLevel }.sorted(), zones.map { it.tier.minLevel })
+
+        // Every preset appears in exactly one zone
+        val zoned = zones.flatMap { it.allPresets }.map { it.id }
+        assertEquals(AdminTeleportCatalog.allPresets.map { it.id }.toSet(), zoned.toSet())
+        assertEquals(zoned.size, zoned.toSet().size)
+
+        val rookvale = zones.first()
+        assertEquals(listOf(-1, -2, -3, -4, -11, -12, -13, -14), rookvale.dungeons.map { it.floor })
+        assertTrue(rookvale.towns.any { it.id == "rookvale_plaza" })
+        zones.forEach { zone ->
+            assertEquals(zone.dungeons.map { it.floor }.sortedDescending(), zone.dungeons.map { it.floor })
+        }
+        // Rookvale dungeon badges never go past Lv 20
+        rookvale.dungeons.forEach { d ->
+            val top = Regex("Lv \\d+-(\\d+)").find(d.levelRangeLabel)?.groupValues?.get(1)?.toInt()
+            if (top != null) assertTrue("${d.id} badge ${d.levelRangeLabel}", top <= 20)
+        }
+    }
 }

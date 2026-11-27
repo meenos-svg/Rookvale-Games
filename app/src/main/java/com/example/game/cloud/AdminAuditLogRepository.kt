@@ -86,6 +86,17 @@ data class AdminTeleportPreset(
     val biomeTier: OverlandBiomeTier = OverlandBiomeTier.ROOKVALE_HEARTLAND
 )
 
+data class AdminWarpZone(
+    val tier: OverlandBiomeTier,
+    val towns: List<AdminTeleportPreset>,
+    val camps: List<AdminTeleportPreset>,
+    val dungeons: List<AdminTeleportPreset>
+) {
+    val allPresets: List<AdminTeleportPreset> get() = towns + camps + dungeons
+    val title: String get() = tier.displayName
+    val levelLabel: String get() = tier.levelRangeLabel.replace("Lvl ", "Lv ")
+}
+
 /**
  * Curated overland & dungeon landmark warp targets for the Admin Control Warp tab,
  * organized into Towns & Empires, Overland Forward/Frontier Camps, and Dungeon Camps.
@@ -129,10 +140,16 @@ object AdminTeleportCatalog {
         val camp = WorldMaps.undergroundCampForFloor(floor)
         val tier = BiomeProgressionRules.surfaceBiomeForDungeonFloor(floor)
         val baseLevel = BiomeProgressionRules.dungeonBaseLevel(tier.minLevel, floor)
+        // Rookvale's dungeons never go past the zone cap (Lv 20)
+        val topLevel = if (tier == OverlandBiomeTier.ROOKVALE_HEARTLAND) {
+            (baseLevel + 5).coerceAtMost(tier.maxLevel)
+        } else {
+            baseLevel + 5
+        }
         val levelLabel = if (openEndedTop) {
             "Lv ${baseLevel}+ • PZ"
         } else {
-            "Lv ${baseLevel}-${baseLevel + 5} • PZ"
+            "Lv ${baseLevel}-${topLevel} • PZ"
         }
         val targetX = camp?.let { (it.minX + it.maxX) / 2 } ?: fallbackX
         val targetY = camp?.let { ((it.minY + it.maxY) / 2).coerceIn(it.minY, it.maxY) } ?: fallbackY
@@ -300,8 +317,8 @@ object AdminTeleportCatalog {
     val dungeonCamps: List<AdminTeleportPreset> = listOf(
         dungeonCampPreset("floor_m1", "F-1 Briar Catacombs", -1, DeepDelveFloors.F1_LANDING_X, DeepDelveFloors.F1_LANDING_Y),
         dungeonCampPreset("floor_m2", "F-2 Watchwood Caverns", -2, DeepDelveFloors.F2_LANDING_X, DeepDelveFloors.F2_LANDING_Y),
-        dungeonCampPreset("floor_m3", "F-3 Crypt Camp", -3, DeepDelveFloors.F3_LANDING_X, DeepDelveFloors.F3_LANDING_Y),
-        dungeonCampPreset("floor_m4", "F-4 Wyrm Camp", -4, DeepDelveFloors.F4_LANDING_X, DeepDelveFloors.F4_LANDING_Y),
+        dungeonCampPreset("floor_m3", "F-3 Abyssal Crypt", -3, DeepDelveFloors.F3_LANDING_X, DeepDelveFloors.F3_LANDING_Y),
+        dungeonCampPreset("floor_m4", "F-4 Obsidian Wyrm Sanctum", -4, DeepDelveFloors.F4_LANDING_X, DeepDelveFloors.F4_LANDING_Y),
         dungeonCampPreset("floor_m5", "F-5 Grimmaw Camp", -5, 24, 40),
         dungeonCampPreset("floor_m6", "F-6 Labyrinth Camp", -6, 24, 40, openEndedTop = true),
         dungeonCampPreset("floor_m7", "F-7 Mire Vaults Camp", -7, 24, 40),
@@ -320,6 +337,26 @@ object AdminTeleportCatalog {
     val dungeonFloors: List<AdminTeleportPreset> = dungeonCamps
 
     val allPresets: List<AdminTeleportPreset> = overlandLandmarks + dungeonFloors
+
+    /**
+     * Warp targets grouped by zone (Rookvale Lv 1-20 first, then each zone in level order).
+     * Within a zone: towns, then camps, then dungeons in floor order (F-1, F-2, ...).
+     */
+    val zones: List<AdminWarpZone> = OverlandBiomeTier.entries
+        .sortedBy { it.minLevel }
+        .map { tier ->
+            AdminWarpZone(
+                tier = tier,
+                towns = townsAndEmpires.filter { it.biomeTier == tier },
+                camps = overlandCamps.filter { it.biomeTier == tier },
+                dungeons = dungeonCamps.filter { it.biomeTier == tier }.sortedByDescending { it.floor }
+            )
+        }
+        .filter { it.allPresets.isNotEmpty() }
+
+    /** Zone the admin is standing in, used to open that zone's section by default. */
+    fun zoneTierForFloor(floor: Int): OverlandBiomeTier =
+        if (floor < 0) BiomeProgressionRules.surfaceBiomeForDungeonFloor(floor) else OverlandBiomeTier.ROOKVALE_HEARTLAND
 
     fun presetsFor(category: AdminWarpCategory?): List<AdminTeleportPreset> = when (category) {
         null -> allPresets
