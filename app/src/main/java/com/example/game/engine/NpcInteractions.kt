@@ -24,6 +24,7 @@ object NpcInteractions {
     private fun vendorIdFor(npc: NpcSpot): String? = when (npc.name) {
         "Odra" -> VendorCatalog.MIRE_OUTFITTER
         "Tahir" -> VendorCatalog.SUN_CARAVANEER
+        "Ulfa" -> VendorCatalog.FROST_FURRIER
         else -> vendorIdFor(npc.role)
     }
 
@@ -69,6 +70,7 @@ object NpcInteractions {
             NpcRole.TOWN_CRIER -> when (npc.name) {
                 "Crier Pell" -> mirewatchCrier(closedMovement(state), wallClockMs)
                 "Crier Nadim" -> sunspireCrier(closedMovement(state), wallClockMs)
+                "Crier Halvard" -> frostpeakCrier(closedMovement(state), wallClockMs)
                 else -> crierNews(closedMovement(state), wallClockMs)
             }
             NpcRole.DUNGEON_GUIDE -> closedMovement(state).addLogInternal(DungeonGuides.messageFor(npc.name))
@@ -118,6 +120,15 @@ object NpcInteractions {
             .addLogInternal("Crier Nadim: 'Hear ye! Desert hunt of the day: every ${featured.displayName} slain gives +$pct% XP, for the next ${TownCrier.hoursUntilTomorrow(wallClockMs)}h!'")
             .addLogInternal("Crier Nadim: 'Sergeant Kasim posts desert bounties in the Sun Plaza, and Tahir trades at the caravanserai.'")
             .addLogInternal("Crier Nadim: 'The Tomb, the Labyrinth and the Scorchglass Rift all lie to the south-west. Carry water!'")
+    }
+
+    fun frostpeakCrier(state: GameWorldState, wallClockMs: Long = System.currentTimeMillis()): GameWorldState {
+        val featured = TownCrier.featuredFrostCreature(wallClockMs)
+        val pct = (TownCrier.FEATURED_XP_BONUS * 100).toInt()
+        return state
+            .addLogInternal("Crier Halvard: 'Hear ye! Frost hunt of the day: every ${featured.displayName} slain gives +$pct% XP, for the next ${TownCrier.hoursUntilTomorrow(wallClockMs)}h!'")
+            .addLogInternal("Crier Halvard: 'Huntmaster Sigrun posts bounties by the Eternal Hearth, and Ulfa trades furs and picks by the south gate.'")
+            .addLogInternal("Crier Halvard: 'Warm yourself in the hot springs, and try the ice-fishing piers on the frozen lake!'")
     }
 
     // ---------------------------------------------------------------- Hunt contracts

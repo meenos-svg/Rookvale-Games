@@ -164,6 +164,10 @@ object WorldMaps {
             add(NpcSpot(0, 366, 790, "Sergeant Kasim", NpcRole.HUNT_MASTER))
             add(NpcSpot(0, 375, 757, "Crier Nadim", NpcRole.TOWN_CRIER))
             add(NpcSpot(0, 347, 773, "Tahir", NpcRole.WANDERING_MERCHANT))
+            // Frostpeak (snowbound granite citadel) townsfolk
+            add(NpcSpot(0, 1407, 204, "Huntmaster Sigrun", NpcRole.HUNT_MASTER))
+            add(NpcSpot(0, 1395, 186, "Crier Halvard", NpcRole.TOWN_CRIER))
+            add(NpcSpot(0, 1393, 228, "Ulfa", NpcRole.BLACKSMITH))
             // Dungeon guides beside each Rookvale dungeon entrance
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 86, ROOKVALE_ORIGIN_Y + 318, "Scout Bryn", NpcRole.DUNGEON_GUIDE))
             add(NpcSpot(0, ROOKVALE_ORIGIN_X + 314, ROOKVALE_ORIGIN_Y + 318, "Ranger Tamsin", NpcRole.DUNGEON_GUIDE))
