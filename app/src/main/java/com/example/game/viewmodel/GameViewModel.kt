@@ -1620,6 +1620,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var newLevel = 1
         var floor = 0
         var name = ""
+        var floorChanged = false
         _world.update { prev ->
             val next = GameEngine.useCustomHotbarSlot(prev, slotIndex, now)
             if (next.level > prev.level) {
@@ -1633,7 +1634,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             if (next.hp != prev.hp || next.mp != prev.mp || next.backpack != prev.backpack || next.floor != prev.floor) {
                 used = true
             }
+            if (next.floor != prev.floor) floorChanged = true
             next
+        }
+        if (floorChanged) {
+            val cur = _world.value
+            multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
+            persistCurrentState(silent = true)
         }
         flushOutboundMonsterHits()
         flushOutboundPlayerEffects()
@@ -1667,6 +1674,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (_displaySettings.value.graphicsQuality == quality) return
         displaySettingsStore.saveGraphicsQuality(quality)
         _displaySettings.update { it.copy(graphicsQuality = quality) }
+    }
+
+    /** Saves HUD customization (vitals style, hotbar size, positions, hidden pieces). */
+    fun updateHudLayout(hud: com.example.game.model.HudLayout) {
+        displaySettingsStore.saveHudLayout(hud)
+        _displaySettings.update { it.copy(hud = hud) }
+    }
+
+    fun resetHotbar() {
+        _world.update { GameEngine.resetHotbar(it) }
+        persistCurrentState(silent = true)
     }
 
     fun setShowMinimap(show: Boolean) {

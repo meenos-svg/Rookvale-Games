@@ -128,7 +128,10 @@ import com.example.game.model.ActivePanel
 import com.example.game.model.BossSpecialKind
 import com.example.game.model.Direction
 import com.example.game.model.GameWorldState
+import com.example.game.model.VitalsStyle
+import com.example.game.model.HotbarActions
 import com.example.game.model.ItemCatalog
+import com.example.game.model.ItemCategory
 import com.example.game.model.MonsterEntity
 import com.example.game.model.PlayerSkills
 import com.example.game.model.ThreatBand
@@ -289,6 +292,7 @@ fun TopLeftHudCluster(
     onOpenAdminScroll: () -> Unit = {},
     onOrbHealth: () -> Unit = {},
     onOrbMana: () -> Unit = {},
+    vitalsStyle: VitalsStyle = VitalsStyle.ORB,
     modifier: Modifier = Modifier
 ) {
     val zoomRadii = remember { listOf(14, 22, 34) }
@@ -302,8 +306,10 @@ fun TopLeftHudCluster(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top
     ) {
-        // Split health/mana orb with the XP bar down the middle
-        VitalsOrb(state = state, onUseHealth = onOrbHealth, onUseMana = onOrbMana)
+        // Split health/mana orb with the XP bar down the middle (Orb style)
+        if (vitalsStyle == VitalsStyle.ORB) {
+            VitalsOrb(state = state, onUseHealth = onOrbHealth, onUseMana = onOrbMana)
+        }
 
         if (state.showMinimap && minimapCollapsed) {
             MinimapTinyButton(
@@ -338,7 +344,8 @@ fun TopLeftHudCluster(
             multiplayerState = multiplayerState,
             saveBanner = saveBanner,
             onMultiplayerStatusTapped = onMultiplayerStatusTapped,
-            onOpenAdminScroll = onOpenAdminScroll
+            onOpenAdminScroll = onOpenAdminScroll,
+            showBars = vitalsStyle == VitalsStyle.BARS
         )
     }
 }
@@ -642,7 +649,8 @@ private fun CharacterVitalsHudCard(
     multiplayerState: MultiplayerUiState,
     saveBanner: String?,
     onMultiplayerStatusTapped: () -> Unit,
-    onOpenAdminScroll: () -> Unit = {}
+    onOpenAdminScroll: () -> Unit = {},
+    showBars: Boolean = false
 ) {
     val portraitAppearance = remember(state.vocation, state.tunicColorIndex, state.hairColorIndex, state.equipment) {
         PaperDollAppearance.fromEquipment(
@@ -682,7 +690,8 @@ private fun CharacterVitalsHudCard(
         snapshot = snapshot,
         portraitAppearance = portraitAppearance,
         onMultiplayerStatusTapped = onMultiplayerStatusTapped,
-        onOpenAdminScroll = onOpenAdminScroll
+        onOpenAdminScroll = onOpenAdminScroll,
+        showBars = showBars
     )
 }
 
@@ -691,14 +700,15 @@ private fun CharacterVitalsHudCardContent(
     snapshot: CharacterVitalsSnapshot,
     portraitAppearance: PaperDollAppearance,
     onMultiplayerStatusTapped: () -> Unit,
-    onOpenAdminScroll: () -> Unit
+    onOpenAdminScroll: () -> Unit,
+    showBars: Boolean = false
 ) {
     Surface(
         color = BasaltDark.copy(alpha = 0.88f),
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.2.dp, StoneBorderLight),
         modifier = Modifier
-            .widthIn(min = 150.dp, max = 230.dp)
+            .widthIn(min = if (showBars) 216.dp else 150.dp, max = if (showBars) 304.dp else 230.dp)
             .testTag("character_vitals_hud")
     ) {
         Row(
@@ -706,8 +716,8 @@ private fun CharacterVitalsHudCardContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Portrait hidden: the vitals orb now shows level, HP, MP and XP
-            if (false) Box(
+            // Portrait + bars only in the Classic style (the orb shows them otherwise)
+            if (showBars) Box(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(6.dp))
@@ -763,8 +773,7 @@ private fun CharacterVitalsHudCardContent(
                     )
                 }
 
-                // EXP / HP / MP bars moved into the vitals orb
-                if (false) CompactMeterBar(
+                if (showBars) CompactMeterBar(
                     label = "EXP",
                     valueText = "${(snapshot.expFraction * 100).toInt()}%",
                     fraction = snapshot.expFraction,
@@ -773,7 +782,7 @@ private fun CharacterVitalsHudCardContent(
                     heightDp = 7
                 )
 
-                if (false) CompactMeterBar(
+                if (showBars) CompactMeterBar(
                     label = "HP",
                     valueText = if (snapshot.isInvulnerable) "∞ / ${snapshot.effMaxHp}" else "${snapshot.hp}/${snapshot.effMaxHp}",
                     fraction = if (snapshot.isInvulnerable) 1f else (snapshot.hp.toFloat() / snapshot.effMaxHp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
@@ -782,7 +791,7 @@ private fun CharacterVitalsHudCardContent(
                     heightDp = 11
                 )
 
-                if (false) CompactMeterBar(
+                if (showBars) CompactMeterBar(
                     label = "MP",
                     valueText = "${snapshot.mp}/${snapshot.maxMp}",
                     fraction = (snapshot.mp.toFloat() / snapshot.maxMp.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
@@ -1784,6 +1793,7 @@ fun BottomCenterQuickHotbar(
     onHotkeyRope: () -> Unit,
     onUseCustomSlot: (Int) -> Unit,
     onBindCustomSlot: (Int, String?) -> Unit,
+    hotbarSize: Int = 7,
     modifier: Modifier = Modifier
 ) {
     var bindingSlotIndex by remember { mutableStateOf<Int?>(null) }
@@ -1811,61 +1821,20 @@ fun BottomCenterQuickHotbar(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IsoHotbarSlot(
-                itemId = "health_potion",
-                label = "Heal",
-                count = state.itemCount("health_potion"),
-                accent = HealthCrimson,
-                onClick = onHotkeyHp,
-                testTag = "hotkey_health_potion"
-            )
-            IsoHotbarSlot(
-                itemId = "mana_potion",
-                label = "Mana",
-                count = state.itemCount("mana_potion"),
-                accent = ManaSapphire,
-                onClick = onHotkeyMp,
-                testTag = "hotkey_mana_potion"
-            )
-            IsoHotbarSlot(
-                itemId = resolvedHealId,
-                label = "H-Rn",
-                count = healRuneCount,
-                accent = ExpEmerald,
-                onClick = onHotkeyHealRune,
-                testTag = "hotkey_heal_rune"
-            )
-            IsoHotbarSlot(
-                itemId = resolvedAtkId,
-                label = atkRuneShortLabel,
-                count = atkRuneCount,
-                accent = SoulViolet,
-                onClick = onHotkeyRune,
-                testTag = "hotkey_attack_rune"
-            )
-            IsoHotbarSlot(
-                itemId = "rope",
-                label = "Rope",
-                count = state.itemCount("rope"),
-                accent = TorchGold,
-                onClick = onHotkeyRope,
-                testTag = "hotkey_rope"
-            )
-
-            // 2 Customizable Quick-Bind Slots (Tap to use or bind; Long-press to rebind/clear)
-            for (slotIdx in 0..1) {
+            // Every slot is customizable: tap to use, long-press to change (empty slots open the picker)
+            for (slotIdx in 0 until hotbarSize.coerceIn(1, HotbarActions.MAX_SLOTS)) {
                 val boundId = state.customHotbarSlots.getOrNull(slotIdx)
-                val boundDef = boundId?.let { ItemCatalog.all[it] }
-                if (boundId != null && boundDef != null) {
-                    val count = state.itemCount(boundId)
+                val view = resolveHotbarSlotView(state, boundId, atkRuneShortLabel)
+                if (view != null) {
                     IsoHotbarSlot(
-                        itemId = boundId,
-                        label = boundDef.name.take(5),
-                        count = count,
-                        accent = TorchAmber,
+                        itemId = view.iconItemId,
+                        label = view.label,
+                        count = view.count,
+                        accent = view.accent,
                         onClick = { onUseCustomSlot(slotIdx) },
                         onLongClick = { bindingSlotIndex = slotIdx },
-                        testTag = "hotkey_custom_$slotIdx"
+                        testTag = "hotkey_slot_$slotIdx",
+                        actionIcon = view.actionIcon
                     )
                 } else {
                     Surface(
@@ -1878,14 +1847,14 @@ fun BottomCenterQuickHotbar(
                                 onClick = { bindingSlotIndex = slotIdx },
                                 onLongClick = { bindingSlotIndex = slotIdx }
                             )
-                            .testTag("hotkey_custom_$slotIdx")
+                            .testTag("hotkey_slot_$slotIdx")
                     ) {
                         Column(
                             modifier = Modifier.fillMaxSize(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Icon(Icons.Default.Add, "Bind Custom Slot ${slotIdx + 1}", tint = TorchGold, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Add, "Set slot ${slotIdx + 1}", tint = TorchGold, modifier = Modifier.size(18.dp))
                             Text(
                                 text = "Slot ${slotIdx + 1}",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
@@ -1921,10 +1890,11 @@ private fun IsoHotbarSlot(
     accent: Color,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
-    testTag: String
+    testTag: String,
+    actionIcon: ImageVector? = null
 ) {
     val icon = remember(itemId) { EntitySpriteAtlas.itemIcon(itemId) }
-    val alpha = if (count > 0) 1f else 0.48f
+    val alpha = if (count != 0) 1f else 0.48f
     Surface(
         color = StoneSurface,
         shape = RoundedCornerShape(6.dp),
@@ -1935,15 +1905,19 @@ private fun IsoHotbarSlot(
             .testTag(testTag)
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(3.dp)) {
-            PixelSpritePreview(
-                bitmap = icon,
-                modifier = Modifier
-                    .size(26.dp)
-                    .align(Alignment.TopCenter)
-                    .background(ObsidianVoid, RoundedCornerShape(4.dp))
-            )
+            if (actionIcon != null) {
+                Icon(actionIcon, contentDescription = label, tint = accent, modifier = Modifier.size(26.dp).align(Alignment.TopCenter))
+            } else {
+                PixelSpritePreview(
+                    bitmap = icon,
+                    modifier = Modifier
+                        .size(26.dp)
+                        .align(Alignment.TopCenter)
+                        .background(ObsidianVoid, RoundedCornerShape(4.dp))
+                )
+            }
             // Live backpack count pill
-            Box(
+            if (count >= 0) Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .background(ObsidianVoid.copy(alpha = 0.88f), RoundedCornerShape(3.dp))
@@ -1967,6 +1941,38 @@ private fun IsoHotbarSlot(
     }
 }
 
+private data class HotbarSlotView(
+    val iconItemId: String,
+    val label: String,
+    val count: Int,
+    val accent: Color,
+    val actionIcon: ImageVector? = null
+)
+
+/** How a hotbar slot looks: item icon + count, or an action (potions, runes, menus). Null = empty. */
+private fun resolveHotbarSlotView(state: GameWorldState, boundId: String?, atkLabel: String): HotbarSlotView? {
+    if (boundId == null) return null
+    return when (boundId) {
+        HotbarActions.HEALTH_POTION -> HotbarSlotView("health_potion", "Heal", state.itemCount("health_potion"), HealthCrimson)
+        HotbarActions.MANA_POTION -> HotbarSlotView("mana_potion", "Mana", state.itemCount("mana_potion"), ManaSapphire)
+        HotbarActions.HEAL_RUNE -> state.resolvedHealRuneId().let { HotbarSlotView(it, "H-Rn", state.itemCount(it), ExpEmerald) }
+        HotbarActions.ATTACK_RUNE -> (state.resolvedAttackRuneId() ?: "magic_dart_rune").let { HotbarSlotView(it, atkLabel, state.itemCount(it), SoulViolet) }
+        HotbarActions.ROPE -> HotbarSlotView("rope", "Rope", state.itemCount("rope"), TorchGold)
+        HotbarActions.EAT_FOOD -> {
+            val foods = state.allCarriedItems().filter { ItemCatalog.all[it.itemId]?.category == ItemCategory.FOOD }
+            HotbarSlotView(foods.firstOrNull()?.itemId ?: "fresh_fish", "Eat", foods.sumOf { it.count }, TorchAmber)
+        }
+        HotbarActions.OPEN_BAG -> HotbarSlotView("rope", "Bag", -1, ParchmentLight, Icons.Default.Backpack)
+        HotbarActions.OPEN_GEAR -> HotbarSlotView("rope", "Gear", -1, ParchmentLight, Icons.Default.Shield)
+        HotbarActions.OPEN_MAP -> HotbarSlotView("rope", "Map", -1, ParchmentLight, Icons.Default.Map)
+        HotbarActions.OPEN_SKILLS -> HotbarSlotView("rope", "Skills", -1, ParchmentLight, Icons.Default.MilitaryTech)
+        else -> {
+            val def = ItemCatalog.all[boundId] ?: return null
+            HotbarSlotView(boundId, def.name.take(6), state.itemCount(boundId), TorchAmber)
+        }
+    }
+}
+
 @Composable
 private fun CustomHotbarBindDialog(
     state: GameWorldState,
@@ -1985,7 +1991,7 @@ private fun CustomHotbarBindDialog(
             color = BasaltDark,
             shape = RoundedCornerShape(12.dp),
             border = BorderStroke(1.5.dp, TorchGold),
-            modifier = Modifier.widthIn(min = 260.dp, max = 380.dp)
+            modifier = Modifier.widthIn(min = 280.dp, max = 420.dp)
         ) {
             Column(
                 modifier = Modifier.padding(12.dp),
@@ -1997,57 +2003,42 @@ private fun CustomHotbarBindDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "BIND CUSTOM SLOT ${slotIndex + 1}",
+                        text = "SET HOTBAR SLOT ${slotIndex + 1}",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = TorchGold
                     )
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, "Close", tint = ParchmentLight, modifier = Modifier.size(18.dp))
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Default.Close, "Close", tint = ParchmentLight, modifier = Modifier.size(20.dp))
                     }
                 }
                 Text(
-                    text = "Pick any potion, rune, or food from your bag. Long-press slot later to change.",
+                    text = "Pick an action or anything from your bag. Long-press a slot any time to change it.",
                     style = MaterialTheme.typography.labelSmall,
                     color = ParchmentMuted
                 )
-
-                if (bindableItems.isEmpty()) {
-                    Text(
-                        text = "No potions, runes, or food currently in your backpack.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ParchmentMuted,
-                        modifier = Modifier.padding(vertical = 10.dp)
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.heightIn(max = 175.dp),
-                        verticalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        items(bindableItems, key = { it.itemId }) { stack ->
-                            val def = ItemCatalog.get(stack.itemId)
-                            val icon = remember(stack.itemId) { EntitySpriteAtlas.itemIcon(stack.itemId) }
-                            Surface(
-                                color = StoneSurface,
-                                shape = RoundedCornerShape(6.dp),
-                                border = BorderStroke(1.dp, StoneBorderLight),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onSelect(stack.itemId) }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    PixelSpritePreview(icon, Modifier.size(26.dp).background(ObsidianVoid, RoundedCornerShape(4.dp)))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(def.name, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = ParchmentLight)
-                                        Text("Owned: x${state.itemCount(stack.itemId)}", style = MaterialTheme.typography.labelSmall, color = TorchGold)
-                                    }
-                                    Text("BIND", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = ExpEmerald)
-                                }
-                            }
-                        }
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 230.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    item(key = "h_actions") {
+                        Text("ACTIONS", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold), color = TorchAmber)
+                    }
+                    items(HotbarActions.labels.entries.toList(), key = { it.key }) { (id, label) ->
+                        BindChoiceRow(title = label, subtitle = null, iconItemId = null, onClick = { onSelect(id) })
+                    }
+                    item(key = "h_items") {
+                        Text("FROM YOUR BAG", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold), color = TorchAmber)
+                    }
+                    if (bindableItems.isEmpty()) {
+                        item(key = "h_none") { Text("Nothing usable in your bag yet.", style = MaterialTheme.typography.bodySmall, color = ParchmentMuted) }
+                    }
+                    items(bindableItems, key = { "i_" + it.itemId }) { stack ->
+                        BindChoiceRow(
+                            title = ItemCatalog.get(stack.itemId).name,
+                            subtitle = "Owned: x${state.itemCount(stack.itemId)}",
+                            iconItemId = stack.itemId,
+                            onClick = { onSelect(stack.itemId) }
+                        )
                     }
                 }
 
@@ -2058,17 +2049,46 @@ private fun CustomHotbarBindDialog(
                         border = BorderStroke(1.dp, HealthCrimson),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 44.dp)
                             .clickable { onSelect(null) }
                     ) {
-                        Text(
-                            text = "Clear Slot ${slotIndex + 1}",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = HealthCrimson,
-                            modifier = Modifier.padding(vertical = 7.dp).align(Alignment.CenterHorizontally)
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "Clear slot ${slotIndex + 1}",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = HealthCrimson,
+                                modifier = Modifier.padding(vertical = 10.dp)
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun BindChoiceRow(title: String, subtitle: String?, iconItemId: String?, onClick: () -> Unit) {
+    Surface(
+        color = StoneSurface,
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(1.dp, StoneBorderLight),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (iconItemId != null) {
+                val icon = remember(iconItemId) { EntitySpriteAtlas.itemIcon(iconItemId) }
+                PixelSpritePreview(icon, Modifier.size(26.dp).background(ObsidianVoid, RoundedCornerShape(4.dp)))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = ParchmentLight)
+                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.labelSmall, color = TorchGold)
+            }
+            Text("SET", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = ExpEmerald)
         }
     }
 }

@@ -326,7 +326,7 @@ object GameEngine {
             boundAttackRuneId = save.boundAttackRuneId ?: "magic_dart_rune",
             boundHealRuneId = save.boundHealRuneId ?: "healing_rune",
             selectedBaitId = save.selectedBaitId,
-            customHotbarSlots = List(2) { idx -> save.customHotbarSlots.getOrNull(idx) },
+            customHotbarSlots = HotbarActions.migrate(save.customHotbarSlots),
             npcProgress = save.npcProgress,
             statusLog = listOf("Loaded ${save.name} (Lvl ${save.level} ${voc.displayName}).$notes")
         )
@@ -368,7 +368,7 @@ object GameEngine {
             boundAttackRuneId = state.boundAttackRuneId,
             boundHealRuneId = state.boundHealRuneId,
             selectedBaitId = state.selectedBaitId,
-            customHotbarSlots = List(2) { idx -> state.customHotbarSlots.getOrNull(idx) },
+            customHotbarSlots = List(HotbarActions.MAX_SLOTS) { idx -> state.customHotbarSlots.getOrNull(idx) },
             regionId = normalizeRegionId(state.regionId),
             facingName = Direction.SOUTH.name,
             npcProgress = state.npcProgress.toMap()
@@ -3250,33 +3250,38 @@ object GameEngine {
     /** Routes longer than this are announced as charted journeys. */
     private const val LONG_ROUTE_STEPS = 60
 
+    /** Anything you can use or equip can go on the hotbar, plus the built-in actions. */
     fun isCustomHotbarBindable(itemId: String): Boolean {
+        if (HotbarActions.isAction(itemId)) return itemId in HotbarActions.labels
         val def = ItemCatalog.all[itemId] ?: return false
-        return def.category == ItemCategory.POTION_HP ||
-            def.category == ItemCategory.POTION_MP ||
-            def.category == ItemCategory.RUNE_HEAL ||
-            def.category == ItemCategory.RUNE_ATTACK ||
-            def.category == ItemCategory.FOOD ||
-            def.category == ItemCategory.TOOL_ROPE ||
-            def.category == ItemCategory.ADMIN_SCROLL
+        if (def.adminOnly && def.category != ItemCategory.ADMIN_SCROLL) return false
+        return when (def.category) {
+            ItemCategory.RAW_ORE, ItemCategory.METAL_INGOT, ItemCategory.CRAFT_MATERIAL,
+            ItemCategory.LOOT_VALUABLE, ItemCategory.RUNE_BLANK -> false
+            else -> true
+        }
     }
 
     fun bindCustomHotbarSlot(state: GameWorldState, slotIndex: Int, itemId: String?): GameWorldState {
-        if (slotIndex !in 0..1) return state
-        val current = List(2) { idx -> state.customHotbarSlots.getOrNull(idx) }.toMutableList()
+        if (slotIndex !in 0 until HotbarActions.MAX_SLOTS) return state
+        val current = List(HotbarActions.MAX_SLOTS) { idx -> state.customHotbarSlots.getOrNull(idx) }.toMutableList()
         if (itemId == null) {
             current[slotIndex] = null
             return state.copy(customHotbarSlots = current.toList())
-                .addLogInternal("Cleared Custom Hotbar Slot ${slotIndex + 1}.")
+                .addLogInternal("Cleared hotbar slot ${slotIndex + 1}.")
         }
         if (!isCustomHotbarBindable(itemId)) {
-            return state.addLogInternal("Only potions, runes, or food can be bound to quick slots.")
+            return state.addLogInternal("That can't go on the hotbar.")
         }
         current[slotIndex] = itemId
-        val itemName = ItemCatalog.get(itemId).name
+        val name = HotbarActions.labels[itemId] ?: ItemCatalog.get(itemId).name
         return state.copy(customHotbarSlots = current.toList())
-            .addLogInternal("Bound $itemName to Custom Slot ${slotIndex + 1}.")
+            .addLogInternal("Set hotbar slot ${slotIndex + 1} to $name.")
     }
+
+    /** Restores the classic hotbar (Heal, Mana, Heal Rune, Attack Rune, Rope). */
+    fun resetHotbar(state: GameWorldState): GameWorldState =
+        state.copy(customHotbarSlots = HotbarActions.DEFAULT_SLOTS).addLogInternal("Hotbar reset to default.")
 
     /**
      * Health/mana orb taps. Health: a health potion, or hotbar food (e.g. fish) when out of potions.
@@ -3297,11 +3302,34 @@ object GameEngine {
 
     fun useCustomHotbarSlot(state: GameWorldState, slotIndex: Int, nowMs: Long): GameWorldState {
         val itemId = state.customHotbarSlots.getOrNull(slotIndex) ?: return state
+        if (HotbarActions.isAction(itemId)) return useHotbarAction(state, itemId, nowMs)
         if (!state.hasItem(itemId)) {
             val name = ItemCatalog.all[itemId]?.name ?: itemId
             return state.addLogInternal("Out of $name!")
         }
         return useOrEquipBackpackItem(state, itemId, nowMs)
+    }
+
+    private fun useHotbarAction(state: GameWorldState, action: String, nowMs: Long): GameWorldState = when (action) {
+        HotbarActions.HEALTH_POTION -> useHealthPotion(state, nowMs)
+        HotbarActions.MANA_POTION -> useManaPotion(state, nowMs)
+        HotbarActions.HEAL_RUNE -> useHealingRune(state, nowMs)
+        HotbarActions.ATTACK_RUNE -> useAttackRune(state, nowMs)
+        HotbarActions.ROPE -> useRope(state, nowMs)
+        HotbarActions.EAT_FOOD -> {
+            val best = state.allCarriedItems()
+                .map { it.itemId }
+                .distinct()
+                .mapNotNull { ItemCatalog.all[it] }
+                .filter { it.category == ItemCategory.FOOD }
+                .maxByOrNull { it.restoreAmount }
+            if (best != null) useOrEquipBackpackItem(state, best.id, nowMs) else state.addLogInternal("You have no food.")
+        }
+        HotbarActions.OPEN_BAG -> state.copy(activePanel = ActivePanel.BACKPACK)
+        HotbarActions.OPEN_GEAR -> state.copy(activePanel = ActivePanel.EQUIPMENT)
+        HotbarActions.OPEN_MAP -> state.copy(activePanel = ActivePanel.WORLD_MAP)
+        HotbarActions.OPEN_SKILLS -> state.copy(activePanel = ActivePanel.SKILLS)
+        else -> state
     }
 
     fun useOrEquipBackpackItem(state: GameWorldState, itemId: String, nowMs: Long): GameWorldState {

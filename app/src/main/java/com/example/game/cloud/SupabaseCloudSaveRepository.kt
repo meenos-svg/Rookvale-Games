@@ -235,7 +235,7 @@ object CloudSavePayloadCodec {
             data.boundHealRuneId?.let { put("boundHealRuneId", it) }
             data.selectedBaitId?.let { put("selectedBaitId", it) }
             put("customHotbarSlots", JSONArray().apply {
-                val normalized = List(2) { idx -> data.customHotbarSlots.getOrNull(idx) }
+                val normalized = List(maxOf(2, data.customHotbarSlots.size).coerceAtMost(9)) { idx -> data.customHotbarSlots.getOrNull(idx) }
                 normalized.forEach { put(it ?: JSONObject.NULL) }
             })
 
@@ -416,7 +416,7 @@ object CloudSavePayloadCodec {
             selectedBaitId = json.optNullableString("selectedBaitId"),
             customHotbarSlots = run {
                 val arr = json.optJSONArray("customHotbarSlots")
-                List(2) { idx ->
+                List(((arr?.length() ?: 2).coerceIn(2, 9))) { idx ->
                     if (arr != null && idx < arr.length() && !arr.isNull(idx)) {
                         arr.optString(idx, "").trim().takeIf { it.isNotEmpty() }
                     } else null

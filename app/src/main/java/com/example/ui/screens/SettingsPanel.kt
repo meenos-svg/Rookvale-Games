@@ -91,6 +91,7 @@ fun SettingsPanelContent(
     onToggleProcNames: (Boolean) -> Unit = {},
     onToggleStatusAndBlockTicks: (Boolean) -> Unit = {},
     onToggleXpAndSkillGains: (Boolean) -> Unit = {},
+    hudSection: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val activeQuality = displaySettings.graphicsQuality
@@ -104,6 +105,9 @@ fun SettingsPanelContent(
             .testTag("settings_panel_content"),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // In-game only: HUD layout, hotbar and display style
+        hudSection?.invoke()
+
         // Section Header: Graphics Quality
         Row(
             modifier = Modifier.fillMaxWidth(),

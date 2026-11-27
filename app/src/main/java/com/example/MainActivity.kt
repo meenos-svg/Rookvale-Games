@@ -132,6 +132,8 @@ class MainActivity : ComponentActivity() {
                             onNpcAction = gameViewModel::onNpcAction,
                             onCancelWalk = gameViewModel::cancelWalk,
                             onOrbTap = gameViewModel::onOrbTap,
+                            onUpdateHudLayout = gameViewModel::updateHudLayout,
+                            onResetHotbar = gameViewModel::resetHotbar,
                             onChooseVocationAtOracle = gameViewModel::chooseVocationAtOracle,
                             onMultiplayerStatusTapped = gameViewModel::onMultiplayerStatusTapped,
                             onToggleChat = gameViewModel::toggleChat,

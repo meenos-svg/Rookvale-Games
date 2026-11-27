@@ -146,6 +146,9 @@ fun SlideUpGamePanel(
     onToggleProcNames: (Boolean) -> Unit = {},
     onToggleStatusAndBlockTicks: (Boolean) -> Unit = {},
     onToggleXpAndSkillGains: (Boolean) -> Unit = {},
+    onUpdateHudLayout: (com.example.game.model.HudLayout) -> Unit = {},
+    onStartHudEdit: () -> Unit = {},
+    onResetHotbar: () -> Unit = {},
     onAdminSetLevel: (Int) -> Unit = {},
     onAdminGrantEquipment: (AdminEquipmentClassification) -> Unit = {},
     onToggleAdminSpectator: (Boolean) -> Unit = {},
@@ -337,7 +340,15 @@ fun SlideUpGamePanel(
                         onToggleHealingTicks = onToggleHealingTicks,
                         onToggleProcNames = onToggleProcNames,
                         onToggleStatusAndBlockTicks = onToggleStatusAndBlockTicks,
-                        onToggleXpAndSkillGains = onToggleXpAndSkillGains
+                        onToggleXpAndSkillGains = onToggleXpAndSkillGains,
+                        hudSection = {
+                            HudSettingsSection(
+                                hud = displaySettings.hud,
+                                onUpdate = onUpdateHudLayout,
+                                onStartMove = onStartHudEdit,
+                                onResetHotbar = onResetHotbar
+                            )
+                        }
                     )
                     ActivePanel.ADMIN_SCROLL -> AdminScrollPanelContent(
                         state = state,

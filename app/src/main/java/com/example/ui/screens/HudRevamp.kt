@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -392,6 +394,174 @@ fun VitalsOrb(
             )
             Text("${(xpFrac * 100).toInt()}%", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold), color = Color(0xFFFAD75A))
             Text("${state.mp}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.ExtraBold), color = Color(0xFF8FC2FF))
+        }
+    }
+}
+
+/**
+ * Places a HUD piece at its default spot plus the player's saved offset. In edit mode the piece
+ * gets a gold outline and can be dragged; taps on it are blocked so nothing fires while moving.
+ */
+@Composable
+fun androidx.compose.foundation.layout.BoxScope.HudMovable(
+    element: com.example.game.model.HudElement,
+    alignment: Alignment,
+    hud: com.example.game.model.HudLayout,
+    editMode: Boolean,
+    onMoved: (com.example.game.model.HudLayout) -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    if (!editMode && !hud.isVisible(element)) return
+    val saved = hud.offsetOf(element)
+    var dragX by remember(saved) { mutableStateOf(saved.first) }
+    var dragY by remember(saved) { mutableStateOf(saved.second) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    Box(
+        modifier = Modifier
+            .align(alignment)
+            .then(modifier)
+            .offset { androidx.compose.ui.unit.IntOffset(dragX.dp.roundToPx(), dragY.dp.roundToPx()) }
+    ) {
+        Box(modifier = Modifier.then(if (editMode && !hud.isVisible(element)) Modifier.alpha(0.35f) else Modifier)) { content() }
+        if (editMode) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .border(2.dp, TorchGold, RoundedCornerShape(8.dp))
+                    .background(TorchGold.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
+                    .pointerInput(element) {
+                        androidx.compose.foundation.gestures.detectDragGestures(
+                            onDragEnd = { onMoved(hud.withOffset(element, dragX, dragY)) }
+                        ) { change, drag ->
+                            change.consume()
+                            with(density) {
+                                dragX += drag.x.toDp().value
+                                dragY += drag.y.toDp().value
+                            }
+                        }
+                    }
+                    .testTag("hud_move_${element.name.lowercase()}")
+            ) {
+                Text(
+                    element.label,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 10.sp),
+                    color = ObsidianVoid,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .background(TorchGold, RoundedCornerShape(bottomEnd = 6.dp))
+                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                )
+            }
+        }
+    }
+}
+
+/** Banner shown while moving HUD pieces. */
+@Composable
+fun HudEditBanner(onDone: () -> Unit, onReset: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        color = BasaltDark.copy(alpha = 0.95f),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.5.dp, TorchGold),
+        modifier = modifier.testTag("hud_edit_banner")
+    ) {
+        Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Drag the gold boxes to move them", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = ParchmentLight)
+            TextButton(onClick = onReset, modifier = Modifier.height(44.dp)) { Text("Reset", color = HealthCrimson) }
+            androidx.compose.material3.Button(
+                onClick = onDone,
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = TorchGold, contentColor = ObsidianVoid),
+                modifier = Modifier.height(44.dp).testTag("hud_edit_done")
+            ) { Text("Done") }
+        }
+    }
+}
+
+/**
+ * HUD section of the in-game settings drawer: vitals style, hotbar size, show/hide pieces,
+ * move mode and resets.
+ */
+@Composable
+fun HudSettingsSection(
+    hud: com.example.game.model.HudLayout,
+    onUpdate: (com.example.game.model.HudLayout) -> Unit,
+    onStartMove: () -> Unit,
+    onResetHotbar: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().testTag("hud_settings_section")) {
+        Text("HUD LAYOUT", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold), color = TorchGold)
+
+        Text("Health & mana display", style = MaterialTheme.typography.labelMedium, color = ParchmentMuted)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            com.example.game.model.VitalsStyle.entries.forEach { style ->
+                ChoiceChip(style.label, hud.vitalsStyle == style, Modifier.weight(1f).testTag("hud_vitals_${style.name.lowercase()}")) {
+                    onUpdate(hud.copy(vitalsStyle = style))
+                }
+            }
+        }
+
+        Text("Hotbar slots", style = MaterialTheme.typography.labelMedium, color = ParchmentMuted)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            com.example.game.model.HudLayout.HOTBAR_SIZES.forEach { n ->
+                ChoiceChip("$n", hud.hotbarSize == n, Modifier.weight(1f).testTag("hud_hotbar_$n")) { onUpdate(hud.copy(hotbarSize = n)) }
+            }
+        }
+        Text("Long-press any hotbar slot to put an item or action on it.", style = MaterialTheme.typography.labelSmall, color = ParchmentMuted)
+
+        Text("Show on screen", style = MaterialTheme.typography.labelMedium, color = ParchmentMuted)
+        com.example.game.model.HudElement.entries.filter { it.hideable }.forEach { e ->
+            ChoiceChip(
+                (if (hud.isVisible(e)) "✓ " else "✗ ") + e.label,
+                hud.isVisible(e),
+                Modifier.fillMaxWidth().testTag("hud_show_${e.name.lowercase()}")
+            ) { onUpdate(hud.toggled(e)) }
+        }
+
+        androidx.compose.material3.Button(
+            onClick = onStartMove,
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = TorchGold, contentColor = ObsidianVoid),
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("hud_move_button")
+        ) { Text("Move HUD pieces") }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            androidx.compose.material3.OutlinedButton(
+                onClick = { onUpdate(hud.copy(offsets = emptyMap(), hidden = emptySet())) },
+                modifier = Modifier.weight(1f).height(48.dp).testTag("hud_reset_layout")
+            ) { Text("Reset layout", color = ParchmentLight) }
+            androidx.compose.material3.OutlinedButton(
+                onClick = onResetHotbar,
+                modifier = Modifier.weight(1f).height(48.dp).testTag("hud_reset_hotbar")
+            ) { Text("Reset hotbar", color = ParchmentLight) }
+        }
+    }
+}
+
+@Composable
+private fun ChoiceChip(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .height(44.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) TorchGold else StoneSurface)
+            .border(1.dp, if (selected) TorchGold else StoneBorderLight, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = if (selected) ObsidianVoid else ParchmentLight)
+    }
+}
+
+/** Stand-in shown for the target frame while moving HUD pieces. */
+@Composable
+fun TargetFramePlaceholder() {
+    Surface(
+        color = BasaltDark.copy(alpha = 0.9f),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.2.dp, TargetRed.copy(alpha = 0.8f)),
+        modifier = Modifier.width(230.dp).height(48.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text("Target frame", style = MaterialTheme.typography.labelMedium, color = ParchmentMuted)
         }
     }
 }
