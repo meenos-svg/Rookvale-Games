@@ -1170,7 +1170,6 @@ private fun TopRightUtilityAndBattleClusterContent(
     var battleExpanded by rememberSaveable { mutableStateOf(true) }
     val nearbyMonsters = snapshot.nearbyMonsters
     val onlineAllies = snapshot.onlineAllies
-    val liveOnlineCount = 1 + onlineAllies.size
 
     Column(
         modifier = modifier,
@@ -1228,27 +1227,14 @@ private fun TopRightUtilityAndBattleClusterContent(
                             color = TorchGold,
                             maxLines = 1
                         )
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(ObsidianVoid.copy(alpha = 0.85f))
-                                .border(0.8.dp, Color(0xFF47D7FF).copy(alpha = 0.7f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                                .testTag("battle_list_online_count"),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(5.dp)
-                                    .clip(CircleShape)
-                                    .background(if (onlineAllies.isNotEmpty()) Color(0xFF47D7FF) else TorchGold)
-                            )
+                        if (onlineAllies.isNotEmpty()) {
+                            // Nearby players only; the total online count lives in the name bar's status pill
                             Text(
-                                text = "ONLINE $liveOnlineCount",
+                                text = if (onlineAllies.size == 1) "+1 ally" else "+${onlineAllies.size} allies",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp, fontWeight = FontWeight.Bold),
                                 color = Color(0xFF8CF0FF),
-                                maxLines = 1
+                                maxLines = 1,
+                                modifier = Modifier.testTag("battle_list_ally_count")
                             )
                         }
                     }
@@ -1269,7 +1255,7 @@ private fun TopRightUtilityAndBattleClusterContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Area clear — no foes or allies",
+                                text = "Area clear",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                 color = ParchmentMuted,
                                 maxLines = 1
