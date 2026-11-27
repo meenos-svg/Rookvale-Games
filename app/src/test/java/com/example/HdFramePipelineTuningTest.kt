@@ -35,27 +35,27 @@ import org.robolectric.annotation.Config
 class HdFramePipelineTuningTest {
 
     @Test
-    fun hdRenderScaleIsAutomatic08fAndClampsSafelyAcrossBounds() {
+    fun everyTierRendersAtFullResolutionAndScaleOverridesClampSafely() {
+        // HD is the sharpest tier: no tier downsamples the world any more
+        for (q in GraphicsQuality.entries) {
+            assertEquals("${q.name} must render at full resolution", 1.0f, q.renderScaleFactor, 0.0001f)
+            assertEquals(1.0f, q.effectiveRenderScale(), 0.0001f)
+        }
         assertEquals(0.8f, GraphicsQuality.HD_RENDER_SCALE, 0.0001f)
-        assertEquals(1.0f, GraphicsQuality.LOW.renderScaleFactor, 0.0001f)
-        assertEquals(1.0f, GraphicsQuality.MEDIUM.renderScaleFactor, 0.0001f)
-        assertEquals(1.0f, GraphicsQuality.HIGH.renderScaleFactor, 0.0001f)
-        assertEquals(0.8f, GraphicsQuality.HD.renderScaleFactor, 0.0001f)
-
-        assertEquals(0.8f, GraphicsQuality.HD.effectiveRenderScale(), 0.0001f)
         assertEquals(0.5f, GraphicsQuality.clampRenderScale(0.1f), 0.0001f)
         assertEquals(1.0f, GraphicsQuality.clampRenderScale(1.8f), 0.0001f)
         assertEquals(0.75f, GraphicsQuality.HD.effectiveRenderScale(0.75f), 0.0001f)
 
         // Scaled viewport dimensions and round-trip native 1.0x coordinate parity
-        assertEquals(1536, WorldViewportScaling.scaledDimensionPx(1920, GraphicsQuality.HD.renderScaleFactor))
-        assertEquals(864, WorldViewportScaling.scaledDimensionPx(1080, GraphicsQuality.HD.renderScaleFactor))
+        assertEquals(1920, WorldViewportScaling.scaledDimensionPx(1920, GraphicsQuality.HD.renderScaleFactor))
+        assertEquals(1536, WorldViewportScaling.scaledDimensionPx(1920, GraphicsQuality.HD_RENDER_SCALE))
+        assertEquals(864, WorldViewportScaling.scaledDimensionPx(1080, GraphicsQuality.HD_RENDER_SCALE))
         assertEquals(1920, WorldViewportScaling.scaledDimensionPx(1920, GraphicsQuality.HIGH.renderScaleFactor))
 
         val nativeX = 942.5f
-        val scaledX = WorldViewportScaling.toScaledCoord(nativeX, GraphicsQuality.HD.renderScaleFactor)
+        val scaledX = WorldViewportScaling.toScaledCoord(nativeX, GraphicsQuality.HD_RENDER_SCALE)
         assertEquals(754.0f, scaledX, 0.01f)
-        assertEquals(nativeX, WorldViewportScaling.toNativeCoord(scaledX, GraphicsQuality.HD.renderScaleFactor), 0.01f)
+        assertEquals(nativeX, WorldViewportScaling.toNativeCoord(scaledX, GraphicsQuality.HD_RENDER_SCALE), 0.01f)
     }
 
     @Test
