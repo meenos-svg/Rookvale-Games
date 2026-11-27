@@ -28,6 +28,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.example.game.model.HudElement
+import com.example.game.model.HudLayout
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -125,6 +127,10 @@ fun GameScreen(
     onCraftRecipe: (String) -> Unit,
     onBindRune: (String) -> Unit = {},
     onNpcAction: (String) -> Unit = {},
+    onCancelWalk: () -> Unit = {},
+    onOrbTap: (Boolean) -> Unit = {},
+    onUpdateHudLayout: (HudLayout) -> Unit = {},
+    onResetHotbar: () -> Unit = {},
     onChooseVocationAtOracle: (Vocation) -> Unit,
     onMultiplayerStatusTapped: () -> Unit = {},
     onToggleChat: () -> Unit = {},
@@ -158,6 +164,7 @@ fun GameScreen(
     var rotateDragMode by rememberSaveable { mutableStateOf(false) }
     val liveFpsState = remember { mutableIntStateOf(60) }
     var adminControlExpanded by rememberSaveable(state.isAdmin) { mutableStateOf(false) }
+    var hudEditMode by rememberSaveable { mutableStateOf(false) }
 
     BackHandler(enabled = state.isAdmin && adminControlExpanded) {
         adminControlExpanded = false
@@ -198,30 +205,48 @@ fun GameScreen(
                 .displayCutoutPadding()
                 .padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
-            // TOP-LEFT CLUSTER: Clickable 360-Degree Minimap + Portrait/Name/EXP/HP/MP/Cap/Online
-            TopLeftHudCluster(
-                state = state,
-                multiplayerState = multiplayerState,
-                saveBanner = saveBanner,
-                cameraYawProvider = { cameraYawState.floatValue },
-                rotateDragMode = rotateDragMode,
-                onResetNorth = { cameraYawState.floatValue = IsometricCamera.DEFAULT_YAW_DEG },
-                onToggleRotateDragMode = { rotateDragMode = !rotateDragMode },
-                onWalkToTile = onWalkToTile,
-                onExpandWorldMap = { onOpenPanel(ActivePanel.WORLD_MAP) },
-                onMultiplayerStatusTapped = onMultiplayerStatusTapped,
-                onOpenAdminScroll = { if (state.isAdmin) adminControlExpanded = true },
-                modifier = Modifier.align(Alignment.TopStart)
-            )
+            val hud = displaySettings.hud
+            val hudIdle = state.activePanel == ActivePanel.NONE || hudEditMode
 
-            // LEFT EDGE VERTICAL SKILL DOCK (skips recomposition unless PlayerSkills changes)
-            VerticalSkillDock(
-                skills = state.skills,
-                onOpenSkills = { onOpenPanel(ActivePanel.SKILLS) },
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(top = 132.dp, bottom = 52.dp)
-            )
+            // TOP-LEFT: health/mana orb (or classic bars), minimap and character info
+            HudMovable(HudElement.VITALS, Alignment.TopStart, hud, hudEditMode, onUpdateHudLayout) {
+                TopLeftHudCluster(
+                    state = state,
+                    multiplayerState = multiplayerState,
+                    saveBanner = saveBanner,
+                    cameraYawProvider = { cameraYawState.floatValue },
+                    rotateDragMode = rotateDragMode,
+                    onResetNorth = { cameraYawState.floatValue = IsometricCamera.DEFAULT_YAW_DEG },
+                    onToggleRotateDragMode = { rotateDragMode = !rotateDragMode },
+                    onWalkToTile = onWalkToTile,
+                    onExpandWorldMap = { onOpenPanel(ActivePanel.WORLD_MAP) },
+                    onMultiplayerStatusTapped = onMultiplayerStatusTapped,
+                    onOpenAdminScroll = { if (state.isAdmin) adminControlExpanded = true },
+                    onOrbHealth = { onOrbTap(true) },
+                    onOrbMana = { onOrbTap(false) },
+                    vitalsStyle = hud.vitalsStyle
+                )
+            }
+
+            // LEFT: adventure tracker (contract, today's hunt, bestiary, current walk)
+            if (hudIdle) {
+                HudMovable(
+                    HudElement.TRACKER, Alignment.CenterStart, hud, hudEditMode, onUpdateHudLayout,
+                    modifier = Modifier.padding(top = 132.dp, bottom = 52.dp)
+                ) {
+                    AdventureTrackerCard(state = state, onCancelWalk = onCancelWalk)
+                }
+            }
+
+            // RIGHT EDGE: big labelled menu buttons
+            HudMovable(HudElement.RAIL, Alignment.TopEnd, hud, hudEditMode, onUpdateHudLayout) {
+                RightActionRail(
+                    activePanel = state.activePanel,
+                    onOpenPanel = onOpenPanel,
+                    onSaveManual = onSaveManual,
+                    onReturnTitle = onReturnTitle
+                )
+            }
 
             // TOP-CENTER LIVE FPS PILL, WEATHER BADGE, BOSS HP NAMEPLATE & FLOOR DESCENT BANNER
             // Isolated into its own composable so 500ms FPS / 2s weather ticks never recompose GameScreen
@@ -234,44 +259,70 @@ fun GameScreen(
                     .padding(top = 2.dp)
             )
 
-            // TOP-RIGHT UTILITY BAR & LIVE BATTLE LIST
-            TopRightUtilityAndBattleCluster(
-                state = state,
-                remotePlayers = multiplayerState.remotePlayers,
-                onOpenPanel = onOpenPanel,
-                onSaveManual = onSaveManual,
-                onReturnTitle = onReturnTitle,
-                onTargetMonster = onTargetMonster,
-                onInspectAlly = onInspectAlly,
-                onWalkToTile = onWalkToTile,
-                modifier = Modifier.align(Alignment.TopEnd)
-            )
-
-            // BOTTOM-LEFT TRANSLUCENT CONSOLE & COLLAPSIBLE CHAT
-            if (state.activePanel == ActivePanel.NONE) {
-                BottomLeftConsoleOverlay(
-                    statusLog = state.statusLog,
-                    mpState = multiplayerState,
-                    currentFloor = state.floor,
-                    onToggleExpanded = onToggleChat,
-                    onSelectChannel = onSelectChatChannel,
-                    onSendMessage = onSendChat,
-                    modifier = Modifier.align(Alignment.BottomStart)
+            // TOP-RIGHT LIVE BATTLE LIST
+            HudMovable(
+                HudElement.BATTLE, Alignment.TopEnd, hud, hudEditMode, onUpdateHudLayout,
+                modifier = Modifier.padding(end = RIGHT_RAIL_WIDTH + 6.dp)
+            ) {
+                TopRightUtilityAndBattleCluster(
+                    state = state,
+                    remotePlayers = multiplayerState.remotePlayers,
+                    onOpenPanel = onOpenPanel,
+                    onSaveManual = onSaveManual,
+                    onReturnTitle = onReturnTitle,
+                    onTargetMonster = onTargetMonster,
+                    onInspectAlly = onInspectAlly,
+                    onWalkToTile = onWalkToTile,
+                    showUtilityBar = false
                 )
             }
 
-            // BOTTOM-CENTER QUICK ACTION HOTBAR (Core + 2 Customizable Backpack Bind Slots)
-            BottomCenterQuickHotbar(
-                state = state,
-                onHotkeyHp = onHotkeyHp,
-                onHotkeyMp = onHotkeyMp,
-                onHotkeyHealRune = onHotkeyHealRune,
-                onHotkeyRune = onHotkeyRune,
-                onHotkeyRope = onHotkeyRope,
-                onUseCustomSlot = onUseCustomHotbarSlot,
-                onBindCustomSlot = onBindCustomHotbarSlot,
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
+            // BOTTOM-LEFT TRANSLUCENT CONSOLE & COLLAPSIBLE CHAT
+            if (hudIdle) {
+                HudMovable(HudElement.CHAT, Alignment.BottomStart, hud, hudEditMode, onUpdateHudLayout) {
+                    BottomLeftConsoleOverlay(
+                        statusLog = state.statusLog,
+                        mpState = multiplayerState,
+                        currentFloor = state.floor,
+                        onToggleExpanded = onToggleChat,
+                        onSelectChannel = onSelectChatChannel,
+                        onSendMessage = onSendChat
+                    )
+                }
+            }
+
+            // TARGET FRAME just above the hotbar (bosses keep their big nameplate up top)
+            if (hudIdle) {
+                HudMovable(
+                    HudElement.TARGET, Alignment.BottomCenter, hud, hudEditMode, onUpdateHudLayout,
+                    modifier = Modifier.padding(bottom = 66.dp)
+                ) {
+                    if (hudEditMode) TargetFramePlaceholder() else TargetFrame(state = state)
+                }
+            }
+
+            // BOTTOM-CENTER HOTBAR (every slot customizable)
+            HudMovable(HudElement.HOTBAR, Alignment.BottomCenter, hud, hudEditMode, onUpdateHudLayout) {
+                BottomCenterQuickHotbar(
+                    state = state,
+                    onHotkeyHp = onHotkeyHp,
+                    onHotkeyMp = onHotkeyMp,
+                    onHotkeyHealRune = onHotkeyHealRune,
+                    onHotkeyRune = onHotkeyRune,
+                    onHotkeyRope = onHotkeyRope,
+                    onUseCustomSlot = onUseCustomHotbarSlot,
+                    onBindCustomSlot = onBindCustomHotbarSlot,
+                    hotbarSize = hud.hotbarSize
+                )
+            }
+
+            if (hudEditMode) {
+                HudEditBanner(
+                    onDone = { hudEditMode = false },
+                    onReset = { onUpdateHudLayout(hud.copy(offsets = emptyMap())) },
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
 
             // BOTTOM-RIGHT COLLAPSIBLE ADMIN CONTROL OVERLAY (strictly visible only when isAdmin == true)
             if (state.isAdmin) {
@@ -347,6 +398,12 @@ fun GameScreen(
                     onToggleProcNames = onToggleProcNames,
                     onToggleStatusAndBlockTicks = onToggleStatusAndBlockTicks,
                     onToggleXpAndSkillGains = onToggleXpAndSkillGains,
+                    onUpdateHudLayout = onUpdateHudLayout,
+                    onStartHudEdit = {
+                        hudEditMode = true
+                        onClosePanel()
+                    },
+                    onResetHotbar = onResetHotbar,
                     onAdminSetLevel = onAdminSetLevel,
                     onAdminGrantEquipment = onAdminGrantEquipment,
                     onToggleAdminSpectator = onToggleAdminSpectator
@@ -511,6 +568,7 @@ private fun TopCenterStatusOverlay(
                 BossHpNameplateBar(boss = boss)
             }
         }
+
         AnimatedVisibility(
             visible = state.floorWarningBanner != null && state.activePanel == ActivePanel.NONE,
             enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),

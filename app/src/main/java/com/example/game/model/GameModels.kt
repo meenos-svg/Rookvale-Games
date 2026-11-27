@@ -1641,7 +1641,8 @@ data class DisplaySettings(
     val showHealingTicks: Boolean = true,
     val showProcNames: Boolean = true,
     val showStatusAndBlockTicks: Boolean = true,
-    val showXpAndSkillGains: Boolean = true
+    val showXpAndSkillGains: Boolean = true,
+    val hud: HudLayout = HudLayout()
 ) {
     /**
      * Determines whether a floating text popup should be drawn on the 2.5D viewport.
@@ -1768,7 +1769,7 @@ data class GameWorldState(
     val boundAttackRuneId: String? = "magic_dart_rune",
     val boundHealRuneId: String? = "healing_rune",
     val selectedBaitId: String? = null,
-    val customHotbarSlots: List<String?> = listOf(null, null),
+    val customHotbarSlots: List<String?> = HotbarActions.DEFAULT_SLOTS,
     /** Townsfolk progress: hunt contract, bestiary kill counts and claims (see NpcServices). */
     val npcProgress: Map<String, Int> = emptyMap(),
     /** Which specialist shop is open (null = Alaric's general store). Not saved. */

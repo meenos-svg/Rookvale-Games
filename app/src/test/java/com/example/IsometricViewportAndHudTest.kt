@@ -136,7 +136,7 @@ class IsometricViewportAndHudTest {
         // Custom hotbar binding, persistence, and usage
         val bound = GameEngine.bindCustomHotbarSlot(targeted, 0, "fresh_fish")
         assertEquals("fresh_fish", bound.customHotbarSlots[0])
-        assertNull(bound.customHotbarSlots[1])
+        assertEquals(com.example.game.model.HotbarActions.MANA_POTION, bound.customHotbarSlots[1])
 
         val encoded = CloudSavePayloadCodec.encode(GameEngine.toSaveData(bound))
         val restored = GameEngine.fromSaveData(CloudSavePayloadCodec.decode(encoded, "slot_hb", "iDemon"))

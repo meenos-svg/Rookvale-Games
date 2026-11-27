@@ -1325,6 +1325,22 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (used) broadcastCurrentState(PlayerActionState.HEALING)
     }
 
+    /** Tap on the health (left) or mana (right) half of the vitals orb. */
+    fun onOrbTap(health: Boolean) {
+        val now = SystemClock.uptimeMillis()
+        var used = false
+        _world.update { prev ->
+            val next = GameEngine.useOrbSide(prev, health, now)
+            if (next.hp != prev.hp || next.mp != prev.mp || next.outboundPlayerEffects.size > prev.outboundPlayerEffects.size) used = true
+            next
+        }
+        flushOutboundPlayerEffects()
+        if (used) {
+            broadcastCurrentState(PlayerActionState.HEALING)
+            persistCurrentState(silent = true)
+        }
+    }
+
     fun onHotkeyManaPotion() {
         val now = SystemClock.uptimeMillis()
         var used = false
@@ -1519,6 +1535,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private var routePlanJob: Job? = null
 
+    /** Stop the current auto-walk (from the tracker's X button). */
+    fun cancelWalk() {
+        routePlanJob?.cancel()
+        _world.update {
+            it.copy(walkPath = emptyList(), longRangeGoal = null, longRangeWaypoints = emptyList())
+                .addLogInternal("Stopped walking.")
+        }
+    }
+
     /**
      * Map "walk here": long routes are planned off the main thread so the screen never freezes,
      * then applied if the hero is still where the plan started.
@@ -1595,6 +1620,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var newLevel = 1
         var floor = 0
         var name = ""
+        var floorChanged = false
         _world.update { prev ->
             val next = GameEngine.useCustomHotbarSlot(prev, slotIndex, now)
             if (next.level > prev.level) {
@@ -1608,7 +1634,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             if (next.hp != prev.hp || next.mp != prev.mp || next.backpack != prev.backpack || next.floor != prev.floor) {
                 used = true
             }
+            if (next.floor != prev.floor) floorChanged = true
             next
+        }
+        if (floorChanged) {
+            val cur = _world.value
+            multiplayerManager.switchFloor(cur.floor, cur.toPresencePayload())
+            persistCurrentState(silent = true)
         }
         flushOutboundMonsterHits()
         flushOutboundPlayerEffects()
@@ -1642,6 +1674,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (_displaySettings.value.graphicsQuality == quality) return
         displaySettingsStore.saveGraphicsQuality(quality)
         _displaySettings.update { it.copy(graphicsQuality = quality) }
+    }
+
+    /** Saves HUD customization (vitals style, hotbar size, positions, hidden pieces). */
+    fun updateHudLayout(hud: com.example.game.model.HudLayout) {
+        displaySettingsStore.saveHudLayout(hud)
+        _displaySettings.update { it.copy(hud = hud) }
+    }
+
+    fun resetHotbar() {
+        _world.update { GameEngine.resetHotbar(it) }
+        persistCurrentState(silent = true)
     }
 
     fun setShowMinimap(show: Boolean) {
