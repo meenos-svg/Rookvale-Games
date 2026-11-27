@@ -213,5 +213,48 @@ class FrontierCitiesAndDungeonsTest {
         }
     }
 
+    @Test
+    fun sunspireSurroundingsAreBadlands() {
+        assertEquals(com.example.game.world.OverlandBiomeTier.SUNSCORCH_BADLANDS, BiomeProgressionRules.biomeForGlobalTile(375, 790))
+        assertEquals(com.example.game.world.OverlandBiomeTier.SUNSCORCH_BADLANDS, BiomeProgressionRules.biomeForGlobalTile(375, 730))
+        // Mirewatch stays marsh
+        assertEquals(com.example.game.world.OverlandBiomeTier.WHISPERING_MARSH, BiomeProgressionRules.biomeForGlobalTile(545, 595))
+        val near = WorldMaps.initialMonsters().filter { it.floor == 0 && BiomeCities.isSunspireBadlandsRim(it.x, it.y) }
+        assertTrue("Sunspire's surroundings should host monsters", near.isNotEmpty())
+        near.forEach { assertTrue("${it.type} near Sunspire is Lv ${it.level}", it.level in 30..45) }
+    }
+
+    @Test
+    fun helmetsLegsAndBootsProgressThroughEveryBiomeTier() {
+        val recipes = RecipeCatalog.forgingRecipes
+        for (cat in listOf(com.example.game.model.ItemCategory.HELMET, com.example.game.model.ItemCategory.LEGS, com.example.game.model.ItemCategory.BOOTS)) {
+            val pieces = ItemCatalog.all.values.filter { it.category == cat && !it.adminOnly }
+            for (lvl in listOf(20, 28, 36, 45)) {
+                val p = pieces.singleOrNull { it.requiredLevel == lvl }
+                assertTrue("$cat missing a Lv $lvl piece", p != null)
+                assertTrue("${p!!.id} must be craftable", recipes.any { it.outputItemId == p.id })
+            }
+            // Armor never goes down as the required level goes up
+            val sorted = pieces.sortedBy { it.requiredLevel }
+            sorted.zipWithNext().forEach { (a, b) -> assertTrue("${b.id} (${b.armor}) weaker than ${a.id} (${a.armor})", b.armor >= a.armor) }
+        }
+    }
+
+    @Test
+    fun highLevelMonstersSalvageOutgrownStarterGear() {
+        val rng = kotlin.random.Random(7)
+        val starter = setOf("sunbrass_dirk", "rookvale_gladius", "wooden_shield", "viking_helmet")
+        var ore = 0
+        repeat(4000) {
+            val loot = MonsterLootTable.rollLoot(MonsterType.SKELETON, rng, monsterLevel = 33)
+            assertTrue("Lv 33 skeleton dropped starter gear: ${loot.items}", loot.items.none { it.itemId in starter })
+            ore += loot.items.filter { it.itemId == "vesperite_ore" }.sumOf { it.count }
+        }
+        assertTrue("Outgrown gear should salvage into badlands ore", ore > 0)
+        // Low-level skeletons still drop their starter gear
+        val low = (1..4000).flatMap { MonsterLootTable.rollLoot(MonsterType.SKELETON, rng, monsterLevel = 6).items.map { it.itemId } }
+        assertTrue(low.any { it in starter })
+    }
+
     private fun f0Tile(x: Int, y: Int) = WorldMaps.getFloor(0).tileAt(x, y)
 }

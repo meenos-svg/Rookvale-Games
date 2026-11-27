@@ -132,7 +132,8 @@ object BiomeProgressionRules {
     }
 
     fun biomeForGlobalTile(x: Int, y: Int): OverlandBiomeTier =
-        biomeForRegion(WorldRegionMeta.forGlobalTile(x, y).regionId)
+        if (BiomeCities.isSunspireBadlandsRim(x, y)) OverlandBiomeTier.SUNSCORCH_BADLANDS
+        else biomeForRegion(WorldRegionMeta.forGlobalTile(x, y).regionId)
 
     /**
      * Canonical surface biome anchor for each underground dungeon floor so deeper floors,
