@@ -467,8 +467,20 @@ data class PaperDollAppearance(
             }
         }
 
+        /** Biome set pieces (helmets, legs, boots) wear their set's material colours. */
+        private fun biomeArmorPalette(id: String): MaterialPalette? = when {
+            id.startsWith("cinderite_") -> MaterialPalettes.CINDERITE
+            id.startsWith("rime_plate_") -> MaterialPalettes.RIME_PLATE
+            id.startsWith("vesperite_") -> MaterialPalettes.VESPERITE
+            id.startsWith("mire_woven_") -> MaterialPalettes.MIRE_WOVEN
+            else -> null
+        }
+
         private fun resolveHelmet(helmetId: String?, vocation: Vocation): Pair<HelmetVisualKind, MaterialPalette> {
             val id = helmetId?.lowercase()?.trim().orEmpty()
+            biomeArmorPalette(id)?.let { pal ->
+                return (if (id.contains("hood")) HelmetVisualKind.MAGE_HOOD else HelmetVisualKind.VIKING_HELM) to pal
+            }
             return when {
                 id.contains("viking") || id.contains("iron") || id.contains("steel") -> HelmetVisualKind.VIKING_HELM to MaterialPalettes.DWARVEN_STEEL
                 id.contains("hat") -> HelmetVisualKind.WIZARD_HAT to MaterialPalettes.MAGE_ROBE
@@ -481,6 +493,7 @@ data class PaperDollAppearance(
 
         private fun resolveLegs(legsId: String?, armorKind: ArmorVisualKind): MaterialPalette {
             val id = legsId?.lowercase()?.trim().orEmpty()
+            biomeArmorPalette(id)?.let { return it }
             return when {
                 id.contains("brass") -> MaterialPalettes.BRASS_PLATE
                 id.contains("leather") -> MaterialPalettes.LEATHER
@@ -492,6 +505,9 @@ data class PaperDollAppearance(
 
         private fun resolveBoots(bootsId: String?, armorKind: ArmorVisualKind): Pair<BootsVisualKind, MaterialPalette> {
             val id = bootsId?.lowercase()?.trim().orEmpty()
+            biomeArmorPalette(id)?.let { pal ->
+                return (if (id.contains("waders")) BootsVisualKind.TRAVELER else BootsVisualKind.PLATE) to pal
+            }
             return when {
                 id.contains("plate") || id.contains("steel") || id.contains("brass") ->
                     BootsVisualKind.PLATE to MaterialPalettes.DWARVEN_STEEL

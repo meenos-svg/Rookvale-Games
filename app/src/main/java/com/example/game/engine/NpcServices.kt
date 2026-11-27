@@ -111,7 +111,7 @@ object VendorCatalog {
         offer("venom_shafts", 12), offer("quenchsteel_quarrels", 14),
         offer("bog_iron_pickaxe", 200), offer("sunbrass_pick", 170), offer("duskmetal_breaker", 330),
         offer("silver_trout", 30), offer("marsh_pike", 55),
-        offer("viking_helmet", 130), offer("brass_legs", 170), offer("life_amulet"),
+        offer("viking_helmet", 130), offer("brass_legs", 170), offer("brass_boots", 140), offer("life_amulet"),
         offer("health_potion", 36), offer("mana_potion", 40), offer("rope", 35),
         offer("spider_silk", 50), offer("runic_slate", 170)
     ).filter { ItemCatalog.all.containsKey(it.itemId) && it.price > 0 }

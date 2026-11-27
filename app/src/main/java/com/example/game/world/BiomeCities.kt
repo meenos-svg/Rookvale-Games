@@ -49,6 +49,18 @@ object BiomeCities {
     val mirewatch: City by lazy { buildMirewatch() }
     val sunspire: City by lazy { buildSunspire() }
 
+    /**
+     * Sunspire sits just north of the coarse 400x400 desert region border (y = 800), so its sandy
+     * surroundings would otherwise count as Writhing Marshes. Everything inside this ellipse around
+     * the city (north of the border) is treated as Sunscorch Badlands for monsters, levels and forage.
+     */
+    fun isSunspireBadlandsRim(x: Int, y: Int): Boolean {
+        if (y >= 800 || y < 705) return false
+        val dx = (x - SUN_CX) / 95.0
+        val dy = (y - 800) / 95.0
+        return dx * dx + dy * dy <= 1.0
+    }
+
     fun cityAt(x: Int, y: Int): City? = when {
         x in MIRE_MIN_X..MIRE_MAX_X && y in MIRE_MIN_Y..MIRE_MAX_Y -> mirewatch
         x in SUN_MIN_X..SUN_MAX_X && y in SUN_MIN_Y..SUN_MAX_Y -> sunspire

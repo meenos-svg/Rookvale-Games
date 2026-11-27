@@ -136,6 +136,7 @@ object MonsterLootTable {
         MonsterType.OUTLAW_BANDIT to MonsterLootEntry(
             minGp = 26, maxGp = 58,
             weightedDrops = listOf(
+                WeightedLootDrop("brass_boots", 1, 1, dropChance = 0.10f, weight = 8),
                 WeightedLootDrop("rookvale_gladius", 1, 1, dropChance = 0.22f, weight = 24),
                 WeightedLootDrop("leather_boots", 1, 1, dropChance = 0.18f, weight = 18),
                 WeightedLootDrop("brass_armor", 1, 1, dropChance = 0.14f, weight = 14),
@@ -396,6 +397,8 @@ object MonsterLootTable {
                 ItemStack("sd_rune", 2)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("vesperite_sun_helm", 1, 1, dropChance = 0.16f, weight = 8),
+                WeightedLootDrop("vesperite_greaves", 1, 1, dropChance = 0.16f, weight = 8),
                 WeightedLootDrop("vesperite_ore", 2, 4, dropChance = 0.80f, weight = 20),
                 WeightedLootDrop("health_potion", 2, 4, dropChance = 0.70f, weight = 16),
                 WeightedLootDrop("mana_potion", 2, 4, dropChance = 0.65f, weight = 16),
@@ -665,6 +668,7 @@ object MonsterLootTable {
                 ItemStack("health_potion", 2)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("mire_woven_leggings", 1, 1, dropChance = 0.16f, weight = 9),
                 WeightedLootDrop("mire_silver_ingot", 2, 3, dropChance = 0.50f, weight = 14),
                 WeightedLootDrop("bog_steel_mace", 1, 1, dropChance = 0.14f, weight = 10),
                 WeightedLootDrop("mire_woven_brigandine", 1, 1, dropChance = 0.14f, weight = 10),
@@ -682,6 +686,7 @@ object MonsterLootTable {
         MonsterType.BOG_HAG to MonsterLootEntry(
             minGp = 48, maxGp = 108,
             weightedDrops = listOf(
+                WeightedLootDrop("mire_woven_hood", 1, 1, dropChance = 0.03f, weight = 3),
                 WeightedLootDrop("bile_gland", 1, 2, dropChance = 0.48f, weight = 28),
                 WeightedLootDrop("hmm_rune", 1, 2, dropChance = 0.36f, weight = 24),
                 WeightedLootDrop("mana_potion", 1, 2, dropChance = 0.34f, weight = 18),
@@ -718,6 +723,8 @@ object MonsterLootTable {
                 ItemStack("mana_potion", 2)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("mire_woven_hood", 1, 1, dropChance = 0.16f, weight = 9),
+                WeightedLootDrop("mire_woven_waders", 1, 1, dropChance = 0.16f, weight = 9),
                 WeightedLootDrop("mire_woven_staff", 1, 1, dropChance = 0.14f, weight = 10),
                 WeightedLootDrop("bog_steel_sabre", 1, 1, dropChance = 0.14f, weight = 10),
                 WeightedLootDrop("bog_steel_shield", 1, 1, dropChance = 0.12f, weight = 8),
@@ -769,6 +776,7 @@ object MonsterLootTable {
                 ItemStack("sd_rune", 2)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("vesperite_sun_helm", 1, 1, dropChance = 0.12f, weight = 8),
                 WeightedLootDrop("gorek_obsidian_horn", 1, 2, dropChance = 0.40f, weight = 14),
                 WeightedLootDrop("quenchsteel_arbalest", 1, 1, dropChance = 0.16f, weight = 10),
                 WeightedLootDrop("fireball_rune", 2, 4, dropChance = 0.68f, weight = 22),
@@ -821,6 +829,8 @@ object MonsterLootTable {
                 ItemStack("runic_slate", 2)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("vesperite_sandstriders", 1, 1, dropChance = 0.18f, weight = 9),
+                WeightedLootDrop("vesperite_greaves", 1, 1, dropChance = 0.14f, weight = 8),
                 WeightedLootDrop("sd_rune", 2, 4, dropChance = 0.66f, weight = 18),
                 WeightedLootDrop("colossus_tendon", 1, 2, dropChance = 0.60f, weight = 16),
                 WeightedLootDrop("stormglass_pendant", 1, 1, dropChance = 0.26f, weight = 12),
@@ -835,6 +845,7 @@ object MonsterLootTable {
         MonsterType.BARROW_WIGHT to MonsterLootEntry(
             minGp = 100, maxGp = 205,
             weightedDrops = listOf(
+                WeightedLootDrop("rime_plate_legguards", 1, 1, dropChance = 0.04f, weight = 3),
                 WeightedLootDrop("ancient_bone", 2, 4, dropChance = 0.56f, weight = 30),
                 WeightedLootDrop("glacier_quartz_ore", 1, 2, dropChance = 0.44f, weight = 26),
                 WeightedLootDrop("frost_iron_ore", 1, 2, dropChance = 0.42f, weight = 24),
@@ -879,6 +890,8 @@ object MonsterLootTable {
                 ItemStack("sd_rune", 3)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("rime_plate_helm", 1, 1, dropChance = 0.16f, weight = 8),
+                WeightedLootDrop("rime_plate_sabatons", 1, 1, dropChance = 0.16f, weight = 8),
                 WeightedLootDrop("runic_slate", 2, 4, dropChance = 0.68f, weight = 22),
                 WeightedLootDrop("mana_potion", 2, 4, dropChance = 0.62f, weight = 20),
                 WeightedLootDrop("vesperite_conduit_staff", 1, 1, dropChance = 0.22f, weight = 16),
@@ -944,6 +957,8 @@ object MonsterLootTable {
                 ItemStack("health_potion", 3)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("cinderite_tassets", 1, 1, dropChance = 0.16f, weight = 8),
+                WeightedLootDrop("cinderite_treads", 1, 1, dropChance = 0.16f, weight = 8),
                 WeightedLootDrop("molten_core", 2, 3, dropChance = 0.80f, weight = 20),
                 WeightedLootDrop("cinderite_greataxe", 1, 1, dropChance = 0.20f, weight = 10),
                 WeightedLootDrop("cinderite_overlord_band", 1, 1, dropChance = 0.16f, weight = 8),
@@ -965,6 +980,7 @@ object MonsterLootTable {
                 ItemStack("dragon_tooth", 3)
             ),
             weightedDrops = listOf(
+                WeightedLootDrop("cinderite_crown", 1, 1, dropChance = 0.16f, weight = 8),
                 WeightedLootDrop("molten_core", 2, 3, dropChance = 0.80f, weight = 20),
                 WeightedLootDrop("cinderite_bastion", 1, 1, dropChance = 0.18f, weight = 9),
                 WeightedLootDrop("cinderite_warplate", 1, 1, dropChance = 0.18f, weight = 9),
@@ -1043,6 +1059,12 @@ object MonsterLootTable {
             for (drop in eligible) {
                 val chance = drop.dropChance * rarityMult(drop.itemId) * (if (isGearDrop(drop)) gearScale else 1f)
                 if (rng.nextFloat() <= chance.coerceIn(0f, 1f)) {
+                    // Regular monsters far above a piece of gear's level salvage it into a local ore instead
+                    // (a Lv 33 badlands skeleton no longer hands out a Lv 1 starter dirk).
+                    if (!type.isBoss && isGearDrop(drop) && LootLevels.isOutgrown(drop.itemId, level)) {
+                        rolled.add(ItemStack(LootLevels.salvageOreFor(level), 1))
+                        continue
+                    }
                     val qty = rollQty(drop.minQty, drop.maxQty, rng)
                     if (qty > 0) {
                         rolled.add(ItemStack(drop.itemId, qty))
@@ -1224,4 +1246,21 @@ object LootLevels {
     }
 
     fun canDrop(itemId: String, monsterLevel: Int): Boolean = itemLevel(itemId) <= monsterLevel + LOOT_LEVEL_SLACK
+
+    /** Gear this many levels below the monster is "outgrown" and gets salvaged instead of dropped. */
+    const val OUTGROWN_GEAR_GAP = 20
+
+    fun isOutgrown(itemId: String, monsterLevel: Int): Boolean {
+        val def = ItemCatalog.all[itemId] ?: return false
+        return isGear(def) && !def.isTool && itemLevel(itemId) + OUTGROWN_GEAR_GAP < monsterLevel
+    }
+
+    /** Ore of the monster's own level band: marsh mire-silver, badlands vesperite, highland frost-iron, caldera cinderite. */
+    fun salvageOreFor(monsterLevel: Int): String = when {
+        monsterLevel >= 55 -> "cinderite_ore"
+        monsterLevel >= 42 -> "frost_iron_ore"
+        monsterLevel >= 30 -> "vesperite_ore"
+        monsterLevel >= 20 -> "mire_silver_ore"
+        else -> "bog_iron_ore"
+    }
 }

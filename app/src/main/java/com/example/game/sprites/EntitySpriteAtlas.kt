@@ -1273,14 +1273,15 @@ object EntitySpriteAtlas {
                 rect(buf, ITEM_S, 4, 7, 8, 2, trim)
             }
             ItemCategory.HELMET -> {
-                rect(buf, ITEM_S, 4, 5, 8, 7, if (itemId == "viking_helmet") 0xFF9EA8B5.toInt() else 0xFF7D502E.toInt())
+                rect(buf, ITEM_S, 4, 5, 8, 7, biomeArmorIconColor(itemId) ?: if (itemId == "viking_helmet") 0xFF9EA8B5.toInt() else 0xFF7D502E.toInt())
             }
             ItemCategory.LEGS -> {
-                val col = if (itemId == "brass_legs") 0xFFB8963E.toInt() else 0xFF7D502E.toInt()
+                val col = biomeArmorIconColor(itemId) ?: if (itemId == "brass_legs") 0xFFB8963E.toInt() else 0xFF7D502E.toInt()
                 rect(buf, ITEM_S, 4, 3, 8, 4, col); rect(buf, ITEM_S, 4, 7, 3, 7, col); rect(buf, ITEM_S, 9, 7, 3, 7, col)
             }
             ItemCategory.BOOTS -> {
-                rect(buf, ITEM_S, 3, 6, 4, 7, 0xFF59381E.toInt()); rect(buf, ITEM_S, 9, 6, 4, 7, 0xFF59381E.toInt())
+                val bc = biomeArmorIconColor(itemId) ?: if (itemId == "brass_boots") 0xFFB8963E.toInt() else 0xFF59381E.toInt()
+                rect(buf, ITEM_S, 3, 6, 4, 7, bc); rect(buf, ITEM_S, 9, 6, 4, 7, bc)
             }
             ItemCategory.AMULET -> {
                 val (chainCol, gemCol) = when (itemId) {
@@ -1334,5 +1335,13 @@ object EntitySpriteAtlas {
             }
         }
         return toBmp(buf, ITEM_S)
+    }
+
+    private fun biomeArmorIconColor(itemId: String): Int? = when {
+        itemId.startsWith("cinderite_") -> 0xFFFF7A1F.toInt()
+        itemId.startsWith("rime_plate_") -> 0xFF9FD8F5.toInt()
+        itemId.startsWith("vesperite_") -> 0xFFB07BFF.toInt()
+        itemId.startsWith("mire_woven_") -> 0xFF5E8F5A.toInt()
+        else -> null
     }
 }

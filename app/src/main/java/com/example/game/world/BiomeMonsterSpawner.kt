@@ -330,6 +330,7 @@ object BiomeMonsterSpawner {
      * Heartland borders / southern ruins / Spirewood Reach scale cleanly to Lv 12–20.
      */
     fun resolveBiomeTypeAt(x: Int, y: Int): BiomeType {
+        if (BiomeCities.isSunspireBadlandsRim(x, y)) return BiomeType.SUNSCORCH_BADLANDS
         val regionId = normalizeRegionId(WorldRegionMeta.forGlobalTile(x, y).regionId)
         return when (regionId) {
             "rookvale_valley" -> {

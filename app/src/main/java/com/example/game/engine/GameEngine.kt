@@ -3566,9 +3566,9 @@ object GameEngine {
         val commonDefenseAndJewelry = listOf(
             "cinderite_warplate" to 1,
             "cinderite_bastion" to 1,
-            "viking_helmet" to 1,
-            "brass_legs" to 1,
-            "leather_boots" to 1,
+            "cinderite_crown" to 1,
+            "cinderite_tassets" to 1,
+            "cinderite_treads" to 1,
             "cinderheart_sovereign_torc" to 1,
             "cinderite_overlord_band" to 1
         )
@@ -3640,9 +3640,9 @@ object GameEngine {
             val slotsToEquip = buildList {
                 add(primaryWeaponId)
                 add("cinderite_warplate")
-                add("viking_helmet")
-                add("brass_legs")
-                add("leather_boots")
+                add("cinderite_crown")
+                add("cinderite_tassets")
+                add("cinderite_treads")
                 add("cinderheart_sovereign_torc")
                 add("cinderite_overlord_band")
                 if (classification == AdminEquipmentClassification.DISTANCE) {
