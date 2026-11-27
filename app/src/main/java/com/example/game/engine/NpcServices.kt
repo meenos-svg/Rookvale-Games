@@ -141,7 +141,8 @@ object VendorCatalog {
     }
 
     fun buyPrice(vendorId: String?, itemId: String, wallClockMs: Long = System.currentTimeMillis()): Int =
-        stockFor(vendorId, wallClockMs).firstOrNull { it.itemId == itemId }?.price ?: 0
+        if (vendorId == null) ItemCatalog.get(itemId).buyPrice  // Alaric: catalog price, as before
+        else stockFor(vendorId, wallClockMs).firstOrNull { it.itemId == itemId }?.price ?: 0
 
     fun sellPrice(vendorId: String?, itemId: String): Int {
         val def = ItemCatalog.get(itemId)
