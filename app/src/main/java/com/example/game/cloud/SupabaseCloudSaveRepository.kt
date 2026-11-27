@@ -276,6 +276,11 @@ object CloudSavePayloadCodec {
                     data.questFlags.forEach { (k, v) -> put(k, v) }
                 })
             }
+            if (data.npcProgress.isNotEmpty()) {
+                put("npcProgress", JSONObject().apply {
+                    data.npcProgress.forEach { (k, v) -> put(k, v) }
+                })
+            }
         }
     }
 
@@ -351,6 +356,19 @@ object CloudSavePayloadCodec {
             }
         }
 
+        val npcObj = json.optJSONObject("npcProgress")
+        val npcProgress = buildMap {
+            if (npcObj != null) {
+                val keys = npcObj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    if (key.length <= 64 && size < 512) {
+                        put(key, npcObj.optInt(key, 0).coerceIn(0, 1_000_000))
+                    }
+                }
+            }
+        }
+
         val maxHp = json.optInt("maxHp", 150).coerceAtLeast(1)
         val maxMp = json.optInt("maxMp", 55).coerceAtLeast(0)
         val maxSoul = json.optInt("maxSoul", 100).coerceAtLeast(1)
@@ -392,6 +410,7 @@ object CloudSavePayloadCodec {
             tunicColorIndex = json.optInt("tunicColorIndex", 0).coerceAtLeast(0),
             hairColorIndex = json.optInt("hairColorIndex", 0).coerceAtLeast(0),
             questFlags = questFlags,
+            npcProgress = npcProgress,
             boundAttackRuneId = json.optNullableString("boundAttackRuneId"),
             boundHealRuneId = json.optNullableString("boundHealRuneId") ?: "healing_rune",
             selectedBaitId = json.optNullableString("selectedBaitId"),

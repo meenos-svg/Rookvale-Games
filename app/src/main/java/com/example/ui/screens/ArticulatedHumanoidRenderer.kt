@@ -1333,6 +1333,127 @@ object ArticulatedHumanoidRenderer {
                 drawCircle(Color(0xFFD6B8FF).copy(alpha = 0.92f), radius = 2.6f * u, center = lanternPos)
                 drawCircle(Color.White.copy(alpha = 0.95f), radius = 1.2f * u, center = lanternPos)
             }
+            NpcRole.FISHERMAN, NpcRole.BLACKSMITH, NpcRole.FLETCHER, NpcRole.WANDERING_MERCHANT,
+            NpcRole.HUNT_MASTER, NpcRole.BESTIARY_SAGE, NpcRole.TOWN_CRIER, NpcRole.DUNGEON_GUIDE -> {
+                drawPlayer(this, cx, feetY, heightPx, townsfolkAppearance(role), facing, 0f, 0f, nowMs, quality, path)
+                if (role == NpcRole.TOWN_CRIER) {
+                    // Brass hand bell
+                    val bell = facing.project(cx, feetY, u, +8.2f, 4.4f, 21.5f + bobUp + sin(nowMs * 0.012f) * 0.8f)
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, bell.x, bell.y, 2.4f * u, 2.8f * u,
+                        Color(0xFFD9A338), SPECULAR_WHITE, Color(0xFF7A5314), ow * 0.7f,
+                        facing.lightScreenX, facing.lightScreenY, useSpecular = useSpec
+                    )
+                }
+                if (role == NpcRole.WANDERING_MERCHANT) {
+                    // Overstuffed travel pack
+                    val pack = facing.project(cx, feetY, u, 0f, -5.5f, 24.0f + bobUp)
+                    VolumetricShading.drawVolumetricEllipsoid(
+                        this, pack.x, pack.y, 5.2f * u, 6.0f * u,
+                        Color(0xFF8C5A2E), Color(0xFFBF8550), Color(0xFF4F3016), ow * 0.8f,
+                        facing.lightScreenX, facing.lightScreenY, useSpecular = false
+                    )
+                }
+            }
+        }
+    }
+
+    /** Outfits for the Rookvale townsfolk. */
+    private fun townsfolkAppearance(role: NpcRole): PaperDollAppearance {
+        fun pal(p: Long, h: Long, s: Long, a: Long = 0xFFE6B44C) = MaterialPalette(Color(p), Color(h), Color(s), Color(a))
+        return when (role) {
+            NpcRole.FISHERMAN -> PaperDollAppearance(
+                vocation = Vocation.ADVENTURER,
+                tunicPalette = pal(0xFF3E6E8C, 0xFF5E93B5, 0xFF223E52),
+                hairPalette = pal(0xFFCFCCC4, 0xFFF2F0EA, 0xFF8E8B84),
+                weaponKind = WeaponVisualKind.STAFF,
+                weaponPalette = MaterialPalettes.OAK_WOOD,
+                armorKind = ArmorVisualKind.LEATHER,
+                armorPalette = pal(0xFFC9A646, 0xFFE8CC6E, 0xFF7E6624),
+                helmetKind = HelmetVisualKind.LEATHER_CAP,
+                helmetPalette = pal(0xFFC9A646, 0xFFE8CC6E, 0xFF7E6624),
+                bootsKind = BootsVisualKind.TRAVELER
+            )
+            NpcRole.BLACKSMITH -> PaperDollAppearance(
+                vocation = Vocation.KNIGHT,
+                tunicPalette = pal(0xFF5A3B2A, 0xFF805640, 0xFF321F15),
+                hairPalette = pal(0xFF2B1D14, 0xFF4E3626, 0xFF140D08),
+                weaponKind = WeaponVisualKind.CLUB,
+                weaponPalette = MaterialPalettes.IRON,
+                armorKind = ArmorVisualKind.LEATHER,
+                armorPalette = MaterialPalettes.LEATHER,
+                helmetKind = HelmetVisualKind.NONE,
+                bootsKind = BootsVisualKind.PLATE
+            )
+            NpcRole.FLETCHER -> PaperDollAppearance(
+                vocation = Vocation.PALADIN,
+                tunicPalette = pal(0xFF4F7A3A, 0xFF73A35A, 0xFF2C4720),
+                hairPalette = pal(0xFFB5652B, 0xFFD98B4E, 0xFF6E3A14),
+                weaponKind = WeaponVisualKind.BOW,
+                weaponPalette = MaterialPalettes.OAK_WOOD,
+                armorKind = ArmorVisualKind.LEATHER,
+                armorPalette = MaterialPalettes.LEATHER,
+                helmetKind = HelmetVisualKind.NONE,
+                bootsKind = BootsVisualKind.TRAVELER
+            )
+            NpcRole.WANDERING_MERCHANT -> PaperDollAppearance(
+                vocation = Vocation.ADVENTURER,
+                tunicPalette = pal(0xFF7A2E5C, 0xFFA84E85, 0xFF451734),
+                hairPalette = pal(0xFF1E1A16, 0xFF3A332C, 0xFF0D0B09),
+                armorKind = ArmorVisualKind.ROBE,
+                armorPalette = pal(0xFF7A2E5C, 0xFFA84E85, 0xFF451734, 0xFFF0C451),
+                helmetKind = HelmetVisualKind.WIZARD_HAT,
+                helmetPalette = pal(0xFF2F2A55, 0xFF4B4585, 0xFF18152E, 0xFFF0C451),
+                bootsKind = BootsVisualKind.TRAVELER
+            )
+            NpcRole.HUNT_MASTER -> PaperDollAppearance(
+                vocation = Vocation.KNIGHT,
+                tunicPalette = pal(0xFF6B1F1F, 0xFF963636, 0xFF3D0F0F),
+                hairPalette = pal(0xFF5C4630, 0xFF85694C, 0xFF33261A),
+                weaponKind = WeaponVisualKind.SWORD,
+                weaponPalette = MaterialPalettes.IRON,
+                offhandKind = OffhandVisualKind.KITE_SHIELD,
+                offhandPalette = pal(0xFF6B1F1F, 0xFF963636, 0xFF3D0F0F),
+                armorKind = ArmorVisualKind.PLATE,
+                armorPalette = MaterialPalettes.IRON,
+                helmetKind = HelmetVisualKind.NONE,
+                bootsKind = BootsVisualKind.PLATE
+            )
+            NpcRole.BESTIARY_SAGE -> PaperDollAppearance(
+                vocation = Vocation.MAGE,
+                tunicPalette = pal(0xFF2E5E57, 0xFF4A8A80, 0xFF173430),
+                hairPalette = pal(0xFFB8B4AC, 0xFFDDDAD3, 0xFF7A766F),
+                weaponKind = WeaponVisualKind.WAND,
+                offhandKind = OffhandVisualKind.ARCANE_ORB,
+                offhandPalette = pal(0xFF6EE0C8, 0xFFC4FFF2, 0xFF2A8A76),
+                armorKind = ArmorVisualKind.ROBE,
+                armorPalette = pal(0xFF2E5E57, 0xFF4A8A80, 0xFF173430),
+                helmetKind = HelmetVisualKind.MAGE_HOOD,
+                helmetPalette = pal(0xFF2E5E57, 0xFF4A8A80, 0xFF173430),
+                bootsKind = BootsVisualKind.DEFAULT
+            )
+            NpcRole.TOWN_CRIER -> PaperDollAppearance(
+                vocation = Vocation.ADVENTURER,
+                tunicPalette = pal(0xFF2D3F8C, 0xFF4A60B8, 0xFF16214D),
+                hairPalette = pal(0xFF8C5A2E, 0xFFB57D48, 0xFF4F3016),
+                armorKind = ArmorVisualKind.TUNIC,
+                armorPalette = pal(0xFF2D3F8C, 0xFF4A60B8, 0xFF16214D, 0xFFF0C451),
+                helmetKind = HelmetVisualKind.WIZARD_HAT,
+                helmetPalette = pal(0xFF8C1F2A, 0xFFB83A46, 0xFF4D0E14, 0xFFF0C451),
+                bootsKind = BootsVisualKind.DEFAULT
+            )
+            else -> PaperDollAppearance(
+                vocation = Vocation.PALADIN,
+                tunicPalette = pal(0xFF5C5A3A, 0xFF85825A, 0xFF33321F),
+                hairPalette = pal(0xFF3A2A1C, 0xFF5E4430, 0xFF1C140D),
+                weaponKind = WeaponVisualKind.JAVELIN,
+                weaponPalette = MaterialPalettes.OAK_WOOD,
+                armorKind = ArmorVisualKind.LEATHER,
+                armorPalette = MaterialPalettes.LEATHER,
+                helmetKind = HelmetVisualKind.LEATHER_CAP,
+                helmetPalette = MaterialPalettes.LEATHER,
+                bootsKind = BootsVisualKind.TRAVELER
+            )
         }
     }
 }

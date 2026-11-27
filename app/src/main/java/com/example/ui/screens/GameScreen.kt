@@ -124,6 +124,7 @@ fun GameScreen(
     onSellItem: (String, Int) -> Unit,
     onCraftRecipe: (String) -> Unit,
     onBindRune: (String) -> Unit = {},
+    onNpcAction: (String) -> Unit = {},
     onChooseVocationAtOracle: (Vocation) -> Unit,
     onMultiplayerStatusTapped: () -> Unit = {},
     onToggleChat: () -> Unit = {},
@@ -327,6 +328,7 @@ fun GameScreen(
                     onSellItem = onSellItem,
                     onCraftRecipe = onCraftRecipe,
                     onBindRune = onBindRune,
+                    onNpcAction = onNpcAction,
                     onWalkToTile = onWalkToTile,
                     onTradePlayer = { peer ->
                         onClosePanel()

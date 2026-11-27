@@ -1405,7 +1405,9 @@ data class PlayerSaveData(
     val selectedBaitId: String? = null,
     val customHotbarSlots: List<String?> = listOf(null, null),
     val regionId: String = DEFAULT_REGION_ID,
-    val facingName: String = Direction.SOUTH.name
+    val facingName: String = Direction.SOUTH.name,
+    /** Townsfolk progress: hunt contract, bestiary kill counts and claims (see NpcServices). */
+    val npcProgress: Map<String, Int> = emptyMap()
 )
 
 /**
@@ -1438,7 +1440,8 @@ data class PersistentCharacterFingerprint(
     val boundHealRuneId: String?,
     val selectedBaitId: String?,
     val customHotbarSlots: List<String?>,
-    val questFlags: Map<String, Boolean>
+    val questFlags: Map<String, Boolean>,
+    val npcProgress: Map<String, Int> = emptyMap()
 )
 
 data class CharacterLocationSnapshot(
@@ -1678,7 +1681,9 @@ enum class ActivePanel {
     ADMIN_SCROLL,
     SETTINGS,
     BIOME_STALL,
-    RECIPE_CODEX
+    RECIPE_CODEX,
+    HUNT_BOARD,
+    BESTIARY
 }
 
 const val DEFAULT_TIME_OF_DAY_HOURS: Float = 19.5f
@@ -1763,7 +1768,11 @@ data class GameWorldState(
     val boundAttackRuneId: String? = "magic_dart_rune",
     val boundHealRuneId: String? = "healing_rune",
     val selectedBaitId: String? = null,
-    val customHotbarSlots: List<String?> = listOf(null, null)
+    val customHotbarSlots: List<String?> = listOf(null, null),
+    /** Townsfolk progress: hunt contract, bestiary kill counts and claims (see NpcServices). */
+    val npcProgress: Map<String, Int> = emptyMap(),
+    /** Which specialist shop is open (null = Alaric's general store). Not saved. */
+    val activeShopId: String? = null
 ) {
     val isInvulnerable: Boolean
         get() = isAdmin || infiniteHealth
@@ -1792,7 +1801,8 @@ data class GameWorldState(
         boundHealRuneId = boundHealRuneId,
         selectedBaitId = selectedBaitId,
         customHotbarSlots = customHotbarSlots,
-        questFlags = questFlags
+        questFlags = questFlags,
+        npcProgress = npcProgress
     )
 
     fun locationSnapshot(): CharacterLocationSnapshot = CharacterLocationSnapshot(

@@ -129,6 +129,7 @@ class MainActivity : ComponentActivity() {
                             onSellItem = gameViewModel::sellItem,
                             onCraftRecipe = gameViewModel::craftRecipe,
                             onBindRune = gameViewModel::bindRuneToHotbar,
+                            onNpcAction = gameViewModel::onNpcAction,
                             onChooseVocationAtOracle = gameViewModel::chooseVocationAtOracle,
                             onMultiplayerStatusTapped = gameViewModel::onMultiplayerStatusTapped,
                             onToggleChat = gameViewModel::toggleChat,

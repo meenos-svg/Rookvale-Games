@@ -327,6 +327,7 @@ object GameEngine {
             boundHealRuneId = save.boundHealRuneId ?: "healing_rune",
             selectedBaitId = save.selectedBaitId,
             customHotbarSlots = List(2) { idx -> save.customHotbarSlots.getOrNull(idx) },
+            npcProgress = save.npcProgress,
             statusLog = listOf("Loaded ${save.name} (Lvl ${save.level} ${voc.displayName}).$notes")
         )
     }
@@ -369,7 +370,8 @@ object GameEngine {
             selectedBaitId = state.selectedBaitId,
             customHotbarSlots = List(2) { idx -> state.customHotbarSlots.getOrNull(idx) },
             regionId = normalizeRegionId(state.regionId),
-            facingName = Direction.SOUTH.name
+            facingName = Direction.SOUTH.name,
+            npcProgress = state.npcProgress.toMap()
         )
     }
 
@@ -470,6 +472,8 @@ object GameEngine {
 
         // 2. NPC or Shop Counter (Brother Alden, The Oracle, Alaric, Harbor Captains)
         if (npc != null || tile == TileType.SHOP_COUNTER) {
+            val townsfolk = npc?.let { NpcInteractions.talkTo(baseState, it) }
+            if (townsfolk != null && dist <= 2) return townsfolk
             return if (dist <= 2) {
                 when (npc?.role) {
                     NpcRole.TEMPLE_PRIEST -> blessAtTemple(baseState, nowMs)
@@ -506,7 +510,7 @@ object GameEngine {
                             longRangeWaypoints = emptyList()
                         ).addLogInternal(greeting)
                     }
-                    else -> baseState.copy(activePanel = ActivePanel.SHOP, walkPath = emptyList(), longRangeGoal = null, longRangeWaypoints = emptyList())
+                    else -> baseState.copy(activePanel = ActivePanel.SHOP, activeShopId = null, walkPath = emptyList(), longRangeGoal = null, longRangeWaypoints = emptyList())
                         .addLogInternal("Alaric: 'Potions, Blank Runes, Hatchets & sturdy tools — inscribe spells at the Rune Altar!'")
                 }
             } else setWalkPathToAdjacent(baseState, tx, ty, remotePlayersOnFloor)
@@ -1318,6 +1322,7 @@ object GameEngine {
         projectileKind: ProjectileKind? = null
     ): GameWorldState {
         val m = state.monsters.firstOrNull { it.id == monsterId } ?: return state
+        val damage = NpcInteractions.applyBestiaryBonus(state, m.type, damage)
         val localId = state.saveId.ifBlank { "local" }
         val newHp = (m.hp - damage).coerceAtLeast(0)
         val updatedContributors = m.contributors + localId
@@ -1391,7 +1396,7 @@ object GameEngine {
             questFlags = bossFlags,
             outboundSystemAlerts = s.outboundSystemAlerts + bossAlert
         )
-        s = grantExperience(s, m.scaledXpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
+        s = NpcInteractions.onKillCredited(s, m, nowMs)
         val expiryHint = if (m.type.isBoss) "3m" else "90s"
         val potionQty = corpse.items.filter { it.itemId == "health_potion" }.sumOf { it.count }
         val isGuaranteedPotion = MonsterLootTable.entryFor(m.type).guaranteedDrops.any { it.itemId == "health_potion" }
@@ -1478,7 +1483,7 @@ object GameEngine {
                 corpses = (s.corpses + personalCorpse).takeLast(38),
                 outboundLootSpawns = s.outboundLootSpawns + personalCorpse
             )
-            s = grantExperience(s, m.scaledXpReward.toLong(), m.x.toFloat(), m.y.toFloat(), nowMs)
+            s = NpcInteractions.onKillCredited(s, m, nowMs)
             s = s.addLogInternal("Co-op kill: ${m.type.displayName}! (+${m.scaledXpReward} XP) Personal loot dropped.")
         } else {
             s = s.addLogInternal("${event.attackerName} slew ${m.type.displayName}.")
@@ -1517,7 +1522,7 @@ object GameEngine {
                     corpses = (s.corpses + personalCorpse).takeLast(38),
                     outboundLootSpawns = s.outboundLootSpawns + personalCorpse
                 )
-                s = grantExperience(s, oldM.scaledXpReward.toLong(), oldM.x.toFloat(), oldM.y.toFloat(), nowMs)
+                s = NpcInteractions.onKillCredited(s, oldM, nowMs)
                 s = s.addLogInternal("Co-op kill: ${oldM.type.displayName}! (+${oldM.scaledXpReward} XP) Personal loot dropped.")
             }
         }
@@ -4153,13 +4158,18 @@ object GameEngine {
 
     private fun formatGold(amount: Long): String = String.format(java.util.Locale.US, "%,d", amount)
 
+    fun shopBuyPrice(state: GameWorldState, itemId: String): Int = VendorCatalog.buyPrice(state.activeShopId, itemId)
+
+    fun shopSellPrice(state: GameWorldState, itemId: String): Int = VendorCatalog.sellPrice(state.activeShopId, itemId)
+
     fun maxShopBuyQuantity(state: GameWorldState, itemId: String, requestedQuantity: Int): Int {
         val qty = requestedQuantity.coerceAtLeast(1)
         val def = ItemCatalog.get(itemId)
-        if (def.buyPrice <= 0) return 0
-        val maxByGold = state.gold / def.buyPrice
+        val price = shopBuyPrice(state, itemId)
+        if (price <= 0) return 0
+        val maxByGold = state.gold / price
         if (maxByGold <= 0) return 0
-        val netWeightPerUnit = def.carriedWeightOz() - def.buyPrice * GOLD_COIN_WEIGHT_OZ
+        val netWeightPerUnit = def.carriedWeightOz() - price * GOLD_COIN_WEIGHT_OZ
         val maxByCap = if (netWeightPerUnit <= 1e-6) {
             qty
         } else {
@@ -4171,13 +4181,14 @@ object GameEngine {
     fun buyShopItem(state: GameWorldState, itemId: String, quantity: Int = 1): GameWorldState {
         val req = quantity.coerceAtLeast(1)
         val def = ItemCatalog.get(itemId)
-        if (def.buyPrice <= 0) return state
-        if (state.gold < def.buyPrice) return state.addLogInternal("Not enough Gold (${def.buyPrice} gp required).")
+        val price = shopBuyPrice(state, itemId)
+        if (price <= 0) return state
+        if (state.gold < price) return state.addLogInternal("Not enough Gold ($price gp required).")
         val actualQty = maxShopBuyQuantity(state, itemId, req)
         if (actualQty <= 0) {
             return state.addLogInternal("Too heavy! Need ${String.format("%.1f", def.carriedWeightOz())} oz Cap.")
         }
-        val totalCost = def.buyPrice * actualQty
+        val totalCost = price * actualQty
         val bagNote = if (def.isTool) " (packed in Tool Bag)" else ""
         val qtyPrefix = if (actualQty > 1) "${actualQty}x " else ""
         val clampNote = if (actualQty < req) " (max affordable/Cap)" else ""
@@ -4189,9 +4200,11 @@ object GameEngine {
         val owned = state.itemCount(itemId)
         if (owned <= 0) return state
         val def = ItemCatalog.get(itemId)
-        if (def.adminOnly || def.sellPrice <= 0) return state.addLogInternal("Alaric isn't interested in ${def.name}.")
+        val shopkeeper = VendorCatalog.vendor(state.activeShopId)?.npcName ?: "Alaric"
+        val unitPrice = shopSellPrice(state, itemId)
+        if (def.adminOnly || unitPrice <= 0) return state.addLogInternal("$shopkeeper isn't interested in ${def.name}.")
         val actualQty = minOf(quantity.coerceAtLeast(1), owned)
-        val totalGain = def.sellPrice * actualQty
+        val totalGain = unitPrice * actualQty
         val qtyPrefix = if (actualQty > 1) "${actualQty}x " else ""
         return removeCarriedItem(state, itemId, actualQty)
             .let { it.copy(gold = it.gold + totalGain) }

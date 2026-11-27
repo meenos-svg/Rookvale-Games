@@ -61,7 +61,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.R
+import com.example.game.engine.Bestiary
 import com.example.game.engine.GameEngine
+import com.example.game.engine.HuntContracts
+import com.example.game.engine.NpcInteractions
+import com.example.game.engine.VendorCatalog
 import com.example.game.model.ActivePanel
 import com.example.game.model.FishingCatalog
 import com.example.game.model.AdminEquipmentClassification
@@ -126,6 +130,7 @@ fun SlideUpGamePanel(
     onSellItem: (String, Int) -> Unit,
     onCraftRecipe: (String) -> Unit,
     onBindRune: (String) -> Unit = {},
+    onNpcAction: (String) -> Unit = {},
     onWalkToTile: (Int, Int) -> Unit = { _, _ -> },
     onTradePlayer: (RemotePlayerState) -> Unit = {},
     onBoardHarborFerry: (String) -> Unit = {},
@@ -151,7 +156,9 @@ fun SlideUpGamePanel(
         ActivePanel.BACKPACK -> stringResource(R.string.panel_backpack)
         ActivePanel.SKILLS -> stringResource(R.string.panel_skills)
         ActivePanel.DEPOT -> stringResource(R.string.panel_depot)
-        ActivePanel.SHOP -> stringResource(R.string.panel_shop)
+        ActivePanel.SHOP -> VendorCatalog.vendor(state.activeShopId)?.title ?: stringResource(R.string.panel_shop)
+        ActivePanel.HUNT_BOARD -> "Captain Hale's Hunt Board"
+        ActivePanel.BESTIARY -> "Sage Ilsa's Bestiary"
         ActivePanel.FURNACE -> "Smelting Furnace"
         ActivePanel.ANVIL -> "Blacksmith Anvil"
         ActivePanel.FLETCHING_BENCH -> "Fletching Workbench"
@@ -338,6 +345,8 @@ fun SlideUpGamePanel(
                         onGrantEquipment = onAdminGrantEquipment,
                         onToggleSpectator = onToggleAdminSpectator
                     )
+                    ActivePanel.HUNT_BOARD -> HuntBoardContent(state = state, onAction = onNpcAction)
+                    ActivePanel.BESTIARY -> BestiaryContent(state = state, onAction = onNpcAction)
                     ActivePanel.ORACLE, ActivePanel.NONE -> Unit
                 }
             }
@@ -1081,24 +1090,25 @@ private fun ShopPanelContent(
         }
         if (tab == 0) {
             LazyColumn(contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(ItemCatalog.shopInventoryIds, key = { it }) { itemId ->
+                items(VendorCatalog.stockFor(state.activeShopId).map { it.itemId }, key = { it }) { itemId ->
                     val def = ItemCatalog.get(itemId)
+                    val unitPrice = GameEngine.shopBuyPrice(state, itemId)
                     val wt = if (def.isTool) "${formatOz(def.carriedWeightOz())} oz (Tool Bag)" else "${formatOz(def.weightOz)} oz"
                     val isBait = def.category == ItemCategory.FISHING_BAIT
                     val baitMeetsFish = !isBait || state.isAdmin || state.skills.fishing.level >= def.requiredFishingLevel
                     val shopSubtitle = if (isBait) {
                         val targetFish = def.baitTargetFishId?.let { ItemCatalog.get(it) }
                         val targetText = targetFish?.let { "Catches ${it.name} (+${it.restoreAmount} HP)" } ?: def.description
-                        "${def.buyPrice} gp • Fish Lv ${def.requiredFishingLevel} • $targetText • $wt"
+                        "$unitPrice gp • Fish Lv ${def.requiredFishingLevel} • $targetText • $wt"
                     } else {
                         val reqNote = if (def.equipSlot != null && def.requiredLevel > 1) " • Req Lv ${def.requiredLevel}" else ""
-                        "${def.buyPrice} gp • $wt$reqNote • ${def.description}"
+                        "$unitPrice gp • $wt$reqNote • ${def.description}"
                     }
                     val maxCanBuy = GameEngine.maxShopBuyQuantity(state, itemId, selectedQty)
                     val displayQty = if (maxCanBuy > 0) maxCanBuy else selectedQty
-                    val totalPrice = def.buyPrice * displayQty
-                    val buyLabel = if (displayQty > 1) "Buy x$displayQty (${totalPrice}g)" else "Buy ${def.buyPrice}g"
-                    val inspectLabel = if (displayQty > 1) "Buy x$displayQty ($totalPrice gp)" else "Buy (${def.buyPrice} gp)"
+                    val totalPrice = unitPrice * displayQty
+                    val buyLabel = if (displayQty > 1) "Buy x$displayQty (${totalPrice}g)" else "Buy ${unitPrice}g"
+                    val inspectLabel = if (displayQty > 1) "Buy x$displayQty ($totalPrice gp)" else "Buy ($unitPrice gp)"
                     ItemActionRow(
                         stack = ItemStack(itemId, 1),
                         subtitleOverride = shopSubtitle,
@@ -1121,6 +1131,7 @@ private fun ShopPanelContent(
             val sellableEntries = remember(state.toolBag, state.backpack) {
                 state.allCarriedItems()
                     .filter { ItemCatalog.get(it.itemId).sellPrice > 0 }
+                    .sortedByDescending { VendorCatalog.isPreferred(state.activeShopId, it.itemId) }
                     .withStableKeys("shop_sell")
             }
             if (sellableEntries.isEmpty()) {
@@ -1135,12 +1146,14 @@ private fun ShopPanelContent(
                         val bagTag = if (def.isTool) "Tool Bag • " else ""
                         val ownedTotal = state.itemCount(stack.itemId)
                         val sellQty = minOf(selectedQty, ownedTotal).coerceAtLeast(1)
-                        val totalGain = def.sellPrice * sellQty
-                        val sellLabel = if (sellQty > 1) "Sell x$sellQty (+${totalGain}g)" else "Sell +${def.sellPrice}g"
-                        val inspectLabel = if (sellQty > 1) "Sell x$sellQty (+$totalGain gp)" else "Sell (+${def.sellPrice} gp)"
+                        val unitSell = GameEngine.shopSellPrice(state, stack.itemId)
+                        val preferredTag = if (VendorCatalog.isPreferred(state.activeShopId, stack.itemId)) "Wanted! " else ""
+                        val totalGain = unitSell * sellQty
+                        val sellLabel = if (sellQty > 1) "Sell x$sellQty (+${totalGain}g)" else "Sell +${unitSell}g"
+                        val inspectLabel = if (sellQty > 1) "Sell x$sellQty (+$totalGain gp)" else "Sell (+$unitSell gp)"
                         ItemActionRow(
                             stack = stack,
-                            subtitleOverride = "${bagTag}Sells for ${def.sellPrice} gp • ${formatOz(def.carriedWeightOz())} oz",
+                            subtitleOverride = "$preferredTag${bagTag}Sells for $unitSell gp • ${formatOz(def.carriedWeightOz())} oz",
                             primaryLabel = sellLabel,
                             onPrimary = { onSell(stack.itemId, selectedQty) },
                             onInspect = {
@@ -2066,3 +2079,149 @@ private fun ReaperTemplePanelContent(
 }
 
 
+
+
+// =========================================================================================
+// Townsfolk panels
+// =========================================================================================
+
+@Composable
+private fun HuntBoardContent(state: GameWorldState, onAction: (String) -> Unit) {
+    val active = NpcInteractions.activeContract(state)
+    val kills = NpcInteractions.huntKills(state)
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.testTag("hunt_board")
+    ) {
+        if (active != null) {
+            item(key = "active") {
+                Surface(
+                    color = StoneSurface,
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.5.dp, TorchGold),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("ACTIVE: ${active.title}", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = TorchGold)
+                        Text("Slay ${active.count} ${active.target.displayName} • $kills/${active.count}", style = MaterialTheme.typography.bodySmall, color = ParchmentLight)
+                        LinearProgressIndicator(
+                            progress = { (kills.toFloat() / active.count).coerceIn(0f, 1f) },
+                            color = ExpEmerald,
+                            trackColor = StoneBorderDark,
+                            modifier = Modifier.fillMaxWidth().height(6.dp)
+                        )
+                        Text(active.hint, style = MaterialTheme.typography.labelSmall, color = ParchmentMuted)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { onAction("hunt_turn_in") },
+                                enabled = kills >= active.count,
+                                colors = ButtonDefaults.buttonColors(containerColor = TorchGold, contentColor = ObsidianVoid),
+                                modifier = Modifier.weight(1f).height(44.dp).testTag("hunt_turn_in")
+                            ) { Text("Claim ${active.goldReward} gp + ${active.xpReward} XP", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                            OutlinedButton(
+                                onClick = { onAction("hunt_abandon") },
+                                modifier = Modifier.height(44.dp).testTag("hunt_abandon")
+                            ) { Text("Abandon", color = ParchmentLight) }
+                        }
+                    }
+                }
+            }
+        }
+        item(key = "header") {
+            Text(
+                "Contracts completed: ${NpcInteractions.huntsCompleted(state)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = ParchmentMuted
+            )
+        }
+        items(HuntContracts.all, key = { it.id }) { c ->
+            val unlocked = state.level >= c.minLevel
+            val isActive = active?.id == c.id
+            Surface(
+                color = StoneSurface.copy(alpha = if (unlocked) 1f else 0.5f),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, if (c.target.isBoss) HealthCrimson.copy(alpha = 0.7f) else StoneBorderLight),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(c.title, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = if (c.target.isBoss) HealthCrimson else ParchmentLight)
+                        Text(
+                            "Slay ${c.count} ${c.target.displayName} • ${c.goldReward} gp + ${c.xpReward} XP • Lv ${c.minLevel}+",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ParchmentMuted
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = { onAction("hunt_accept:${c.id}") },
+                        enabled = unlocked && active == null,
+                        colors = ButtonDefaults.buttonColors(containerColor = ExpEmerald, contentColor = ObsidianVoid),
+                        modifier = Modifier.height(40.dp).testTag("hunt_accept_${c.id}")
+                    ) { Text(if (isActive) "Active" else if (unlocked) "Accept" else "Lv ${c.minLevel}") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BestiaryContent(state: GameWorldState, onAction: (String) -> Unit) {
+    val entries = NpcInteractions.bestiaryEntries(state)
+    if (entries.isEmpty()) {
+        Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+            Text(
+                "Slay creatures and Sage Ilsa will record them. Finish an entry (${Bestiary.REGULAR_KILLS} kills, or ${Bestiary.BOSS_KILLS} for bosses) for gold and +${(Bestiary.DAMAGE_BONUS * 100).toInt()}% damage against that creature.",
+                color = ParchmentMuted,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        return
+    }
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.testTag("bestiary")
+    ) {
+        items(entries, key = { it.name }) { type ->
+            val kills = NpcInteractions.kills(state, type)
+            val needed = Bestiary.killsNeeded(type)
+            val claimed = NpcInteractions.isClaimed(state, type)
+            val ready = !claimed && kills >= needed
+            Surface(
+                color = StoneSurface,
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, if (ready) TorchGold else StoneBorderLight),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(type.displayName, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = if (type.isBoss) HealthCrimson else ParchmentLight)
+                        Text(
+                            if (claimed) "Recorded • +${(Bestiary.DAMAGE_BONUS * 100).toInt()}% damage • $kills slain" else "${kills.coerceAtMost(needed)}/$needed slain",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (claimed) ExpEmerald else ParchmentMuted
+                        )
+                        if (!claimed) {
+                            LinearProgressIndicator(
+                                progress = { (kills.toFloat() / needed).coerceIn(0f, 1f) },
+                                color = TorchAmber,
+                                trackColor = StoneBorderDark,
+                                modifier = Modifier.fillMaxWidth().height(5.dp)
+                            )
+                        }
+                    }
+                    if (ready) {
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = { onAction("bestiary_claim:${type.name}") },
+                            colors = ButtonDefaults.buttonColors(containerColor = TorchGold, contentColor = ObsidianVoid),
+                            modifier = Modifier.height(40.dp).testTag("bestiary_claim_${type.name}")
+                        ) { Text("Record +${Bestiary.goldReward(type)}g") }
+                    }
+                }
+            }
+        }
+    }
+}

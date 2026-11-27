@@ -1903,6 +1903,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         persistCurrentState(silent = true)
     }
 
+    /** Actions from the townsfolk panels (hunt contracts, bestiary claims). */
+    fun onNpcAction(action: String) {
+        val now = SystemClock.uptimeMillis()
+        _world.update { com.example.game.engine.NpcInteractions.handleAction(it, action, now) }
+        persistCurrentState(silent = true)
+    }
+
     fun onBuyBackReaperItem(itemId: String) {
         var changed = false
         _world.update { prev ->
