@@ -125,6 +125,48 @@ class UpdateCheckerTest {
         assertEquals("2026-04-11T08:00:00Z", newerRelease.releaseTimestampIso)
     }
 
+    private fun releaseWithCode(code: Int, assetUpdated: String) = """
+        {
+          "name": "Rookvale Latest Android Build",
+          "html_url": "https://github.com/meenos-svg/Rookvale-Games/releases/tag/latest",
+          "body": "Automated Android APK build (`v1.0.$code`, `versionCode $code`, `release` signed) from latest `main` push.",
+          "published_at": "2026-11-25T16:45:42Z",
+          "assets": [{ "name": "Rookvale-latest.apk", "updated_at": "$assetUpdated" }]
+        }
+    """.trimIndent()
+
+    @Test
+    fun evaluateUpdate_sameBuildNumberNeverNagsEvenWhenUploadIsMinutesAfterBuild() {
+        // The real case: APK stamped 01:19:50, asset uploaded 01:23:19 (well past the 2-minute grace).
+        val result = GitHubUpdateChecker.evaluateUpdateFromJson(
+            rawJson = releaseWithCode(57, "2026-11-27T01:23:19Z"),
+            installedBuildTimeIso = "2026-11-27T01:19:50Z",
+            dismissedReleaseIso = null,
+            baseState = UpdateCheckState(currentVersionLabel = "v1.0.57", buildCode = 57)
+        )
+        assertFalse(result.updateAvailable)
+    }
+
+    @Test
+    fun evaluateUpdate_higherRemoteBuildNumberPromptsUntilDismissed() {
+        val json = releaseWithCode(58, "2026-11-28T09:00:00Z")
+        val base = UpdateCheckState(currentVersionLabel = "v1.0.57", buildCode = 57)
+        val prompt = GitHubUpdateChecker.evaluateUpdateFromJson(json, "2026-11-27T01:19:50Z", null, base)
+        assertTrue(prompt.updateAvailable)
+        assertEquals("2026-11-28T09:00:00Z", prompt.releaseTimestampIso)
+
+        val dismissed = GitHubUpdateChecker.evaluateUpdateFromJson(
+            json, "2026-11-27T01:19:50Z", "2026-11-28T09:00:00Z", base
+        )
+        assertFalse(dismissed.updateAvailable)
+    }
+
+    @Test
+    fun parseReleaseJson_readsVersionCodeFromReleaseNotes() {
+        val parsed = GitHubUpdateChecker.parseReleaseJson(releaseWithCode(123, "2026-11-27T01:23:19Z"))
+        assertEquals(123, parsed!!.versionCode)
+    }
+
     @Test
     fun validateReleaseUrl_rejectsUntrustedSchemesAndForeignDomains() {
         assertEquals(
