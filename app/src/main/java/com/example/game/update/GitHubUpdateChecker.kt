@@ -28,7 +28,9 @@ data class ParsedReleaseInfo(
     val latestTimestampIso: String,
     val latestTimestampMs: Long,
     val releaseName: String,
-    val downloadUrl: String
+    val downloadUrl: String,
+    /** Build number of the published APK, read from the release notes ("versionCode N"). */
+    val versionCode: Int? = null
 )
 
 /**
@@ -47,6 +49,7 @@ object GitHubUpdateChecker {
     private const val PREFS_NAME = "rookvale_update_prefs"
     private const val KEY_DISMISSED_RELEASE_TS = "last_seen_release_timestamp_iso"
     private const val CI_CLOCK_SKEW_GRACE_MS = 120_000L
+    private val VERSION_CODE_REGEX = Regex("versionCode\\s+(\\d+)")
 
     private val moshi = Moshi.Builder().build()
     private val mapType = Types.newParameterizedType(Map::class.java, String::class.java, Any::class.java)
@@ -95,6 +98,22 @@ object GitHubUpdateChecker {
         baseState: UpdateCheckState = UpdateCheckState()
     ): UpdateCheckState {
         val parsed = parseReleaseJson(rawJson) ?: return baseState
+        val dismissedMsForCode = parseIsoUtcMillis(dismissedReleaseIso) ?: 0L
+
+        // Preferred: compare build numbers. The release asset is uploaded minutes after the APK's
+        // BUILD_TIME_UTC is stamped, so timestamps alone made the newest APK nag about itself.
+        val remoteCode = parsed.versionCode
+        if (remoteCode != null && baseState.buildCode > 0) {
+            val newer = remoteCode > baseState.buildCode && parsed.latestTimestampMs > dismissedMsForCode
+            return if (!newer) baseState else baseState.copy(
+                updateAvailable = true,
+                releaseTimestampIso = parsed.latestTimestampIso,
+                releaseDateLabel = formatFriendlyDate(parsed.latestTimestampMs),
+                releaseName = parsed.releaseName,
+                downloadUrl = parsed.downloadUrl
+            )
+        }
+
         val installedMs = parseIsoUtcMillis(installedBuildTimeIso) ?: 0L
         val dismissedMs = parseIsoUtcMillis(dismissedReleaseIso) ?: 0L
 
@@ -145,11 +164,14 @@ object GitHubUpdateChecker {
             .ifEmpty { "Rookvale Latest Android Build" }
 
         val safeUrl = validateReleaseUrl(root["html_url"] as? String)
+        val code = (root["body"] as? String)
+            ?.let { VERSION_CODE_REGEX.find(it)?.groupValues?.get(1)?.toIntOrNull() }
         return ParsedReleaseInfo(
             latestTimestampIso = latest.first,
             latestTimestampMs = latest.second,
             releaseName = rawName,
-            downloadUrl = safeUrl
+            downloadUrl = safeUrl,
+            versionCode = code
         )
     }
 
