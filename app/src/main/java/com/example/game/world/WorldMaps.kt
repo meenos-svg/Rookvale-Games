@@ -239,6 +239,7 @@ object WorldMaps {
             add(LandmarkLabel(-6, 24, 11, "DESCENT TO VAELGOR'S INNER SANCTUM"))
             ContinentalDungeonGenerator.generatedDungeons.forEach { d ->
                 add(d.descentLandmark)
+                addAll(d.areaLandmarks)
             }
             ContinentalDungeonGenerator.generatedLowerBossLairs.forEach { lair ->
                 add(lair.bossLandmark)
@@ -255,17 +256,17 @@ object WorldMaps {
         FloorPortal(0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 316, -2, DeepDelveFloors.F2_LANDING_X, DeepDelveFloors.F2_LANDING_Y, requiresRope = false),
         FloorPortal(-2, DeepDelveFloors.F2_STAIRS_UP_X, DeepDelveFloors.F2_STAIRS_UP_Y, 0, ROOKVALE_ORIGIN_X + 316, ROOKVALE_ORIGIN_Y + 317, requiresRope = false),
         // 3. NW Copper Quarry Rope-Hole <-> Floor -11 NW Copper Quarry Mines (Lvl 5-10, standalone)
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 96, -11, 24, 40, requiresRope = false),
-        FloorPortal(-11, 24, 41, 0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, requiresRope = true),
+        FloorPortal(0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 96, -11, HeartlandSiteFloors.QUARRY.landingX, HeartlandSiteFloors.QUARRY.landingY, requiresRope = false),
+        FloorPortal(-11, HeartlandSiteFloors.QUARRY.stairsUpX, HeartlandSiteFloors.QUARRY.stairsUpY, 0, ROOKVALE_ORIGIN_X + 92, ROOKVALE_ORIGIN_Y + 97, requiresRope = true),
         // 4. North Mountain Cavern Stairs <-> Floor -12 North Mountain Cavern (Lvl 7-12, standalone)
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 84, -12, 24, 40, requiresRope = false),
-        FloorPortal(-12, 24, 41, 0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 85, requiresRope = false),
+        FloorPortal(0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 84, -12, HeartlandSiteFloors.MOUNTAIN.landingX, HeartlandSiteFloors.MOUNTAIN.landingY, requiresRope = false),
+        FloorPortal(-12, HeartlandSiteFloors.MOUNTAIN.stairsUpX, HeartlandSiteFloors.MOUNTAIN.stairsUpY, 0, ROOKVALE_ORIGIN_X + 264, ROOKVALE_ORIGIN_Y + 85, requiresRope = false),
         // 5. East Dark Forest Sinkhole Rope-Hole <-> Floor -13 Dark Forest Sinkhole (Lvl 9-14, standalone)
         FloorPortal(0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 206, -13, 24, 40, requiresRope = false),
         FloorPortal(-13, 24, 41, 0, ROOKVALE_ORIGIN_X + 312, ROOKVALE_ORIGIN_Y + 207, requiresRope = true),
         // 6. NE Crag Hills Stairs <-> Floor -14 Crag Deep Hollow (Lvl 13-18, standalone)
-        FloorPortal(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 66, -14, 24, 40, requiresRope = false),
-        FloorPortal(-14, 24, 41, 0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 67, requiresRope = false),
+        FloorPortal(0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 66, -14, HeartlandSiteFloors.CRAG.landingX, HeartlandSiteFloors.CRAG.landingY, requiresRope = false),
+        FloorPortal(-14, HeartlandSiteFloors.CRAG.stairsUpX, HeartlandSiteFloors.CRAG.stairsUpY, 0, ROOKVALE_ORIGIN_X + 308, ROOKVALE_ORIGIN_Y + 67, requiresRope = false),
 
         // --- 7 Separate Outer-Continent Dedicated Biome Dungeons (Strictly 1-to-1 Bidirectional!) ---
         // Frostpeak Grimmaw Ridge <-> Floor -5 The Grimmaw Quarry
@@ -411,7 +412,7 @@ object WorldMaps {
         -4 -> DeepDelveFloors.F4_LANDING_X to DeepDelveFloors.F4_LANDING_Y
         -5 -> 24 to 40
         -6 -> 24 to 40
-        in -15..-7 -> 24 to 40
+        in -15..-7 -> ContinentalDungeonGenerator.landingFor(floorId)
         in -28..-16 -> ContinentalDungeonGenerator.LOWER_LANDING_X to ContinentalDungeonGenerator.LOWER_LANDING_Y
         else -> TEMPLE_SPAWN_X to TEMPLE_SPAWN_Y
     }

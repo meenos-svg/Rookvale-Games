@@ -191,6 +191,12 @@ object GameEngine {
             targetX = lx
             targetY = ly
         }
+        // Map v6 rebuilt Quarry Mines (-11), North Mountain Cavern (-12) and Crag Deep Hollow (-14).
+        if (save.mapVersion < HEARTLAND_SITE_REBUILD_MAP_VERSION && save.floor in setOf(-11, -12, -14)) {
+            val (lx, ly) = WorldMaps.fallbackLandingForFloor(save.floor)
+            targetX = lx
+            targetY = ly
+        }
         val npcCoordsOnFloor = WorldMaps.npcs.filter { it.floor == save.floor }.map { it.x to it.y }.toSet()
         val isBlockedOrOut = targetX !in 0 until floorMap.width ||
             targetY !in 0 until floorMap.height ||

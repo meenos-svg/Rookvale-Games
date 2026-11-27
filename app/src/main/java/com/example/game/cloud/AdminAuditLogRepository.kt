@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.game.multiplayer.MultiplayerConfig
 import com.example.game.world.BiomeProgressionRules
 import com.example.game.world.DeepDelveFloors
+import com.example.game.world.HeartlandSiteFloors
 import com.example.game.world.OverlandBiomeTier
 import com.example.game.world.WorldBiomeBlueprint
 import com.example.game.world.WorldMaps
@@ -325,10 +326,10 @@ object AdminTeleportCatalog {
         dungeonCampPreset("floor_m8", "F-8 Ziggurat Camp", -8, 24, 40),
         dungeonCampPreset("floor_m9", "F-9 Barrow Camp", -9, 24, 40),
         dungeonCampPreset("floor_m10", "F-10 Caldera Camp", -10, 24, 40, openEndedTop = true),
-        dungeonCampPreset("floor_m11", "F-11 Quarry Mines", -11, 24, 40),
-        dungeonCampPreset("floor_m12", "F-12 Mountain Cavern", -12, 24, 40),
+        dungeonCampPreset("floor_m11", "F-11 Copper Quarry Mines", -11, HeartlandSiteFloors.QUARRY.landingX, HeartlandSiteFloors.QUARRY.landingY),
+        dungeonCampPreset("floor_m12", "F-12 North Mountain Cavern", -12, HeartlandSiteFloors.MOUNTAIN.landingX, HeartlandSiteFloors.MOUNTAIN.landingY),
         dungeonCampPreset("floor_m13", "F-13 Forest Sinkhole", -13, 24, 40),
-        dungeonCampPreset("floor_m14", "F-14 Crag Hollow", -14, 24, 40),
+        dungeonCampPreset("floor_m14", "F-14 Crag Deep Hollow", -14, HeartlandSiteFloors.CRAG.landingX, HeartlandSiteFloors.CRAG.landingY),
         dungeonCampPreset("floor_m15", "F-15 Ember Sanctum", -15, 24, 40, openEndedTop = true)
     )
 
