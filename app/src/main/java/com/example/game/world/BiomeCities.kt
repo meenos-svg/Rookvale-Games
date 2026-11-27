@@ -46,7 +46,13 @@ object BiomeCities {
     const val SUN_MAX_X = 420
     const val SUN_MAX_Y = 832
 
+    const val FROST_MIN_X = 1336
+    const val FROST_MIN_Y = 148
+    const val FROST_MAX_X = 1456
+    const val FROST_MAX_Y = 252
+
     val mirewatch: City by lazy { buildMirewatch() }
+    val frostpeak: City by lazy { buildFrostpeak() }
     val sunspire: City by lazy { buildSunspire() }
 
     /**
@@ -64,6 +70,7 @@ object BiomeCities {
     fun cityAt(x: Int, y: Int): City? = when {
         x in MIRE_MIN_X..MIRE_MAX_X && y in MIRE_MIN_Y..MIRE_MAX_Y -> mirewatch
         x in SUN_MIN_X..SUN_MAX_X && y in SUN_MIN_Y..SUN_MAX_Y -> sunspire
+        x in FROST_MIN_X..FROST_MAX_X && y in FROST_MIN_Y..FROST_MAX_Y -> frostpeak
         else -> null
     }
 
@@ -381,5 +388,130 @@ object BiomeCities {
         for (y in 750..756 step 6) { c[371, y] = TileType.LANTERN_POST; c[379, y] = TileType.LANTERN_POST }
 
         return c.build("sunspire")
+    }
+
+    // =====================================================================================
+    // FROSTPEAK — granite citadel in a snowbound mountain bowl
+    // =====================================================================================
+    const val FROST_CX = 1396
+    const val FROST_CY = 204
+
+    /**
+     * A city cut into a snowy mountain bowl: a ring of crags with gatehouses on the north and south
+     * passes, the Eternal Hearth plaza, a half-frozen lake with ice-fishing piers, steaming hot
+     * springs, the Jarl's granite mead hall, a smithing terrace, timber longhouses, the Temple of the
+     * Frost-Mother and a yak market by the south gate.
+     */
+    private fun buildFrostpeak(): City {
+        val c = Canvas(FROST_MIN_X, FROST_MIN_Y, FROST_MAX_X, FROST_MAX_Y)
+        val cx = FROST_CX; val cy = FROST_CY
+        val snow = TileType.SNOW
+        val granite = TileType.GRANITE_WALL
+        val street = TileType.COBBLESTONE
+        val plank = TileType.WOOD_PLANK_FLOOR
+
+        // 1. Mountain bowl: snowfield inside a ragged ring of crags
+        for (y in c.minY..c.maxY) for (x in c.minX..c.maxX) {
+            val dx = (x - cx) / 60f; val dy = (y - cy) / 52f
+            val d = sqrt(dx * dx + dy * dy) + ((noise(x / 3, y / 3, 41) % 100) - 50) / 600f
+            c[x, y] = when {
+                d <= 0.86f -> snow
+                d <= 1.0f -> TileType.MOUNTAIN_ROCK
+                else -> null
+            }
+        }
+        // scattered snow pines (kept off the streets, which are drawn afterwards)
+        for (y in c.minY..c.maxY) for (x in c.minX..c.maxX) {
+            if (c[x, y] == snow && noise(x, y, 43) % 100 < 3) c[x, y] = TileType.TREE
+        }
+
+        // 2. Streets: north-south high street through both passes, and the east-west cross street
+        c.rect(1393, c.minY, 1399, c.maxY, street)
+        c.rect(1352, 202, 1413, 206, street)
+        for (y in 160..244 step 12) { c[1392, y] = TileType.LANTERN_POST; c[1400, y] = TileType.LANTERN_POST }
+
+        // gatehouses with portcullises on both passes
+        fun gatehouse(y1: Int, y2: Int, gateY: Int) {
+            c.rect(1387, y1, 1391, y2, granite); c.rect(1401, y1, 1405, y2, granite)
+            for (x in 1393..1399) c[x, gateY] = TileType.IRON_BAR_GATE
+            c[1392, gateY] = TileType.WAR_BANNER; c[1400, gateY] = TileType.WAR_BANNER
+        }
+        gatehouse(c.minY, c.minY + 7, c.minY + 4)
+        gatehouse(c.maxY - 7, c.maxY, c.maxY - 4)
+
+        // 3. Hearthstone Plaza with the Eternal Hearth
+        c.ellipse(cx, cy, 10f, 8f, street)
+        c[cx, cy] = TileType.CAMPFIRE_BRAZIER
+        c[1390, 199] = TileType.MINI_DEPOT
+        c[1401, 200] = TileType.BIOME_STALL_FROSTPEAK                 // Frostpeak Great Hearth (crafting)
+        c[1402, 200] = TileType.SMELTING_FURNACE
+        for ((x, y) in listOf(1387 to 197, 1405 to 197, 1387 to 211, 1405 to 211)) c[x, y] = TileType.LANTERN_POST
+
+        // 4. The half-frozen lake (west) with ice-fishing piers and huts
+        c.ellipse(1364, 188, 17f, 12f, snow)
+        c.ellipse(1364, 188, 14f, 9f, TileType.WATER)
+        c.ellipse(1364, 187, 7f, 4f, TileType.DEEP_WATER)
+        for (px in listOf(1356, 1364, 1372)) {
+            c.rect(px, 186, px + 1, 197, TileType.WOOD_PIER)
+            c[px + 2, 188] = TileType.MOORED_BOAT
+        }
+        c.hut(1346, 193, 1350, 197, TileType.TIMBER_WALL, plank, 'E')
+        c.hut(1378, 193, 1382, 197, TileType.TIMBER_WALL, plank, 'W')
+        c.rect(1352, 198, 1376, 201, snow)
+
+        // 5. Hot springs (north-east): steaming pools on warm paving, with a bathhouse
+        c.ellipse(1424, 170, 12f, 9f, street)
+        for ((px, py) in listOf(1418 to 168, 1428 to 166, 1426 to 175)) {
+            c.ellipse(px, py, 3f, 2f, TileType.WATER)
+            c[px + 3, py] = TileType.CAMPFIRE_BRAZIER                   // steam vent
+        }
+        c.hut(1430, 172, 1436, 177, TileType.TIMBER_WINDOW_WALL, plank, 'W')
+        c.line(1400, 178, 1414, 172, 3, street)
+
+        // 6. The Jarl's mead hall (east): a long granite hall at the end of the cross street
+        c.rect(1414, 190, 1442, 218, plank)
+        c.outline(1414, 190, 1442, 218, granite)
+        for (y in 202..206) c[1414, y] = plank                           // great doors
+        c[1427, 196] = TileType.CAMPFIRE_BRAZIER; c[1427, 212] = TileType.CAMPFIRE_BRAZIER
+        for (px in 1419..1437 step 3) { c[px, 200] = TileType.TEMPLE_PEW; c[px, 208] = TileType.TEMPLE_PEW }
+        c[1440, 204] = TileType.TEMPLE_ALTAR                             // the Jarl's high seat
+        for (y in listOf(192, 216)) for (x in 1418..1438 step 5) c[x, y] = TileType.WAR_BANNER
+        c[1441, 194] = TileType.WEAPON_RACK; c[1441, 214] = TileType.WEAPON_RACK
+
+        // 7. Smithing terrace (north-west)
+        c.rect(1350, 158, 1384, 176, TileType.DIRT_FLOOR)
+        c.hut(1354, 160, 1364, 167, granite, TileType.DIRT_FLOOR, 'S')
+        c[1357, 162] = TileType.BLACKSMITH_ANVIL; c[1361, 162] = TileType.SMELTING_FURNACE
+        c.hut(1368, 160, 1377, 167, TileType.TIMBER_WALL, plank, 'S')
+        c[1370, 162] = TileType.FLETCHING_BENCH; c[1374, 162] = TileType.RUNECRAFTING_TABLE
+        for (x in 1354..1380 step 4) c[x, 174] = TileType.CRATE_BARREL
+        c.rect(1384, 168, 1393, 170, street)
+
+        // 8. Timber longhouses (south-west)
+        for ((hx, hy) in listOf(1350 to 212, 1366 to 212, 1350 to 224, 1366 to 224)) {
+            c.hut(hx, hy, hx + 11, hy + 6, TileType.TIMBER_WALL, plank, 'N', bed = true)
+            c[hx + 9, hy + 2] = TileType.CAMPFIRE_BRAZIER
+        }
+        c.rect(1350, 209, 1392, 210, snow)
+        c.rect(1350, 221, 1392, 222, snow)
+
+        // 9. Temple of the Frost-Mother (south-east)
+        c.rect(1410, 224, 1434, 244, TileType.TEMPLE_FLOOR)
+        c.outline(1410, 224, 1434, 244, granite)
+        for (y in 232..236) c[1410, y] = TileType.TEMPLE_FLOOR
+        c[1431, 234] = TileType.TEMPLE_ALTAR
+        for ((x, y) in listOf(1414 to 227, 1430 to 227, 1414 to 241, 1430 to 241, 1428 to 230, 1428 to 238)) c[x, y] = TileType.CRYSTAL_PILLAR
+        for (py in listOf(229, 232, 236, 239)) for (px in listOf(1416, 1417, 1418, 1421, 1422, 1423)) c[px, py] = TileType.TEMPLE_PEW
+        c.rect(1400, 233, 1409, 235, street)
+
+        // 10. Yak market by the south gate
+        for ((sx, sy) in listOf(1380 to 230, 1384 to 230, 1380 to 236, 1384 to 236)) {
+            c[sx, sy] = TileType.MARKET_AWNING; c[sx + 1, sy] = TileType.MARKET_AWNING; c[sx, sy + 1] = TileType.CRATE_BARREL
+        }
+        c.outline(1370, 236, 1378, 244, TileType.WOOD_FENCE)
+        c[1374, 236] = snow
+        c[1386, 242] = TileType.BIOME_STALL_FROSTPEAK
+
+        return c.build("frostpeak")
     }
 }

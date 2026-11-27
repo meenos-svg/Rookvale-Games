@@ -316,10 +316,10 @@ object WorldBiomeBlueprint {
             regionId = "frostcrest_highlands",
             centerX = 1396,
             centerY = 204,
-            minX = 1378,
-            minY = 188,
-            maxX = 1414,
-            maxY = 220,
+            minX = BiomeCities.FROST_MIN_X,
+            minY = BiomeCities.FROST_MIN_Y,
+            maxX = BiomeCities.FROST_MAX_X,
+            maxY = BiomeCities.FROST_MAX_Y,
             ideology = BiomeIdeology.FROSTPEAK,
             tier = SettlementTier.EMPIRE,
             levelRangeLabel = OverlandBiomeTier.FROSTPEAK_HIGHLANDS.levelRangeLabel
@@ -456,8 +456,8 @@ object WorldBiomeBlueprint {
         // Frostpeak Highlands & Boreal Woods (Lvl 42-58 — Glacier-Quartz & Frost-Iron veins)
         OverworldOrePlacement(1278, 238, OreVeinKind.FROST_IRON),
         OverworldOrePlacement(1292, 248, OreVeinKind.GLACIER_QUARTZ),
-        OverworldOrePlacement(1352, 228, OreVeinKind.GLACIER_QUARTZ),
-        OverworldOrePlacement(1442, 236, OreVeinKind.FROST_IRON),
+        OverworldOrePlacement(1326, 200, OreVeinKind.GLACIER_QUARTZ),
+        OverworldOrePlacement(1466, 214, OreVeinKind.FROST_IRON),
         OverworldOrePlacement(1460, 248, OreVeinKind.GLACIER_QUARTZ),
         // Ashen Caldera & Blighted Wastes (Lvl 55-75+ — Cinderite & Vesperite veins)
         OverworldOrePlacement(278, 224, OreVeinKind.VESPERITE),

@@ -39,8 +39,10 @@ object VendorCatalog {
     const val WANDERER = "wanderer"
     const val MIRE_OUTFITTER = "odra"
     const val SUN_CARAVANEER = "tahir"
+    const val FROST_FURRIER = "ulfa"
 
     private val marshGoods = setOf("bile_gland", "spider_silk", "mire_silver_ore", "peat_coal_ore", "bog_iron_ore", "ghoul_gem", "jagged_ivory", "marsh_pike")
+    private val frostGoods = setOf("frost_iron_ore", "glacier_quartz_ore", "grimmaw_stone_core", "colossus_tendon", "ancient_bone", "runic_slate", "glacier_salmon")
     private val badlandsGoods = setOf("vesperite_ore", "gorek_obsidian_horn", "colossus_tendon", "ancient_bone", "runic_slate", "ember_heart", "sunfin_snapper")
 
     /** Specialists pay 25% more than Alaric for goods in their trade. */
@@ -125,6 +127,19 @@ object VendorCatalog {
                 offer("quenchsteel_quarrels", 14), offer("vesperite_tipped_pickaxe", 980)
             ),
             prefers = { it.id in badlandsGoods },
+            preferredSellMultiplier = SPECIALIST_SELL_BONUS
+        ),
+        Vendor(
+            id = FROST_FURRIER,
+            npcName = "Ulfa",
+            title = "Ulfa's Furs & Picks",
+            greeting = "Ulfa: 'Glowworms for the ice holes, a glacier pick for the deep veins. I pay best for frost ore and quarry cores.'",
+            stock = listOf(
+                offer("fishing_rod"), offer("frost_glowworm"),
+                offer("health_potion"), offer("mana_potion"), offer("rope"),
+                offer("starlight_quarrels", 18), offer("glacier_forged_pickaxe", 1800)
+            ),
+            prefers = { it.id in frostGoods },
             preferredSellMultiplier = SPECIALIST_SELL_BONUS
         ),
         Vendor(
@@ -216,11 +231,13 @@ object HuntBoards {
     const val ROOKVALE = "rookvale"
     const val MIREWATCH = "mirewatch"
     const val SUNSPIRE = "sunspire"
+    const val FROSTPEAK = "frostpeak"
 
     val all: List<HuntBoard> = listOf(
         HuntBoard(ROOKVALE, "Captain Hale", "Captain Hale's Hunt Board", "Rookvale's plaza"),
         HuntBoard(MIREWATCH, "Warden Brisk", "Warden Brisk's Marsh Bounties", "Mirewatch's moot platform"),
-        HuntBoard(SUNSPIRE, "Sergeant Kasim", "Sergeant Kasim's Desert Bounties", "Sunspire's Sun Plaza")
+        HuntBoard(SUNSPIRE, "Sergeant Kasim", "Sergeant Kasim's Desert Bounties", "Sunspire's Sun Plaza"),
+        HuntBoard(FROSTPEAK, "Huntmaster Sigrun", "Huntmaster Sigrun's Frost Bounties", "Frostpeak's Hearthstone Plaza")
     )
 
     fun byId(id: String?): HuntBoard = all.firstOrNull { it.id == id } ?: all.first()
@@ -240,6 +257,7 @@ object HuntContracts {
 
     private const val M = HuntBoards.MIREWATCH
     private const val S = HuntBoards.SUNSPIRE
+    private const val F = HuntBoards.FROSTPEAK
 
     val all: List<HuntContract> = listOf(
         regular("rats", "Rat Catcher", MonsterType.CAVE_RAT, 15, 1, 60, "Cave rats scurry in the meadows around town."),
@@ -285,7 +303,15 @@ object HuntContracts {
         regular("s_golems", "Salt-Crust Golems", MonsterType.SALTGLASS_GOLEM, 15, 42, 4600, "Saltglass golems guard the Rift's Salt Flats.", S),
         boss("s_b_akhet", MonsterType.AKHET_THE_SAND_PHARAOH, 32, 6000, "Sealed in the Sanctum at the top of the Tomb of Akhet.", S),
         boss("s_b_vaelgor", MonsterType.VAELGOR_LABYRINTH_WARDEN, 38, 8000, "Down the stairs north of the Gorek Labyrinth's ring.", S),
-        boss("s_b_sirocco", MonsterType.SIROCCO_THE_STORM_DJINN, 43, 9500, "Inside the Djinn's Eye at the top of the Scorchglass Rift.", S)
+        boss("s_b_sirocco", MonsterType.SIROCCO_THE_STORM_DJINN, 43, 9500, "Inside the Djinn's Eye at the top of the Scorchglass Rift.", S),
+        // --- Frostpeak: Huntmaster Sigrun's frost bounties (Lv 42-58) ---
+        regular("f_quarrymen", "Quarry Giants", MonsterType.GRIMMAW_QUARRYMAN, 20, 42, 4800, "Grimmaw quarrymen work the Grimmaw Quarry, south-west of the citadel.", F),
+        regular("f_hurlers", "Rock-Hurlers", MonsterType.GRIMMAW_ROCK_HURLER, 20, 42, 4800, "Rock-hurlers throw from the Quarry's upper alcoves.", F),
+        regular("f_crushers", "Crushers", MonsterType.GRIMMAW_CRUSHER, 15, 44, 5200, "Crushers guard the Quarry's deep terraces.", F),
+        regular("f_wights", "Barrow Wights", MonsterType.BARROW_WIGHT, 20, 48, 6000, "Wights stalk the Blightwood Barrow Catacombs.", F),
+        regular("f_banshees", "Silence the Banshees", MonsterType.FROST_BANSHEE, 20, 48, 6000, "Frost banshees wail in the Barrow's frozen halls.", F),
+        boss("f_b_kragor", MonsterType.KRAGOR_THE_STONE_EYED, 44, 9000, "In Kragor's Deep Quarry Pit, below the Grimmaw Quarry.", F),
+        boss("f_b_malgrath", MonsterType.LORD_MALGRATH_THE_UNDYING, 50, 12000, "In the Barrow Sovereign's Tomb, below the Blightwood Barrow.", F)
     )
 
     fun byId(id: String?): HuntContract? = all.firstOrNull { it.id == id }
@@ -357,9 +383,18 @@ object TownCrier {
     fun featuredBadlandsCreature(wallClockMs: Long = System.currentTimeMillis()): MonsterType =
         badlandsPool[VendorCatalog.positiveHash(wallClockMs / DAY_MS, 197L) % badlandsPool.size]
 
+    private val frostPool = listOf(
+        MonsterType.GRIMMAW_QUARRYMAN, MonsterType.GRIMMAW_ROCK_HURLER, MonsterType.GRIMMAW_CRUSHER,
+        MonsterType.BARROW_WIGHT, MonsterType.FROST_BANSHEE
+    )
+
+    /** Frostpeak's crier announces a highland creature each day. */
+    fun featuredFrostCreature(wallClockMs: Long = System.currentTimeMillis()): MonsterType =
+        frostPool[VendorCatalog.positiveHash(wallClockMs / DAY_MS, 263L) % frostPool.size]
+
     /** Every creature that earns today's bonus XP (one per town). */
     fun featuredCreatures(wallClockMs: Long = System.currentTimeMillis()): Set<MonsterType> =
-        setOf(featuredCreature(wallClockMs), featuredMarshCreature(wallClockMs), featuredBadlandsCreature(wallClockMs))
+        setOf(featuredCreature(wallClockMs), featuredMarshCreature(wallClockMs), featuredBadlandsCreature(wallClockMs), featuredFrostCreature(wallClockMs))
 
     fun hoursUntilTomorrow(wallClockMs: Long = System.currentTimeMillis()): Long =
         ((DAY_MS - (wallClockMs % DAY_MS)) + 3_599_999L) / 3_600_000L
