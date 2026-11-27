@@ -256,5 +256,32 @@ class FrontierCitiesAndDungeonsTest {
         assertTrue(low.any { it in starter })
     }
 
+    /**
+     * Every ore vein can be reached and mined, dungeon veins never need a Mining level far above the
+     * dungeon's monsters, and each outer biome has enough of its own signature ore out in the open.
+     */
+    @Test
+    fun oreVeinsMatchTheirAreaAndCanBeMined() {
+        val nodes = WorldMaps.initialOreNodes().values
+        for ((floorId, list) in nodes.groupBy { it.floor }) {
+            val fl = WorldMaps.getFloor(floorId)
+            list.forEach { n ->
+                assertTrue("${n.kind} at $floorId (${n.x},${n.y}) has no open side",
+                    listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1).any { (dx, dy) -> fl.tileAt(n.x + dx, n.y + dy).walkable })
+            }
+            if (floorId < 0) {
+                val top = BiomeProgressionRules.dungeonBaseLevel(BiomeProgressionRules.surfaceBiomeForDungeonFloor(floorId).minLevel, floorId) + 5
+                list.forEach { n -> assertTrue("F$floorId (top Lv $top) has ${n.kind} needing Mining ${n.kind.requiredMiningLevel}", n.kind.requiredMiningLevel <= top + 6) }
+            }
+        }
+        val overland = nodes.filter { it.floor == 0 }
+        fun count(tier: com.example.game.world.OverlandBiomeTier, vararg kinds: OreVeinKind) =
+            overland.count { BiomeProgressionRules.biomeForGlobalTile(it.x, it.y) == tier && it.kind in kinds }
+        assertTrue(count(com.example.game.world.OverlandBiomeTier.WHISPERING_MARSH, OreVeinKind.MIRE_SILVER, OreVeinKind.PEAT_COAL) >= 12)
+        assertTrue(count(com.example.game.world.OverlandBiomeTier.SUNSCORCH_BADLANDS, OreVeinKind.VESPERITE) >= 8)
+        assertTrue(count(com.example.game.world.OverlandBiomeTier.FROSTPEAK_HIGHLANDS, OreVeinKind.FROST_IRON, OreVeinKind.GLACIER_QUARTZ) >= 12)
+        assertTrue(count(com.example.game.world.OverlandBiomeTier.ASHEN_CALDERA, OreVeinKind.CINDERITE) >= 8)
+    }
+
     private fun f0Tile(x: Int, y: Int) = WorldMaps.getFloor(0).tileAt(x, y)
 }

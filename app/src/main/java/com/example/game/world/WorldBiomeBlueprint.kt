@@ -442,7 +442,7 @@ object WorldBiomeBlueprint {
         OverworldOrePlacement(255, 495, OreVeinKind.MIRE_SILVER),
         OverworldOrePlacement(268, 522, OreVeinKind.PEAT_COAL),
         OverworldOrePlacement(332, 540, OreVeinKind.MIRE_SILVER),
-        OverworldOrePlacement(220, 560, OreVeinKind.PEAT_COAL),
+        OverworldOrePlacement(218, 558, OreVeinKind.PEAT_COAL),
         OverworldOrePlacement(486, 568, OreVeinKind.MIRE_SILVER),
         OverworldOrePlacement(503, 545, OreVeinKind.PEAT_COAL),
         OverworldOrePlacement(680, 995, OreVeinKind.PEAT_COAL),
@@ -468,7 +468,45 @@ object WorldBiomeBlueprint {
         OverworldOrePlacement(965, 232, OreVeinKind.CINDERITE),
         OverworldOrePlacement(1062, 220, OreVeinKind.CINDERITE),
         OverworldOrePlacement(1485, 932, OreVeinKind.CINDERITE),
-        OverworldOrePlacement(1518, 948, OreVeinKind.CINDERITE)
+        OverworldOrePlacement(1511, 941, OreVeinKind.CINDERITE),
+        // Whispering Marsh veins (Mining 20): mire-silver & peat-coal
+        OverworldOrePlacement(376, 400, OreVeinKind.MIRE_SILVER),
+        OverworldOrePlacement(154, 622, OreVeinKind.PEAT_COAL),
+        OverworldOrePlacement(1042, 898, OreVeinKind.MIRE_SILVER),
+        OverworldOrePlacement(430, 928, OreVeinKind.MIRE_SILVER),
+        OverworldOrePlacement(880, 1060, OreVeinKind.PEAT_COAL),
+        OverworldOrePlacement(814, 1126, OreVeinKind.MIRE_SILVER),
+        OverworldOrePlacement(280, 400, OreVeinKind.PEAT_COAL),
+        OverworldOrePlacement(580, 682, OreVeinKind.MIRE_SILVER),
+        OverworldOrePlacement(724, 1120, OreVeinKind.PEAT_COAL),
+        OverworldOrePlacement(184, 400, OreVeinKind.MIRE_SILVER),
+        // Sunscorch Badlands veins (Mining 10-30): vesperite & bog iron
+        OverworldOrePlacement(394, 964, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(220, 1138, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(118, 1048, OreVeinKind.BOG_IRON),
+        OverworldOrePlacement(124, 946, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(394, 1066, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(328, 1132, OreVeinKind.BOG_IRON),
+        OverworldOrePlacement(226, 802, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(82, 1120, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(454, 748, OreVeinKind.BOG_IRON),
+        OverworldOrePlacement(232, 946, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(388, 886, OreVeinKind.VESPERITE),
+        OverworldOrePlacement(274, 1084, OreVeinKind.BOG_IRON),
+        // Frostpeak Highlands veins (Mining 42): frost-iron & glacier-quartz
+        OverworldOrePlacement(1312, 46, OreVeinKind.FROST_IRON),
+        OverworldOrePlacement(1240, 118, OreVeinKind.GLACIER_QUARTZ),
+        OverworldOrePlacement(508, 268, OreVeinKind.FROST_IRON),
+        OverworldOrePlacement(442, 334, OreVeinKind.FROST_IRON),
+        OverworldOrePlacement(508, 172, OreVeinKind.GLACIER_QUARTZ),
+        OverworldOrePlacement(1588, 256, OreVeinKind.FROST_IRON),
+        OverworldOrePlacement(1522, 322, OreVeinKind.GLACIER_QUARTZ),
+        OverworldOrePlacement(1588, 160, OreVeinKind.FROST_IRON),
+        OverworldOrePlacement(418, 166, OreVeinKind.GLACIER_QUARTZ),
+        OverworldOrePlacement(1414, 334, OreVeinKind.FROST_IRON),
+        // Ashen Caldera veins (Mining 52): cinderite
+        OverworldOrePlacement(1192, 166, OreVeinKind.CINDERITE),
+        OverworldOrePlacement(1048, 310, OreVeinKind.CINDERITE)
     )
 
     private val outerOreLookup: Map<Long, TileType> = outerOverworldOres.associate { ore ->

@@ -84,9 +84,10 @@ class RookvaleLoreExpansionTest {
         val f5Kinds = state.oreNodes.filterKeys { it.first == -5 }.values.map { it.kind }.toSet()
         val f6Kinds = state.oreNodes.filterKeys { it.first == -6 }.values.map { it.kind }.toSet()
 
-        assertTrue("Floor -1 must contain Vesperite veins", OreVeinKind.VESPERITE in f1Kinds)
-        assertTrue("Floor -5 Grimmaw Quarry must contain Vesperite veins", OreVeinKind.VESPERITE in f5Kinds)
-        assertTrue("Floor -2 must contain Cinderite veins", OreVeinKind.CINDERITE in f2Kinds)
+        // Veins match each dungeon's level band (Rookvale delves: starter ores; Grimmaw: Frostpeak ores)
+        assertTrue("Floor -1 must contain Tin veins", OreVeinKind.TIN in f1Kinds)
+        assertTrue("Floor -5 Grimmaw Quarry must contain Frost-Iron veins", OreVeinKind.FROST_IRON in f5Kinds)
+        assertTrue("Floor -2 must contain Bog Iron veins", OreVeinKind.BOG_IRON in f2Kinds)
         assertTrue("Floor -6 Gorek Labyrinth (badlands) must contain Vesperite veins", OreVeinKind.VESPERITE in f6Kinds)
 
         // Verify Vesperite & Cinderite smelting recipes at their respective biome stalls
